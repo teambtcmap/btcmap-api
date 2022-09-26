@@ -1,3 +1,4 @@
+use crate::daily_report::DailyReport;
 use crate::element::Element;
 use rusqlite::{Connection, Row};
 use serde_json::Value;
@@ -17,7 +18,7 @@ pub fn cli_main(args: &[String], db_conn: Connection) {
 }
 
 fn cli_migrate(db_conn: Connection) {
-    let schema_ver: i16 = db_conn
+    let mut schema_ver: i16 = db_conn
         .query_row("SELECT user_version FROM pragma_user_version", [], |row| {
             row.get(0)
         })
@@ -31,11 +32,21 @@ fn cli_migrate(db_conn: Connection) {
         db_conn
             .execute_batch(&format!("PRAGMA user_version={}", 1))
             .unwrap();
-    } else {
-        println!("Found database schema version {}", schema_ver);
+        schema_ver += 1;
     }
 
-    println!("Database schema is up to date");
+    if schema_ver == 1 {
+        println!("Migrating database schema to version 2");
+        db_conn
+            .execute_batch(include_str!("../migrations/2.sql"))
+            .unwrap();
+        db_conn
+            .execute_batch(&format!("PRAGMA user_version={}", 2))
+            .unwrap();
+        schema_ver += 1;
+    }
+
+    println!("Database schema is up to date (version {schema_ver})");
 }
 
 fn cli_drop(db_conn: Connection) {
@@ -62,6 +73,21 @@ pub fn mapper_element_full() -> fn(&Row) -> rusqlite::Result<Element> {
             created_at: row.get(2)?,
             updated_at: row.get(3)?,
             deleted_at: row.get(4)?,
+        })
+    }
+}
+
+pub fn mapper_daily_report_full() -> fn(&Row) -> rusqlite::Result<DailyReport> {
+    |row: &Row| -> rusqlite::Result<DailyReport> {
+        Ok(DailyReport {
+            date: row.get(0)?,
+            total_elements: row.get(1)?,
+            up_to_date_elements: row.get(2)?,
+            outdated_elements: row.get(3)?,
+            legacy_elements: row.get(4)?,
+            elements_created: row.get(5)?,
+            elements_updated: row.get(6)?,
+            elements_deleted: row.get(7)?,
         })
     }
 }

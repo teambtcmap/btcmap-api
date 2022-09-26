@@ -9,6 +9,9 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
+use std::ops::Sub;
+use time::Duration;
+use time::OffsetDateTime;
 
 pub async fn sync(mut db_conn: Connection) {
     println!("Starting sync");
@@ -98,6 +101,10 @@ pub async fn sync(mut db_conn: Connection) {
         })
         .collect();
 
+    let mut elements_created = 0;
+    let mut elements_updated = 0;
+    let mut elements_deleted = 0;
+
     // First, let's check if any of the cached elements no longer accept bitcoins
     for element in &elements {
         if !fresh_element_ids.contains(&element.id) && element.deleted_at.is_none() {
@@ -106,6 +113,7 @@ pub async fn sync(mut db_conn: Connection) {
                 "UPDATE element SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE id = ?";
             println!("Executing query: {query:?}");
             tx.execute(query, params![element.id]).unwrap();
+            elements_deleted += 1;
         }
     }
 
@@ -127,6 +135,8 @@ pub async fn sync(mut db_conn: Connection) {
                         params![fresh_element_data, id],
                     )
                     .unwrap();
+
+                    elements_updated += 1;
                 }
             }
             None => {
@@ -137,9 +147,77 @@ pub async fn sync(mut db_conn: Connection) {
                     params![id, serde_json::to_string(fresh_element).unwrap()],
                 )
                 .unwrap();
+
+                elements_created += 1;
             }
         }
     }
+
+    let today = OffsetDateTime::now_utc().date();
+    let year_ago = today.sub(Duration::days(365));
+    println!("Today: {today}, year ago: {year_ago}");
+
+    let up_to_date_elements: Vec<&Value> = fresh_elements
+        .iter()
+        .filter(|it| {
+            (it["tags"].get("survey:date").is_some()
+                && it["tags"]["survey:date"].as_str().unwrap().to_string() > year_ago.to_string())
+                || (it["tags"].get("check_date").is_some()
+                    && it["tags"]["check_date"].as_str().unwrap().to_string()
+                        > year_ago.to_string())
+        })
+        .collect();
+
+    let outdated_elements: Vec<&Value> = fresh_elements
+        .iter()
+        .filter(|it| {
+            (it["tags"].get("check_date").is_none()
+                && (it["tags"].get("survey:date").is_none()
+                    || (it["tags"].get("survey:date").is_some()
+                        && it["tags"]["survey:date"].as_str().unwrap().to_string()
+                            <= year_ago.to_string())))
+                || (it["tags"].get("survey:date").is_none()
+                    && (it["tags"].get("check_date").is_none()
+                        || (it["tags"].get("check_date").is_some()
+                            && it["tags"]["check_date"].as_str().unwrap().to_string()
+                                <= year_ago.to_string())))
+        })
+        .collect();
+
+    let legacy_elements: Vec<&Value> = fresh_elements
+        .iter()
+        .filter(|it| it["tags"].get("payment:bitcoin").is_some())
+        .collect();
+
+    println!("Total elements: {}", elements.len());
+    println!("Up to date elements: {}", up_to_date_elements.len());
+    println!("Outdated elements: {}", outdated_elements.len());
+    println!("Legacy elements: {}", legacy_elements.len());
+    println!("Elements created: {elements_created}");
+    println!("Elements updated: {elements_updated}");
+    println!("Elements deleted: {elements_deleted}");
+
+    let query = "SELECT * FROM daily_report WHERE date = ?";
+    let report = tx.query_row(query, [today.to_string()], db::mapper_daily_report_full());
+
+    if let Ok(report) = report {
+        println!("Found existing report, deleting");
+        tx.execute(
+            "DELETE FROM daily_report WHERE date = ?",
+            [today.to_string()],
+        )
+        .unwrap();
+        elements_created += report.elements_created;
+        elements_updated += report.elements_updated;
+        elements_deleted += report.elements_deleted;
+    }
+
+    println!("Inserting new or updated report");
+    tx.execute(
+        "INSERT INTO daily_report (date, total_elements, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        params![today.to_string(), elements.len(), up_to_date_elements.len(), outdated_elements.len(), legacy_elements.len(), elements_created, elements_updated, elements_deleted],
+    )
+    .unwrap();
 
     tx.commit().expect("Failed to save sync results");
     println!("Finished sync");

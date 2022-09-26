@@ -2,8 +2,10 @@ extern crate core;
 
 mod db;
 mod element;
+mod daily_report;
 mod sync;
 
+use crate::daily_report::DailyReport;
 use std::env;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
@@ -43,6 +45,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(db_conn.clone())
                     .service(get_elements)
                     .service(get_element)
+                    .service(get_daily_reports)
             })
             .bind(("127.0.0.1", 8000))?
             .run()
@@ -118,6 +121,21 @@ async fn get_element(
         .unwrap();
 
     Json(place)
+}
+
+#[actix_web::get("/daily_reports")]
+async fn get_daily_reports(
+    conn: web::Data<Mutex<Connection>>,
+) -> Json<Vec<DailyReport>> {
+    let conn = conn.lock().unwrap();
+    let query = "SELECT * FROM daily_report ORDER BY date DESC";
+    let mut stmt: Statement = conn.prepare(query).unwrap();
+    let reports: Vec<DailyReport> = stmt.query_map([], db::mapper_daily_report_full())
+        .unwrap()
+        .map(|row| row.unwrap())
+        .collect();
+
+    Json(reports)
 }
 
 fn get_db_file_path() -> PathBuf {
