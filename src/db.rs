@@ -1,3 +1,4 @@
+use crate::area::Area;
 use crate::daily_report::DailyReport;
 use crate::element::Element;
 use rusqlite::{Connection, Row};
@@ -46,6 +47,17 @@ fn cli_migrate(db_conn: Connection) {
         schema_ver += 1;
     }
 
+    if schema_ver == 2 {
+        println!("Migrating database schema to version 3");
+        db_conn
+            .execute_batch(include_str!("../migrations/3.sql"))
+            .unwrap();
+        db_conn
+            .execute_batch(&format!("PRAGMA user_version={}", 3))
+            .unwrap();
+        schema_ver += 1;
+    }
+
     println!("Database schema is up to date (version {schema_ver})");
 }
 
@@ -88,6 +100,20 @@ pub fn mapper_daily_report_full() -> fn(&Row) -> rusqlite::Result<DailyReport> {
             elements_created: row.get(5)?,
             elements_updated: row.get(6)?,
             elements_deleted: row.get(7)?,
+        })
+    }
+}
+
+pub fn mapper_area_full() -> fn(&Row) -> rusqlite::Result<Area> {
+    |row: &Row| -> rusqlite::Result<Area> {
+        Ok(Area {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            area_type: row.get(2)?,
+            min_lon: row.get(3)?,
+            min_lat: row.get(4)?,
+            max_lon: row.get(5)?,
+            max_lat: row.get(6)?,
         })
     }
 }

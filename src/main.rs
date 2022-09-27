@@ -1,15 +1,22 @@
+use crate::area::Area;
+use std::ops::Sub;
 extern crate core;
 
+mod area;
+mod daily_report;
 mod db;
 mod element;
-mod daily_report;
 mod sync;
 
 use crate::daily_report::DailyReport;
+use serde::Deserialize;
+use serde::Serialize;
 use std::env;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use time::Duration;
+use time::OffsetDateTime;
 
 use crate::element::Element;
 use actix_web::middleware::Logger;
@@ -46,6 +53,8 @@ async fn main() -> std::io::Result<()> {
                     .service(get_elements)
                     .service(get_element)
                     .service(get_daily_reports)
+                    .service(get_areas)
+                    .service(get_area)
             })
             .bind(("127.0.0.1", 8000))?
             .run()
@@ -124,18 +133,164 @@ async fn get_element(
 }
 
 #[actix_web::get("/daily_reports")]
-async fn get_daily_reports(
-    conn: web::Data<Mutex<Connection>>,
-) -> Json<Vec<DailyReport>> {
+async fn get_daily_reports(conn: web::Data<Mutex<Connection>>) -> Json<Vec<DailyReport>> {
     let conn = conn.lock().unwrap();
     let query = "SELECT * FROM daily_report ORDER BY date DESC";
     let mut stmt: Statement = conn.prepare(query).unwrap();
-    let reports: Vec<DailyReport> = stmt.query_map([], db::mapper_daily_report_full())
+    let reports: Vec<DailyReport> = stmt
+        .query_map([], db::mapper_daily_report_full())
         .unwrap()
         .map(|row| row.unwrap())
         .collect();
 
     Json(reports)
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GetAreasItem {
+    pub id: String,
+    pub name: String,
+    pub area_type: String,
+    pub min_lon: f64,
+    pub min_lat: f64,
+    pub max_lon: f64,
+    pub max_lat: f64,
+    pub elements: usize,
+    pub up_to_date_elements: usize,
+}
+
+#[actix_web::get("/areas")]
+async fn get_areas(conn: web::Data<Mutex<Connection>>) -> Json<Vec<GetAreasItem>> {
+    let conn = conn.lock().unwrap();
+
+    let query = "SELECT * FROM area ORDER BY name";
+    let mut stmt: Statement = conn.prepare(query).unwrap();
+
+    let areas: Vec<Area> = stmt
+        .query_map([], db::mapper_area_full())
+        .unwrap()
+        .map(|row| row.unwrap())
+        .collect();
+
+    let query = "SELECT * FROM element ORDER BY updated_at DESC";
+    let mut stmt: Statement = conn.prepare(query).unwrap();
+
+    let elements: Vec<Element> = stmt
+        .query_map([], db::mapper_element_full())
+        .unwrap()
+        .map(|row| row.unwrap())
+        .collect();
+
+    let mut res: Vec<GetAreasItem> = vec![];
+    let today = OffsetDateTime::now_utc().date();
+    let year_ago = today.sub(Duration::days(365));
+
+    for area in areas {
+        let area_elements: Vec<&Element> = elements
+            .iter()
+            .filter(|it| it.data["type"].as_str().unwrap() == "node")
+            .filter(|it| {
+                let lat = it.data["lat"].as_f64().unwrap();
+                let lon = it.data["lon"].as_f64().unwrap();
+                lon > area.min_lon && lon < area.max_lon && lat > area.min_lat && lat < area.max_lat
+            })
+            .collect();
+
+        let elements_len = area_elements.len();
+
+        let up_to_date_elements: Vec<&Element> = area_elements
+            .into_iter()
+            .filter(|it| {
+                (it.data["tags"].get("survey:date").is_some()
+                    && it.data["tags"]["survey:date"].as_str().unwrap().to_string()
+                        > year_ago.to_string())
+                    || (it.data["tags"].get("check_date").is_some()
+                        && it.data["tags"]["check_date"].as_str().unwrap().to_string()
+                            > year_ago.to_string())
+            })
+            .collect();
+
+        res.push(GetAreasItem {
+            id: area.id,
+            name: area.name,
+            area_type: area.area_type,
+            min_lon: area.min_lon,
+            min_lat: area.min_lat,
+            max_lon: area.max_lon,
+            max_lat: area.max_lat,
+            elements: elements_len,
+            up_to_date_elements: up_to_date_elements.len(),
+        });
+    }
+
+    Json(res)
+}
+
+#[actix_web::get("/areas/{id}")]
+async fn get_area(
+    path: web::Path<String>,
+    conn: web::Data<Mutex<Connection>>,
+) -> Json<Option<GetAreasItem>> {
+    let id = path.into_inner();
+    let conn = conn.lock().unwrap();
+
+    let query = "SELECT * FROM area WHERE id = ?";
+    let area = conn
+        .query_row(query, [id], db::mapper_area_full())
+        .optional()
+        .unwrap()
+        .map(|area| {
+            let query = "SELECT * FROM element ORDER BY updated_at DESC";
+            let mut stmt: Statement = conn.prepare(query).unwrap();
+            let elements: Vec<Element> = stmt
+                .query_map([], db::mapper_element_full())
+                .unwrap()
+                .map(|row| row.unwrap())
+                .collect();
+
+            let area_elements: Vec<&Element> = elements
+                .iter()
+                .filter(|it| it.data["type"].as_str().unwrap() == "node")
+                .filter(|it| {
+                    let lat = it.data["lat"].as_f64().unwrap();
+                    let lon = it.data["lon"].as_f64().unwrap();
+                    lon > area.min_lon
+                        && lon < area.max_lon
+                        && lat > area.min_lat
+                        && lat < area.max_lat
+                })
+                .collect();
+
+            let elements_len = area_elements.len();
+            let today = OffsetDateTime::now_utc().date();
+            let year_ago = today.sub(Duration::days(365));
+
+            let up_to_date_elements: Vec<&Element> = area_elements
+                .into_iter()
+                .filter(|it| {
+                    (it.data["tags"].get("survey:date").is_some()
+                        && it.data["tags"]["survey:date"].as_str().unwrap().to_string()
+                            > year_ago.to_string())
+                        || (it.data["tags"].get("check_date").is_some()
+                            && it.data["tags"]["check_date"].as_str().unwrap().to_string()
+                                > year_ago.to_string())
+                })
+                .collect();
+
+            GetAreasItem {
+                id: area.id,
+                name: area.name,
+                area_type: area.area_type,
+                min_lon: area.min_lon,
+                min_lat: area.min_lat,
+                max_lon: area.max_lon,
+                max_lat: area.max_lat,
+                elements: elements_len,
+                up_to_date_elements: up_to_date_elements.len(),
+            }
+        });
+
+    Json(area)
 }
 
 fn get_db_file_path() -> PathBuf {
