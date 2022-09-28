@@ -82,7 +82,7 @@ async fn main() -> std::io::Result<()> {
 
 #[derive(serde::Deserialize)]
 struct GetPlacesArgs {
-    created_or_updated_since: Option<String>,
+    updated_since: Option<String>,
 }
 
 #[actix_web::get("/elements")]
@@ -92,11 +92,11 @@ async fn get_elements(
 ) -> Json<Vec<Element>> {
     let conn = conn.lock().unwrap();
 
-    let places: Vec<Element> = match &args.created_or_updated_since {
-        Some(created_or_updated_since) => {
+    let places: Vec<Element> = match &args.updated_since {
+        Some(updated_since) => {
             let query = "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
             let mut stmt: Statement = conn.prepare(query).unwrap();
-            stmt.query_map([created_or_updated_since], db::mapper_element_full())
+            stmt.query_map([updated_since], db::mapper_element_full())
                 .unwrap()
                 .map(|row| row.unwrap())
                 .collect()

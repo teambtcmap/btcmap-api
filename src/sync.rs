@@ -6,7 +6,9 @@ use rusqlite::Connection;
 use rusqlite::Statement;
 use rusqlite::Transaction;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::ops::Sub;
@@ -108,7 +110,16 @@ pub async fn sync(mut db_conn: Connection) {
     // First, let's check if any of the cached elements no longer accept bitcoins
     for element in &elements {
         if !fresh_element_ids.contains(&element.id) && element.deleted_at.is_none() {
-            println!("Cached element with {} was deleted from OSM", element.id);
+            let osm_id = element.data["id"].as_i64().unwrap();
+            let element_type = element.data["type"].as_str().unwrap();
+            let name = element.data["tags"]["name"]
+                .as_str()
+                .unwrap_or("Unnamed element");
+            println!("Cached element with id {} was deleted from OSM", element.id);
+            send_discord_message(format!(
+                "{name} has been deleted https://www.openstreetmap.org/{element_type}/{osm_id}"
+            ))
+            .await;
             let query =
                 "UPDATE element SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE id = ?";
             println!("Executing query: {query:?}");
@@ -119,20 +130,28 @@ pub async fn sync(mut db_conn: Connection) {
 
     for fresh_element in fresh_elements {
         let element_type = fresh_element["type"].as_str().unwrap();
-        let id = fresh_element["id"].as_i64().unwrap();
-        let id = format!("{element_type}:{id}");
+        let osm_id = fresh_element["id"].as_i64().unwrap();
+        let btcmap_id = format!("{element_type}:{osm_id}");
+        let name = fresh_element["tags"]["name"]
+            .as_str()
+            .unwrap_or("Unnamed element");
+        let user = fresh_element["user"].as_str().unwrap_or("unknown user");
 
-        match elements.iter().find(|it| it.id == id) {
+        match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
                 let element_data: String = serde_json::to_string(&element.data).unwrap();
                 let fresh_element_data = serde_json::to_string(fresh_element).unwrap();
 
                 if element_data != fresh_element_data {
-                    println!("Element {id} has been changed");
+                    println!("Element {btcmap_id} has been updated");
+                    send_discord_message(format!(
+                        "{name} has been updated by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
+                    ))
+                    .await;
 
                     tx.execute(
                         "UPDATE element SET data = ? WHERE id = ?",
-                        params![fresh_element_data, id],
+                        params![fresh_element_data, btcmap_id],
                     )
                     .unwrap();
 
@@ -140,11 +159,15 @@ pub async fn sync(mut db_conn: Connection) {
                 }
             }
             None => {
-                println!("Element {id} does not exist, inserting");
+                println!("Element {btcmap_id} does not exist, inserting");
+                send_discord_message(format!(
+                    "{name} has been added by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
+                ))
+                .await;
 
                 tx.execute(
                     "INSERT INTO element (id, data) VALUES (?, ?)",
-                    params![id, serde_json::to_string(fresh_element).unwrap()],
+                    params![btcmap_id, serde_json::to_string(fresh_element).unwrap()],
                 )
                 .unwrap();
 
@@ -221,4 +244,28 @@ pub async fn sync(mut db_conn: Connection) {
 
     tx.commit().expect("Failed to save sync results");
     println!("Finished sync");
+}
+
+async fn send_discord_message(text: String) {
+    if let Ok(discord_webhook_url) = env::var("DISCORD_WEBHOOK_URL") {
+        println!("Sending Discord message");
+        let mut args = HashMap::new();
+        args.insert("username", "btcmap.org".to_string());
+        args.insert("content", text);
+
+        let response = reqwest::Client::new()
+            .post(discord_webhook_url)
+            .json(&args)
+            .send()
+            .await;
+
+        match response {
+            Ok(response) => {
+                println!("Discord response status: {:?}", response.status());
+            }
+            Err(_) => {
+                println!("Failed to send Discord message");
+            }
+        }
+    }
 }
