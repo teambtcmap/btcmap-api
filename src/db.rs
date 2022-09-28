@@ -58,6 +58,17 @@ fn cli_migrate(db_conn: Connection) {
         schema_ver += 1;
     }
 
+    if schema_ver == 3 {
+        println!("Migrating database schema to version 4");
+        db_conn
+            .execute_batch(include_str!("../migrations/4.sql"))
+            .unwrap();
+        db_conn
+            .execute_batch(&format!("PRAGMA user_version={}", 4))
+            .unwrap();
+        schema_ver += 1;
+    }
+
     println!("Database schema is up to date (version {schema_ver})");
 }
 

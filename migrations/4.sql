@@ -1,0 +1,1 @@
+INSERT INTO area VALUES ('london-bitcoin-space', 'London Bitcoin Space', 'area', -0.54791, 51.27915, 0.35022, 51.69389);
