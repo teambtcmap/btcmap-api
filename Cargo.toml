@@ -18,3 +18,4 @@ time = { version = "0.3.9", features = ["formatting"] }
 directories = "4.0.1"
 log = "0.4.0"
 env_logger = "0.8.4"
+include_dir = "0.7.2"

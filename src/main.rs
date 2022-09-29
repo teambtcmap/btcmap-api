@@ -39,10 +39,15 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     let args: Vec<String> = env::args().collect();
-    let db_conn = Connection::open(get_db_file_path()).unwrap();
+    let mut db_conn = Connection::open(get_db_file_path()).unwrap();
 
     match args.len() {
         1 => {
+            if let Err(err) = db::migrate(&mut db_conn) {
+                eprintln!("Migration faied: {err}");
+                std::process::exit(1);
+            }
+
             let db_conn = web::Data::new(Mutex::new(db_conn));
 
             println!("Starting HTTP server");

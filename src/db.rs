@@ -1,15 +1,17 @@
 use crate::area::Area;
 use crate::daily_report::DailyReport;
 use crate::element::Element;
+use include_dir::include_dir;
+use include_dir::Dir;
 use rusqlite::{Connection, Row};
 use serde_json::Value;
 use std::fs::remove_file;
 
-pub fn cli_main(args: &[String], db_conn: Connection) {
+pub fn cli_main(args: &[String], mut db_conn: Connection) {
     match args.first() {
         Some(first_arg) => match first_arg.as_str() {
-            "migrate" => cli_migrate(db_conn),
-            "drop" => cli_drop(db_conn),
+            "migrate" => migrate(&mut db_conn).unwrap(),
+            "drop" => drop(db_conn),
             _ => panic!("Unknown action {first_arg}"),
         },
         None => {
@@ -18,61 +20,42 @@ pub fn cli_main(args: &[String], db_conn: Connection) {
     }
 }
 
-fn cli_migrate(db_conn: Connection) {
-    let mut schema_ver: i16 = db_conn
-        .query_row("SELECT user_version FROM pragma_user_version", [], |row| {
+static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
+
+pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let mut schema_ver: i16 =
+        db_conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
             row.get(0)
-        })
-        .unwrap();
+        })?;
 
-    if schema_ver == 0 {
-        println!("Creating database schema");
-        db_conn
-            .execute_batch(include_str!("../migrations/1.sql"))
-            .unwrap();
-        db_conn
-            .execute_batch(&format!("PRAGMA user_version={}", 1))
-            .unwrap();
-        schema_ver += 1;
-    }
-
-    if schema_ver == 1 {
-        println!("Migrating database schema to version 2");
-        db_conn
-            .execute_batch(include_str!("../migrations/2.sql"))
-            .unwrap();
-        db_conn
-            .execute_batch(&format!("PRAGMA user_version={}", 2))
-            .unwrap();
-        schema_ver += 1;
-    }
-
-    if schema_ver == 2 {
-        println!("Migrating database schema to version 3");
-        db_conn
-            .execute_batch(include_str!("../migrations/3.sql"))
-            .unwrap();
-        db_conn
-            .execute_batch(&format!("PRAGMA user_version={}", 3))
-            .unwrap();
-        schema_ver += 1;
-    }
-
-    if schema_ver == 3 {
-        println!("Migrating database schema to version 4");
-        db_conn
-            .execute_batch(include_str!("../migrations/4.sql"))
-            .unwrap();
-        db_conn
-            .execute_batch(&format!("PRAGMA user_version={}", 4))
-            .unwrap();
-        schema_ver += 1;
+    loop {
+        let file_name = format!("{}.sql", schema_ver + 1);
+        let file = MIGRATIONS_DIR.get_file(&file_name);
+        match file {
+            Some(file) => {
+                println!("Found new migration: {file_name}");
+                let sql = file
+                    .contents_utf8()
+                    .ok_or(format!("Can't read {file_name} in UTF-8"))?;
+                println!("{sql}");
+                let tx = db_conn.transaction()?;
+                tx.execute_batch(sql)?;
+                tx.execute_batch(&format!("PRAGMA user_version={}", schema_ver + 1))?;
+                tx.commit()?;
+                schema_ver += 1;
+            }
+            None => {
+                break;
+            }
+        }
     }
 
     println!("Database schema is up to date (version {schema_ver})");
+
+    Ok(())
 }
 
-fn cli_drop(db_conn: Connection) {
+fn drop(db_conn: Connection) {
     if !db_conn.path().unwrap().exists() {
         panic!("Database does not exist");
     } else {
