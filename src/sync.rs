@@ -117,7 +117,7 @@ pub async fn sync(mut db_conn: Connection) {
                 .unwrap_or("Unnamed element");
             println!("Cached element with id {} was deleted from OSM", element.id);
             send_discord_message(format!(
-                "{name} has been deleted https://www.openstreetmap.org/{element_type}/{osm_id}"
+                "{name} was deleted https://www.openstreetmap.org/{element_type}/{osm_id}"
             ))
             .await;
             let query =
@@ -145,7 +145,7 @@ pub async fn sync(mut db_conn: Connection) {
                 if element_data != fresh_element_data {
                     println!("Element {btcmap_id} has been updated");
                     send_discord_message(format!(
-                        "{name} has been updated by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
+                        "{name} was updated by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
                     ))
                     .await;
 
@@ -161,7 +161,7 @@ pub async fn sync(mut db_conn: Connection) {
             None => {
                 println!("Element {btcmap_id} does not exist, inserting");
                 send_discord_message(format!(
-                    "{name} has been added by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
+                    "{name} was added by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
                 ))
                 .await;
 
