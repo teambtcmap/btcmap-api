@@ -60,6 +60,7 @@ async fn main() -> std::io::Result<()> {
                     .service(get_daily_reports)
                     .service(get_areas)
                     .service(get_area)
+                    .service(get_area_elements)
             })
             .bind(("127.0.0.1", 8000))?
             .run()
@@ -97,7 +98,7 @@ async fn get_elements(
 ) -> Json<Vec<Element>> {
     let conn = conn.lock().unwrap();
 
-    let places: Vec<Element> = match &args.updated_since {
+    let elements: Vec<Element> = match &args.updated_since {
         Some(updated_since) => {
             let query = "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
             let mut stmt: Statement = conn.prepare(query).unwrap();
@@ -116,7 +117,7 @@ async fn get_elements(
         }
     };
 
-    Json(places)
+    Json(elements)
 }
 
 #[actix_web::get("/elements/{id}")]
@@ -296,6 +297,51 @@ async fn get_area(
         });
 
     Json(area)
+}
+
+#[actix_web::get("/areas/{id}/elements")]
+async fn get_area_elements(
+    path: web::Path<String>,
+    conn: web::Data<Mutex<Connection>>,
+) -> Json<Vec<Element>> {
+    let id = path.into_inner();
+    let conn = conn.lock().unwrap();
+
+    let query = "SELECT * FROM area WHERE id = ?";
+
+    let area = conn
+        .query_row(query, [id], db::mapper_area_full())
+        .optional()
+        .unwrap();
+
+    if let None = area {
+        return Json(vec![]);
+    }
+
+    let area = area.unwrap();
+
+    let query = "SELECT * FROM element ORDER BY updated_at DESC";
+    let mut stmt: Statement = conn.prepare(query).unwrap();
+
+    let elements: Vec<Element> = stmt
+        .query_map([], db::mapper_element_full())
+        .unwrap()
+        .map(|row| row.unwrap())
+        .filter(|it| {
+            let element_type = it.data["type"].as_str().unwrap();
+
+            if element_type != "node" {
+                return false;
+            }
+
+            let lat = it.data["lat"].as_f64().unwrap();
+            let lon = it.data["lon"].as_f64().unwrap();
+
+            lon > area.min_lon && lon < area.max_lon && lat > area.min_lat && lat < area.max_lat
+        })
+        .collect();
+
+    Json(elements)
 }
 
 fn get_db_file_path() -> PathBuf {
