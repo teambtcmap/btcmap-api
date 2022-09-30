@@ -1,0 +1,2 @@
+UPDATE area SET min_lon=-4.93704, min_lat=54.01989, max_lon=-4.14054, max_lat=54.43413 WHERE id='iom';
+UPDATE area SET min_lon=-5.40304, min_lat=36.10543, max_lon=-5.30142, max_lat=36.15576 WHERE id='bitcoin-rock';
