@@ -22,6 +22,10 @@ pub fn cli_main(args: &[String], mut db_conn: Connection) {
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
+pub static ELEMENT_SELECT_ALL: &str = "SELECT * FROM element ORDER BY updated_at DESC";
+pub static ELEMENT_SELECT_BY_ID: &str = "SELECT * FROM element WHERE id = ?";
+pub static ELEMENT_SELECT_UPDATED_SINCE: &str = "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
+
 pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error>> {
     let mut schema_ver: i16 =
         db_conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {

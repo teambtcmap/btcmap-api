@@ -1,4 +1,8 @@
 use crate::area::Area;
+use actix_web::http::header::ContentType;
+use actix_web::http::StatusCode;
+use actix_web::HttpResponse;
+use actix_web::ResponseError;
 use std::ops::Sub;
 extern crate core;
 
@@ -86,6 +90,47 @@ async fn main() -> std::io::Result<()> {
     }
 }
 
+#[derive(serde::Serialize, Debug)]
+struct ApiError {
+    message: String,
+}
+
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::convert::From<rusqlite::Error> for ApiError {
+    fn from(error: rusqlite::Error) -> Self {
+        ApiError {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl std::convert::From<std::sync::PoisonError<std::sync::MutexGuard<'_, rusqlite::Connection>>>
+    for ApiError
+{
+    fn from(_: std::sync::PoisonError<std::sync::MutexGuard<'_, rusqlite::Connection>>) -> Self {
+        ApiError {
+            message: "Failed to lock database connection".to_string(),
+        }
+    }
+}
+
+impl ResponseError for ApiError {
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::build(StatusCode::from_u16(500).unwrap())
+            .insert_header(ContentType::json())
+            .body(serde_json::to_string(self).unwrap())
+    }
+
+    fn status_code(&self) -> StatusCode {
+        StatusCode::from_u16(500).unwrap()
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct GetPlacesArgs {
     updated_since: Option<String>,
@@ -95,47 +140,39 @@ struct GetPlacesArgs {
 async fn get_elements(
     args: web::Query<GetPlacesArgs>,
     conn: web::Data<Mutex<Connection>>,
-) -> Json<Vec<Element>> {
-    let conn = conn.lock().unwrap();
-
-    let elements: Vec<Element> = match &args.updated_since {
-        Some(updated_since) => {
-            let query = "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
-            let mut stmt: Statement = conn.prepare(query).unwrap();
-            stmt.query_map([updated_since], db::mapper_element_full())
-                .unwrap()
-                .map(|row| row.unwrap())
-                .collect()
-        }
-        None => {
-            let query = "SELECT * FROM element ORDER BY updated_at DESC";
-            let mut stmt: Statement = conn.prepare(query).unwrap();
-            stmt.query_map([], db::mapper_element_full())
-                .unwrap()
-                .map(|row| row.unwrap())
-                .collect()
-        }
-    };
-
-    Json(elements)
+) -> Result<Json<Vec<Element>>, ApiError> {
+    Ok(Json(match &args.updated_since {
+        Some(updated_since) => conn
+            .lock()?
+            .prepare(db::ELEMENT_SELECT_UPDATED_SINCE)?
+            .query_map([updated_since], db::mapper_element_full())?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap())
+            .collect(),
+        None => conn
+            .lock()?
+            .prepare(db::ELEMENT_SELECT_ALL)?
+            .query_map([], db::mapper_element_full())?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap())
+            .collect(),
+    }))
 }
 
 #[actix_web::get("/elements/{id}")]
 async fn get_element(
     path: web::Path<String>,
     conn: web::Data<Mutex<Connection>>,
-) -> Json<Option<Element>> {
-    let id = path.into_inner();
-
-    let query = "SELECT * FROM element WHERE id = ?";
-    let place = conn
-        .lock()
-        .unwrap()
-        .query_row(query, [id], db::mapper_element_full())
-        .optional()
-        .unwrap();
-
-    Json(place)
+) -> Result<Json<Option<Element>>, ApiError> {
+    Ok(Json(
+        conn.lock()?
+            .query_row(
+                db::ELEMENT_SELECT_BY_ID,
+                [path.into_inner()],
+                db::mapper_element_full(),
+            )
+            .optional()?,
+    ))
 }
 
 #[actix_web::get("/daily_reports")]
