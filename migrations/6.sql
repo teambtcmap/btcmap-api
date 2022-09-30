@@ -1,0 +1,2 @@
+INSERT INTO area VALUES ('iom', 'Isle of Man', 'area', 54.01989, -4.93704, 54.43413, -4.14054);
+INSERT INTO area VALUES ('bitcoin-rock', 'Bitcoin Rock', 'area', 36.10543, -5.40304, 36.15576, -5.30142);
