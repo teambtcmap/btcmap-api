@@ -1,6 +1,6 @@
 use crate::db;
 use crate::get_project_dirs;
-use crate::Element;
+use crate::model::Element;
 use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::Statement;
@@ -16,32 +16,37 @@ use time::Duration;
 use time::OffsetDateTime;
 
 pub async fn sync(mut db_conn: Connection) {
-    println!("Starting sync");
+    log::info!("Starting sync");
 
     let project_dirs = get_project_dirs();
     let cache_dir = project_dirs.cache_dir();
-    println!("Cache directory is {cache_dir:?}");
+    log::info!("Cache directory is {cache_dir:?}");
 
     if cache_dir.exists() {
-        println!("Cache directory already exists");
+        log::info!("Cache directory already exists");
     } else {
-        println!("Cache directory doesn't exist, creating...");
+        log::info!("Cache directory doesn't exist, creating...");
         create_dir_all(cache_dir).expect("Failed to create cache directory");
-        println!("Created cache directory {cache_dir:?}");
+        log::info!("Created cache directory {cache_dir:?}");
     }
 
-    println!("Fetching new data...");
+    log::info!("Fetching new data...");
 
     let response = reqwest::Client::new()
         .get("https://data.btcmap.org/elements.json")
         .send()
-        .await
-        .expect("Failed to fetch new data");
+        .await;
 
-    println!("Fetched new data");
+    if let Err(_) = response {
+        log::error!("Failed to fetch response");
+        std::process::exit(1);
+    }
+
+    let response = response.unwrap();
+    log::info!("Fetched new data");
 
     let data_file_path = cache_dir.join("elements.json");
-    println!("Data file path is {data_file_path:?}");
+    log::info!("Data file path is {data_file_path:?}");
 
     let mut data_file = File::create(&data_file_path).expect("Failed to create data file");
     let response_body = response
@@ -82,8 +87,28 @@ pub async fn sync(mut db_conn: Connection) {
         relations.len(),
     );
 
+    let onchain_elements: Vec<&Value> = fresh_elements
+        .iter()
+        .filter(|it| it["tags"]["payment:onchain"].as_str().unwrap_or("") == "yes")
+        .collect();
+
+    let lightning_elements: Vec<&Value> = fresh_elements
+        .iter()
+        .filter(|it| it["tags"]["payment:lightning"].as_str().unwrap_or("") == "yes")
+        .collect();
+
+    let lightning_contactless_elements: Vec<&Value> = fresh_elements
+        .iter()
+        .filter(|it| {
+            it["tags"]["payment:lightning_contactless"]
+                .as_str()
+                .unwrap_or("")
+                == "yes"
+        })
+        .collect();
+
     let tx: Transaction = db_conn.transaction().unwrap();
-    let mut elements_stmt: Statement = tx.prepare("SELECT * FROM element").unwrap();
+    let mut elements_stmt: Statement = tx.prepare(db::ELEMENT_SELECT_ALL).unwrap();
     let elements: Vec<Element> = elements_stmt
         .query_map([], db::mapper_element_full())
         .unwrap()
@@ -220,16 +245,16 @@ pub async fn sync(mut db_conn: Connection) {
     println!("Elements updated: {elements_updated}");
     println!("Elements deleted: {elements_deleted}");
 
-    let query = "SELECT * FROM daily_report WHERE date = ?";
-    let report = tx.query_row(query, [today.to_string()], db::mapper_daily_report_full());
+    let report = tx.query_row(
+        db::DAILY_REPORT_SELECT_BY_DATE,
+        [today.to_string()],
+        db::mapper_daily_report_full(),
+    );
 
     if let Ok(report) = report {
         println!("Found existing report, deleting");
-        tx.execute(
-            "DELETE FROM daily_report WHERE date = ?",
-            [today.to_string()],
-        )
-        .unwrap();
+        tx.execute(db::DAILY_REPORT_DELETE_BY_DATE, [today.to_string()])
+            .unwrap();
         elements_created += report.elements_created;
         elements_updated += report.elements_updated;
         elements_deleted += report.elements_deleted;
@@ -237,8 +262,20 @@ pub async fn sync(mut db_conn: Connection) {
 
     println!("Inserting new or updated report");
     tx.execute(
-        "INSERT INTO daily_report (date, total_elements, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        params![today.to_string(), elements.len(), up_to_date_elements.len(), outdated_elements.len(), legacy_elements.len(), elements_created, elements_updated, elements_deleted],
+        db::DAILY_REPORT_INSERT,
+        params![
+            today.to_string(),
+            elements.len(),
+            onchain_elements.len(),
+            lightning_elements.len(),
+            lightning_contactless_elements.len(),
+            up_to_date_elements.len(),
+            outdated_elements.len(),
+            legacy_elements.len(),
+            elements_created,
+            elements_updated,
+            elements_deleted
+        ],
     )
     .unwrap();
 

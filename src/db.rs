@@ -1,16 +1,36 @@
-use crate::area::Area;
-use crate::daily_report::DailyReport;
-use crate::element::Element;
+use crate::model::Area;
+use crate::model::DailyReport;
+use crate::model::Element;
 use include_dir::include_dir;
 use include_dir::Dir;
 use rusqlite::{Connection, Row};
 use serde_json::Value;
 use std::fs::remove_file;
 
+static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
+
+pub static ELEMENT_SELECT_ALL: &str = "SELECT * FROM element ORDER BY updated_at DESC";
+pub static ELEMENT_SELECT_BY_ID: &str = "SELECT * FROM element WHERE id = ?";
+pub static ELEMENT_SELECT_UPDATED_SINCE: &str =
+    "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
+
+pub static DAILY_REPORT_INSERT: &str = "INSERT INTO daily_report (date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+pub static DAILY_REPORT_SELECT_ALL: &str = "SELECT date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted FROM daily_report ORDER BY date DESC";
+pub static DAILY_REPORT_SELECT_BY_DATE: &str = "SELECT date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted FROM daily_report WHERE date = ?";
+pub static DAILY_REPORT_DELETE_BY_DATE: &str = "DELETE FROM daily_report WHERE date = ?";
+
+pub static AREA_SELECT_BY_ID: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE id = ?";
+pub static AREA_SELECT_ALL: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area ORDER BY name";
+
 pub fn cli_main(args: &[String], mut db_conn: Connection) {
     match args.first() {
         Some(first_arg) => match first_arg.as_str() {
-            "migrate" => migrate(&mut db_conn).unwrap(),
+            "migrate" => {
+                if let Err(err) = migrate(&mut db_conn) {
+                    log::error!("Migration faied: {err}");
+                    std::process::exit(1);
+                }
+            }
             "drop" => drop(db_conn),
             _ => panic!("Unknown action {first_arg}"),
         },
@@ -19,12 +39,6 @@ pub fn cli_main(args: &[String], mut db_conn: Connection) {
         }
     }
 }
-
-static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
-
-pub static ELEMENT_SELECT_ALL: &str = "SELECT * FROM element ORDER BY updated_at DESC";
-pub static ELEMENT_SELECT_BY_ID: &str = "SELECT * FROM element WHERE id = ?";
-pub static ELEMENT_SELECT_UPDATED_SINCE: &str = "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
 
 pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error>> {
     let mut schema_ver: i16 =
@@ -37,11 +51,11 @@ pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error
         let file = MIGRATIONS_DIR.get_file(&file_name);
         match file {
             Some(file) => {
-                println!("Found new migration: {file_name}");
+                log::warn!("Found new migration: {file_name}");
                 let sql = file
                     .contents_utf8()
                     .ok_or(format!("Can't read {file_name} in UTF-8"))?;
-                println!("{sql}");
+                log::warn!("{sql}");
                 let tx = db_conn.transaction()?;
                 tx.execute_batch(sql)?;
                 tx.execute_batch(&format!("PRAGMA user_version={}", schema_ver + 1))?;
@@ -54,21 +68,22 @@ pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error
         }
     }
 
-    println!("Database schema is up to date (version {schema_ver})");
+    log::info!("Database schema is up to date (version {schema_ver})");
 
     Ok(())
 }
 
 fn drop(db_conn: Connection) {
     if !db_conn.path().unwrap().exists() {
-        panic!("Database does not exist");
+        log::error!("Database does not exist");
+        std::process::exit(1);
     } else {
-        println!(
+        log::info!(
             "Found database at {}",
             db_conn.path().unwrap().to_str().unwrap()
         );
         remove_file(db_conn.path().unwrap()).unwrap();
-        println!("Database file was removed");
+        log::info!("Database file was removed");
     }
 }
 
@@ -92,12 +107,15 @@ pub fn mapper_daily_report_full() -> fn(&Row) -> rusqlite::Result<DailyReport> {
         Ok(DailyReport {
             date: row.get(0)?,
             total_elements: row.get(1)?,
-            up_to_date_elements: row.get(2)?,
-            outdated_elements: row.get(3)?,
-            legacy_elements: row.get(4)?,
-            elements_created: row.get(5)?,
-            elements_updated: row.get(6)?,
-            elements_deleted: row.get(7)?,
+            total_elements_onchain: row.get(2)?,
+            total_elements_lightning: row.get(3)?,
+            total_elements_lightning_contactless: row.get(4)?,
+            up_to_date_elements: row.get(5)?,
+            outdated_elements: row.get(6)?,
+            legacy_elements: row.get(7)?,
+            elements_created: row.get(8)?,
+            elements_updated: row.get(9)?,
+            elements_deleted: row.get(10)?,
         })
     }
 }

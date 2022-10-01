@@ -4,6 +4,9 @@ use serde::Serialize;
 pub struct DailyReport {
     pub date: String,
     pub total_elements: i64,
+    pub total_elements_onchain: i64,
+    pub total_elements_lightning: i64,
+    pub total_elements_lightning_contactless: i64,
     pub up_to_date_elements: i64,
     pub outdated_elements: i64,
     pub legacy_elements: i64,
