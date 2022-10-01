@@ -12,6 +12,7 @@ use std::env;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::ops::Sub;
+use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
 
@@ -145,8 +146,9 @@ pub async fn sync(mut db_conn: Connection) {
             tx.execute(
                 db::ELEMENT_EVENT_INSERT,
                 params![
-                    OffsetDateTime::now_utc().to_string(),
+                    OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                     element.id,
+                    name,
                     "delete",
                     "",
                 ],
@@ -185,8 +187,9 @@ pub async fn sync(mut db_conn: Connection) {
                     tx.execute(
                         db::ELEMENT_EVENT_INSERT,
                         params![
-                            OffsetDateTime::now_utc().to_string(),
+                            OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                             btcmap_id,
+                            name,
                             "update",
                             user
                         ],
@@ -213,8 +216,9 @@ pub async fn sync(mut db_conn: Connection) {
                 tx.execute(
                     db::ELEMENT_EVENT_INSERT,
                     params![
-                        OffsetDateTime::now_utc().to_string(),
+                        OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                         btcmap_id,
+                        name,
                         "create",
                         user
                     ],

@@ -1,0 +1,1 @@
+ALTER TABLE element_event ADD COLUMN element_name TEXT NOT NULL DEFAULT '';
