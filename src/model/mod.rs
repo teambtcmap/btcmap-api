@@ -9,3 +9,6 @@ pub use area::Area;
 
 pub mod daily_report;
 pub use daily_report::DailyReport;
+
+pub mod element_event;
+pub use element_event::ElementEvent;

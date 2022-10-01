@@ -55,6 +55,7 @@ async fn main() -> std::io::Result<()> {
                     .service(controller::area::get_areas)
                     .service(controller::area::get_area)
                     .service(controller::area::get_area_elements)
+                    .service(controller::element_event::get)
             })
             .bind(("127.0.0.1", 8000))?
             .run()

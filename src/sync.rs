@@ -141,6 +141,18 @@ pub async fn sync(mut db_conn: Connection) {
                 .as_str()
                 .unwrap_or("Unnamed element");
             println!("Cached element with id {} was deleted from OSM", element.id);
+
+            tx.execute(
+                db::ELEMENT_EVENT_INSERT,
+                params![
+                    OffsetDateTime::now_utc().to_string(),
+                    element.id,
+                    "delete",
+                    "",
+                ],
+            )
+            .unwrap();
+
             send_discord_message(format!(
                 "{name} was deleted https://www.openstreetmap.org/{element_type}/{osm_id}"
             ))
@@ -169,6 +181,18 @@ pub async fn sync(mut db_conn: Connection) {
 
                 if element_data != fresh_element_data {
                     println!("Element {btcmap_id} has been updated");
+
+                    tx.execute(
+                        db::ELEMENT_EVENT_INSERT,
+                        params![
+                            OffsetDateTime::now_utc().to_string(),
+                            btcmap_id,
+                            "update",
+                            user
+                        ],
+                    )
+                    .unwrap();
+
                     send_discord_message(format!(
                         "{name} was updated by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
                     ))
@@ -185,6 +209,18 @@ pub async fn sync(mut db_conn: Connection) {
             }
             None => {
                 println!("Element {btcmap_id} does not exist, inserting");
+
+                tx.execute(
+                    db::ELEMENT_EVENT_INSERT,
+                    params![
+                        OffsetDateTime::now_utc().to_string(),
+                        btcmap_id,
+                        "create",
+                        user
+                    ],
+                )
+                .unwrap();
+
                 send_discord_message(format!(
                     "{name} was added by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
                 ))

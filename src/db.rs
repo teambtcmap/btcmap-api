@@ -1,3 +1,4 @@
+use crate::model::ElementEvent;
 use crate::model::Area;
 use crate::model::DailyReport;
 use crate::model::Element;
@@ -21,6 +22,9 @@ pub static DAILY_REPORT_DELETE_BY_DATE: &str = "DELETE FROM daily_report WHERE d
 
 pub static AREA_SELECT_BY_ID: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE id = ?";
 pub static AREA_SELECT_ALL: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area ORDER BY name";
+
+pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO element_event (date, element_id, type, user) VALUES (?, ?, ?, ?)";
+pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT date, element_id, type, user FROM element_event ORDER BY date DESC";
 
 pub fn cli_main(args: &[String], mut db_conn: Connection) {
     match args.first() {
@@ -130,6 +134,17 @@ pub fn mapper_area_full() -> fn(&Row) -> rusqlite::Result<Area> {
             min_lat: row.get(4)?,
             max_lon: row.get(5)?,
             max_lat: row.get(6)?,
+        })
+    }
+}
+
+pub fn mapper_element_event_full() -> fn(&Row) -> rusqlite::Result<ElementEvent> {
+    |row: &Row| -> rusqlite::Result<ElementEvent> {
+        Ok(ElementEvent {
+            date: row.get(0)?,
+            element_id: row.get(1)?,
+            event_type: row.get(2)?,
+            user: row.get(3)?,
         })
     }
 }
