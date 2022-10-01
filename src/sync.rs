@@ -31,10 +31,26 @@ pub async fn sync(mut db_conn: Connection) {
         log::info!("Created cache directory {cache_dir:?}");
     }
 
-    log::info!("Fetching new data...");
-
+    log::info!("Querying OSM API, it could take a while...");
     let response = reqwest::Client::new()
-        .get("https://data.btcmap.org/elements.json")
+        .post("https://overpass-api.de/api/interpreter")
+        .body(
+            r#"
+            [out:json][timeout:300];
+            (
+              node["currency:XBT"="yes"];
+              way["currency:XBT"="yes"];
+              relation["currency:XBT"="yes"];
+              node["payment:bitcoin"="yes"];
+              way["payment:bitcoin"="yes"];
+              relation["payment:bitcoin"="yes"];
+              node["currency:BTC"="yes"];
+              way["currency:BTC"="yes"];
+              relation["currency:BTC"="yes"];
+            );
+            out meta geom;
+        "#,
+        )
         .send()
         .await;
 
@@ -64,8 +80,6 @@ pub async fn sync(mut db_conn: Connection) {
     let fresh_elements: &Vec<Value> = fresh_elements["elements"]
         .as_array()
         .expect("Failed to extract elements");
-    println!("Got {} elements", fresh_elements.len());
-
     let nodes: Vec<&Value> = fresh_elements
         .iter()
         .filter(|it| it["type"].as_str().unwrap() == "node")
@@ -81,11 +95,12 @@ pub async fn sync(mut db_conn: Connection) {
         .filter(|it| it["type"].as_str().unwrap() == "relation")
         .collect();
 
-    println!(
-        "Of them:\nNodes {}\nWays {}\nRelations {}",
+    log::info!(
+        "Got {} elements (nodes: {}, ways: {}, relations: {})",
+        fresh_elements.len(),
         nodes.len(),
         ways.len(),
-        relations.len(),
+        relations.len()
     );
 
     let onchain_elements: Vec<&Value> = fresh_elements
@@ -116,7 +131,7 @@ pub async fn sync(mut db_conn: Connection) {
         .map(|row| row.unwrap())
         .collect();
     drop(elements_stmt);
-    println!("Found {} cached elements", elements.len());
+    log::info!("Found {} cached elements", elements.len());
 
     let fresh_element_ids: HashSet<String> = fresh_elements
         .iter()
@@ -141,7 +156,7 @@ pub async fn sync(mut db_conn: Connection) {
             let name = element.data["tags"]["name"]
                 .as_str()
                 .unwrap_or("Unnamed element");
-            println!("Cached element with id {} was deleted from OSM", element.id);
+            log::warn!("Cached element with id {} was deleted from OSM", element.id);
 
             tx.execute(
                 db::ELEMENT_EVENT_INSERT,
@@ -161,7 +176,7 @@ pub async fn sync(mut db_conn: Connection) {
             .await;
             let query =
                 "UPDATE element SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE id = ?";
-            println!("Executing query: {query:?}");
+            log::info!("Executing query: {query:?}");
             tx.execute(query, params![element.id]).unwrap();
             elements_deleted += 1;
         }
@@ -182,7 +197,7 @@ pub async fn sync(mut db_conn: Connection) {
                 let fresh_element_data = serde_json::to_string(fresh_element).unwrap();
 
                 if element_data != fresh_element_data {
-                    println!("Element {btcmap_id} has been updated");
+                    log::warn!("Element {btcmap_id} was updated");
 
                     tx.execute(
                         db::ELEMENT_EVENT_INSERT,
@@ -211,7 +226,7 @@ pub async fn sync(mut db_conn: Connection) {
                 }
             }
             None => {
-                println!("Element {btcmap_id} does not exist, inserting");
+                log::warn!("Element {btcmap_id} does not exist, inserting");
 
                 tx.execute(
                     db::ELEMENT_EVENT_INSERT,
@@ -243,7 +258,7 @@ pub async fn sync(mut db_conn: Connection) {
 
     let today = OffsetDateTime::now_utc().date();
     let year_ago = today.sub(Duration::days(365));
-    println!("Today: {today}, year ago: {year_ago}");
+    log::info!("Today: {today}, year ago: {year_ago}");
 
     let up_to_date_elements: Vec<&Value> = fresh_elements
         .iter()
@@ -277,13 +292,13 @@ pub async fn sync(mut db_conn: Connection) {
         .filter(|it| it["tags"].get("payment:bitcoin").is_some())
         .collect();
 
-    println!("Total elements: {}", elements.len());
-    println!("Up to date elements: {}", up_to_date_elements.len());
-    println!("Outdated elements: {}", outdated_elements.len());
-    println!("Legacy elements: {}", legacy_elements.len());
-    println!("Elements created: {elements_created}");
-    println!("Elements updated: {elements_updated}");
-    println!("Elements deleted: {elements_deleted}");
+    log::info!("Total elements: {}", elements.len());
+    log::info!("Up to date elements: {}", up_to_date_elements.len());
+    log::info!("Outdated elements: {}", outdated_elements.len());
+    log::info!("Legacy elements: {}", legacy_elements.len());
+    log::info!("Elements created: {elements_created}");
+    log::info!("Elements updated: {elements_updated}");
+    log::info!("Elements deleted: {elements_deleted}");
 
     let report = tx.query_row(
         db::DAILY_REPORT_SELECT_BY_DATE,
@@ -292,7 +307,7 @@ pub async fn sync(mut db_conn: Connection) {
     );
 
     if let Ok(report) = report {
-        println!("Found existing report, deleting");
+        log::info!("Found existing report, deleting");
         tx.execute(db::DAILY_REPORT_DELETE_BY_DATE, [today.to_string()])
             .unwrap();
         elements_created += report.elements_created;
@@ -300,7 +315,7 @@ pub async fn sync(mut db_conn: Connection) {
         elements_deleted += report.elements_deleted;
     }
 
-    println!("Inserting new or updated report");
+    log::info!("Inserting new or updated report");
     tx.execute(
         db::DAILY_REPORT_INSERT,
         params![
@@ -320,12 +335,12 @@ pub async fn sync(mut db_conn: Connection) {
     .unwrap();
 
     tx.commit().expect("Failed to save sync results");
-    println!("Finished sync");
+    log::info!("Finished sync");
 }
 
 async fn send_discord_message(text: String) {
     if let Ok(discord_webhook_url) = env::var("DISCORD_WEBHOOK_URL") {
-        println!("Sending Discord message");
+        log::info!("Sending Discord message");
         let mut args = HashMap::new();
         args.insert("username", "btcmap.org".to_string());
         args.insert("content", text);
@@ -338,10 +353,10 @@ async fn send_discord_message(text: String) {
 
         match response {
             Ok(response) => {
-                println!("Discord response status: {:?}", response.status());
+                log::info!("Discord response status: {:?}", response.status());
             }
             Err(_) => {
-                println!("Failed to send Discord message");
+                log::error!("Failed to send Discord message");
             }
         }
     }
