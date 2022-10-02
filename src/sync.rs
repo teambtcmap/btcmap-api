@@ -163,6 +163,8 @@ pub async fn sync(mut db_conn: Connection) {
                 params![
                     OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                     element.id,
+                    element.lat(),
+                    element.lon(),
                     name,
                     "delete",
                     "",
@@ -204,6 +206,8 @@ pub async fn sync(mut db_conn: Connection) {
                         params![
                             OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                             btcmap_id,
+                            element.lat(),
+                            element.lon(),
                             name,
                             "update",
                             user
@@ -228,11 +232,21 @@ pub async fn sync(mut db_conn: Connection) {
             None => {
                 log::warn!("Element {btcmap_id} does not exist, inserting");
 
+                let element = Element {
+                    id: "".to_string(),
+                    data: fresh_element.clone(),
+                    created_at: "".to_string(),
+                    updated_at: "".to_string(),
+                    deleted_at: Option::None,
+                };
+
                 tx.execute(
                     db::ELEMENT_EVENT_INSERT,
                     params![
                         OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                         btcmap_id,
+                        element.lat(),
+                        element.lon(),
                         name,
                         "create",
                         user
@@ -320,7 +334,7 @@ pub async fn sync(mut db_conn: Connection) {
         db::DAILY_REPORT_INSERT,
         params![
             today.to_string(),
-            elements.len(),
+            fresh_elements.len(),
             onchain_elements.len(),
             lightning_elements.len(),
             lightning_contactless_elements.len(),

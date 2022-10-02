@@ -1,0 +1,2 @@
+ALTER TABLE element_event ADD COLUMN element_lat REAL NOT NULL DEFAULT -1000;
+ALTER TABLE element_event ADD COLUMN element_lon REAL NOT NULL DEFAULT -1000;
