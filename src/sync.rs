@@ -157,6 +157,9 @@ pub async fn sync(mut db_conn: Connection) {
                 .as_str()
                 .unwrap_or("Unnamed element");
             log::warn!("Cached element with id {} was deleted from OSM", element.id);
+            let user = fetch_element(element_type, osm_id)
+                .await
+                .map(|it| it["user"].as_str().unwrap_or("").to_string());
 
             tx.execute(
                 db::ELEMENT_EVENT_INSERT,
@@ -167,7 +170,7 @@ pub async fn sync(mut db_conn: Connection) {
                     element.lon(),
                     name,
                     "delete",
-                    "",
+                    user.unwrap_or("".to_string()),
                 ],
             )
             .unwrap();
@@ -374,4 +377,39 @@ async fn send_discord_message(text: String) {
             }
         }
     }
+}
+
+async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
+    let url = format!("https://api.openstreetmap.org/api/0.6/{element_type}/{element_id}.json");
+    log::info!("Querying {url}");
+    let res = reqwest::get(&url).await;
+
+    if let Err(_) = res {
+        log::error!("Failed to fetch element {element_type}:{element_id}");
+        return None;
+    }
+
+    let body = res.unwrap().text().await;
+
+    if let Err(_) = body {
+        log::error!("Failed to fetch element {element_type}:{element_id}");
+        return None;
+    }
+
+    let body: serde_json::Result<Value> = serde_json::from_str(&body.unwrap());
+
+    if let Err(_) = body {
+        log::error!("Failed to fetch element {element_type}:{element_id}");
+        return None;
+    }
+
+    let body = body.unwrap();
+    let elements: Option<&Vec<Value>> = body["elements"].as_array();
+
+    if elements.is_none() || elements.unwrap().len() == 0 {
+        log::error!("Failed to fetch element {element_type}:{element_id}");
+        return None;
+    }
+
+    Some(elements.unwrap()[0].clone())
 }
