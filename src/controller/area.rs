@@ -96,68 +96,80 @@ async fn get_areas(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetAreasIte
 async fn get_area(
     path: Path<String>,
     conn: Data<Mutex<Connection>>,
-) -> Result<Json<Option<GetAreasItem>>, ApiError> {
+) -> Result<Json<GetAreasItem>, ApiError> {
+    let id_or_name = path.into_inner();
     let conn = conn.lock()?;
 
-    let area = conn
-        .query_row(
-            db::AREA_SELECT_BY_ID,
-            [path.into_inner()],
-            db::mapper_area_full(),
-        )
-        .optional()?
-        .map(|area| {
-            let elements: Vec<Element> = conn
-                .prepare(db::ELEMENT_SELECT_ALL)
-                .unwrap()
-                .query_map([], db::mapper_element_full())
-                .unwrap()
-                .map(|row| row.unwrap())
-                .collect();
+    let area_by_id = conn
+        .query_row(db::AREA_SELECT_BY_ID, [&id_or_name], db::mapper_area_full())
+        .optional()?;
 
-            let area_elements: Vec<&Element> = elements
-                .iter()
-                .filter(|it| it.data["type"].as_str().unwrap() == "node")
-                .filter(|it| {
-                    let lat = it.data["lat"].as_f64().unwrap();
-                    let lon = it.data["lon"].as_f64().unwrap();
-                    lon > area.min_lon
-                        && lon < area.max_lon
-                        && lat > area.min_lat
-                        && lat < area.max_lat
-                })
-                .collect();
+    match area_by_id {
+        Some(area) => area_to_areas_item(area, &conn),
+        None => {
+            let area_by_name = conn
+                .query_row(
+                    db::AREA_SELECT_BY_NAME,
+                    [&id_or_name],
+                    db::mapper_area_full(),
+                )
+                .optional()?;
 
-            let elements_len = area_elements.len();
-            let today = OffsetDateTime::now_utc().date();
-            let year_ago = today.sub(Duration::days(365));
-
-            let up_to_date_elements: Vec<&Element> = area_elements
-                .into_iter()
-                .filter(|it| {
-                    (it.data["tags"].get("survey:date").is_some()
-                        && it.data["tags"]["survey:date"].as_str().unwrap().to_string()
-                            > year_ago.to_string())
-                        || (it.data["tags"].get("check_date").is_some()
-                            && it.data["tags"]["check_date"].as_str().unwrap().to_string()
-                                > year_ago.to_string())
-                })
-                .collect();
-
-            GetAreasItem {
-                id: area.id,
-                name: area.name,
-                area_type: area.area_type,
-                min_lon: area.min_lon,
-                min_lat: area.min_lat,
-                max_lon: area.max_lon,
-                max_lat: area.max_lat,
-                elements: elements_len,
-                up_to_date_elements: up_to_date_elements.len(),
+            match area_by_name {
+                Some(area) => area_to_areas_item(area, &conn),
+                None => Result::Err(ApiError {
+                    message: format!("Area with id or name {} doesn't exist", &id_or_name)
+                        .to_string(),
+                }),
             }
-        });
+        }
+    }
+}
 
-    Ok(Json(area))
+fn area_to_areas_item(area: Area, conn: &Connection) -> Result<Json<GetAreasItem>, ApiError> {
+    let all_elements: Vec<Element> = conn
+        .prepare(db::ELEMENT_SELECT_ALL)?
+        .query_map([], db::mapper_element_full())?
+        .map(|row| row.unwrap())
+        .collect();
+
+    let area_elements: Vec<&Element> = all_elements
+        .iter()
+        .filter(|it| {
+            it.lon() > area.min_lon
+                && it.lon() < area.max_lon
+                && it.lat() > area.min_lat
+                && it.lat() < area.max_lat
+        })
+        .collect();
+
+    let elements_len = area_elements.len();
+    let today = OffsetDateTime::now_utc().date();
+    let year_ago = today.sub(Duration::days(365));
+
+    let up_to_date_elements: Vec<&Element> = area_elements
+        .into_iter()
+        .filter(|it| {
+            (it.data["tags"].get("survey:date").is_some()
+                && it.data["tags"]["survey:date"].as_str().unwrap().to_string()
+                    > year_ago.to_string())
+                || (it.data["tags"].get("check_date").is_some()
+                    && it.data["tags"]["check_date"].as_str().unwrap().to_string()
+                        > year_ago.to_string())
+        })
+        .collect();
+
+    Ok(Json(GetAreasItem {
+        id: area.id,
+        name: area.name,
+        area_type: area.area_type,
+        min_lon: area.min_lon,
+        min_lat: area.min_lat,
+        max_lon: area.max_lon,
+        max_lat: area.max_lat,
+        elements: elements_len,
+        up_to_date_elements: up_to_date_elements.len(),
+    }))
 }
 
 #[get("/areas/{id}/elements")]

@@ -9,7 +9,7 @@ use std::sync::PoisonError;
 
 #[derive(serde::Serialize, Debug)]
 pub struct ApiError {
-    message: String,
+    pub message: String,
 }
 
 impl ResponseError for ApiError {

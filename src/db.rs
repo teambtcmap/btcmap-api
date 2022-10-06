@@ -20,8 +20,9 @@ pub static DAILY_REPORT_SELECT_ALL: &str = "SELECT date, total_elements, total_e
 pub static DAILY_REPORT_SELECT_BY_DATE: &str = "SELECT date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted FROM daily_report WHERE date = ?";
 pub static DAILY_REPORT_DELETE_BY_DATE: &str = "DELETE FROM daily_report WHERE date = ?";
 
-pub static AREA_SELECT_BY_ID: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE id = ?";
 pub static AREA_SELECT_ALL: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area ORDER BY name";
+pub static AREA_SELECT_BY_ID: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE id = ?";
+pub static AREA_SELECT_BY_NAME: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE UPPER(name) = UPPER(?)";
 
 pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO element_event (date, element_id, element_lat, element_lon, element_name, type, user) VALUES (?, ?, ?, ?, ?, ?, ?)";
 pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT date, element_id, element_lat, element_lon, element_name, type, user FROM element_event ORDER BY date DESC";
