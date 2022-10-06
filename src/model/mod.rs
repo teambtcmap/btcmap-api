@@ -12,3 +12,6 @@ pub use daily_report::DailyReport;
 
 pub mod element_event;
 pub use element_event::ElementEvent;
+
+pub mod user;
+pub use user::User;

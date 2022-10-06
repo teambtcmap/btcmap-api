@@ -42,6 +42,8 @@ async fn main() -> std::io::Result<()> {
                 std::process::exit(1);
             }
 
+            //sync::insert_user_if_not_exists(2104834, &db_conn).await;
+
             let db_conn = Data::new(Mutex::new(db_conn));
 
             log::info!("Starting HTTP server");
@@ -56,6 +58,7 @@ async fn main() -> std::io::Result<()> {
                     .service(controller::area::get_area)
                     .service(controller::area::get_area_elements)
                     .service(controller::element_event::get)
+                    .service(controller::user::get)
             })
             .bind(("127.0.0.1", 8000))?
             .run()

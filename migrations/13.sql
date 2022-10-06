@@ -1,0 +1,1 @@
+ALTER TABLE element_event ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0;

@@ -1,8 +1,10 @@
 use crate::db;
 use crate::get_project_dirs;
 use crate::model::Element;
+use crate::model::User;
 use rusqlite::params;
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 use rusqlite::Statement;
 use rusqlite::Transaction;
 use serde_json::Value;
@@ -157,9 +159,18 @@ pub async fn sync(mut db_conn: Connection) {
                 .as_str()
                 .unwrap_or("Unnamed element");
             log::warn!("Cached element with id {} was deleted from OSM", element.id);
-            let user = fetch_element(element_type, osm_id)
-                .await
-                .map(|it| it["user"].as_str().unwrap_or("").to_string());
+
+            let fresh_element = fetch_element(element_type, osm_id).await;
+            let user_id = fresh_element
+                .clone()
+                .map(|it| it["uid"].as_i64().unwrap_or(0))
+                .unwrap_or(0);
+            let user_display_name = fresh_element
+                .clone()
+                .map(|it| it["user"].as_str().unwrap_or("").to_string())
+                .unwrap_or("".to_string());
+
+            insert_user_if_not_exists(user_id, &tx).await;
 
             tx.execute(
                 db::ELEMENT_EVENT_INSERT,
@@ -170,7 +181,8 @@ pub async fn sync(mut db_conn: Connection) {
                     element.lon(),
                     name,
                     "delete",
-                    user.unwrap_or("".to_string()),
+                    user_id,
+                    user_display_name,
                 ],
             )
             .unwrap();
@@ -194,7 +206,8 @@ pub async fn sync(mut db_conn: Connection) {
         let name = fresh_element["tags"]["name"]
             .as_str()
             .unwrap_or("Unnamed element");
-        let user = fresh_element["user"].as_str().unwrap_or("unknown user");
+        let user_id = fresh_element["uid"].as_i64().unwrap_or(0);
+        let user_display_name = fresh_element["user"].as_str().unwrap_or("");
 
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
@@ -203,6 +216,8 @@ pub async fn sync(mut db_conn: Connection) {
 
                 if element_data != fresh_element_data {
                     log::warn!("Element {btcmap_id} was updated");
+
+                    insert_user_if_not_exists(user_id, &tx).await;
 
                     tx.execute(
                         db::ELEMENT_EVENT_INSERT,
@@ -213,13 +228,14 @@ pub async fn sync(mut db_conn: Connection) {
                             element.lon(),
                             name,
                             "update",
-                            user
+                            user_id,
+                            user_display_name,
                         ],
                     )
                     .unwrap();
 
                     send_discord_message(format!(
-                        "{name} was updated by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
+                        "{name} was updated by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
                     ))
                     .await;
 
@@ -234,6 +250,8 @@ pub async fn sync(mut db_conn: Connection) {
             }
             None => {
                 log::warn!("Element {btcmap_id} does not exist, inserting");
+
+                insert_user_if_not_exists(user_id, &tx).await;
 
                 let element = Element {
                     id: "".to_string(),
@@ -252,13 +270,14 @@ pub async fn sync(mut db_conn: Connection) {
                         element.lon(),
                         name,
                         "create",
-                        user
+                        user_id,
+                        user_display_name,
                     ],
                 )
                 .unwrap();
 
                 send_discord_message(format!(
-                    "{name} was added by {user} https://www.openstreetmap.org/{element_type}/{osm_id}"
+                    "{name} was added by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
                 ))
                 .await;
 
@@ -412,4 +431,57 @@ async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
     }
 
     Some(elements.unwrap()[0].clone())
+}
+
+pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
+    if user_id == 0 {
+        return;
+    }
+
+    let db_user: Option<User> = conn
+        .query_row(db::USER_SELECT_BY_ID, [user_id], db::mapper_user_full())
+        .optional()
+        .unwrap();
+
+    if db_user.is_some() {
+        log::info!("User {user_id} already exists");
+        return;
+    }
+
+    let url = format!("https://api.openstreetmap.org/api/0.6/user/{user_id}.json");
+    log::info!("Querying {url}");
+    let res = reqwest::get(&url).await;
+
+    if let Err(_) = res {
+        log::error!("Failed to fetch user {user_id}");
+        return;
+    }
+
+    let body = res.unwrap().text().await;
+
+    if let Err(_) = body {
+        log::error!("Failed to fetch user {user_id}");
+        return;
+    }
+
+    let body: serde_json::Result<Value> = serde_json::from_str(&body.unwrap());
+
+    if let Err(_) = body {
+        log::error!("Failed to fetch user {user_id}");
+        return;
+    }
+
+    let body = body.unwrap();
+    let user: Option<&Value> = body.get("user");
+
+    if user.is_none() {
+        log::error!("Failed to fetch user {user_id}");
+        return;
+    }
+
+    conn.execute(
+        db::USER_INSERT,
+        params![user_id, serde_json::to_string(user.unwrap()).unwrap()],
+    )
+    .unwrap();
 }
