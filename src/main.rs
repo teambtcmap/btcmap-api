@@ -5,6 +5,7 @@ mod controller;
 mod db;
 mod model;
 mod sync;
+mod sync_users;
 
 use std::env;
 use std::fs::create_dir_all;
@@ -73,6 +74,9 @@ async fn main() -> std::io::Result<()> {
                 }
                 "sync" => {
                     sync::sync(db_conn).await;
+                }
+                "sync-users" => {
+                    sync_users::sync(db_conn).await;
                 }
                 _ => {
                     log::error!("Unknown action");
