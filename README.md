@@ -1,6 +1,7 @@
 # btcmap-api
 
-API documentation to come!
+- https://api.btcmap.org/v2/elements
+- https://api.btcmap.org/v2/elements/node:9985802993
 
 ---
 
