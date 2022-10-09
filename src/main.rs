@@ -62,6 +62,9 @@ async fn main() -> std::io::Result<()> {
                     .service(controller::area::get_area_elements)
                     .service(controller::element_event::get)
                     .service(controller::user::get)
+                    .service(controller::user::get_v2)
+                    .service(controller::user::get_by_id)
+                    .service(controller::user::get_by_id_v2)
             })
             .bind(("127.0.0.1", 8000))?
             .run()

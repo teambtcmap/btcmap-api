@@ -57,5 +57,7 @@ pub async fn sync(db_conn: Connection) {
                 )
                 .unwrap();
         }
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
     }
 }
