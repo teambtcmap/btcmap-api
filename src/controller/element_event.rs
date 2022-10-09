@@ -6,11 +6,10 @@ use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use rusqlite::Connection;
-use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Mutex;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct GetElementEventsItem {
     pub date: String,
     pub element_id: String,
@@ -21,6 +20,29 @@ pub struct GetElementEventsItem {
     pub user_id: i64,
     pub user: Option<String>,
     pub user_v2: Option<User>,
+}
+
+#[derive(Serialize)]
+pub struct GetEventItemV2 {
+    pub date: String,
+    pub r#type: String,
+    pub element_id: String,
+    pub element_lat: f64,
+    pub element_lon: f64,
+    pub user_id: i64,
+}
+
+impl Into<GetEventItemV2> for ElementEvent {
+    fn into(self) -> GetEventItemV2 {
+        GetEventItemV2 {
+            date: self.date,
+            r#type: self.event_type,
+            element_id: self.element_id,
+            element_lat: self.element_lat,
+            element_lon: self.element_lon,
+            user_id: self.user_id,
+        }
+    }
 }
 
 #[get("/element_events")]
@@ -70,4 +92,16 @@ async fn get(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetElementEventsI
         .collect();
 
     Ok(Json(res))
+}
+
+#[get("/v2/events")]
+async fn get_v2(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetEventItemV2>>, ApiError> {
+    Ok(Json(
+        conn.lock()?
+            .prepare(db::ELEMENT_EVENT_SELECT_ALL)?
+            .query_map([], db::mapper_element_event_full())?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap().into())
+            .collect(),
+    ))
 }

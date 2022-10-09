@@ -61,6 +61,7 @@ async fn main() -> std::io::Result<()> {
                     .service(controller::area::get_area)
                     .service(controller::area::get_area_elements)
                     .service(controller::element_event::get)
+                    .service(controller::element_event::get_v2)
                     .service(controller::user::get)
                     .service(controller::user::get_v2)
                     .service(controller::user::get_by_id)
