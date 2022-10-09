@@ -8,7 +8,6 @@ use actix_web::web::Json;
 use actix_web::web::Path;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
-use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Mutex;
 use time::Duration;
@@ -16,7 +15,7 @@ use time::OffsetDateTime;
 
 use std::ops::Sub;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct GetAreasItem {
     pub id: String,
     pub name: String,
@@ -29,8 +28,33 @@ pub struct GetAreasItem {
     pub up_to_date_elements: usize,
 }
 
+#[derive(Serialize)]
+pub struct GetAreasItemV2 {
+    pub id: String,
+    pub name: String,
+    pub r#type: String,
+    pub min_lon: f64,
+    pub min_lat: f64,
+    pub max_lon: f64,
+    pub max_lat: f64,
+}
+
+impl Into<GetAreasItemV2> for Area {
+    fn into(self) -> GetAreasItemV2 {
+        GetAreasItemV2 {
+            id: self.id,
+            name: self.name,
+            r#type: self.area_type,
+            min_lon: self.min_lon,
+            min_lat: self.min_lat,
+            max_lon: self.max_lon,
+            max_lat: self.max_lat,
+        }
+    }
+}
+
 #[get("/areas")]
-async fn get_areas(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetAreasItem>>, ApiError> {
+async fn get(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetAreasItem>>, ApiError> {
     let conn = conn.lock()?;
 
     let areas: Vec<Area> = conn
@@ -92,8 +116,20 @@ async fn get_areas(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetAreasIte
     Ok(Json(res))
 }
 
+#[get("/v2/areas")]
+async fn get_v2(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetAreasItemV2>>, ApiError> {
+    Ok(Json(
+        conn.lock()?
+            .prepare(db::AREA_SELECT_ALL)?
+            .query_map([], db::mapper_area_full())?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap().into())
+            .collect(),
+    ))
+}
+
 #[get("/areas/{id}")]
-async fn get_area(
+async fn get_by_id(
     path: Path<String>,
     conn: Data<Mutex<Connection>>,
 ) -> Result<Json<GetAreasItem>, ApiError> {
@@ -117,6 +153,40 @@ async fn get_area(
 
             match area_by_name {
                 Some(area) => area_to_areas_item(area, &conn),
+                None => Result::Err(ApiError {
+                    message: format!("Area with id or name {} doesn't exist", &id_or_name)
+                        .to_string(),
+                }),
+            }
+        }
+    }
+}
+
+#[get("/v2/areas/{id}")]
+async fn get_by_id_v2(
+    path: Path<String>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<GetAreasItemV2>, ApiError> {
+    let id_or_name = path.into_inner();
+    let conn = conn.lock()?;
+
+    let area_by_id: Option<Area> = conn
+        .query_row(db::AREA_SELECT_BY_ID, [&id_or_name], db::mapper_area_full())
+        .optional()?;
+
+    match area_by_id {
+        Some(area) => Ok(Json(area.into())),
+        None => {
+            let area_by_name = conn
+                .query_row(
+                    db::AREA_SELECT_BY_NAME,
+                    [&id_or_name],
+                    db::mapper_area_full(),
+                )
+                .optional()?;
+
+            match area_by_name {
+                Some(area) => Ok(Json(area.into())),
                 None => Result::Err(ApiError {
                     message: format!("Area with id or name {} doesn't exist", &id_or_name)
                         .to_string(),
