@@ -16,10 +16,10 @@ pub static ELEMENT_SELECT_BY_ID: &str = "SELECT * FROM element WHERE id = ?";
 pub static ELEMENT_SELECT_UPDATED_SINCE: &str =
     "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
 
-pub static DAILY_REPORT_INSERT: &str = "INSERT INTO daily_report (date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-pub static DAILY_REPORT_SELECT_ALL: &str = "SELECT date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted FROM daily_report ORDER BY date DESC";
-pub static DAILY_REPORT_SELECT_BY_DATE: &str = "SELECT date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted FROM daily_report WHERE date = ?";
-pub static DAILY_REPORT_DELETE_BY_DATE: &str = "DELETE FROM daily_report WHERE date = ?";
+pub static DAILY_REPORT_INSERT: &str = "INSERT INTO report (area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+pub static DAILY_REPORT_SELECT_ALL: &str = "SELECT area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report ORDER BY date DESC";
+pub static DAILY_REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = "SELECT area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report WHERE area_id = ? AND date = ?";
+pub static DAILY_REPORT_UPDATE_EVENT_COUNTERS: &str = "UPDATE report SET elements_created = ?, elements_updated = ?, elements_deleted = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE area_id = ? AND date = ?"; 
 
 pub static AREA_SELECT_ALL: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area ORDER BY name";
@@ -119,17 +119,21 @@ pub fn mapper_element_full() -> fn(&Row) -> rusqlite::Result<Element> {
 pub fn mapper_daily_report_full() -> fn(&Row) -> rusqlite::Result<DailyReport> {
     |row: &Row| -> rusqlite::Result<DailyReport> {
         Ok(DailyReport {
-            date: row.get(0)?,
-            total_elements: row.get(1)?,
-            total_elements_onchain: row.get(2)?,
-            total_elements_lightning: row.get(3)?,
-            total_elements_lightning_contactless: row.get(4)?,
-            up_to_date_elements: row.get(5)?,
-            outdated_elements: row.get(6)?,
-            legacy_elements: row.get(7)?,
-            elements_created: row.get(8)?,
-            elements_updated: row.get(9)?,
-            elements_deleted: row.get(10)?,
+            area_id: row.get(0)?,
+            date: row.get(1)?,
+            total_elements: row.get(2)?,
+            total_elements_onchain: row.get(3)?,
+            total_elements_lightning: row.get(4)?,
+            total_elements_lightning_contactless: row.get(5)?,
+            up_to_date_elements: row.get(6)?,
+            outdated_elements: row.get(7)?,
+            legacy_elements: row.get(8)?,
+            elements_created: row.get(9)?,
+            elements_updated: row.get(10)?,
+            elements_deleted: row.get(11)?,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
+            deleted_at: row.get(14)?,
         })
     }
 }

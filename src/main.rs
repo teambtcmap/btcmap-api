@@ -44,7 +44,6 @@ async fn main() -> std::io::Result<()> {
             }
 
             //sync::insert_user_if_not_exists(2104834, &db_conn).await;
-
             let db_conn = Data::new(Mutex::new(db_conn));
 
             log::info!("Starting HTTP server");
@@ -56,7 +55,8 @@ async fn main() -> std::io::Result<()> {
                     .service(controller::element::get_v2)
                     .service(controller::element::get_by_id)
                     .service(controller::element::get_by_id_v2)
-                    .service(controller::daily_report::get_daily_reports)
+                    .service(controller::daily_report::get)
+                    .service(controller::daily_report::get_v2)
                     .service(controller::area::get_areas)
                     .service(controller::area::get_area)
                     .service(controller::area::get_area_elements)

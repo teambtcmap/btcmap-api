@@ -337,38 +337,48 @@ pub async fn sync(mut db_conn: Connection) {
     log::info!("Elements deleted: {elements_deleted}");
 
     let report = tx.query_row(
-        db::DAILY_REPORT_SELECT_BY_DATE,
-        [today.to_string()],
+        db::DAILY_REPORT_SELECT_BY_AREA_ID_AND_DATE,
+        params!["", today.to_string()],
         db::mapper_daily_report_full(),
     );
 
     if let Ok(report) = report {
-        log::info!("Found existing report, deleting");
-        tx.execute(db::DAILY_REPORT_DELETE_BY_DATE, [today.to_string()])
-            .unwrap();
+        log::info!("Found existing report, updating");
         elements_created += report.elements_created;
         elements_updated += report.elements_updated;
         elements_deleted += report.elements_deleted;
+        tx.execute(
+            db::DAILY_REPORT_UPDATE_EVENT_COUNTERS,
+            params![
+                elements_created + report.elements_created,
+                elements_updated + report.elements_updated,
+                elements_deleted + report.elements_deleted,
+                "",
+                today.to_string(),
+            ],
+        )
+        .unwrap();
+    } else {
+        log::info!("Inserting new report");
+        tx.execute(
+            db::DAILY_REPORT_INSERT,
+            params![
+                "",
+                today.to_string(),
+                fresh_elements.len(),
+                onchain_elements.len(),
+                lightning_elements.len(),
+                lightning_contactless_elements.len(),
+                up_to_date_elements.len(),
+                outdated_elements.len(),
+                legacy_elements.len(),
+                elements_created,
+                elements_updated,
+                elements_deleted,
+            ],
+        )
+        .unwrap();
     }
-
-    log::info!("Inserting new or updated report");
-    tx.execute(
-        db::DAILY_REPORT_INSERT,
-        params![
-            today.to_string(),
-            fresh_elements.len(),
-            onchain_elements.len(),
-            lightning_elements.len(),
-            lightning_contactless_elements.len(),
-            up_to_date_elements.len(),
-            outdated_elements.len(),
-            legacy_elements.len(),
-            elements_created,
-            elements_updated,
-            elements_deleted
-        ],
-    )
-    .unwrap();
 
     tx.commit().expect("Failed to save sync results");
     log::info!("Finished sync");
