@@ -344,9 +344,12 @@ pub async fn sync(mut db_conn: Connection) {
 
     if let Ok(report) = report {
         log::info!("Found existing report, updating");
-        elements_created += report.elements_created;
-        elements_updated += report.elements_updated;
-        elements_deleted += report.elements_deleted;
+        log::info!(
+            "Existing report: created {}, updated {}, deleted {}",
+            report.elements_created,
+            report.elements_updated,
+            report.elements_deleted
+        );
         tx.execute(
             db::DAILY_REPORT_UPDATE_EVENT_COUNTERS,
             params![

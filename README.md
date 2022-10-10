@@ -10,6 +10,8 @@
 
 - https://api.btcmap.org/v2/events
 
+- https://api.btcmap.org/v2/areas
+
 ---
 
 ![Untitled](https://user-images.githubusercontent.com/85003930/194117128-2f96bafd-2379-407a-a584-6c03396a42cc.png)
