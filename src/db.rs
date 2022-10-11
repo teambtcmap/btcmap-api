@@ -29,6 +29,7 @@ pub static AREA_SELECT_BY_NAME: &str = "SELECT id, name, type, min_lon, min_lat,
 
 pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO element_event (date, element_id, element_lat, element_lon, element_name, type, user_id, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT date, element_id, element_lat, element_lon, element_name, type, user_id, user FROM element_event ORDER BY date DESC";
+pub static ELEMENT_EVENT_SELECT_UPDATED_SINCE: &str = "SELECT date, element_id, element_lat, element_lon, element_name, type, user_id, user FROM element_event WHERE date > ? ORDER BY date DESC";
 
 pub static USER_INSERT: &str = "INSERT INTO user (id, data) VALUES (?, ?)";
 pub static USER_SELECT_ALL: &str =
