@@ -62,7 +62,7 @@ pub async fn sync(mut db_conn: Connection) {
     }
 
     let response = response.unwrap();
-    log::info!("Fetched new data");
+    log::info!("Fetched new data, response code: {}", response.status());
 
     let data_file_path = cache_dir.join("elements.json");
     log::info!("Data file path is {data_file_path:?}");
@@ -108,9 +108,11 @@ pub async fn sync(mut db_conn: Connection) {
     if fresh_elements.len() < 5000 {
         log::error!("Data set is most likely invalid, skipping the sync");
         send_discord_message(
-            "Got a suspicious resopnse from OSM, check server log".to_string(),
+            "Got a suspicious resopnse from OSM, check server logs".to_string(),
         )
         .await;
+        let suspicious_elements_file_path = cache_dir.join("suspicious-elements.json");
+        std::fs::copy(&data_file_path, &suspicious_elements_file_path).unwrap();
         std::process::exit(1);
     }
 

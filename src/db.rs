@@ -19,7 +19,7 @@ pub static ELEMENT_SELECT_UPDATED_SINCE: &str =
 pub static DAILY_REPORT_INSERT: &str = "INSERT INTO report (area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 pub static DAILY_REPORT_SELECT_ALL: &str = "SELECT area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report ORDER BY date DESC";
 pub static DAILY_REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = "SELECT area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report WHERE area_id = ? AND date = ?";
-pub static DAILY_REPORT_UPDATE_EVENT_COUNTERS: &str = "UPDATE report SET elements_created = ?, elements_updated = ?, elements_deleted = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE area_id = ? AND date = ?"; 
+pub static DAILY_REPORT_UPDATE_EVENT_COUNTERS: &str = "UPDATE report SET elements_created = ?, elements_updated = ?, elements_deleted = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE area_id = ? AND date = ?";
 
 pub static AREA_SELECT_ALL: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area ORDER BY name";
@@ -36,6 +36,8 @@ pub static USER_SELECT_ALL: &str =
     "SELECT id, data, created_at, updated_at, deleted_at FROM user ORDER BY updated_at DESC";
 pub static USER_SELECT_BY_ID: &str =
     "SELECT id, data, created_at, updated_at, deleted_at FROM user WHERE id = ?";
+pub static USER_SELECT_UPDATED_SINCE: &str =
+    "SELECT id, data, created_at, updated_at, deleted_at FROM user WHERE updated_at > ? ORDER BY updated_at DESC";
 
 pub fn cli_main(args: &[String], mut db_conn: Connection) {
     match args.first() {

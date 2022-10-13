@@ -5,8 +5,10 @@ use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
+use actix_web::web::Query;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::Mutex;
@@ -30,6 +32,11 @@ impl Into<GetUserItem> for User {
             deleted_at: self.deleted_at,
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct GetUsersArgsV2 {
+    updated_since: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -66,15 +73,26 @@ async fn get(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetUserItem>>, Ap
 }
 
 #[get("/v2/users")]
-async fn get_v2(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetUserItemV2>>, ApiError> {
-    Ok(Json(
-        conn.lock()?
+async fn get_v2(
+    args: Query<GetUsersArgsV2>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<Vec<GetUserItemV2>>, ApiError> {
+    Ok(Json(match &args.updated_since {
+        Some(updated_since) => conn
+            .lock()?
+            .prepare(db::USER_SELECT_UPDATED_SINCE)?
+            .query_map([updated_since], db::mapper_user_full())?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap().into())
+            .collect(),
+        None => conn
+            .lock()?
             .prepare(db::USER_SELECT_ALL)?
             .query_map([], db::mapper_user_full())?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
-    ))
+    }))
 }
 
 #[get("/users/{id}")]
