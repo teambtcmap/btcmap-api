@@ -6,6 +6,7 @@
 
 - https://api.btcmap.org/v2/users
 - https://api.btcmap.org/v2/users/16990757
+- https://api.btcmap.org/v2/users?updated_since=2022-10-11
 
 - https://api.btcmap.org/v2/reports
 
