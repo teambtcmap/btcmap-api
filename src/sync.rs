@@ -105,6 +105,15 @@ pub async fn sync(mut db_conn: Connection) {
         relations.len()
     );
 
+    if fresh_elements.len() < 5000 {
+        log::error!("Data set is most likely invalid, skipping the sync");
+        send_discord_message(
+            "Got a suspicious resopnse from OSM, check server log".to_string(),
+        )
+        .await;
+        std::process::exit(1);
+    }
+
     let onchain_elements: Vec<&Value> = fresh_elements
         .iter()
         .filter(|it| it["tags"]["payment:onchain"].as_str().unwrap_or("") == "yes")
