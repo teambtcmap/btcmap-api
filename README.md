@@ -14,6 +14,7 @@
 
 - https://api.btcmap.org/v2/areas
 - https://api.btcmap.org/v2/areas/bitcoin-island-philippines
+- https://api.btcmap.org/areas/th/elements
 
 ---
 
