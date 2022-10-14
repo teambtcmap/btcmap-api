@@ -169,7 +169,7 @@ pub async fn sync(mut db_conn: Connection) {
             let name = element.data["tags"]["name"]
                 .as_str()
                 .unwrap_or("Unnamed element");
-            log::warn!("Cached element with id {} was deleted from OSM", element.id);
+            log::warn!("Cached element with id {} was deleted from OSM or no longer accepts Bitcoin", element.id);
 
             let fresh_element = fetch_element(element_type, osm_id).await;
             let user_id = fresh_element
@@ -422,8 +422,8 @@ async fn send_discord_message(text: String) {
     }
 }
 
-async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
-    let url = format!("https://api.openstreetmap.org/api/0.6/{element_type}/{element_id}.json");
+pub async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
+    let url = format!("https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}");
     log::info!("Querying {url}");
     let res = reqwest::get(&url).await;
 
