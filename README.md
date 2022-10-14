@@ -11,6 +11,7 @@
 - https://api.btcmap.org/v2/reports
 
 - https://api.btcmap.org/v2/events
+- https://api.btcmap.org/v2/events/500
 - https://api.btcmap.org/v2/events?updated_since=2022-10-11
 
 - https://api.btcmap.org/v2/areas

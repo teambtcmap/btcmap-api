@@ -27,9 +27,10 @@ pub static AREA_SELECT_BY_ID: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE id = ?";
 pub static AREA_SELECT_BY_NAME: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE UPPER(name) = UPPER(?)";
 
-pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO element_event (date, element_id, element_lat, element_lon, element_name, type, user_id, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT date, element_id, element_lat, element_lon, element_name, type, user_id, user FROM element_event ORDER BY date DESC";
-pub static ELEMENT_EVENT_SELECT_UPDATED_SINCE: &str = "SELECT date, element_id, element_lat, element_lon, element_name, type, user_id, user FROM element_event WHERE date > ? ORDER BY date DESC";
+pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO event (date, element_id, element_lat, element_lon, element_name, type, user_id, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
+pub static ELEMENT_EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event where ROWID = ?";
+pub static ELEMENT_EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
 
 pub static USER_INSERT: &str = "INSERT INTO user (id, data) VALUES (?, ?)";
 pub static USER_SELECT_ALL: &str =
@@ -158,14 +159,18 @@ pub fn mapper_area_full() -> fn(&Row) -> rusqlite::Result<Area> {
 pub fn mapper_element_event_full() -> fn(&Row) -> rusqlite::Result<ElementEvent> {
     |row: &Row| -> rusqlite::Result<ElementEvent> {
         Ok(ElementEvent {
-            date: row.get(0)?,
-            element_id: row.get(1)?,
-            element_lat: row.get(2)?,
-            element_lon: row.get(3)?,
-            element_name: row.get(4)?,
-            event_type: row.get(5)?,
-            user_id: row.get(6)?,
-            user: row.get(7)?,
+            id: row.get(0)?,
+            date: row.get(1)?,
+            element_id: row.get(2)?,
+            element_lat: row.get(3)?,
+            element_lon: row.get(4)?,
+            element_name: row.get(5)?,
+            event_type: row.get(6)?,
+            user_id: row.get(7)?,
+            user: row.get(8)?,
+            created_at: row.get(9)?,
+            updated_at: row.get(10)?,
+            deleted_at: row.get(11)?,
         })
     }
 }

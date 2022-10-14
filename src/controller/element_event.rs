@@ -1,3 +1,5 @@
+use rusqlite::OptionalExtension;
+use actix_web::web::Path;
 use crate::db;
 use crate::model::ApiError;
 use crate::model::ElementEvent;
@@ -31,23 +33,31 @@ pub struct GetEventItemsArgsV2 {
 
 #[derive(Serialize)]
 pub struct GetEventItemV2 {
+    pub id: i64,
     pub date: String,
     pub r#type: String,
     pub element_id: String,
     pub element_lat: f64,
     pub element_lon: f64,
     pub user_id: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: String,
 }
 
 impl Into<GetEventItemV2> for ElementEvent {
     fn into(self) -> GetEventItemV2 {
         GetEventItemV2 {
+            id: self.id,
             date: self.date,
             r#type: self.event_type,
             element_id: self.element_id,
             element_lat: self.element_lat,
             element_lon: self.element_lon,
             user_id: self.user_id,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            deleted_at: self.deleted_at,
         }
     }
 }
@@ -122,4 +132,21 @@ async fn get_v2(
             .map(|it| it.unwrap().into())
             .collect(),
     }))
+}
+
+#[get("/v2/events/{id}")]
+pub async fn get_by_id_v2(
+    path: Path<String>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<Option<GetEventItemV2>>, ApiError> {
+    Ok(Json(
+        conn.lock()?
+            .query_row(
+                db::ELEMENT_EVENT_SELECT_BY_ID,
+                [path.into_inner()],
+                db::mapper_element_event_full(),
+            )
+            .optional()?
+            .map(|it| it.into()),
+    ))
 }
