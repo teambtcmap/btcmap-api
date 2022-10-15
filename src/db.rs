@@ -22,10 +22,11 @@ pub static DAILY_REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = "SELECT area_id, date
 pub static DAILY_REPORT_UPDATE_EVENT_COUNTERS: &str = "UPDATE report SET elements_created = ?, elements_updated = ?, elements_deleted = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE area_id = ? AND date = ?";
 
 pub static AREA_SELECT_ALL: &str =
-    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area ORDER BY name";
+    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, created_at, updated_at, deleted_at FROM area ORDER BY updated_at DESC";
 pub static AREA_SELECT_BY_ID: &str =
-    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE id = ?";
-pub static AREA_SELECT_BY_NAME: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat FROM area WHERE UPPER(name) = UPPER(?)";
+    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, created_at, updated_at, deleted_at FROM area WHERE id = ?";
+pub static AREA_SELECT_BY_NAME: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, created_at, updated_at, deleted_at FROM area WHERE UPPER(name) = UPPER(?)";
+pub static AREA_SELECT_UPDATED_SINCE: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, created_at, updated_at, deleted_at FROM area WHERE updated_at > ? ORDER BY updated_at DESC";
 
 pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO event (date, element_id, element_lat, element_lon, element_name, type, user_id, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
@@ -152,6 +153,9 @@ pub fn mapper_area_full() -> fn(&Row) -> rusqlite::Result<Area> {
             min_lat: row.get(4)?,
             max_lon: row.get(5)?,
             max_lat: row.get(6)?,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            deleted_at: row.get(9)?,
         })
     }
 }

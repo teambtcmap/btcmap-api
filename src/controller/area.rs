@@ -1,3 +1,4 @@
+use actix_web::web::Query;
 use crate::db;
 use crate::model::ApiError;
 use crate::model::Area;
@@ -12,6 +13,7 @@ use serde::Serialize;
 use std::sync::Mutex;
 use time::Duration;
 use time::OffsetDateTime;
+use serde::Deserialize;
 
 use std::ops::Sub;
 
@@ -28,6 +30,11 @@ pub struct GetAreasItem {
     pub up_to_date_elements: usize,
 }
 
+#[derive(Deserialize)]
+pub struct GetAreasArgsV2 {
+    updated_since: Option<String>,
+}
+
 #[derive(Serialize)]
 pub struct GetAreasItemV2 {
     pub id: String,
@@ -37,6 +44,9 @@ pub struct GetAreasItemV2 {
     pub min_lat: f64,
     pub max_lon: f64,
     pub max_lat: f64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: String,
 }
 
 impl Into<GetAreasItemV2> for Area {
@@ -49,6 +59,9 @@ impl Into<GetAreasItemV2> for Area {
             min_lat: self.min_lat,
             max_lon: self.max_lon,
             max_lat: self.max_lat,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            deleted_at: self.deleted_at,
         }
     }
 }
@@ -117,15 +130,26 @@ async fn get(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetAreasItem>>, A
 }
 
 #[get("/v2/areas")]
-async fn get_v2(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetAreasItemV2>>, ApiError> {
-    Ok(Json(
-        conn.lock()?
+async fn get_v2(
+    args: Query<GetAreasArgsV2>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<Vec<GetAreasItemV2>>, ApiError> {
+    Ok(Json(match &args.updated_since {
+        Some(updated_since) => conn
+            .lock()?
+            .prepare(db::AREA_SELECT_UPDATED_SINCE)?
+            .query_map([updated_since], db::mapper_area_full())?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap().into())
+            .collect(),
+        None => conn
+            .lock()?
             .prepare(db::AREA_SELECT_ALL)?
             .query_map([], db::mapper_area_full())?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
-    ))
+    }))
 }
 
 #[get("/areas/{id}")]

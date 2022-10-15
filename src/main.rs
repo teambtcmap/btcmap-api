@@ -43,7 +43,7 @@ async fn main() -> std::io::Result<()> {
                 std::process::exit(1);
             }
 
-            //sync::insert_user_if_not_exists(2104834, &db_conn).await;
+            log::info!("H");
             let db_conn = Data::new(Mutex::new(db_conn));
 
             log::info!("Starting HTTP server");
