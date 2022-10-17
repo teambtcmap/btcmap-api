@@ -43,7 +43,6 @@ async fn main() -> std::io::Result<()> {
                 std::process::exit(1);
             }
 
-            log::info!("H");
             let db_conn = Data::new(Mutex::new(db_conn));
 
             log::info!("Starting HTTP server");

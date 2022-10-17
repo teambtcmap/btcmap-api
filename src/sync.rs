@@ -107,10 +107,8 @@ pub async fn sync(mut db_conn: Connection) {
 
     if fresh_elements.len() < 5000 {
         log::error!("Data set is most likely invalid, skipping the sync");
-        send_discord_message(
-            "Got a suspicious resopnse from OSM, check server logs".to_string(),
-        )
-        .await;
+        send_discord_message("Got a suspicious resopnse from OSM, check server logs".to_string())
+            .await;
         let suspicious_elements_file_path = cache_dir.join("suspicious-elements.json");
         std::fs::copy(&data_file_path, &suspicious_elements_file_path).unwrap();
         std::process::exit(1);
@@ -169,9 +167,25 @@ pub async fn sync(mut db_conn: Connection) {
             let name = element.data["tags"]["name"]
                 .as_str()
                 .unwrap_or("Unnamed element");
-            log::warn!("Cached element with id {} was deleted from OSM or no longer accepts Bitcoin", element.id);
+            log::warn!(
+                "Cached element with id {} was deleted from Overpass or no longer accepts Bitcoin",
+                element.id
+            );
 
             let fresh_element = fetch_element(element_type, osm_id).await;
+            let deleted_from_osm = !fresh_element
+                .clone()
+                .map(|it| it["visible"].as_bool().unwrap_or(true))
+                .unwrap_or(true);
+            log::info!("Deleted from OSM: {deleted_from_osm}");
+
+            if !deleted_from_osm {
+                let message = format!("Overpass lied about {element_type}/{osm_id} being deleted!");
+                log::error!("{}", message);
+                send_discord_message(message).await;
+                std::process::exit(1);
+            }
+
             let user_id = fresh_element
                 .clone()
                 .map(|it| it["uid"].as_i64().unwrap_or(0))
@@ -423,7 +437,9 @@ async fn send_discord_message(text: String) {
 }
 
 pub async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
-    let url = format!("https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}");
+    let url = format!(
+        "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
+    );
     log::info!("Querying {url}");
     let res = reqwest::get(&url).await;
 
