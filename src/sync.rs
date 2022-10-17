@@ -180,10 +180,22 @@ pub async fn sync(mut db_conn: Connection) {
             log::info!("Deleted from OSM: {deleted_from_osm}");
 
             if !deleted_from_osm {
-                let message = format!("Overpass lied about {element_type}/{osm_id} being deleted!");
-                log::error!("{}", message);
-                send_discord_message(message).await;
-                std::process::exit(1);
+                let fresh_element = fresh_element.clone().unwrap();
+                let bitcoin_tag_value = fresh_element["tags"]["currency:XBT"]
+                    .as_str()
+                    .unwrap_or("no");
+                let legacy_bitcoin_tag_value = fresh_element["tags"]["payment:bitcoin"]
+                    .as_str()
+                    .unwrap_or("no");
+                log::info!("Bitcoin tag value: {bitcoin_tag_value}");
+                log::info!("Legacy Bitcoin tag value: {legacy_bitcoin_tag_value}");
+
+                if bitcoin_tag_value == "yes" || legacy_bitcoin_tag_value == "yes" {
+                    let message = format!("Overpass lied about {element_type}/{osm_id} being deleted!");
+                    log::error!("{}", message);
+                    send_discord_message(message).await;
+                    std::process::exit(1);
+                }
             }
 
             let user_id = fresh_element
