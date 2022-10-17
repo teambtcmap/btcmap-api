@@ -272,6 +272,14 @@ pub async fn sync(mut db_conn: Connection) {
 
                     elements_updated += 1;
                 }
+
+                if element.deleted_at.is_some() {
+                    tx.execute(
+                        "UPDATE element SET deleted_at = NULL WHERE id = ?",
+                        params![btcmap_id],
+                    )
+                    .unwrap();
+                }
             }
             None => {
                 log::warn!("Element {btcmap_id} does not exist, inserting");
