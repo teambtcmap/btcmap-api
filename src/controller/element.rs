@@ -45,7 +45,7 @@ pub struct GetElementItemV2 {
     pub osm_json: Value,
     pub created_at: String,
     pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub deleted_at: String,
 }
 
 impl Into<GetElementItemV2> for Element {
@@ -55,7 +55,7 @@ impl Into<GetElementItemV2> for Element {
             osm_json: self.data,
             created_at: self.created_at,
             updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            deleted_at: self.deleted_at.unwrap_or("".to_string()),
         }
     }
 }

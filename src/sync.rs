@@ -35,20 +35,13 @@ pub async fn sync(mut db_conn: Connection) {
 
     log::info!("Querying OSM API, it could take a while...");
     let response = reqwest::Client::new()
-        .post("https://overpass-api.de/api/interpreter")
+        .post("https://maps.mail.ru/osm/tools/overpass/api/interpreter")
         .body(
             r#"
             [out:json][timeout:300];
             (
-              node["currency:XBT"="yes"];
-              way["currency:XBT"="yes"];
-              relation["currency:XBT"="yes"];
-              node["payment:bitcoin"="yes"];
-              way["payment:bitcoin"="yes"];
-              relation["payment:bitcoin"="yes"];
-              node["currency:BTC"="yes"];
-              way["currency:BTC"="yes"];
-              relation["currency:BTC"="yes"];
+              nwr["currency:XBT"="yes"];
+              nwr["payment:bitcoin"="yes"];
             );
             out meta geom;
         "#,
