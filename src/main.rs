@@ -6,6 +6,7 @@ mod db;
 mod model;
 mod sync;
 mod sync_users;
+mod auth;
 
 use std::env;
 use std::fs::create_dir_all;
@@ -60,6 +61,7 @@ async fn main() -> std::io::Result<()> {
                     .service(controller::area::get_v2)
                     .service(controller::area::get_by_id)
                     .service(controller::area::get_by_id_v2)
+                    .service(controller::area::post_tags_v2)
                     .service(controller::area::get_area_elements)
                     .service(controller::element_event::get)
                     .service(controller::element_event::get_v2)

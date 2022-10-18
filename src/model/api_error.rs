@@ -12,6 +12,14 @@ pub struct ApiError {
     pub message: String,
 }
 
+impl ApiError {
+    pub fn new(message: &str) -> ApiError {
+        ApiError {
+            message: message.to_string(),
+        }
+    }
+}
+
 impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(StatusCode::from_u16(500).unwrap())

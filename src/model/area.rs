@@ -1,5 +1,6 @@
-use serde::Serialize;
 use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
 
 #[derive(Serialize, Deserialize)]
 pub struct Area {
@@ -10,6 +11,7 @@ pub struct Area {
     pub min_lat: f64,
     pub max_lon: f64,
     pub max_lat: f64,
+    pub tags: Value,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,

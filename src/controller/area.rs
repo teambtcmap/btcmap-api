@@ -1,19 +1,25 @@
-use actix_web::web::Query;
+use crate::auth::is_from_admin;
 use crate::db;
 use crate::model::ApiError;
 use crate::model::Area;
 use crate::model::Element;
 use actix_web::get;
+use actix_web::post;
 use actix_web::web::Data;
+use actix_web::web::Form;
 use actix_web::web::Json;
 use actix_web::web::Path;
+use actix_web::web::Query;
+use actix_web::HttpRequest;
+use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use std::sync::Mutex;
 use time::Duration;
 use time::OffsetDateTime;
-use serde::Deserialize;
 
 use std::ops::Sub;
 
@@ -31,6 +37,12 @@ pub struct GetAreasItem {
 }
 
 #[derive(Deserialize)]
+struct PostTagsArgsV2 {
+    name: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
 pub struct GetAreasArgsV2 {
     updated_since: Option<String>,
 }
@@ -44,6 +56,7 @@ pub struct GetAreasItemV2 {
     pub min_lat: f64,
     pub max_lon: f64,
     pub max_lat: f64,
+    pub tags: Value,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -59,6 +72,7 @@ impl Into<GetAreasItemV2> for Area {
             min_lat: self.min_lat,
             max_lon: self.max_lon,
             max_lat: self.max_lat,
+            tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
             deleted_at: self.deleted_at,
@@ -217,6 +231,54 @@ async fn get_by_id_v2(
                 }),
             }
         }
+    }
+}
+
+#[post("/v2/areas/{id}/tags")]
+async fn post_tags_v2(
+    id: Path<String>,
+    req: HttpRequest,
+    args: Form<PostTagsArgsV2>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<Value>, ApiError> {
+    if let Err(err) = is_from_admin(&req) {
+        return Err(err);
+    };
+
+    let conn = conn.lock()?;
+
+    let area: Option<Area> = conn
+        .query_row(
+            db::AREA_SELECT_BY_ID,
+            [&id.into_inner()],
+            db::mapper_area_full(),
+        )
+        .optional()?;
+
+    match area {
+        Some(area) => {
+            if args.value.len() > 0 {
+                conn.execute(
+                    db::AREA_INSERT_TAG,
+                    named_params! {
+                        ":area_id": area.id,
+                        ":tag_name": format!("$.{}", args.name),
+                        ":tag_value": args.value,
+                    },
+                )?;
+            } else {
+                conn.execute(
+                    db::AREA_DELETE_TAG,
+                    named_params! {
+                        ":area_id": area.id,
+                        ":tag_name": format!("$.{}", args.name),
+                    },
+                )?;
+            }
+
+            Ok(Json("{}".to_string().into()))
+        }
+        None => Err(ApiError::new("Can't find area")),
     }
 }
 
