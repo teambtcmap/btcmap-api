@@ -21,6 +21,8 @@ pub static DAILY_REPORT_SELECT_ALL: &str = "SELECT area_id, date, total_elements
 pub static DAILY_REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = "SELECT area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report WHERE area_id = ? AND date = ?";
 pub static DAILY_REPORT_UPDATE_EVENT_COUNTERS: &str = "UPDATE report SET elements_created = ?, elements_updated = ?, elements_deleted = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE area_id = ? AND date = ?";
 
+pub static AREA_INSERT: &str =
+    "INSERT INTO area (id, name, type, min_lon, min_lat, max_lon, max_lat) VALUES (:id, '', '', 0, 0, 0, 0)";
 pub static AREA_SELECT_ALL: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area ORDER BY updated_at DESC";
 pub static AREA_SELECT_BY_ID: &str =

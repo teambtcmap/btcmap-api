@@ -234,6 +234,28 @@ async fn get_by_id_v2(
     }
 }
 
+#[post("/v2/areas/{id}")]
+async fn post_v2(
+    id: Path<String>,
+    req: HttpRequest,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<Value>, ApiError> {
+    if let Err(err) = is_from_admin(&req) {
+        return Err(err);
+    };
+
+    let conn = conn.lock()?;
+
+    conn.execute(
+        db::AREA_INSERT,
+        named_params![
+            ":id": id.into_inner(),
+        ],
+    )?;
+
+    Ok(Json("{}".to_string().into()))
+}
+
 #[post("/v2/areas/{id}/tags")]
 async fn post_tags_v2(
     id: Path<String>,
