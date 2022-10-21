@@ -139,3 +139,55 @@ pub async fn get_by_id_v2(
             .map(|it| it.into()),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db;
+    use actix_web::test::TestRequest;
+    use actix_web::{test, App};
+    use rusqlite::named_params;
+    use std::sync::atomic::Ordering;
+
+    #[actix_web::test]
+    async fn get_v2_empty_table() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(super::get_v2),
+        )
+        .await;
+        let req = TestRequest::get().uri("/v2/elements").to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.as_array().unwrap().len(), 0);
+    }
+
+    #[actix_web::test]
+    async fn get_v2_one_row() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute(
+            db::ELEMENT_INSERT,
+            named_params! {
+                ":id": "node:1",
+                ":data": "{}",
+            },
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(super::get_v2),
+        )
+        .await;
+        let req = TestRequest::get().uri("/v2/elements").to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.as_array().unwrap().len(), 1);
+    }
+}

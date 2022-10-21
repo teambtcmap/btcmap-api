@@ -8,9 +8,16 @@ use include_dir::Dir;
 use rusqlite::{Connection, Row};
 use serde_json::Value;
 use std::fs::remove_file;
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
+
+#[cfg(test)]
+pub static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
+#[cfg(test)]
+pub static ELEMENT_INSERT: &str = "INSERT INTO element (id, data) VALUES (:id, :data)";
 pub static ELEMENT_SELECT_ALL: &str = "SELECT * FROM element ORDER BY updated_at DESC";
 pub static ELEMENT_SELECT_BY_ID: &str = "SELECT * FROM element WHERE id = ?";
 pub static ELEMENT_SELECT_UPDATED_SINCE: &str =
@@ -29,8 +36,10 @@ pub static AREA_SELECT_BY_ID: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE id = ?";
 pub static AREA_SELECT_BY_NAME: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE UPPER(name) = UPPER(?)";
 pub static AREA_SELECT_UPDATED_SINCE: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE updated_at > ? ORDER BY updated_at DESC";
-pub static AREA_INSERT_TAG: &str = "UPDATE area SET tags = json_set(tags, :tag_name, :tag_value) where id = :area_id;";
-pub static AREA_DELETE_TAG: &str = "UPDATE area SET tags = json_remove(tags, :tag_name) where id = :area_id;";
+pub static AREA_INSERT_TAG: &str =
+    "UPDATE area SET tags = json_set(tags, :tag_name, :tag_value) where id = :area_id;";
+pub static AREA_DELETE_TAG: &str =
+    "UPDATE area SET tags = json_remove(tags, :tag_name) where id = :area_id;";
 
 pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO event (date, element_id, element_lat, element_lon, element_name, type, user_id, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
