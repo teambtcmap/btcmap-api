@@ -4,4 +4,11 @@ case "$1" in
     fetch-prod-db)
         rsync -v btcmap:.local/share/btcmap/btcmap.db ~/.local/share/btcmap/btcmap.db
         ;;
+
+    deploy)
+        cargo test \
+            && cargo build --release \
+            && rsync -v target/release/btcmap-api btcmap:/usr/local/bin/btcmap-api \
+            && ssh btcmap 'systemctl restart btcmap-api.service'
+        ;;
 esac

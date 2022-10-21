@@ -2,6 +2,7 @@ use crate::db;
 use crate::get_project_dirs;
 use crate::model::Element;
 use crate::model::User;
+use rusqlite::named_params;
 use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
@@ -184,7 +185,8 @@ pub async fn sync(mut db_conn: Connection) {
                 log::info!("Legacy Bitcoin tag value: {legacy_bitcoin_tag_value}");
 
                 if bitcoin_tag_value == "yes" || legacy_bitcoin_tag_value == "yes" {
-                    let message = format!("Overpass lied about {element_type}/{osm_id} being deleted!");
+                    let message =
+                        format!("Overpass lied about {element_type}/{osm_id} being deleted!");
                     log::error!("{}", message);
                     send_discord_message(message).await;
                     std::process::exit(1);
@@ -320,8 +322,11 @@ pub async fn sync(mut db_conn: Connection) {
                 .await;
 
                 tx.execute(
-                    "INSERT INTO element (id, data) VALUES (?, ?)",
-                    params![btcmap_id, serde_json::to_string(fresh_element).unwrap()],
+                    db::ELEMENT_INSERT,
+                    named_params! {
+                        ":id": btcmap_id,
+                        ":data": serde_json::to_string(fresh_element).unwrap(),
+                    },
                 )
                 .unwrap();
 

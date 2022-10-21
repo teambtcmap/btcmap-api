@@ -16,7 +16,6 @@ pub static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-#[cfg(test)]
 pub static ELEMENT_INSERT: &str = "INSERT INTO element (id, data) VALUES (:id, :data)";
 pub static ELEMENT_SELECT_ALL: &str = "SELECT * FROM element ORDER BY updated_at DESC";
 pub static ELEMENT_SELECT_BY_ID: &str = "SELECT * FROM element WHERE id = ?";
