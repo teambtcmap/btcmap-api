@@ -1,0 +1,7 @@
+#!/bin/bash
+
+case "$1" in
+    fetch-prod-db)
+        rsync -v btcmap:.local/share/btcmap/btcmap.db ~/.local/share/btcmap/btcmap.db
+        ;;
+esac
