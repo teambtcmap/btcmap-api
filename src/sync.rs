@@ -1,5 +1,4 @@
 use crate::db;
-use crate::get_project_dirs;
 use crate::model::Element;
 use crate::model::User;
 use rusqlite::named_params;
@@ -12,70 +11,58 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
-use std::fs::{create_dir_all, File};
-use std::io::Write;
 use std::ops::Sub;
 use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
 
+static OVERPASS_API_URL: &str = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
+
+static OVERPASS_API_QUERY: &str = r#"
+    [out:json][timeout:300];
+    (
+    nwr["currency:XBT"="yes"];
+    nwr["payment:bitcoin"="yes"];
+    );
+    out meta geom;
+"#;
+
 pub async fn sync(mut db_conn: Connection) {
     log::info!("Starting sync");
-
-    let project_dirs = get_project_dirs();
-    let cache_dir = project_dirs.cache_dir();
-    log::info!("Cache directory is {cache_dir:?}");
-
-    if cache_dir.exists() {
-        log::info!("Cache directory already exists");
-    } else {
-        log::info!("Cache directory doesn't exist, creating...");
-        create_dir_all(cache_dir).expect("Failed to create cache directory");
-        log::info!("Created cache directory {cache_dir:?}");
-    }
-
     log::info!("Querying OSM API, it could take a while...");
-    let response = reqwest::Client::new()
-        .post("https://maps.mail.ru/osm/tools/overpass/api/interpreter")
-        .body(
-            r#"
-            [out:json][timeout:300];
-            (
-              nwr["currency:XBT"="yes"];
-              nwr["payment:bitcoin"="yes"];
-            );
-            out meta geom;
-        "#,
-        )
+    let response = match reqwest::Client::new()
+        .post(OVERPASS_API_URL)
+        .body(OVERPASS_API_QUERY)
         .send()
-        .await;
+        .await
+    {
+        Ok(ok) => ok,
+        Err(err) => {
+            log::error!("Failed to fetch response: {err}");
+            return;
+        }
+    };
 
-    if let Err(_) = response {
-        log::error!("Failed to fetch response");
-        std::process::exit(1);
-    }
-
-    let response = response.unwrap();
     log::info!("Fetched new data, response code: {}", response.status());
 
-    let data_file_path = cache_dir.join("elements.json");
-    log::info!("Data file path is {data_file_path:?}");
+    let response = match response.json::<Value>().await {
+        Ok(ok) => ok,
+        Err(err) => {
+            log::error!("Failed to read response body: {err}");
+            return;
+        }
+    };
 
-    let mut data_file = File::create(&data_file_path).expect("Failed to create data file");
-    let response_body = response
-        .bytes()
-        .await
-        .expect("Failed to read response body");
-    data_file
-        .write_all(&response_body)
-        .expect("Failed to save new data to a file");
+    let fresh_elements: &Vec<Value> = match response["elements"].as_array() {
+        Some(some) => some,
+        None => {
+            log::error!("Failed to parse elements");
+            return;
+        }
+    };
 
-    let data_file = File::open(&data_file_path).expect("Failed to open data file");
-    let fresh_elements: Value =
-        serde_json::from_reader(data_file).expect("Failed to read data file into a JSON object");
-    let fresh_elements: &Vec<Value> = fresh_elements["elements"]
-        .as_array()
-        .expect("Failed to extract elements");
+    log::info!("Fetched {} fresh elements", fresh_elements.len());
+
     let nodes: Vec<&Value> = fresh_elements
         .iter()
         .filter(|it| it["type"].as_str().unwrap() == "node")
@@ -103,9 +90,7 @@ pub async fn sync(mut db_conn: Connection) {
         log::error!("Data set is most likely invalid, skipping the sync");
         send_discord_message("Got a suspicious resopnse from OSM, check server logs".to_string())
             .await;
-        let suspicious_elements_file_path = cache_dir.join("suspicious-elements.json");
-        std::fs::copy(&data_file_path, &suspicious_elements_file_path).unwrap();
-        std::process::exit(1);
+        return;
     }
 
     let onchain_elements: Vec<&Value> = fresh_elements
@@ -247,7 +232,7 @@ pub async fn sync(mut db_conn: Connection) {
                 let fresh_element_data = serde_json::to_string(fresh_element).unwrap();
 
                 if element_data != fresh_element_data {
-                    log::warn!("Element {btcmap_id} was updated");
+                    log::info!("Element {btcmap_id} was updated");
 
                     insert_user_if_not_exists(user_id, &tx).await;
 
@@ -289,7 +274,7 @@ pub async fn sync(mut db_conn: Connection) {
                 }
             }
             None => {
-                log::warn!("Element {btcmap_id} does not exist, inserting");
+                log::info!("Element {btcmap_id} does not exist, inserting");
 
                 insert_user_if_not_exists(user_id, &tx).await;
 
