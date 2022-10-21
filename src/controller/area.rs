@@ -50,12 +50,6 @@ pub struct GetAreasArgsV2 {
 #[derive(Serialize)]
 pub struct GetAreasItemV2 {
     pub id: String,
-    pub name: String,
-    pub r#type: String,
-    pub min_lon: f64,
-    pub min_lat: f64,
-    pub max_lon: f64,
-    pub max_lat: f64,
     pub tags: Value,
     pub created_at: String,
     pub updated_at: String,
@@ -66,12 +60,6 @@ impl Into<GetAreasItemV2> for Area {
     fn into(self) -> GetAreasItemV2 {
         GetAreasItemV2 {
             id: self.id,
-            name: self.name,
-            r#type: self.area_type,
-            min_lon: self.min_lon,
-            min_lat: self.min_lat,
-            max_lon: self.max_lon,
-            max_lat: self.max_lat,
             tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,

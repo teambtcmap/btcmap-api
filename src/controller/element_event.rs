@@ -1,5 +1,3 @@
-use rusqlite::OptionalExtension;
-use actix_web::web::Path;
 use crate::db;
 use crate::model::ApiError;
 use crate::model::ElementEvent;
@@ -7,8 +5,10 @@ use crate::model::User;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
+use actix_web::web::Path;
 use actix_web::web::Query;
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Mutex;
@@ -37,8 +37,6 @@ pub struct GetEventItemV2 {
     pub date: String,
     pub r#type: String,
     pub element_id: String,
-    pub element_lat: f64,
-    pub element_lon: f64,
     pub user_id: i64,
     pub created_at: String,
     pub updated_at: String,
@@ -52,8 +50,6 @@ impl Into<GetEventItemV2> for ElementEvent {
             date: self.date,
             r#type: self.event_type,
             element_id: self.element_id,
-            element_lat: self.element_lat,
-            element_lon: self.element_lon,
             user_id: self.user_id,
             created_at: self.created_at,
             updated_at: self.updated_at,
