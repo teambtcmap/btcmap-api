@@ -24,7 +24,7 @@ impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(StatusCode::from_u16(500).unwrap())
             .insert_header(ContentType::json())
-            .body(serde_json::to_string(self).unwrap())
+            .body(serde_json::to_string(self).unwrap() + "\n")
     }
 
     fn status_code(&self) -> StatusCode {

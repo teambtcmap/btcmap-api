@@ -89,7 +89,7 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     #[actix_web::test]
-    async fn get_v2_empty_table() {
+    async fn get_empty_table() {
         let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
         let mut db =
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
@@ -106,7 +106,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn get_v2_one_row() {
+    async fn get_one_row() {
         let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
         let mut db =
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();

@@ -24,6 +24,10 @@ async fn main() -> std::io::Result<()> {
         env::set_var("RUST_LOG", "info");
     }
 
+    if env::var("ADMIN_TOKEN").is_err() && cfg!(debug_assertions) {
+        env::set_var("ADMIN_TOKEN", "debug");
+    }
+
     env_logger::init();
 
     log::info!("Initializing BTC Map API");
@@ -55,13 +59,10 @@ async fn main() -> std::io::Result<()> {
                     .service(controller::element_v2::get_by_id)
                     .service(controller::daily_report::get)
                     .service(controller::daily_report::get_v2)
-                    .service(controller::area::get)
-                    .service(controller::area::get_v2)
-                    .service(controller::area::get_by_id)
-                    .service(controller::area::get_by_id_v2)
-                    .service(controller::area::post_tags_v2)
-                    .service(controller::area::get_area_elements)
-                    .service(controller::area::post_v2)
+                    .service(controller::area_v2::post)
+                    .service(controller::area_v2::get)
+                    .service(controller::area_v2::get_by_id)
+                    .service(controller::area_v2::post_tags)
                     .service(controller::element_event::get)
                     .service(controller::element_event::get_v2)
                     .service(controller::element_event::get_by_id_v2)

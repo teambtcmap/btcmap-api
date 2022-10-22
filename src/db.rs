@@ -33,7 +33,6 @@ pub static AREA_SELECT_ALL: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area ORDER BY updated_at DESC";
 pub static AREA_SELECT_BY_ID: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE id = ?";
-pub static AREA_SELECT_BY_NAME: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE UPPER(name) = UPPER(?)";
 pub static AREA_SELECT_UPDATED_SINCE: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE updated_at > ? ORDER BY updated_at DESC";
 pub static AREA_INSERT_TAG: &str =
     "UPDATE area SET tags = json_set(tags, :tag_name, :tag_value) where id = :area_id;";
