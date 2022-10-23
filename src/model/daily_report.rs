@@ -2,6 +2,7 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct DailyReport {
+    pub id: i64,
     pub area_id: String,
     pub date: String,
     pub total_elements: i64,

@@ -24,6 +24,7 @@
 
 ## Reports
 - https://api.btcmap.org/v2/reports
+- https://api.btcmap.org/v2/reports/25
 
 ---
 

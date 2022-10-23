@@ -1,12 +1,12 @@
 use actix_web::web::Data;
 extern crate core;
 
+mod auth;
 mod controller;
 mod db;
 mod model;
 mod sync;
 mod sync_users;
-mod auth;
 
 use std::env;
 use std::fs::create_dir_all;
@@ -57,8 +57,8 @@ async fn main() -> std::io::Result<()> {
                     .app_data(db_conn.clone())
                     .service(controller::element_v2::get)
                     .service(controller::element_v2::get_by_id)
-                    .service(controller::daily_report::get)
-                    .service(controller::daily_report::get_v2)
+                    .service(controller::report_v2::get)
+                    .service(controller::report_v2::get_by_id)
                     .service(controller::area_v2::post)
                     .service(controller::area_v2::get)
                     .service(controller::area_v2::get_by_id)

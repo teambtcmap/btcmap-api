@@ -365,7 +365,7 @@ pub async fn sync(mut db_conn: Connection) {
     log::info!("Elements deleted: {elements_deleted}");
 
     let report = tx.query_row(
-        db::DAILY_REPORT_SELECT_BY_AREA_ID_AND_DATE,
+        db::REPORT_SELECT_BY_AREA_ID_AND_DATE,
         params!["", today.to_string()],
         db::mapper_daily_report_full(),
     );
@@ -379,7 +379,7 @@ pub async fn sync(mut db_conn: Connection) {
             report.elements_deleted
         );
         tx.execute(
-            db::DAILY_REPORT_UPDATE_EVENT_COUNTERS,
+            db::REPORT_UPDATE_EVENT_COUNTERS,
             params![
                 elements_created + report.elements_created,
                 elements_updated + report.elements_updated,
@@ -392,21 +392,21 @@ pub async fn sync(mut db_conn: Connection) {
     } else {
         log::info!("Inserting new report");
         tx.execute(
-            db::DAILY_REPORT_INSERT,
-            params![
-                "",
-                today.to_string(),
-                fresh_elements.len(),
-                onchain_elements.len(),
-                lightning_elements.len(),
-                lightning_contactless_elements.len(),
-                up_to_date_elements.len(),
-                outdated_elements.len(),
-                legacy_elements.len(),
-                elements_created,
-                elements_updated,
-                elements_deleted,
-            ],
+            db::REPORT_INSERT,
+            named_params! {
+                ":area_id" : "",
+                ":date" : today.to_string(),
+                ":total_elements" : fresh_elements.len(),
+                ":total_elements_onchain" : onchain_elements.len(),
+                ":total_elements_lightning" : lightning_elements.len(),
+                ":total_elements_lightning_contactless" : lightning_contactless_elements.len(),
+                ":up_to_date_elements" : up_to_date_elements.len(),
+                ":outdated_elements" : outdated_elements.len(),
+                ":legacy_elements" : legacy_elements.len(),
+                ":elements_created" : elements_created,
+                ":elements_updated" : elements_updated,
+                ":elements_deleted" : elements_deleted,
+            },
         )
         .unwrap();
     }
