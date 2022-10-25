@@ -69,10 +69,31 @@ pub static AREA_INSERT_TAG: &str =
 pub static AREA_DELETE_TAG: &str =
     "UPDATE area SET tags = json_remove(tags, :tag_name) where id = :area_id;";
 
-pub static ELEMENT_EVENT_INSERT: &str = "INSERT INTO event (date, element_id, element_lat, element_lon, element_name, type, user_id, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-pub static ELEMENT_EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
-pub static ELEMENT_EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event where ROWID = ?";
-pub static ELEMENT_EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
+pub static EVENT_INSERT: &str = r#"
+    INSERT INTO event (
+        date, 
+        element_id, 
+        element_lat, 
+        element_lon, 
+        element_name, 
+        type, 
+        user_id, 
+        user
+    ) VALUES (
+        :date,
+        :element_id,
+        :element_lat,
+        :element_lon,
+        :element_name,
+        :type,
+        :user_id,
+        :user
+    )
+"#;
+
+pub static EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
+pub static EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event where ROWID = ?";
+pub static EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
 
 pub static USER_INSERT: &str = "INSERT INTO user (id, data) VALUES (?, ?)";
 pub static USER_SELECT_ALL: &str =
@@ -206,7 +227,7 @@ pub fn mapper_area_full() -> fn(&Row) -> rusqlite::Result<Area> {
     }
 }
 
-pub fn mapper_element_event_full() -> fn(&Row) -> rusqlite::Result<ElementEvent> {
+pub fn mapper_event_full() -> fn(&Row) -> rusqlite::Result<ElementEvent> {
     |row: &Row| -> rusqlite::Result<ElementEvent> {
         Ok(ElementEvent {
             id: row.get(0)?,

@@ -67,16 +67,14 @@ async fn post(
         return Err(err);
     };
 
-    let conn = conn.lock()?;
-
-    conn.execute(
+    conn.lock()?.execute(
         db::AREA_INSERT,
         named_params![
             ":id": args.id,
         ],
     )?;
 
-    Ok(HttpResponse::Created().body(r#"{"message":"Created"}"#.to_string() + "\n"))
+    Ok(HttpResponse::Created())
 }
 
 #[get("/v2/areas")]
@@ -130,14 +128,11 @@ async fn post_tags(
         return Err(err);
     };
 
+    let id = id.into_inner();
     let conn = conn.lock()?;
 
     let area: Option<Area> = conn
-        .query_row(
-            db::AREA_SELECT_BY_ID,
-            [&id.into_inner()],
-            db::mapper_area_full(),
-        )
+        .query_row(db::AREA_SELECT_BY_ID, [&id], db::mapper_area_full())
         .optional()?;
 
     match area {
@@ -161,9 +156,12 @@ async fn post_tags(
                 )?;
             }
 
-            Ok(HttpResponse::Created().body(r#"{"message":"Created"}"#.to_string() + "\n"))
+            Ok(HttpResponse::Created())
         }
-        None => Err(ApiError::new("Can't find area")),
+        None => Err(ApiError::new(
+            404,
+            &format!("There is no area with id {id}"),
+        )),
     }
 }
 

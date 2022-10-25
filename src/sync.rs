@@ -190,17 +190,17 @@ pub async fn sync(mut db_conn: Connection) {
             insert_user_if_not_exists(user_id, &tx).await;
 
             tx.execute(
-                db::ELEMENT_EVENT_INSERT,
-                params![
-                    OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
-                    element.id,
-                    element.lat(),
-                    element.lon(),
-                    name,
-                    "delete",
-                    user_id,
-                    user_display_name,
-                ],
+                db::EVENT_INSERT,
+                named_params! {
+                    ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+                    ":element_id": element.id,
+                    ":element_lat": element.lat(),
+                    ":element_lon": element.lon(),
+                    ":element_name": name,
+                    ":type": "delete",
+                    ":user_id": user_id,
+                    ":user": user_display_name,
+                },
             )
             .unwrap();
 
@@ -237,17 +237,17 @@ pub async fn sync(mut db_conn: Connection) {
                     insert_user_if_not_exists(user_id, &tx).await;
 
                     tx.execute(
-                        db::ELEMENT_EVENT_INSERT,
-                        params![
-                            OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
-                            btcmap_id,
-                            element.lat(),
-                            element.lon(),
-                            name,
-                            "update",
-                            user_id,
-                            user_display_name,
-                        ],
+                        db::EVENT_INSERT,
+                        named_params! {
+                            ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+                            ":element_id": btcmap_id,
+                            ":element_lat": element.lat(),
+                            ":element_lon": element.lon(),
+                            ":element_name": name,
+                            ":type": "update",
+                            ":user_id": user_id,
+                            ":user": user_display_name,
+                        },
                     )
                     .unwrap();
 
@@ -287,17 +287,17 @@ pub async fn sync(mut db_conn: Connection) {
                 };
 
                 tx.execute(
-                    db::ELEMENT_EVENT_INSERT,
-                    params![
-                        OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
-                        btcmap_id,
-                        element.lat(),
-                        element.lon(),
-                        name,
-                        "create",
-                        user_id,
-                        user_display_name,
-                    ],
+                    db::EVENT_INSERT,
+                    named_params! {
+                        ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+                        ":element_id": btcmap_id,
+                        ":element_lat": element.lat(),
+                        ":element_lon": element.lon(),
+                        ":element_name": name,
+                        ":type": "create",
+                        ":user_id": user_id,
+                        ":user": user_display_name,
+                    },
                 )
                 .unwrap();
 
