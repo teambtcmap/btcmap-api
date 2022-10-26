@@ -30,7 +30,7 @@ impl ResponseError for ApiError {
 
         HttpResponse::build(self.http_code)
             .insert_header(ContentType::json())
-            .body(serde_json::to_string(&body).unwrap() + "\n")
+            .body(serde_json::to_string_pretty(&body).unwrap() + "\n")
     }
 
     fn status_code(&self) -> StatusCode {

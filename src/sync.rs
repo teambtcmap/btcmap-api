@@ -367,7 +367,7 @@ pub async fn sync(mut db_conn: Connection) {
     let report = tx.query_row(
         db::REPORT_SELECT_BY_AREA_ID_AND_DATE,
         params!["", today.to_string()],
-        db::mapper_daily_report_full(),
+        db::mapper_report_full(),
     );
 
     if let Ok(report) = report {

@@ -1,12 +1,12 @@
 use crate::auth::is_from_admin;
 use crate::db;
+use crate::model::json::Json;
 use crate::model::ApiError;
 use crate::model::Area;
 use actix_web::get;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Form;
-use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::HttpRequest;
@@ -57,7 +57,7 @@ struct PostTagsArgs {
     value: String,
 }
 
-#[post("/v2/areas")]
+#[post("")]
 async fn post(
     args: Form<PostArgs>,
     req: HttpRequest,
@@ -77,7 +77,7 @@ async fn post(
     Ok(HttpResponse::Created())
 }
 
-#[get("/v2/areas")]
+#[get("")]
 async fn get(
     args: Query<GetArgs>,
     conn: Data<Mutex<Connection>>,
@@ -100,24 +100,24 @@ async fn get(
     }))
 }
 
-#[get("/v2/areas/{id}")]
+#[get("{id}")]
 async fn get_by_id(
     id: Path<String>,
     conn: Data<Mutex<Connection>>,
-) -> Result<Json<Option<GetItem>>, ApiError> {
-    Ok(Json(
-        conn.lock()?
-            .query_row(
-                db::AREA_SELECT_BY_ID,
-                [id.into_inner()],
-                db::mapper_area_full(),
-            )
-            .optional()?
-            .map(|it| it.into()),
-    ))
+) -> Result<Json<GetItem>, ApiError> {
+    let id = id.into_inner();
+
+    conn.lock()?
+        .query_row(db::AREA_SELECT_BY_ID, [&id], db::mapper_area_full())
+        .optional()?
+        .map(|it| Json(it.into()))
+        .ok_or(ApiError::new(
+            404,
+            &format!("Area with id {id} doesn't exist"),
+        ))
 }
 
-#[post("/v2/areas/{id}/tags")]
+#[post("{id}/tags")]
 async fn post_tags(
     id: Path<String>,
     req: HttpRequest,
@@ -170,6 +170,7 @@ mod tests {
     use super::*;
     use crate::db;
     use actix_web::test::TestRequest;
+    use actix_web::web::scope;
     use actix_web::{test, App};
     use std::env;
     use std::sync::atomic::Ordering;
@@ -185,11 +186,11 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(Mutex::new(db)))
-                .service(super::post),
+                .service(scope("/").service(super::post)),
         )
         .await;
         let req = TestRequest::post()
-            .uri("/v2/areas")
+            .uri("/")
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_form(PostArgs {
                 id: "test-area".into(),

@@ -1,68 +1,65 @@
-use crate::db;
 use crate::model::json::Json;
+use crate::db;
 use crate::model::ApiError;
-use crate::model::DailyReport;
+use crate::model::User;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Path;
+use actix_web::web::Query;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use std::sync::Mutex;
+
+#[derive(Deserialize)]
+pub struct GetArgs {
+    updated_since: Option<String>,
+}
 
 #[derive(Serialize)]
 pub struct GetItem {
-    pub id: i64,
-    pub area_id: String,
-    pub date: String,
-    pub total_elements: i64,
-    pub total_elements_onchain: i64,
-    pub total_elements_lightning: i64,
-    pub total_elements_lightning_contactless: i64,
-    pub up_to_date_elements: i64,
-    pub outdated_elements: i64,
-    pub legacy_elements: i64,
-    pub elements_created: i64,
-    pub elements_updated: i64,
-    pub elements_deleted: i64,
+    pub id: String,
+    pub osm_json: Value,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for DailyReport {
+impl Into<GetItem> for User {
     fn into(self) -> GetItem {
         GetItem {
             id: self.id,
-            area_id: self.area_id,
-            date: self.date,
-            total_elements: self.total_elements,
-            total_elements_onchain: self.total_elements_onchain,
-            total_elements_lightning: self.total_elements_lightning,
-            total_elements_lightning_contactless: self.total_elements_lightning_contactless,
-            up_to_date_elements: self.up_to_date_elements,
-            outdated_elements: self.outdated_elements,
-            legacy_elements: self.legacy_elements,
-            elements_created: self.elements_created,
-            elements_updated: self.elements_updated,
-            elements_deleted: self.elements_deleted,
+            osm_json: self.data,
             created_at: self.created_at,
             updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            deleted_at: self.deleted_at.unwrap_or("".to_string()),
         }
     }
 }
 
 #[get("")]
-async fn get(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetItem>>, ApiError> {
-    Ok(Json(
-        conn.lock()?
-            .prepare(db::REPORT_SELECT_ALL)?
-            .query_map([], db::mapper_report_full())?
+async fn get(
+    args: Query<GetArgs>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<Vec<GetItem>>, ApiError> {
+    Ok(Json(match &args.updated_since {
+        Some(updated_since) => conn
+            .lock()?
+            .prepare(db::USER_SELECT_UPDATED_SINCE)?
+            .query_map([updated_since], db::mapper_user_full())?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
-    ))
+        None => conn
+            .lock()?
+            .prepare(db::USER_SELECT_ALL)?
+            .query_map([], db::mapper_user_full())?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap().into())
+            .collect(),
+    }))
 }
 
 #[get("{id}")]
@@ -73,12 +70,12 @@ pub async fn get_by_id(
     let id = id.into_inner();
 
     conn.lock()?
-        .query_row(db::REPORT_SELECT_BY_ID, [&id], db::mapper_report_full())
+        .query_row(db::USER_SELECT_BY_ID, [&id], db::mapper_user_full())
         .optional()?
         .map(|it| Json(it.into()))
         .ok_or(ApiError::new(
             404,
-            &format!("Report with id {id} doesn't exist"),
+            &format!("User with id {id} doesn't exist"),
         ))
 }
 
@@ -117,20 +114,10 @@ mod tests {
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
         db.execute(
-            db::REPORT_INSERT,
+            db::USER_INSERT,
             named_params! {
-                ":area_id" : "",
-                ":date" : "",
-                ":total_elements" : 0,
-                ":total_elements_onchain" : 0,
-                ":total_elements_lightning" : 0,
-                ":total_elements_lightning_contactless" : 0,
-                ":up_to_date_elements" : 0,
-                ":outdated_elements" : 0,
-                ":legacy_elements" : 0,
-                ":elements_created" : 0,
-                ":elements_updated" : 0,
-                ":elements_deleted" : 0,
+                ":id": 1,
+                ":data": "{}",
             },
         )
         .unwrap();

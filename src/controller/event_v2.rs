@@ -1,9 +1,9 @@
 use crate::db;
+use crate::model::json::Json;
 use crate::model::ApiError;
 use crate::model::ElementEvent;
-use actix_web::routes;
+use actix_web::get;
 use actix_web::web::Data;
-use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
 use rusqlite::Connection;
@@ -44,9 +44,7 @@ impl Into<GetItem> for ElementEvent {
     }
 }
 
-#[routes]
-#[get("/events")]
-#[get("/v2/events")]
+#[get("")]
 async fn get(
     args: Query<GetArgs>,
     conn: Data<Mutex<Connection>>,
@@ -69,9 +67,7 @@ async fn get(
     }))
 }
 
-#[routes]
-#[get("/events/{id}")]
-#[get("/v2/events/{id}")]
+#[get("{id}")]
 pub async fn get_by_id(
     id: Path<String>,
     conn: Data<Mutex<Connection>>,
@@ -79,11 +75,7 @@ pub async fn get_by_id(
     let id = id.into_inner();
 
     conn.lock()?
-        .query_row(
-            db::EVENT_SELECT_BY_ID,
-            [&id],
-            db::mapper_event_full(),
-        )
+        .query_row(db::EVENT_SELECT_BY_ID, [&id], db::mapper_event_full())
         .optional()?
         .map(|it| Json(it.into()))
         .ok_or(ApiError::new(
@@ -94,12 +86,13 @@ pub async fn get_by_id(
 
 #[cfg(test)]
 mod tests {
-    use serde_json::Value;
-use super::*;
+    use super::*;
     use crate::db;
     use actix_web::test::TestRequest;
+    use actix_web::web::scope;
     use actix_web::{test, App};
     use rusqlite::named_params;
+    use serde_json::Value;
     use std::sync::atomic::Ordering;
 
     #[actix_web::test]
@@ -111,10 +104,10 @@ use super::*;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(Mutex::new(db)))
-                .service(super::get),
+                .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/v2/events").to_request();
+        let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
     }
@@ -142,10 +135,10 @@ use super::*;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(Mutex::new(db)))
-                .service(super::get),
+                .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/v2/events").to_request();
+        let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
     }

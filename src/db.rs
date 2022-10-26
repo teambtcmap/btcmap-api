@@ -95,7 +95,7 @@ pub static EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, element_lat
 pub static EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event where ROWID = ?";
 pub static EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
 
-pub static USER_INSERT: &str = "INSERT INTO user (id, data) VALUES (?, ?)";
+pub static USER_INSERT: &str = "INSERT INTO user (id, data) VALUES (:id, :data)";
 pub static USER_SELECT_ALL: &str =
     "SELECT id, data, created_at, updated_at, deleted_at FROM user ORDER BY updated_at DESC";
 pub static USER_SELECT_BY_ID: &str =
@@ -183,7 +183,7 @@ pub fn mapper_element_full() -> fn(&Row) -> rusqlite::Result<Element> {
     }
 }
 
-pub fn mapper_daily_report_full() -> fn(&Row) -> rusqlite::Result<DailyReport> {
+pub fn mapper_report_full() -> fn(&Row) -> rusqlite::Result<DailyReport> {
     |row: &Row| -> rusqlite::Result<DailyReport> {
         Ok(DailyReport {
             id: row.get(0)?,
