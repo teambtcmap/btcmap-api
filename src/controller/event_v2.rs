@@ -1,7 +1,7 @@
 use crate::db;
 use crate::model::json::Json;
 use crate::model::ApiError;
-use crate::model::ElementEvent;
+use crate::model::Event;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Path;
@@ -29,12 +29,12 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for ElementEvent {
+impl Into<GetItem> for Event {
     fn into(self) -> GetItem {
         GetItem {
             id: self.id,
             date: self.date,
-            r#type: self.event_type,
+            r#type: self.r#type,
             element_id: self.element_id,
             user_id: self.user_id,
             created_at: self.created_at,
@@ -123,12 +123,8 @@ mod tests {
             named_params! {
                 ":date": "",
                 ":element_id": "",
-                ":element_lat": "0",
-                ":element_lon": "0",
-                ":element_name": "",
                 ":type": "",
                 ":user_id": "0",
-                ":user": "",
             },
         )
         .unwrap();

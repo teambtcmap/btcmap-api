@@ -194,12 +194,8 @@ pub async fn sync(mut db_conn: Connection) {
                 named_params! {
                     ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                     ":element_id": element.id,
-                    ":element_lat": element.lat(),
-                    ":element_lon": element.lon(),
-                    ":element_name": name,
                     ":type": "delete",
                     ":user_id": user_id,
-                    ":user": user_display_name,
                 },
             )
             .unwrap();
@@ -241,12 +237,8 @@ pub async fn sync(mut db_conn: Connection) {
                         named_params! {
                             ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                             ":element_id": btcmap_id,
-                            ":element_lat": element.lat(),
-                            ":element_lon": element.lon(),
-                            ":element_name": name,
                             ":type": "update",
                             ":user_id": user_id,
-                            ":user": user_display_name,
                         },
                     )
                     .unwrap();
@@ -278,25 +270,13 @@ pub async fn sync(mut db_conn: Connection) {
 
                 insert_user_if_not_exists(user_id, &tx).await;
 
-                let element = Element {
-                    id: "".to_string(),
-                    data: fresh_element.clone(),
-                    created_at: "".to_string(),
-                    updated_at: "".to_string(),
-                    deleted_at: Option::None,
-                };
-
                 tx.execute(
                     db::EVENT_INSERT,
                     named_params! {
                         ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                         ":element_id": btcmap_id,
-                        ":element_lat": element.lat(),
-                        ":element_lon": element.lon(),
-                        ":element_name": name,
                         ":type": "create",
                         ":user_id": user_id,
-                        ":user": user_display_name,
                     },
                 )
                 .unwrap();

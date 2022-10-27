@@ -11,4 +11,8 @@ case "$1" in
             && rsync -v target/release/btcmap-api btcmap:/usr/local/bin/btcmap-api \
             && ssh btcmap 'systemctl restart btcmap-api.service'
         ;;
+
+    db)
+        sqlite3 ~/.local/share/btcmap/btcmap.db
+        ;;
 esac

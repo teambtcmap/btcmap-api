@@ -1,7 +1,7 @@
 use crate::model::Area;
 use crate::model::DailyReport;
 use crate::model::Element;
-use crate::model::ElementEvent;
+use crate::model::Event;
 use crate::model::User;
 use include_dir::include_dir;
 use include_dir::Dir;
@@ -60,7 +60,7 @@ pub static REPORT_UPDATE_EVENT_COUNTERS: &str = "UPDATE report SET elements_crea
 pub static AREA_INSERT: &str =
     "INSERT INTO area (id, name, type, min_lon, min_lat, max_lon, max_lat) VALUES (:id, '', '', 0, 0, 0, 0)";
 pub static AREA_SELECT_ALL: &str =
-    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area ORDER BY updated_at DESC";
+    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area ORDER BY updated_at";
 pub static AREA_SELECT_BY_ID: &str =
     "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE id = ?";
 pub static AREA_SELECT_UPDATED_SINCE: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE updated_at > ? ORDER BY updated_at DESC";
@@ -73,27 +73,19 @@ pub static EVENT_INSERT: &str = r#"
     INSERT INTO event (
         date, 
         element_id, 
-        element_lat, 
-        element_lon, 
-        element_name, 
         type, 
-        user_id, 
-        user
+        user_id
     ) VALUES (
         :date,
         :element_id,
-        :element_lat,
-        :element_lon,
-        :element_name,
         :type,
-        :user_id,
-        :user
+        :user_id
     )
 "#;
 
-pub static EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
-pub static EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event where ROWID = ?";
-pub static EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, element_lat, element_lon, element_name, type, user_id, user, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
+pub static EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
+pub static EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event where ROWID = ?";
+pub static EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
 
 pub static USER_INSERT: &str = "INSERT INTO user (id, data) VALUES (:id, :data)";
 pub static USER_SELECT_ALL: &str =
@@ -227,21 +219,17 @@ pub fn mapper_area_full() -> fn(&Row) -> rusqlite::Result<Area> {
     }
 }
 
-pub fn mapper_event_full() -> fn(&Row) -> rusqlite::Result<ElementEvent> {
-    |row: &Row| -> rusqlite::Result<ElementEvent> {
-        Ok(ElementEvent {
+pub fn mapper_event_full() -> fn(&Row) -> rusqlite::Result<Event> {
+    |row: &Row| -> rusqlite::Result<Event> {
+        Ok(Event {
             id: row.get(0)?,
             date: row.get(1)?,
             element_id: row.get(2)?,
-            element_lat: row.get(3)?,
-            element_lon: row.get(4)?,
-            element_name: row.get(5)?,
-            event_type: row.get(6)?,
-            user_id: row.get(7)?,
-            user: row.get(8)?,
-            created_at: row.get(9)?,
-            updated_at: row.get(10)?,
-            deleted_at: row.get(11)?,
+            r#type: row.get(3)?,
+            user_id: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+            deleted_at: row.get(7)?,
         })
     }
 }
