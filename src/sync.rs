@@ -205,7 +205,7 @@ pub async fn sync(mut db_conn: Connection) {
             .unwrap();
 
             send_discord_message(format!(
-                "{name} was deleted https://www.openstreetmap.org/{element_type}/{osm_id}"
+                "{name} was deleted by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
             ))
             .await;
             let query =
