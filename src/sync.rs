@@ -11,9 +11,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
-use std::ops::Sub;
 use time::format_description::well_known::Rfc3339;
-use time::Duration;
 use time::OffsetDateTime;
 
 static OVERPASS_API_URL: &str = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
@@ -61,30 +59,7 @@ pub async fn sync(mut db_conn: Connection) {
         }
     };
 
-    log::info!("Fetched {} fresh elements", fresh_elements.len());
-
-    let nodes: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| it["type"].as_str().unwrap() == "node")
-        .collect();
-
-    let ways: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| it["type"].as_str().unwrap() == "way")
-        .collect();
-
-    let relations: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| it["type"].as_str().unwrap() == "relation")
-        .collect();
-
-    log::info!(
-        "Got {} elements (nodes: {}, ways: {}, relations: {})",
-        fresh_elements.len(),
-        nodes.len(),
-        ways.len(),
-        relations.len()
-    );
+    log::info!("Fetched {} elements", fresh_elements.len());
 
     if fresh_elements.len() < 5000 {
         log::error!("Data set is most likely invalid, skipping the sync");
@@ -92,26 +67,6 @@ pub async fn sync(mut db_conn: Connection) {
             .await;
         return;
     }
-
-    let onchain_elements: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| it["tags"]["payment:onchain"].as_str().unwrap_or("") == "yes")
-        .collect();
-
-    let lightning_elements: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| it["tags"]["payment:lightning"].as_str().unwrap_or("") == "yes")
-        .collect();
-
-    let lightning_contactless_elements: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| {
-            it["tags"]["payment:lightning_contactless"]
-                .as_str()
-                .unwrap_or("")
-                == "yes"
-        })
-        .collect();
 
     let tx: Transaction = db_conn.transaction().unwrap();
     let mut elements_stmt: Statement = tx.prepare(db::ELEMENT_SELECT_ALL).unwrap();
@@ -133,10 +88,6 @@ pub async fn sync(mut db_conn: Connection) {
             )
         })
         .collect();
-
-    let mut elements_created = 0;
-    let mut elements_updated = 0;
-    let mut elements_deleted = 0;
 
     // First, let's check if any of the cached elements no longer accept bitcoins
     for element in &elements {
@@ -208,7 +159,6 @@ pub async fn sync(mut db_conn: Connection) {
                 "UPDATE element SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE id = ?";
             log::info!("Executing query: {query:?}");
             tx.execute(query, params![element.id]).unwrap();
-            elements_deleted += 1;
         }
     }
 
@@ -253,8 +203,6 @@ pub async fn sync(mut db_conn: Connection) {
                         params![fresh_element_data, btcmap_id],
                     )
                     .unwrap();
-
-                    elements_updated += 1;
                 }
 
                 if element.deleted_at.is_some() {
@@ -294,101 +242,8 @@ pub async fn sync(mut db_conn: Connection) {
                     },
                 )
                 .unwrap();
-
-                elements_created += 1;
             }
         }
-    }
-
-    let today = OffsetDateTime::now_utc().date();
-    let year_ago = today.sub(Duration::days(365));
-    log::info!("Today: {today}, year ago: {year_ago}");
-
-    let up_to_date_elements: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| {
-            (it["tags"].get("survey:date").is_some()
-                && it["tags"]["survey:date"].as_str().unwrap().to_string() > year_ago.to_string())
-                || (it["tags"].get("check_date").is_some()
-                    && it["tags"]["check_date"].as_str().unwrap().to_string()
-                        > year_ago.to_string())
-        })
-        .collect();
-
-    let outdated_elements: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| {
-            (it["tags"].get("check_date").is_none()
-                && (it["tags"].get("survey:date").is_none()
-                    || (it["tags"].get("survey:date").is_some()
-                        && it["tags"]["survey:date"].as_str().unwrap().to_string()
-                            <= year_ago.to_string())))
-                || (it["tags"].get("survey:date").is_none()
-                    && (it["tags"].get("check_date").is_none()
-                        || (it["tags"].get("check_date").is_some()
-                            && it["tags"]["check_date"].as_str().unwrap().to_string()
-                                <= year_ago.to_string())))
-        })
-        .collect();
-
-    let legacy_elements: Vec<&Value> = fresh_elements
-        .iter()
-        .filter(|it| it["tags"].get("payment:bitcoin").is_some())
-        .collect();
-
-    log::info!("Total elements: {}", elements.len());
-    log::info!("Up to date elements: {}", up_to_date_elements.len());
-    log::info!("Outdated elements: {}", outdated_elements.len());
-    log::info!("Legacy elements: {}", legacy_elements.len());
-    log::info!("Elements created: {elements_created}");
-    log::info!("Elements updated: {elements_updated}");
-    log::info!("Elements deleted: {elements_deleted}");
-
-    let report = tx.query_row(
-        db::REPORT_SELECT_BY_AREA_ID_AND_DATE,
-        params!["", today.to_string()],
-        db::mapper_report_full(),
-    );
-
-    if let Ok(report) = report {
-        log::info!("Found existing report, updating");
-        log::info!(
-            "Existing report: created {}, updated {}, deleted {}",
-            report.elements_created,
-            report.elements_updated,
-            report.elements_deleted
-        );
-        tx.execute(
-            db::REPORT_UPDATE_EVENT_COUNTERS,
-            params![
-                elements_created + report.elements_created,
-                elements_updated + report.elements_updated,
-                elements_deleted + report.elements_deleted,
-                "",
-                today.to_string(),
-            ],
-        )
-        .unwrap();
-    } else {
-        log::info!("Inserting new report");
-        tx.execute(
-            db::REPORT_INSERT,
-            named_params! {
-                ":area_id" : "",
-                ":date" : today.to_string(),
-                ":total_elements" : fresh_elements.len(),
-                ":total_elements_onchain" : onchain_elements.len(),
-                ":total_elements_lightning" : lightning_elements.len(),
-                ":total_elements_lightning_contactless" : lightning_contactless_elements.len(),
-                ":up_to_date_elements" : up_to_date_elements.len(),
-                ":outdated_elements" : outdated_elements.len(),
-                ":legacy_elements" : legacy_elements.len(),
-                ":elements_created" : elements_created,
-                ":elements_updated" : elements_updated,
-                ":elements_deleted" : elements_deleted,
-            },
-        )
-        .unwrap();
     }
 
     tx.commit().expect("Failed to save sync results");
@@ -419,7 +274,7 @@ async fn send_discord_message(text: String) {
     }
 }
 
-pub async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
+async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
     let url = format!(
         "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
     );

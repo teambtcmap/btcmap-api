@@ -1,7 +1,7 @@
 use crate::model::Area;
-use crate::model::DailyReport;
 use crate::model::Element;
 use crate::model::Event;
+use crate::model::Report;
 use crate::model::User;
 use include_dir::include_dir;
 use include_dir::Dir;
@@ -25,37 +25,53 @@ pub static ELEMENT_SELECT_UPDATED_SINCE: &str =
 pub static REPORT_INSERT: &str = r#"
     INSERT INTO report (
         area_id, 
-        date, 
-        total_elements, 
-        total_elements_onchain, 
-        total_elements_lightning, 
-        total_elements_lightning_contactless, 
-        up_to_date_elements, 
-        outdated_elements, 
-        legacy_elements, 
-        elements_created, 
-        elements_updated, 
-        elements_deleted
+        date,
+        tags
     ) VALUES (
         :area_id,
         :date,
-        :total_elements,
-        :total_elements_onchain,
-        :total_elements_lightning,
-        :total_elements_lightning_contactless,
-        :up_to_date_elements,
-        :outdated_elements,
-        :legacy_elements,
-        :elements_created,
-        :elements_updated,
-        :elements_deleted
+        :tags
     )
 "#;
 
-pub static REPORT_SELECT_ALL: &str = "SELECT ROWID, area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report ORDER BY date DESC";
-pub static REPORT_SELECT_BY_ID: &str = "SELECT ROWID, area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report WHERE ROWID = ?";
-pub static REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = "SELECT ROWID, area_id, date, total_elements, total_elements_onchain, total_elements_lightning, total_elements_lightning_contactless, up_to_date_elements, outdated_elements, legacy_elements, elements_created, elements_updated, elements_deleted, created_at, updated_at, deleted_at FROM report WHERE area_id = ? AND date = ?";
-pub static REPORT_UPDATE_EVENT_COUNTERS: &str = "UPDATE report SET elements_created = ?, elements_updated = ?, elements_deleted = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE area_id = ? AND date = ?";
+pub static REPORT_SELECT_ALL: &str = r#"
+    SELECT 
+        ROWID,
+        area_id,
+        date,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM report 
+    ORDER BY updated_at
+"#;
+
+pub static REPORT_SELECT_BY_ID: &str = r#"
+    SELECT 
+        ROWID, 
+        area_id, 
+        date, 
+        tags, 
+        created_at, 
+        updated_at, 
+        deleted_at 
+    FROM report 
+    WHERE ROWID = :id
+"#;
+
+pub static REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = r#"
+    SELECT 
+        ROWID,
+        area_id,
+        date,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM report 
+    WHERE area_id = :area_id AND date = :date
+"#;
 
 pub static AREA_INSERT: &str =
     "INSERT INTO area (id, name, type, min_lon, min_lat, max_lon, max_lat) VALUES (:id, '', '', 0, 0, 0, 0)";
@@ -175,25 +191,19 @@ pub fn mapper_element_full() -> fn(&Row) -> rusqlite::Result<Element> {
     }
 }
 
-pub fn mapper_report_full() -> fn(&Row) -> rusqlite::Result<DailyReport> {
-    |row: &Row| -> rusqlite::Result<DailyReport> {
-        Ok(DailyReport {
+pub fn mapper_report_full() -> fn(&Row) -> rusqlite::Result<Report> {
+    |row: &Row| -> rusqlite::Result<Report> {
+        let tags: String = row.get(3)?;
+        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
+
+        Ok(Report {
             id: row.get(0)?,
             area_id: row.get(1)?,
             date: row.get(2)?,
-            total_elements: row.get(3)?,
-            total_elements_onchain: row.get(4)?,
-            total_elements_lightning: row.get(5)?,
-            total_elements_lightning_contactless: row.get(6)?,
-            up_to_date_elements: row.get(7)?,
-            outdated_elements: row.get(8)?,
-            legacy_elements: row.get(9)?,
-            elements_created: row.get(10)?,
-            elements_updated: row.get(11)?,
-            elements_deleted: row.get(12)?,
-            created_at: row.get(13)?,
-            updated_at: row.get(14)?,
-            deleted_at: row.get(15)?,
+            tags: tags,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+            deleted_at: row.get(6)?,
         })
     }
 }

@@ -6,6 +6,7 @@ extern crate core;
 mod auth;
 mod controller;
 mod db;
+mod generate_report;
 mod model;
 mod sync;
 mod sync_users;
@@ -132,6 +133,9 @@ async fn main() -> std::io::Result<()> {
                 }
                 "sync-users" => {
                     sync_users::sync(db_conn).await;
+                }
+                "generate-report" => {
+                    generate_report::generate_report(db_conn).await;
                 }
                 _ => {
                     log::error!("Unknown action");

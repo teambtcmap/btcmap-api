@@ -7,8 +7,8 @@ pub use api_error::ApiError;
 pub mod area;
 pub use area::Area;
 
-pub mod daily_report;
-pub use daily_report::DailyReport;
+pub mod report;
+pub use report::Report;
 
 pub mod event;
 pub use event::Event;

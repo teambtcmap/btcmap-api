@@ -1,13 +1,14 @@
 use crate::db;
 use crate::model::json::Json;
 use crate::model::ApiError;
-use crate::model::DailyReport;
+use crate::model::Report;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Path;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use serde::Serialize;
+use serde_json::Value;
 use std::sync::Mutex;
 
 #[derive(Serialize)]
@@ -15,6 +16,7 @@ pub struct GetItem {
     pub id: i64,
     pub area_id: String,
     pub date: String,
+    pub tags: Value,
     pub total_elements: i64,
     pub total_elements_onchain: i64,
     pub total_elements_lightning: i64,
@@ -30,22 +32,25 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for DailyReport {
+impl Into<GetItem> for Report {
     fn into(self) -> GetItem {
         GetItem {
             id: self.id,
             area_id: self.area_id,
             date: self.date,
-            total_elements: self.total_elements,
-            total_elements_onchain: self.total_elements_onchain,
-            total_elements_lightning: self.total_elements_lightning,
-            total_elements_lightning_contactless: self.total_elements_lightning_contactless,
-            up_to_date_elements: self.up_to_date_elements,
-            outdated_elements: self.outdated_elements,
-            legacy_elements: self.legacy_elements,
-            elements_created: self.elements_created,
-            elements_updated: self.elements_updated,
-            elements_deleted: self.elements_deleted,
+            tags: self.tags.clone(),
+            total_elements: self.tags["total_elements"].as_i64().unwrap_or(0),
+            total_elements_onchain: self.tags["total_elements_onchain"].as_i64().unwrap_or(0),
+            total_elements_lightning: self.tags["total_elements_lightning"].as_i64().unwrap_or(0),
+            total_elements_lightning_contactless: self.tags["total_elements_lightning_contactless"]
+                .as_i64()
+                .unwrap_or(0),
+            up_to_date_elements: self.tags["up_to_date_elements"].as_i64().unwrap_or(0),
+            outdated_elements: self.tags["outdated_elements"].as_i64().unwrap_or(0),
+            legacy_elements: self.tags["legacy_elements"].as_i64().unwrap_or(0),
+            elements_created: 0,
+            elements_updated: 0,
+            elements_deleted: 0,
             created_at: self.created_at,
             updated_at: self.updated_at,
             deleted_at: self.deleted_at,
@@ -121,16 +126,7 @@ mod tests {
             named_params! {
                 ":area_id" : "",
                 ":date" : "",
-                ":total_elements" : 0,
-                ":total_elements_onchain" : 0,
-                ":total_elements_lightning" : 0,
-                ":total_elements_lightning_contactless" : 0,
-                ":up_to_date_elements" : 0,
-                ":outdated_elements" : 0,
-                ":legacy_elements" : 0,
-                ":elements_created" : 0,
-                ":elements_updated" : 0,
-                ":elements_deleted" : 0,
+                ":tags" : "{}",
             },
         )
         .unwrap();
