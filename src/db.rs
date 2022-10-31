@@ -16,11 +16,70 @@ pub static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-pub static ELEMENT_INSERT: &str = "INSERT INTO element (id, data) VALUES (:id, :data)";
-pub static ELEMENT_SELECT_ALL: &str = "SELECT * FROM element ORDER BY updated_at DESC";
-pub static ELEMENT_SELECT_BY_ID: &str = "SELECT * FROM element WHERE id = ?";
-pub static ELEMENT_SELECT_UPDATED_SINCE: &str =
-    "SELECT * FROM element WHERE updated_at > ? ORDER BY updated_at DESC";
+pub static ELEMENT_INSERT: &str = r#"
+    INSERT INTO element (
+        id,
+        osm_json
+    ) VALUES (
+        :id,
+        :osm_json
+    )
+"#;
+
+pub static ELEMENT_SELECT_ALL: &str = r#"
+    SELECT
+        id,
+        osm_json,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM element
+    ORDER BY updated_at
+"#;
+
+pub static ELEMENT_SELECT_BY_ID: &str = r#"
+    SELECT
+        id,
+        osm_json,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM element 
+    WHERE id = :id
+"#;
+
+pub static ELEMENT_SELECT_UPDATED_SINCE: &str = r#"
+    SELECT
+        id,
+        osm_json,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM element
+    WHERE updated_at > :updated_since
+    ORDER BY updated_at
+"#;
+
+pub static ELEMENT_UPDATE_DELETED_AT: &str = r#"
+    UPDATE element
+    SET deleted_at = :deleted_at
+    WHERE id = :id
+"#;
+
+pub static ELEMENT_UPDATE_OSM_JSON: &str = r#"
+    UPDATE element
+    SET osm_json = :osm_json
+    WHERE id = :id
+"#;
+
+pub static ELEMENT_MARK_AS_DELETED: &str = r#"
+    UPDATE element
+    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ')
+    WHERE id = :id
+"#;
 
 pub static REPORT_INSERT: &str = r#"
     INSERT INTO report (
@@ -178,15 +237,19 @@ fn drop(db_conn: Connection) {
 
 pub fn mapper_element_full() -> fn(&Row) -> rusqlite::Result<Element> {
     |row: &Row| -> rusqlite::Result<Element> {
-        let data: String = row.get(1)?;
-        let data: Value = serde_json::from_str(&data).unwrap_or_default();
+        let osm_json: String = row.get(1)?;
+        let osm_json: Value = serde_json::from_str(&osm_json).unwrap_or_default();
+
+        let tags: String = row.get(2)?;
+        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(Element {
             id: row.get(0)?,
-            data,
-            created_at: row.get(2)?,
-            updated_at: row.get(3)?,
-            deleted_at: row.get(4)?,
+            osm_json,
+            tags,
+            created_at: row.get(3)?,
+            updated_at: row.get(4)?,
+            deleted_at: row.get(5)?,
         })
     }
 }

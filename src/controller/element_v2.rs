@@ -22,6 +22,7 @@ pub struct GetArgs {
 pub struct GetItem {
     pub id: String,
     pub osm_json: Value,
+    pub tags: Value,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -31,10 +32,11 @@ impl Into<GetItem> for Element {
     fn into(self) -> GetItem {
         GetItem {
             id: self.id,
-            osm_json: self.data,
+            osm_json: self.osm_json,
+            tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
-            deleted_at: self.deleted_at.unwrap_or("".into()),
+            deleted_at: self.deleted_at,
         }
     }
 }
@@ -48,7 +50,10 @@ pub async fn get(
         Some(updated_since) => conn
             .lock()?
             .prepare(db::ELEMENT_SELECT_UPDATED_SINCE)?
-            .query_map([updated_since], db::mapper_element_full())?
+            .query_map(
+                &[(":updated_since", &updated_since)],
+                db::mapper_element_full(),
+            )?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
@@ -70,7 +75,11 @@ pub async fn get_by_id(
     let id = id.into_inner();
 
     conn.lock()?
-        .query_row(db::ELEMENT_SELECT_BY_ID, [&id], db::mapper_element_full())
+        .query_row(
+            db::ELEMENT_SELECT_BY_ID,
+            &[(":id", &id)],
+            db::mapper_element_full(),
+        )
         .optional()?
         .map(|it| Json(it.into()))
         .ok_or(ApiError::new(
@@ -116,7 +125,7 @@ mod tests {
             db::ELEMENT_INSERT,
             named_params! {
                 ":id": "node:1",
-                ":data": "{}",
+                ":osm_json": "{}",
             },
         )
         .unwrap();

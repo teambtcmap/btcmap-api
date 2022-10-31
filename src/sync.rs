@@ -5,7 +5,6 @@ use rusqlite::named_params;
 use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
-use rusqlite::Statement;
 use rusqlite::Transaction;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -69,13 +68,14 @@ pub async fn sync(mut db_conn: Connection) {
     }
 
     let tx: Transaction = db_conn.transaction().unwrap();
-    let mut elements_stmt: Statement = tx.prepare(db::ELEMENT_SELECT_ALL).unwrap();
-    let elements: Vec<Element> = elements_stmt
+    let elements: Vec<Element> = tx
+        .prepare(db::ELEMENT_SELECT_ALL)
+        .unwrap()
         .query_map([], db::mapper_element_full())
         .unwrap()
         .map(|row| row.unwrap())
         .collect();
-    drop(elements_stmt);
+
     log::info!("Found {} cached elements", elements.len());
 
     let fresh_element_ids: HashSet<String> = fresh_elements
@@ -91,10 +91,10 @@ pub async fn sync(mut db_conn: Connection) {
 
     // First, let's check if any of the cached elements no longer accept bitcoins
     for element in &elements {
-        if !fresh_element_ids.contains(&element.id) && element.deleted_at.is_none() {
-            let osm_id = element.data["id"].as_i64().unwrap();
-            let element_type = element.data["type"].as_str().unwrap();
-            let name = element.data["tags"]["name"]
+        if !fresh_element_ids.contains(&element.id) && element.deleted_at.len() == 0 {
+            let osm_id = element.osm_json["id"].as_i64().unwrap();
+            let element_type = element.osm_json["type"].as_str().unwrap();
+            let name = element.osm_json["tags"]["name"]
                 .as_str()
                 .unwrap_or("Unnamed element");
             log::warn!(
@@ -125,7 +125,7 @@ pub async fn sync(mut db_conn: Connection) {
                         format!("Overpass lied about {element_type}/{osm_id} being deleted!");
                     log::error!("{}", message);
                     send_discord_message(message).await;
-                    std::process::exit(1);
+                    return;
                 }
             }
 
@@ -155,10 +155,12 @@ pub async fn sync(mut db_conn: Connection) {
                 "{name} was deleted by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
             ))
             .await;
-            let query =
-                "UPDATE element SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ') WHERE id = ?";
-            log::info!("Executing query: {query:?}");
-            tx.execute(query, params![element.id]).unwrap();
+            log::info!("Marking element {} as deleted", &element.id);
+            tx.execute(
+                db::ELEMENT_MARK_AS_DELETED,
+                named_params! { ":id": &element.id },
+            )
+            .unwrap();
         }
     }
 
@@ -174,10 +176,10 @@ pub async fn sync(mut db_conn: Connection) {
 
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
-                let element_data: String = serde_json::to_string(&element.data).unwrap();
-                let fresh_element_data = serde_json::to_string(fresh_element).unwrap();
+                let old_element_osm_json = serde_json::to_string(&element.osm_json).unwrap();
+                let new_element_osm_json = serde_json::to_string(fresh_element).unwrap();
 
-                if element_data != fresh_element_data {
+                if new_element_osm_json != old_element_osm_json {
                     log::info!("Element {btcmap_id} was updated");
 
                     insert_user_if_not_exists(user_id, &tx).await;
@@ -199,16 +201,22 @@ pub async fn sync(mut db_conn: Connection) {
                     .await;
 
                     tx.execute(
-                        "UPDATE element SET data = ? WHERE id = ?",
-                        params![fresh_element_data, btcmap_id],
+                        db::ELEMENT_UPDATE_OSM_JSON,
+                        named_params! {
+                            ":id": &btcmap_id,
+                            ":osm_json": &new_element_osm_json,
+                        },
                     )
                     .unwrap();
                 }
 
-                if element.deleted_at.is_some() {
+                if element.deleted_at.len() > 0 {
                     tx.execute(
-                        "UPDATE element SET deleted_at = NULL WHERE id = ?",
-                        params![btcmap_id],
+                        db::ELEMENT_UPDATE_DELETED_AT,
+                        named_params! {
+                            ":id": &btcmap_id,
+                            ":deleted_at": "",
+                        },
                     )
                     .unwrap();
                 }
@@ -237,8 +245,8 @@ pub async fn sync(mut db_conn: Connection) {
                 tx.execute(
                     db::ELEMENT_INSERT,
                     named_params! {
-                        ":id": btcmap_id,
-                        ":data": serde_json::to_string(fresh_element).unwrap(),
+                        ":id": &btcmap_id,
+                        ":osm_json": serde_json::to_string(fresh_element).unwrap(),
                     },
                 )
                 .unwrap();

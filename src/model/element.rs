@@ -4,10 +4,11 @@ use serde_json::Value;
 #[derive(Serialize)]
 pub struct Element {
     pub id: String,
-    pub data: Value,
+    pub osm_json: Value,
+    pub tags: Value,
     pub created_at: String,
     pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub deleted_at: String,
 }
 
 // impl Element {
