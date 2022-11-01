@@ -581,7 +581,7 @@ pub async fn generate_android_icons(db_conn: Connection) {
         }
 
         if shop == "water_sports" {
-            icon_id = "sports";
+            icon_id = "pool";
         }
 
         if shop == "water" {
