@@ -75,16 +75,22 @@ pub static ELEMENT_UPDATE_OSM_JSON: &str = r#"
     WHERE id = :id
 "#;
 
+pub static ELEMENT_MARK_AS_DELETED: &str = r#"
+    UPDATE element
+    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ')
+    WHERE id = :id
+"#;
+
 pub static ELEMENT_INSERT_TAG: &str = r#"
     UPDATE element
     SET tags = json_set(tags, :tag_name, :tag_value)
     WHERE id = :element_id
 "#;
 
-pub static ELEMENT_MARK_AS_DELETED: &str = r#"
+pub static ELEMENT_DELETE_TAG: &str = r#"
     UPDATE element
-    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ')
-    WHERE id = :id
+    SET tags = json_remove(tags, :tag_name)
+    WHERE id = :element_id
 "#;
 
 pub static REPORT_INSERT: &str = r#"

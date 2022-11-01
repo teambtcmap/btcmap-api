@@ -63,7 +63,8 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         scope("elements")
                             .service(controller::element_v2::get)
-                            .service(controller::element_v2::get_by_id),
+                            .service(controller::element_v2::get_by_id)
+                            .service(controller::element_v2::post_tags),
                     )
                     .service(
                         scope("events")
@@ -92,7 +93,8 @@ async fn main() -> std::io::Result<()> {
                             .service(
                                 scope("elements")
                                     .service(controller::element_v2::get)
-                                    .service(controller::element_v2::get_by_id),
+                                    .service(controller::element_v2::get_by_id)
+                                    .service(controller::element_v2::post_tags),
                             )
                             .service(
                                 scope("events")

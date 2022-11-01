@@ -1,11 +1,18 @@
+use crate::auth::is_from_admin;
 use crate::db;
 use crate::model::json::Json;
 use crate::model::ApiError;
 use crate::model::Element;
 use actix_web::get;
+use actix_web::post;
 use actix_web::web::Data;
+use actix_web::web::Form;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use actix_web::HttpRequest;
+use actix_web::HttpResponse;
+use actix_web::Responder;
+use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use serde::Deserialize;
@@ -39,6 +46,12 @@ impl Into<GetItem> for Element {
             deleted_at: self.deleted_at,
         }
     }
+}
+
+#[derive(Deserialize)]
+struct PostTagsArgs {
+    name: String,
+    value: String,
 }
 
 #[get("")]
@@ -86,6 +99,54 @@ pub async fn get_by_id(
             404,
             &format!("Element with id {id} doesn't exist"),
         ))
+}
+
+#[post("{id}/tags")]
+async fn post_tags(
+    id: Path<String>,
+    req: HttpRequest,
+    args: Form<PostTagsArgs>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<impl Responder, ApiError> {
+    if let Err(err) = is_from_admin(&req) {
+        return Err(err);
+    };
+
+    let id = id.into_inner();
+    let conn = conn.lock()?;
+
+    let element: Option<Element> = conn
+        .query_row(db::ELEMENT_SELECT_BY_ID, [&id], db::mapper_element_full())
+        .optional()?;
+
+    match element {
+        Some(element) => {
+            if args.value.len() > 0 {
+                conn.execute(
+                    db::ELEMENT_INSERT_TAG,
+                    named_params! {
+                        ":element_id": &element.id,
+                        ":tag_name": format!("$.{}", &args.name),
+                        ":tag_value": args.value,
+                    },
+                )?;
+            } else {
+                conn.execute(
+                    db::ELEMENT_DELETE_TAG,
+                    named_params! {
+                        ":element_id": &element.id,
+                        ":tag_name": format!("$.{}", &args.name),
+                    },
+                )?;
+            }
+
+            Ok(HttpResponse::Created())
+        }
+        None => Err(ApiError::new(
+            404,
+            &format!("There is no element with id {id}"),
+        )),
+    }
 }
 
 #[cfg(test)]
