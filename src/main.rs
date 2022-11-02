@@ -74,7 +74,8 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         scope("users")
                             .service(controller::user_v2::get)
-                            .service(controller::user_v2::get_by_id),
+                            .service(controller::user_v2::get_by_id)
+                            .service(controller::user_v2::post_tags),
                     )
                     .service(
                         scope("areas")
@@ -104,7 +105,8 @@ async fn main() -> std::io::Result<()> {
                             .service(
                                 scope("users")
                                     .service(controller::user_v2::get)
-                                    .service(controller::user_v2::get_by_id),
+                                    .service(controller::user_v2::get_by_id)
+                                    .service(controller::user_v2::post_tags),
                             )
                             .service(
                                 scope("areas")

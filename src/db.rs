@@ -174,13 +174,63 @@ pub static EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, type, user_
 pub static EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event where ROWID = ?";
 pub static EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
 
-pub static USER_INSERT: &str = "INSERT INTO user (id, data) VALUES (:id, :data)";
-pub static USER_SELECT_ALL: &str =
-    "SELECT id, data, created_at, updated_at, deleted_at FROM user ORDER BY updated_at DESC";
-pub static USER_SELECT_BY_ID: &str =
-    "SELECT id, data, created_at, updated_at, deleted_at FROM user WHERE id = ?";
-pub static USER_SELECT_UPDATED_SINCE: &str =
-    "SELECT id, data, created_at, updated_at, deleted_at FROM user WHERE updated_at > ? ORDER BY updated_at DESC";
+pub static USER_INSERT: &str = r#"
+    INSERT INTO user (
+        id,
+        osm_json
+    ) VALUES (
+        :id,
+        :osm_json
+    )
+"#;
+
+pub static USER_SELECT_ALL: &str = r#"
+    SELECT
+        id,
+        osm_json,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM user
+    ORDER BY updated_at
+"#;
+
+pub static USER_SELECT_BY_ID: &str = r#"
+    SELECT
+        id,
+        osm_json,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM user
+    WHERE id = :id
+"#;
+
+pub static USER_SELECT_UPDATED_SINCE: &str = r#"
+    SELECT
+        id,
+        data,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM user
+    WHERE updated_at > :updated_since
+    ORDER BY updated_at
+"#;
+
+pub static USER_INSERT_TAG: &str = r#"
+    UPDATE user
+    SET tags = json_set(tags, :tag_name, :tag_value)
+    WHERE id = :user_id
+"#;
+
+pub static USER_DELETE_TAG: &str = r#"
+    UPDATE user
+    SET tags = json_remove(tags, :tag_name)
+    WHERE id = :user_id
+"#;
 
 pub fn cli_main(args: &[String], mut db_conn: Connection) {
     match args.first() {
@@ -321,15 +371,19 @@ pub fn mapper_event_full() -> fn(&Row) -> rusqlite::Result<Event> {
 
 pub fn mapper_user_full() -> fn(&Row) -> rusqlite::Result<User> {
     |row: &Row| -> rusqlite::Result<User> {
-        let data: String = row.get(1)?;
-        let data: Value = serde_json::from_str(&data).unwrap_or_default();
+        let osm_json: String = row.get(1)?;
+        let osm_json: Value = serde_json::from_str(&osm_json).unwrap_or_default();
+
+        let tags: String = row.get(2)?;
+        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(User {
             id: row.get(0)?,
-            data,
-            created_at: row.get(2)?,
-            updated_at: row.get(3)?,
-            deleted_at: row.get(4)?,
+            osm_json,
+            tags,
+            created_at: row.get(3)?,
+            updated_at: row.get(4)?,
+            deleted_at: row.get(5)?,
         })
     }
 }

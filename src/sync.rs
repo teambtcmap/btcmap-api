@@ -2,7 +2,6 @@ use crate::db;
 use crate::model::Element;
 use crate::model::User;
 use rusqlite::named_params;
-use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
@@ -325,7 +324,11 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
     }
 
     let db_user: Option<User> = conn
-        .query_row(db::USER_SELECT_BY_ID, [user_id], db::mapper_user_full())
+        .query_row(
+            db::USER_SELECT_BY_ID,
+            &[(":id", &user_id)],
+            db::mapper_user_full(),
+        )
         .optional()
         .unwrap();
 
@@ -367,7 +370,10 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
 
     conn.execute(
         db::USER_INSERT,
-        params![user_id, serde_json::to_string(user.unwrap()).unwrap()],
+        named_params! {
+            ":id": user_id,
+            ":osm_json": serde_json::to_string(user.unwrap()).unwrap()
+        },
     )
     .unwrap();
 }

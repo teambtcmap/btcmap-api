@@ -45,14 +45,14 @@ pub async fn sync(db_conn: Connection) {
             log::error!("Failed to fetch user {}", db_user.id);
             continue;
         }
-        let db_user_str = serde_json::to_string(&db_user.data).unwrap();
+        let db_user_str = serde_json::to_string(&db_user.osm_json).unwrap();
         let fresh_user_str = serde_json::to_string(&fresh_user.unwrap()).unwrap();
         if fresh_user_str != db_user_str {
             log::info!("Change detected");
 
             db_conn
                 .execute(
-                    "UPDATE user SET data = ? WHERE id = ?",
+                    "UPDATE user SET osm_json = ? WHERE id = ?",
                     params![fresh_user_str, db_user.id],
                 )
                 .unwrap();
