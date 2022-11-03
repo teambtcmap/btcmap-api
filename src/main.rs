@@ -7,6 +7,7 @@ mod auth;
 mod controller;
 mod db;
 mod generate_android_icons;
+mod generate_element_categories;
 mod generate_report;
 mod model;
 mod sync;
@@ -144,6 +145,9 @@ async fn main() -> std::io::Result<()> {
                 }
                 "generate-android-icons" => {
                     generate_android_icons::generate_android_icons(db_conn).await;
+                }
+                "generate-element-categories" => {
+                    generate_element_categories::generate_element_categories(db_conn).await;
                 }
                 _ => {
                     log::error!("Unknown action");
