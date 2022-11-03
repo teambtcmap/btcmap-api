@@ -211,7 +211,8 @@ pub static USER_SELECT_BY_ID: &str = r#"
 pub static USER_SELECT_UPDATED_SINCE: &str = r#"
     SELECT
         id,
-        data,
+        osm_json,
+        tags,
         created_at,
         updated_at,
         deleted_at
