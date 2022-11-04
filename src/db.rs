@@ -118,6 +118,20 @@ pub static REPORT_SELECT_ALL: &str = r#"
     ORDER BY updated_at
 "#;
 
+pub static REPORT_SELECT_UPDATED_SINCE: &str = r#"
+    SELECT 
+        ROWID,
+        area_id,
+        date,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM report 
+    WHERE updated_at > :updated_since
+    ORDER BY updated_at
+"#;
+
 pub static REPORT_SELECT_BY_ID: &str = r#"
     SELECT 
         ROWID, 

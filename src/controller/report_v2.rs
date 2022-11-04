@@ -5,11 +5,18 @@ use crate::model::Report;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Path;
+use actix_web::web::Query;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::Mutex;
+
+#[derive(Deserialize)]
+pub struct GetArgs {
+    updated_since: Option<String>,
+}
 
 #[derive(Serialize)]
 pub struct GetItem {
@@ -59,15 +66,29 @@ impl Into<GetItem> for Report {
 }
 
 #[get("")]
-async fn get(conn: Data<Mutex<Connection>>) -> Result<Json<Vec<GetItem>>, ApiError> {
-    Ok(Json(
-        conn.lock()?
+async fn get(
+    args: Query<GetArgs>,
+    conn: Data<Mutex<Connection>>,
+) -> Result<Json<Vec<GetItem>>, ApiError> {
+    Ok(Json(match &args.updated_since {
+        Some(updated_since) => conn
+            .lock()?
+            .prepare(db::REPORT_SELECT_UPDATED_SINCE)?
+            .query_map(
+                &[(":updated_since", &updated_since)],
+                db::mapper_report_full(),
+            )?
+            .filter(|it| it.is_ok())
+            .map(|it| it.unwrap().into())
+            .collect(),
+        None => conn
+            .lock()?
             .prepare(db::REPORT_SELECT_ALL)?
             .query_map([], db::mapper_report_full())?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
-    ))
+    }))
 }
 
 #[get("{id}")]
