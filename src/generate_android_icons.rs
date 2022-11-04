@@ -21,8 +21,45 @@ pub async fn generate_android_icons(db_conn: Connection) {
     let mut known = 0;
     let mut unknown = 0;
 
-    for element in elements {
-        let tags: &Value = &element.osm_json["tags"];
+    for element in &elements {
+        let old_icon = element.tags["icon:android"].as_str().unwrap_or("");
+        let new_icon = element.android_icon();
+
+        if old_icon != new_icon {
+            log::info!(
+                "Updating icon for element {} ({old_icon} -> {new_icon})",
+                &element.id,
+            );
+
+            db_conn
+                .execute(
+                    db::ELEMENT_INSERT_TAG,
+                    named_params! {
+                        ":element_id": &element.id,
+                        ":tag_name": "$.icon:android",
+                        ":tag_value": &new_icon,
+                    },
+                )
+                .unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+        }
+
+        if new_icon == "question_mark" {
+            unknown += 1;
+        } else {
+            known += 1;
+        }
+    }
+
+    log::info!(
+        "Finished generating Android icons. Known: {known}, unknown: {unknown}, coverage: {:.2}%",
+        known as f64 / (known as f64 + unknown as f64) * 100.0
+    );
+}
+
+impl Element {
+    pub fn android_icon(&self) -> String {
+        let tags: &Value = &self.osm_json["tags"];
 
         let amenity = tags["amenity"].as_str().unwrap_or("");
         let cuisine = tags["cuisine"].as_str().unwrap_or("");
@@ -988,36 +1025,6 @@ pub async fn generate_android_icons(db_conn: Connection) {
             icon_id = "icecream";
         }
 
-        let current_icon_id = element.tags["icon:android"].as_str().unwrap_or("");
-
-        if icon_id != current_icon_id {
-            log::info!(
-                "Updating icon for element {} ({current_icon_id} -> {icon_id})",
-                &element.id
-            );
-
-            db_conn
-                .execute(
-                    db::ELEMENT_INSERT_TAG,
-                    named_params! {
-                        ":element_id": &element.id,
-                        ":tag_name": "$.icon:android",
-                        ":tag_value": &icon_id,
-                    },
-                )
-                .unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-        }
-
-        if icon_id == "question_mark" {
-            unknown += 1;
-        } else {
-            known += 1;
-        }
+        icon_id.to_string()
     }
-
-    log::info!(
-        "Finished generating Android icons. Known: {known}, unknown: {unknown}, coverage: {:.2}%",
-        known as f64 / (known as f64 + unknown as f64) * 100.0
-    );
 }

@@ -236,11 +236,6 @@ pub async fn sync(mut db_conn: Connection) {
                 )
                 .unwrap();
 
-                send_discord_message(format!(
-                    "{name} was added by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
-                ))
-                .await;
-
                 tx.execute(
                     db::ELEMENT_INSERT,
                     named_params! {
@@ -249,6 +244,44 @@ pub async fn sync(mut db_conn: Connection) {
                     },
                 )
                 .unwrap();
+
+                let element = tx
+                    .query_row(
+                        db::ELEMENT_SELECT_BY_ID,
+                        &[(":id", &btcmap_id)],
+                        db::mapper_element_full(),
+                    )
+                    .unwrap();
+
+                let category = element.category();
+                let android_icon = element.android_icon();
+
+                tx.execute(
+                    db::ELEMENT_INSERT_TAG,
+                    named_params! {
+                        ":element_id": &element.id,
+                        ":tag_name": "$.category",
+                        ":tag_value": &category,
+                    },
+                )
+                .unwrap();
+
+                tx.execute(
+                    db::ELEMENT_INSERT_TAG,
+                    named_params! {
+                        ":element_id": &element.id,
+                        ":tag_name": "$.icon:android",
+                        ":tag_value": &android_icon,
+                    },
+                )
+                .unwrap();
+
+                log::info!("Category: {category}, icon: {android_icon}");
+
+                send_discord_message(format!(
+                    "{name} was added by {user_display_name} (category: {category}, icon: {android_icon}) https://www.openstreetmap.org/{element_type}/{osm_id}"
+                ))
+                .await;
             }
         }
     }

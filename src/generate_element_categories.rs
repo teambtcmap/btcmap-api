@@ -21,23 +21,14 @@ pub async fn generate_element_categories(db_conn: Connection) {
     let mut known = 0;
     let mut unknown = 0;
 
-    for element in elements {
-        let tags: &Value = &element.osm_json["tags"];
+    for element in &elements {
+        let new_category = element.category();
+        let old_category = element.tags["category"].as_str().unwrap_or("");
 
-        let amenity = tags["amenity"].as_str().unwrap_or("");
-
-        let mut category: &str = "other";
-
-        if amenity == "atm" {
-            category = "atm";
-        }
-
-        let current_category = element.tags["category"].as_str().unwrap_or("");
-
-        if category != current_category {
+        if new_category != old_category {
             log::info!(
-                "Updating category for element {} ({current_category} -> {category})",
-                &element.id
+                "Updating category for element {} ({old_category} -> {new_category})",
+                &element.id,
             );
 
             db_conn
@@ -46,14 +37,14 @@ pub async fn generate_element_categories(db_conn: Connection) {
                     named_params! {
                         ":element_id": &element.id,
                         ":tag_name": "$.category",
-                        ":tag_value": &category,
+                        ":tag_value": &new_category,
                     },
                 )
                 .unwrap();
             tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
 
-        if category == "other" {
+        if new_category == "other" {
             unknown += 1;
         } else {
             known += 1;
@@ -64,4 +55,20 @@ pub async fn generate_element_categories(db_conn: Connection) {
         "Finished generating categories. Known: {known}, unknown: {unknown}, coverage: {:.2}%",
         known as f64 / (known as f64 + unknown as f64) * 100.0
     );
+}
+
+impl Element {
+    pub fn category(&self) -> String {
+        let tags: &Value = &self.osm_json["tags"];
+
+        let amenity = tags["amenity"].as_str().unwrap_or("");
+
+        let mut category: &str = "other";
+
+        if amenity == "atm" {
+            category = "atm";
+        }
+
+        category.to_string()
+    }
 }
