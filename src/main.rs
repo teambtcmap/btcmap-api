@@ -1,3 +1,4 @@
+use actix_web::middleware::Compress;
 use actix_web::middleware::NormalizePath;
 use actix_web::web::scope;
 use actix_web::web::Data;
@@ -60,6 +61,7 @@ async fn main() -> std::io::Result<()> {
                 App::new()
                     .wrap(Logger::default())
                     .wrap(NormalizePath::trim())
+                    .wrap(Compress::default())
                     .app_data(db_conn.clone())
                     .service(
                         scope("elements")

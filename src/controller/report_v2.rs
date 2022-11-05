@@ -1,9 +1,9 @@
 use crate::db;
-use crate::model::json::Json;
 use crate::model::ApiError;
 use crate::model::Report;
 use actix_web::get;
 use actix_web::web::Data;
+use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
 use rusqlite::Connection;

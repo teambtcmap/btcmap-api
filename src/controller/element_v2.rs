@@ -1,12 +1,12 @@
 use crate::auth::is_from_admin;
 use crate::db;
-use crate::model::json::Json;
 use crate::model::ApiError;
 use crate::model::Element;
 use actix_web::get;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Form;
+use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::HttpRequest;
