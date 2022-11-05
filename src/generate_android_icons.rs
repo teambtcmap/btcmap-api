@@ -506,7 +506,7 @@ impl Element {
         }
 
         if shop == "confectionery" {
-            icon_id = "storefront";
+            icon_id = "cake";
         }
 
         if shop == "beverages" {
@@ -999,6 +999,10 @@ impl Element {
 
         if craft == "brewery" {
             icon_id = "sports_bar"
+        }
+
+        if craft == "confectionery" {
+            icon_id = "cake";
         }
 
         if company == "transport" {
