@@ -1,5 +1,5 @@
 use crate::auth::is_from_admin;
-use crate::db;
+use crate::model::area;
 use crate::model::ApiError;
 use crate::model::Area;
 use actix_web::get;
@@ -67,12 +67,8 @@ async fn post(
         return Err(err);
     };
 
-    conn.lock()?.execute(
-        db::AREA_INSERT,
-        named_params![
-            ":id": args.id,
-        ],
-    )?;
+    conn.lock()?
+        .execute(area::INSERT, named_params![ ":id": args.id ])?;
 
     Ok(HttpResponse::Created())
 }
@@ -85,15 +81,18 @@ async fn get(
     Ok(Json(match &args.updated_since {
         Some(updated_since) => conn
             .lock()?
-            .prepare(db::AREA_SELECT_UPDATED_SINCE)?
-            .query_map([updated_since], db::mapper_area_full())?
+            .prepare(area::SELECT_UPDATED_SINCE)?
+            .query_map(
+                &[(":updated_since", &updated_since)],
+                area::SELECT_UPDATED_SINCE_MAPPER,
+            )?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
         None => conn
             .lock()?
-            .prepare(db::AREA_SELECT_ALL)?
-            .query_map([], db::mapper_area_full())?
+            .prepare(area::SELECT_ALL)?
+            .query_map([], area::SELECT_ALL_MAPPER)?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
@@ -108,7 +107,11 @@ async fn get_by_id(
     let id = id.into_inner();
 
     conn.lock()?
-        .query_row(db::AREA_SELECT_BY_ID, [&id], db::mapper_area_full())
+        .query_row(
+            area::SELECT_BY_ID,
+            &[(":id", &id)],
+            area::SELECT_BY_ID_MAPPER,
+        )
         .optional()?
         .map(|it| Json(it.into()))
         .ok_or(ApiError::new(
@@ -132,14 +135,18 @@ async fn post_tags(
     let conn = conn.lock()?;
 
     let area: Option<Area> = conn
-        .query_row(db::AREA_SELECT_BY_ID, [&id], db::mapper_area_full())
+        .query_row(
+            area::SELECT_BY_ID,
+            &[(":id", &id)],
+            area::SELECT_BY_ID_MAPPER,
+        )
         .optional()?;
 
     match area {
         Some(area) => {
             if args.value.len() > 0 {
                 conn.execute(
-                    db::AREA_INSERT_TAG,
+                    area::INSERT_TAG,
                     named_params! {
                         ":area_id": area.id,
                         ":tag_name": format!("$.{}", args.name),
@@ -148,7 +155,7 @@ async fn post_tags(
                 )?;
             } else {
                 conn.execute(
-                    db::AREA_DELETE_TAG,
+                    area::DELETE_TAG,
                     named_params! {
                         ":area_id": area.id,
                         ":tag_name": format!("$.{}", args.name),
@@ -199,5 +206,43 @@ mod tests {
         let res = test::call_service(&app, req).await;
         log::info!("Response status: {}", res.status());
         assert!(res.status().is_success());
+    }
+
+    #[actix_web::test]
+    async fn get_empty_table() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute("DELETE FROM area", []).unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.as_array().unwrap().len(), 0);
+    }
+
+    #[actix_web::test]
+    async fn get_one_row() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute("DELETE FROM area", []).unwrap();
+        db.execute(area::INSERT, named_params! { ":id": "test" })
+            .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.as_array().unwrap().len(), 1);
     }
 }

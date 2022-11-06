@@ -1,4 +1,3 @@
-use crate::model::Area;
 use crate::model::Element;
 use crate::model::Event;
 use crate::model::Report;
@@ -157,18 +156,6 @@ pub static REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = r#"
     FROM report 
     WHERE area_id = :area_id AND date = :date
 "#;
-
-pub static AREA_INSERT: &str =
-    "INSERT INTO area (id, name, type, min_lon, min_lat, max_lon, max_lat) VALUES (:id, '', '', 0, 0, 0, 0)";
-pub static AREA_SELECT_ALL: &str =
-    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area ORDER BY updated_at";
-pub static AREA_SELECT_BY_ID: &str =
-    "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE id = ?";
-pub static AREA_SELECT_UPDATED_SINCE: &str = "SELECT id, name, type, min_lon, min_lat, max_lon, max_lat, tags, created_at, updated_at, deleted_at FROM area WHERE updated_at > ? ORDER BY updated_at DESC";
-pub static AREA_INSERT_TAG: &str =
-    "UPDATE area SET tags = json_set(tags, :tag_name, :tag_value) where id = :area_id;";
-pub static AREA_DELETE_TAG: &str =
-    "UPDATE area SET tags = json_remove(tags, :tag_name) where id = :area_id;";
 
 pub static EVENT_INSERT: &str = r#"
     INSERT INTO event (
@@ -344,27 +331,6 @@ pub fn mapper_report_full() -> fn(&Row) -> rusqlite::Result<Report> {
             created_at: row.get(4)?,
             updated_at: row.get(5)?,
             deleted_at: row.get(6)?,
-        })
-    }
-}
-
-pub fn mapper_area_full() -> fn(&Row) -> rusqlite::Result<Area> {
-    |row: &Row| -> rusqlite::Result<Area> {
-        let tags: String = row.get(7)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
-
-        Ok(Area {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            area_type: row.get(2)?,
-            min_lon: row.get(3)?,
-            min_lat: row.get(4)?,
-            max_lon: row.get(5)?,
-            max_lat: row.get(6)?,
-            tags: tags,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
-            deleted_at: row.get(10)?,
         })
     }
 }
