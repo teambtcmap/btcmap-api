@@ -1,4 +1,4 @@
-use crate::db;
+use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
 use rusqlite::named_params;
@@ -8,9 +8,9 @@ pub async fn generate_element_categories(db_conn: Connection) {
     log::info!("Generating element categories");
 
     let elements: Vec<Element> = db_conn
-        .prepare(db::ELEMENT_SELECT_ALL)
+        .prepare(element::SELECT_ALL)
         .unwrap()
-        .query_map([], db::mapper_element_full())
+        .query_map([], element::SELECT_ALL_MAPPER)
         .unwrap()
         .filter(|it| it.is_ok())
         .map(|it| it.unwrap())
@@ -33,7 +33,7 @@ pub async fn generate_element_categories(db_conn: Connection) {
 
             db_conn
                 .execute(
-                    db::ELEMENT_INSERT_TAG,
+                    element::INSERT_TAG,
                     named_params! {
                         ":element_id": &element.id,
                         ":tag_name": "$.category",

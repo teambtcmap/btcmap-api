@@ -1,4 +1,3 @@
-use crate::model::Element;
 use crate::model::Event;
 use crate::model::Report;
 use crate::model::User;
@@ -14,83 +13,6 @@ use std::sync::atomic::AtomicUsize;
 pub static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
-
-pub static ELEMENT_INSERT: &str = r#"
-    INSERT INTO element (
-        id,
-        osm_json
-    ) VALUES (
-        :id,
-        :osm_json
-    )
-"#;
-
-pub static ELEMENT_SELECT_ALL: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM element
-    ORDER BY updated_at
-"#;
-
-pub static ELEMENT_SELECT_BY_ID: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM element 
-    WHERE id = :id
-"#;
-
-pub static ELEMENT_SELECT_UPDATED_SINCE: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM element
-    WHERE updated_at > :updated_since
-    ORDER BY updated_at
-"#;
-
-pub static ELEMENT_UPDATE_DELETED_AT: &str = r#"
-    UPDATE element
-    SET deleted_at = :deleted_at
-    WHERE id = :id
-"#;
-
-pub static ELEMENT_UPDATE_OSM_JSON: &str = r#"
-    UPDATE element
-    SET osm_json = :osm_json
-    WHERE id = :id
-"#;
-
-pub static ELEMENT_MARK_AS_DELETED: &str = r#"
-    UPDATE element
-    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ')
-    WHERE id = :id
-"#;
-
-pub static ELEMENT_INSERT_TAG: &str = r#"
-    UPDATE element
-    SET tags = json_set(tags, :tag_name, :tag_value)
-    WHERE id = :element_id
-"#;
-
-pub static ELEMENT_DELETE_TAG: &str = r#"
-    UPDATE element
-    SET tags = json_remove(tags, :tag_name)
-    WHERE id = :element_id
-"#;
 
 pub static REPORT_INSERT: &str = r#"
     INSERT INTO report (
@@ -296,25 +218,6 @@ fn drop(db_conn: Connection) {
         );
         remove_file(db_conn.path().unwrap()).unwrap();
         log::info!("Database file was removed");
-    }
-}
-
-pub fn mapper_element_full() -> fn(&Row) -> rusqlite::Result<Element> {
-    |row: &Row| -> rusqlite::Result<Element> {
-        let osm_json: String = row.get(1)?;
-        let osm_json: Value = serde_json::from_str(&osm_json).unwrap_or_default();
-
-        let tags: String = row.get(2)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
-
-        Ok(Element {
-            id: row.get(0)?,
-            osm_json,
-            tags,
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
-            deleted_at: row.get(5)?,
-        })
     }
 }
 

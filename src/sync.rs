@@ -1,4 +1,5 @@
 use crate::db;
+use crate::model::element;
 use crate::model::Element;
 use crate::model::User;
 use rusqlite::named_params;
@@ -68,9 +69,9 @@ pub async fn sync(mut db_conn: Connection) {
 
     let tx: Transaction = db_conn.transaction().unwrap();
     let elements: Vec<Element> = tx
-        .prepare(db::ELEMENT_SELECT_ALL)
+        .prepare(element::SELECT_ALL)
         .unwrap()
-        .query_map([], db::mapper_element_full())
+        .query_map([], element::SELECT_ALL_MAPPER)
         .unwrap()
         .map(|row| row.unwrap())
         .collect();
@@ -83,7 +84,7 @@ pub async fn sync(mut db_conn: Connection) {
             format!(
                 "{}:{}",
                 it["type"].as_str().unwrap(),
-                it["id"].as_i64().unwrap()
+                it["id"].as_i64().unwrap(),
             )
         })
         .collect();
@@ -156,7 +157,7 @@ pub async fn sync(mut db_conn: Connection) {
             .await;
             log::info!("Marking element {} as deleted", &element.id);
             tx.execute(
-                db::ELEMENT_MARK_AS_DELETED,
+                element::MARK_AS_DELETED,
                 named_params! { ":id": &element.id },
             )
             .unwrap();
@@ -200,7 +201,7 @@ pub async fn sync(mut db_conn: Connection) {
                     .await;
 
                     tx.execute(
-                        db::ELEMENT_UPDATE_OSM_JSON,
+                        element::UPDATE_OSM_JSON,
                         named_params! {
                             ":id": &btcmap_id,
                             ":osm_json": &new_element_osm_json,
@@ -211,7 +212,7 @@ pub async fn sync(mut db_conn: Connection) {
 
                 if element.deleted_at.len() > 0 {
                     tx.execute(
-                        db::ELEMENT_UPDATE_DELETED_AT,
+                        element::UPDATE_DELETED_AT,
                         named_params! {
                             ":id": &btcmap_id,
                             ":deleted_at": "",
@@ -237,7 +238,7 @@ pub async fn sync(mut db_conn: Connection) {
                 .unwrap();
 
                 tx.execute(
-                    db::ELEMENT_INSERT,
+                    element::INSERT,
                     named_params! {
                         ":id": &btcmap_id,
                         ":osm_json": serde_json::to_string(fresh_element).unwrap(),
@@ -247,9 +248,9 @@ pub async fn sync(mut db_conn: Connection) {
 
                 let element = tx
                     .query_row(
-                        db::ELEMENT_SELECT_BY_ID,
+                        element::SELECT_BY_ID,
                         &[(":id", &btcmap_id)],
-                        db::mapper_element_full(),
+                        element::SELECT_BY_ID_MAPPER,
                     )
                     .unwrap();
 
@@ -257,7 +258,7 @@ pub async fn sync(mut db_conn: Connection) {
                 let android_icon = element.android_icon();
 
                 tx.execute(
-                    db::ELEMENT_INSERT_TAG,
+                    element::INSERT_TAG,
                     named_params! {
                         ":element_id": &element.id,
                         ":tag_name": "$.category",
@@ -267,7 +268,7 @@ pub async fn sync(mut db_conn: Connection) {
                 .unwrap();
 
                 tx.execute(
-                    db::ELEMENT_INSERT_TAG,
+                    element::INSERT_TAG,
                     named_params! {
                         ":element_id": &element.id,
                         ":tag_name": "$.icon:android",
