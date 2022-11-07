@@ -30,7 +30,7 @@ pub struct GetArgs {
     updated_since: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: String,
     pub tags: Value,
@@ -244,5 +244,26 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn get_by_id() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute("DELETE FROM area", []).unwrap();
+        let area_id = "test";
+        db.execute(area::INSERT, named_params! { ":id": area_id })
+            .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(super::get_by_id),
+        )
+        .await;
+        let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
+        let res: GetItem = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.id, area_id);
     }
 }

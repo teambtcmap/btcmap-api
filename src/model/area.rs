@@ -70,7 +70,7 @@ pub static SELECT_BY_ID: &str = r#"
         updated_at,
         deleted_at
     FROM area
-    WHERE id = ?
+    WHERE id = :id
 "#;
 
 pub static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
