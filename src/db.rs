@@ -1,5 +1,4 @@
 use crate::model::Event;
-use crate::model::Report;
 use crate::model::User;
 use include_dir::include_dir;
 use include_dir::Dir;
@@ -13,71 +12,6 @@ use std::sync::atomic::AtomicUsize;
 pub static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
-
-pub static REPORT_INSERT: &str = r#"
-    INSERT INTO report (
-        area_id, 
-        date,
-        tags
-    ) VALUES (
-        :area_id,
-        :date,
-        :tags
-    )
-"#;
-
-pub static REPORT_SELECT_ALL: &str = r#"
-    SELECT 
-        ROWID,
-        area_id,
-        date,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM report 
-    ORDER BY updated_at
-"#;
-
-pub static REPORT_SELECT_UPDATED_SINCE: &str = r#"
-    SELECT 
-        ROWID,
-        area_id,
-        date,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM report 
-    WHERE updated_at > :updated_since
-    ORDER BY updated_at
-"#;
-
-pub static REPORT_SELECT_BY_ID: &str = r#"
-    SELECT 
-        ROWID, 
-        area_id, 
-        date, 
-        tags, 
-        created_at, 
-        updated_at, 
-        deleted_at 
-    FROM report 
-    WHERE ROWID = :id
-"#;
-
-pub static REPORT_SELECT_BY_AREA_ID_AND_DATE: &str = r#"
-    SELECT 
-        ROWID,
-        area_id,
-        date,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM report 
-    WHERE area_id = :area_id AND date = :date
-"#;
 
 pub static EVENT_INSERT: &str = r#"
     INSERT INTO event (
@@ -218,23 +152,6 @@ fn drop(db_conn: Connection) {
         );
         remove_file(db_conn.path().unwrap()).unwrap();
         log::info!("Database file was removed");
-    }
-}
-
-pub fn mapper_report_full() -> fn(&Row) -> rusqlite::Result<Report> {
-    |row: &Row| -> rusqlite::Result<Report> {
-        let tags: String = row.get(3)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
-
-        Ok(Report {
-            id: row.get(0)?,
-            area_id: row.get(1)?,
-            date: row.get(2)?,
-            tags: tags,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
-            deleted_at: row.get(6)?,
-        })
     }
 }
 

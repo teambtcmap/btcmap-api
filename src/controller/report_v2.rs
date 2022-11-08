@@ -1,4 +1,4 @@
-use crate::db;
+use crate::model::report;
 use crate::model::ApiError;
 use crate::model::Report;
 use actix_web::get;
@@ -18,7 +18,7 @@ pub struct GetArgs {
     updated_since: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: i64,
     pub area_id: String,
@@ -73,18 +73,18 @@ async fn get(
     Ok(Json(match &args.updated_since {
         Some(updated_since) => conn
             .lock()?
-            .prepare(db::REPORT_SELECT_UPDATED_SINCE)?
+            .prepare(report::SELECT_UPDATED_SINCE)?
             .query_map(
-                &[(":updated_since", &updated_since)],
-                db::mapper_report_full(),
+                &[(":updated_since", updated_since)],
+                report::SELECT_UPDATED_SINCE_MAPPER,
             )?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
         None => conn
             .lock()?
-            .prepare(db::REPORT_SELECT_ALL)?
-            .query_map([], db::mapper_report_full())?
+            .prepare(report::SELECT_ALL)?
+            .query_map([], report::SELECT_ALL_MAPPER)?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
@@ -99,7 +99,11 @@ pub async fn get_by_id(
     let id = id.into_inner();
 
     conn.lock()?
-        .query_row(db::REPORT_SELECT_BY_ID, [&id], db::mapper_report_full())
+        .query_row(
+            report::SELECT_BY_ID,
+            &[(":id", &id)],
+            report::SELECT_BY_ID_MAPPER,
+        )
         .optional()?
         .map(|it| Json(it.into()))
         .ok_or(ApiError::new(
@@ -143,7 +147,7 @@ mod tests {
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
         db.execute(
-            db::REPORT_INSERT,
+            report::INSERT,
             named_params! {
                 ":area_id" : "",
                 ":date" : "",
@@ -160,5 +164,34 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn get_updated_since() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute(
+            "INSERT INTO report (area_id, date, updated_at) VALUES ('', '', '2022-01-05')",
+            [],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO report (area_id, date, updated_at) VALUES ('', '', '2022-02-05')",
+            [],
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?updated_since=2022-01-10")
+            .to_request();
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
     }
 }

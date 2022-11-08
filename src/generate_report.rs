@@ -1,4 +1,4 @@
-use crate::db;
+use crate::model::report;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use serde_json::Value;
@@ -23,11 +23,12 @@ pub async fn generate_report(db_conn: Connection) {
     log::info!("Generating report for {today}");
 
     let existing_report = db_conn.query_row(
-        db::REPORT_SELECT_BY_AREA_ID_AND_DATE,
+        report::SELECT_BY_AREA_ID_AND_DATE,
         named_params![
-            ":area_id": "", 
-            ":date": today.to_string()],
-        db::mapper_report_full(),
+            ":area_id": "",
+            ":date": today.to_string()
+        ],
+        report::SELECT_BY_AREA_ID_AND_DATE_MAPPER,
     );
 
     if existing_report.is_ok() {
@@ -150,7 +151,7 @@ pub async fn generate_report(db_conn: Connection) {
 
     db_conn
         .execute(
-            db::REPORT_INSERT,
+            report::INSERT,
             named_params! {
                 ":area_id" : "",
                 ":date" : today.to_string(),
