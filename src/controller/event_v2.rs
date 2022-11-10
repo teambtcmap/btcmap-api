@@ -20,7 +20,6 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: i64,
-    pub date: String,
     pub r#type: String,
     pub element_id: String,
     pub user_id: i64,
@@ -33,7 +32,6 @@ impl Into<GetItem> for Event {
     fn into(self) -> GetItem {
         GetItem {
             id: self.id,
-            date: self.date,
             r#type: self.r#type,
             element_id: self.element_id,
             user_id: self.user_id,
