@@ -1,86 +1,21 @@
-use crate::model::User;
 use include_dir::include_dir;
 use include_dir::Dir;
-use rusqlite::{Connection, Row};
-use serde_json::Value;
+use rusqlite::Connection;
+use std::error::Error;
 use std::fs::remove_file;
-#[cfg(test)]
-use std::sync::atomic::AtomicUsize;
-
-#[cfg(test)]
-pub static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-pub static USER_INSERT: &str = r#"
-    INSERT INTO user (
-        id,
-        osm_json
-    ) VALUES (
-        :id,
-        :osm_json
-    )
-"#;
-
-pub static USER_SELECT_ALL: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM user
-    ORDER BY updated_at
-"#;
-
-pub static USER_SELECT_BY_ID: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM user
-    WHERE id = :id
-"#;
-
-pub static USER_SELECT_UPDATED_SINCE: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM user
-    WHERE updated_at > :updated_since
-    ORDER BY updated_at
-"#;
-
-pub static USER_INSERT_TAG: &str = r#"
-    UPDATE user
-    SET tags = json_set(tags, :tag_name, :tag_value)
-    WHERE id = :user_id
-"#;
-
-pub static USER_DELETE_TAG: &str = r#"
-    UPDATE user
-    SET tags = json_remove(tags, :tag_name)
-    WHERE id = :user_id
-"#;
-
-pub fn cli_main(args: &[String], mut db_conn: Connection) {
+pub fn cli_main(args: &[String], mut db: Connection) {
     match args.first() {
         Some(first_arg) => match first_arg.as_str() {
             "migrate" => {
-                if let Err(err) = migrate(&mut db_conn) {
+                if let Err(err) = migrate(&mut db) {
                     log::error!("Migration faied: {err}");
                     std::process::exit(1);
                 }
             }
-            "drop" => drop(db_conn),
+            "drop" => drop(db),
             _ => panic!("Unknown action {first_arg}"),
         },
         None => {
@@ -89,9 +24,9 @@ pub fn cli_main(args: &[String], mut db_conn: Connection) {
     }
 }
 
-pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error>> {
+pub fn migrate(db: &mut Connection) -> Result<(), Box<dyn Error>> {
     let mut schema_ver: i16 =
-        db_conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
+        db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
             row.get(0)
         })?;
 
@@ -105,7 +40,7 @@ pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error
                     .contents_utf8()
                     .ok_or(format!("Can't read {file_name} in UTF-8"))?;
                 log::warn!("{sql}");
-                let tx = db_conn.transaction()?;
+                let tx = db.transaction()?;
                 tx.execute_batch(sql)?;
                 tx.execute_batch(&format!("PRAGMA user_version={}", schema_ver + 1))?;
                 tx.commit()?;
@@ -122,35 +57,19 @@ pub fn migrate(db_conn: &mut Connection) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-fn drop(db_conn: Connection) {
-    if !db_conn.path().unwrap().exists() {
+fn drop(db: Connection) {
+    if !db.path().unwrap().exists() {
         log::error!("Database does not exist");
         std::process::exit(1);
     } else {
-        log::info!(
-            "Found database at {}",
-            db_conn.path().unwrap().to_str().unwrap()
-        );
-        remove_file(db_conn.path().unwrap()).unwrap();
+        log::info!("Found database at {}", db.path().unwrap().to_str().unwrap());
+        remove_file(db.path().unwrap()).unwrap();
         log::info!("Database file was removed");
     }
 }
 
-pub fn mapper_user_full() -> fn(&Row) -> rusqlite::Result<User> {
-    |row: &Row| -> rusqlite::Result<User> {
-        let osm_json: String = row.get(1)?;
-        let osm_json: Value = serde_json::from_str(&osm_json).unwrap_or_default();
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
 
-        let tags: String = row.get(2)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
-
-        Ok(User {
-            id: row.get(0)?,
-            osm_json,
-            tags,
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
-            deleted_at: row.get(5)?,
-        })
-    }
-}
+#[cfg(test)]
+pub static COUNTER: AtomicUsize = std::sync::atomic::AtomicUsize::new(1);

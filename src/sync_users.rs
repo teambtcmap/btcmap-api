@@ -1,16 +1,18 @@
-use crate::db;
+use crate::model::user;
 use crate::model::User;
 use crate::Connection;
-use rusqlite::params;
+use rusqlite::named_params;
 use serde_json::Value;
+use tokio::time::sleep;
+use tokio::time::Duration;
 
-pub async fn sync(db_conn: Connection) {
+pub async fn sync(db: Connection) {
     log::info!("Syncing users");
 
-    let users: Vec<User> = db_conn
-        .prepare(db::USER_SELECT_ALL)
+    let users: Vec<User> = db
+        .prepare(user::SELECT_ALL)
         .unwrap()
-        .query_map([], db::mapper_user_full())
+        .query_map([], user::SELECT_ALL_MAPPER)
         .unwrap()
         .filter(|it| it.is_ok())
         .map(|it| it.unwrap())
@@ -18,10 +20,10 @@ pub async fn sync(db_conn: Connection) {
 
     log::info!("Found {} cached users", users.len());
 
-    for db_user in users {
+    for db_user in &users {
         let url = format!(
             "https://api.openstreetmap.org/api/0.6/user/{}.json",
-            db_user.id
+            db_user.id,
         );
         log::info!("Querying {url}");
         let res = reqwest::get(&url).await;
@@ -50,14 +52,16 @@ pub async fn sync(db_conn: Connection) {
         if fresh_user_str != db_user_str {
             log::info!("Change detected");
 
-            db_conn
-                .execute(
-                    "UPDATE user SET osm_json = ? WHERE id = ?",
-                    params![fresh_user_str, db_user.id],
-                )
-                .unwrap();
+            db.execute(
+                user::UPDATE_OSM_JSON,
+                named_params! {
+                    ":id": db_user.id,
+                    ":osm_json": fresh_user_str,
+                },
+            )
+            .unwrap();
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
+        sleep(Duration::from_millis(5000)).await;
     }
 }

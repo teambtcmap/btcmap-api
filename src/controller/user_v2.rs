@@ -1,5 +1,5 @@
 use crate::auth::is_from_admin;
-use crate::db;
+use crate::model::user;
 use crate::model::ApiError;
 use crate::model::User;
 use actix_web::get;
@@ -25,7 +25,7 @@ pub struct GetArgs {
     updated_since: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: i64,
     pub osm_json: Value,
@@ -57,23 +57,23 @@ struct PostTagsArgs {
 #[get("")]
 async fn get(
     args: Query<GetArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
+    let db = db.lock()?;
+
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => conn
-            .lock()?
-            .prepare(db::USER_SELECT_UPDATED_SINCE)?
+        Some(updated_since) => db
+            .prepare(user::SELECT_UPDATED_SINCE)?
             .query_map(
-                &[(":updated_since", &updated_since)],
-                db::mapper_user_full(),
+                &[(":updated_since", updated_since)],
+                user::SELECT_UPDATED_SINCE_MAPPER,
             )?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
-        None => conn
-            .lock()?
-            .prepare(db::USER_SELECT_ALL)?
-            .query_map([], db::mapper_user_full())?
+        None => db
+            .prepare(user::SELECT_ALL)?
+            .query_map([], user::SELECT_ALL_MAPPER)?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
@@ -89,9 +89,9 @@ pub async fn get_by_id(
 
     conn.lock()?
         .query_row(
-            db::USER_SELECT_BY_ID,
+            user::SELECT_BY_ID,
             &[(":id", &id)],
-            db::mapper_user_full(),
+            user::SELECT_BY_ID_MAPPER,
         )
         .optional()?
         .map(|it| Json(it.into()))
@@ -117,9 +117,9 @@ async fn post_tags(
 
     let user: Option<User> = conn
         .query_row(
-            db::USER_SELECT_BY_ID,
+            user::SELECT_BY_ID,
             &[(":id", &id)],
-            db::mapper_user_full(),
+            user::SELECT_BY_ID_MAPPER,
         )
         .optional()?;
 
@@ -127,7 +127,7 @@ async fn post_tags(
         Some(user) => {
             if args.value.len() > 0 {
                 conn.execute(
-                    db::USER_INSERT_TAG,
+                    user::INSERT_TAG,
                     named_params! {
                         ":user_id": &user.id,
                         ":tag_name": format!("$.{}", &args.name),
@@ -136,7 +136,7 @@ async fn post_tags(
                 )?;
             } else {
                 conn.execute(
-                    db::USER_DELETE_TAG,
+                    user::DELETE_TAG,
                     named_params! {
                         ":user_id": &user.id,
                         ":tag_name": format!("$.{}", &args.name),
@@ -188,7 +188,7 @@ mod tests {
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
         db.execute(
-            db::USER_INSERT,
+            user::INSERT,
             named_params! {
                 ":id": 1,
                 ":osm_json": "{}",
@@ -204,5 +204,62 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn get_updated_since() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute(
+            "INSERT INTO user (id, osm_json, updated_at) VALUES (1, '{}', '2022-01-05')",
+            [],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO user (id, osm_json, updated_at) VALUES (2, '{}', '2022-02-05')",
+            [],
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?updated_since=2022-01-10")
+            .to_request();
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn get_by_id() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        let element_id = 1;
+        db.execute(
+            user::INSERT,
+            named_params! {
+                ":id": &element_id,
+                ":osm_json": "{}",
+            },
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(super::get_by_id),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{element_id}"))
+            .to_request();
+        let res: GetItem = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.id, element_id);
     }
 }
