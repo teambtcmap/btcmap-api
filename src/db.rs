@@ -1,4 +1,3 @@
-use crate::model::Event;
 use crate::model::User;
 use include_dir::include_dir;
 use include_dir::Dir;
@@ -12,24 +11,6 @@ use std::sync::atomic::AtomicUsize;
 pub static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
-
-pub static EVENT_INSERT: &str = r#"
-    INSERT INTO event (
-        date, 
-        element_id, 
-        type, 
-        user_id
-    ) VALUES (
-        :date,
-        :element_id,
-        :type,
-        :user_id
-    )
-"#;
-
-pub static EVENT_SELECT_ALL: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event ORDER BY date DESC";
-pub static EVENT_SELECT_BY_ID: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event where ROWID = ?";
-pub static EVENT_SELECT_UPDATED_SINCE: &str = "SELECT ROWID, date, element_id, type, user_id, created_at, updated_at, deleted_at FROM event WHERE updated_at > ? ORDER BY date DESC";
 
 pub static USER_INSERT: &str = r#"
     INSERT INTO user (
@@ -152,21 +133,6 @@ fn drop(db_conn: Connection) {
         );
         remove_file(db_conn.path().unwrap()).unwrap();
         log::info!("Database file was removed");
-    }
-}
-
-pub fn mapper_event_full() -> fn(&Row) -> rusqlite::Result<Event> {
-    |row: &Row| -> rusqlite::Result<Event> {
-        Ok(Event {
-            id: row.get(0)?,
-            date: row.get(1)?,
-            element_id: row.get(2)?,
-            r#type: row.get(3)?,
-            user_id: row.get(4)?,
-            created_at: row.get(5)?,
-            updated_at: row.get(6)?,
-            deleted_at: row.get(7)?,
-        })
     }
 }
 

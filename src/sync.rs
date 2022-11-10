@@ -1,5 +1,6 @@
 use crate::db;
 use crate::model::element;
+use crate::model::event;
 use crate::model::Element;
 use crate::model::User;
 use rusqlite::named_params;
@@ -141,7 +142,7 @@ pub async fn sync(mut db_conn: Connection) {
             insert_user_if_not_exists(user_id, &tx).await;
 
             tx.execute(
-                db::EVENT_INSERT,
+                event::INSERT,
                 named_params! {
                     ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                     ":element_id": element.id,
@@ -185,7 +186,7 @@ pub async fn sync(mut db_conn: Connection) {
                     insert_user_if_not_exists(user_id, &tx).await;
 
                     tx.execute(
-                        db::EVENT_INSERT,
+                        event::INSERT,
                         named_params! {
                             ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                             ":element_id": btcmap_id,
@@ -227,7 +228,7 @@ pub async fn sync(mut db_conn: Connection) {
                 insert_user_if_not_exists(user_id, &tx).await;
 
                 tx.execute(
-                    db::EVENT_INSERT,
+                    event::INSERT,
                     named_params! {
                         ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
                         ":element_id": btcmap_id,

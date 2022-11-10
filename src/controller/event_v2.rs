@@ -1,4 +1,4 @@
-use crate::db;
+use crate::model::event;
 use crate::model::ApiError;
 use crate::model::Event;
 use actix_web::get;
@@ -17,7 +17,7 @@ pub struct GetArgs {
     updated_since: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: i64,
     pub date: String,
@@ -52,15 +52,18 @@ async fn get(
     Ok(Json(match &args.updated_since {
         Some(updated_since) => conn
             .lock()?
-            .prepare(db::EVENT_SELECT_UPDATED_SINCE)?
-            .query_map([updated_since], db::mapper_event_full())?
+            .prepare(event::SELECT_UPDATED_SINCE)?
+            .query_map(
+                &[(":updated_since", &updated_since)],
+                event::SELECT_UPDATED_SINCE_MAPPER,
+            )?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
         None => conn
             .lock()?
-            .prepare(db::EVENT_SELECT_ALL)?
-            .query_map([], db::mapper_event_full())?
+            .prepare(event::SELECT_ALL)?
+            .query_map([], event::SELECT_ALL_MAPPER)?
             .filter(|it| it.is_ok())
             .map(|it| it.unwrap().into())
             .collect(),
@@ -75,7 +78,11 @@ pub async fn get_by_id(
     let id = id.into_inner();
 
     conn.lock()?
-        .query_row(db::EVENT_SELECT_BY_ID, [&id], db::mapper_event_full())
+        .query_row(
+            event::SELECT_BY_ID,
+            &[(":id", &id)],
+            event::SELECT_BY_ID_MAPPER,
+        )
         .optional()?
         .map(|it| Json(it.into()))
         .ok_or(ApiError::new(
@@ -119,7 +126,7 @@ mod tests {
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
         db.execute(
-            db::EVENT_INSERT,
+            event::INSERT,
             named_params! {
                 ":date": "",
                 ":element_id": "",
@@ -137,5 +144,64 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn get_updated_since() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute(
+            "INSERT INTO event (date, element_id, type, user_id, updated_at) VALUES ('', '', '', 0, '2022-01-05')",
+            [],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO event (date, element_id, type, user_id, updated_at) VALUES ('', '', '', 0, '2022-02-05')",
+            [],
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?updated_since=2022-01-10")
+            .to_request();
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn get_by_id() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        let element_id = 1;
+        db.execute(
+            event::INSERT,
+            named_params! {
+                ":date": "",
+                ":element_id": "",
+                ":type": "",
+                ":user_id": "0",
+            },
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(super::get_by_id),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{element_id}"))
+            .to_request();
+        let res: GetItem = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.id, element_id);
     }
 }
