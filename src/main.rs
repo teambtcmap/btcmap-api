@@ -11,6 +11,7 @@ mod generate_android_icons;
 mod generate_element_categories;
 mod generate_report;
 mod model;
+mod pouch;
 mod sync;
 mod sync_users;
 
@@ -150,6 +151,9 @@ async fn main() -> std::io::Result<()> {
                 }
                 "generate-element-categories" => {
                     generate_element_categories::generate_element_categories(db_conn).await;
+                }
+                "pouch" => {
+                    pouch::pouch(db_conn).await;
                 }
                 _ => {
                     log::error!("Unknown action");
