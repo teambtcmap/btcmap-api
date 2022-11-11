@@ -51,7 +51,7 @@ impl Into<GetItem> for Area {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct PostTagsArgs {
     name: String,
     value: String,
@@ -61,14 +61,14 @@ struct PostTagsArgs {
 async fn post(
     args: Form<PostArgs>,
     req: HttpRequest,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<impl Responder, ApiError> {
     if let Err(err) = is_from_admin(&req) {
         return Err(err);
     };
 
-    conn.lock()?
-        .execute(area::INSERT, named_params![ ":id": args.id ])?;
+    let db = db.lock()?;
+    db.execute(area::INSERT, named_params![ ":id": args.id ])?;
 
     Ok(HttpResponse::Created())
 }
@@ -76,37 +76,35 @@ async fn post(
 #[get("")]
 async fn get(
     args: Query<GetArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
+    let db = db.lock()?;
+
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => conn
-            .lock()?
+        Some(updated_since) => db
             .prepare(area::SELECT_UPDATED_SINCE)?
             .query_map(
-                &[(":updated_since", &updated_since)],
+                named_params! { ":updated_since": updated_since },
                 area::SELECT_UPDATED_SINCE_MAPPER,
             )?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
-        None => conn
-            .lock()?
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
+        None => db
             .prepare(area::SELECT_ALL)?
             .query_map([], area::SELECT_ALL_MAPPER)?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
     }))
 }
 
 #[get("{id}")]
 async fn get_by_id(
     id: Path<String>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    conn.lock()?
+    db.lock()?
         .query_row(
             area::SELECT_BY_ID,
             &[(":id", &id)],
@@ -125,16 +123,16 @@ async fn post_tags(
     id: Path<String>,
     req: HttpRequest,
     args: Form<PostTagsArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<impl Responder, ApiError> {
     if let Err(err) = is_from_admin(&req) {
         return Err(err);
     };
 
     let id = id.into_inner();
-    let conn = conn.lock()?;
+    let db = db.lock()?;
 
-    let area: Option<Area> = conn
+    let area: Option<Area> = db
         .query_row(
             area::SELECT_BY_ID,
             &[(":id", &id)],
@@ -145,7 +143,7 @@ async fn post_tags(
     match area {
         Some(area) => {
             if args.value.len() > 0 {
-                conn.execute(
+                db.execute(
                     area::INSERT_TAG,
                     named_params! {
                         ":area_id": area.id,
@@ -154,7 +152,7 @@ async fn post_tags(
                     },
                 )?;
             } else {
-                conn.execute(
+                db.execute(
                     area::DELETE_TAG,
                     named_params! {
                         ":area_id": area.id,
@@ -176,6 +174,7 @@ async fn post_tags(
 mod tests {
     use super::*;
     use crate::db;
+    use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
@@ -265,5 +264,36 @@ mod tests {
         let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, area_id);
+    }
+
+    #[actix_web::test]
+    async fn post_tags() {
+        let admin_token = "test";
+        env::set_var("ADMIN_TOKEN", admin_token);
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute("DELETE FROM area", []).unwrap();
+        let area_id = "test";
+        db.execute(area::INSERT, named_params![":id": area_id])
+            .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(super::post_tags),
+        )
+        .await;
+        let req = TestRequest::post()
+            .uri(&format!("/{area_id}/tags"))
+            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .set_form(PostTagsArgs {
+                name: "foo".into(),
+                value: "bar".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        log::info!("Response status: {}", res.status());
+        assert_eq!(res.status(), StatusCode::CREATED);
     }
 }
