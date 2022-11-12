@@ -48,7 +48,7 @@ impl Into<GetItem> for User {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct PostTagsArgs {
     name: String,
     value: String,
@@ -68,26 +68,24 @@ async fn get(
                 &[(":updated_since", updated_since)],
                 user::SELECT_UPDATED_SINCE_MAPPER,
             )?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
         None => db
             .prepare(user::SELECT_ALL)?
             .query_map([], user::SELECT_ALL_MAPPER)?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
     }))
 }
 
 #[get("{id}")]
 pub async fn get_by_id(
     id: Path<String>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    conn.lock()?
+    db.lock()?
         .query_row(
             user::SELECT_BY_ID,
             &[(":id", &id)],
@@ -106,16 +104,16 @@ async fn post_tags(
     id: Path<String>,
     req: HttpRequest,
     args: Form<PostTagsArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<impl Responder, ApiError> {
     if let Err(err) = is_from_admin(&req) {
         return Err(err);
     };
 
     let id = id.into_inner();
-    let conn = conn.lock()?;
+    let db = db.lock()?;
 
-    let user: Option<User> = conn
+    let user: Option<User> = db
         .query_row(
             user::SELECT_BY_ID,
             &[(":id", &id)],
@@ -126,20 +124,20 @@ async fn post_tags(
     match user {
         Some(user) => {
             if args.value.len() > 0 {
-                conn.execute(
+                db.execute(
                     user::INSERT_TAG,
                     named_params! {
-                        ":user_id": &user.id,
-                        ":tag_name": format!("$.{}", &args.name),
+                        ":user_id": user.id,
+                        ":tag_name": format!("$.{}", args.name),
                         ":tag_value": args.value,
                     },
                 )?;
             } else {
-                conn.execute(
+                db.execute(
                     user::DELETE_TAG,
                     named_params! {
-                        ":user_id": &user.id,
-                        ":tag_name": format!("$.{}", &args.name),
+                        ":user_id": user.id,
+                        ":tag_name": format!("$.{}", args.name),
                     },
                 )?;
             }
@@ -160,8 +158,10 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
+    use reqwest::StatusCode;
     use rusqlite::named_params;
     use serde_json::Value;
+    use std::env;
     use std::sync::atomic::Ordering;
 
     #[actix_web::test]
@@ -241,11 +241,11 @@ mod tests {
         let mut db =
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
-        let element_id = 1;
+        let user_id = 1;
         db.execute(
             user::INSERT,
             named_params! {
-                ":id": &element_id,
+                ":id": user_id,
                 ":osm_json": "{}",
             },
         )
@@ -256,10 +256,44 @@ mod tests {
                 .service(super::get_by_id),
         )
         .await;
-        let req = TestRequest::get()
-            .uri(&format!("/{element_id}"))
-            .to_request();
+        let req = TestRequest::get().uri(&format!("/{user_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.id, element_id);
+        assert_eq!(res.id, user_id);
+    }
+
+    #[actix_web::test]
+    async fn post_tags() {
+        let admin_token = "test";
+        env::set_var("ADMIN_TOKEN", admin_token);
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        let user_id = 1;
+        db.execute(
+            user::INSERT,
+            named_params! {
+                ":id": user_id,
+                ":osm_json": "{}",
+            },
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(super::post_tags),
+        )
+        .await;
+        let req = TestRequest::post()
+            .uri(&format!("/{user_id}/tags"))
+            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .set_form(PostTagsArgs {
+                name: "foo".into(),
+                value: "bar".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        log::info!("Response status: {}", res.status());
+        assert_eq!(res.status(), StatusCode::CREATED);
     }
 }
