@@ -24,16 +24,6 @@ pub struct GetItem {
     pub area_id: String,
     pub date: String,
     pub tags: Value,
-    pub total_elements: i64,
-    pub total_elements_onchain: i64,
-    pub total_elements_lightning: i64,
-    pub total_elements_lightning_contactless: i64,
-    pub up_to_date_elements: i64,
-    pub outdated_elements: i64,
-    pub legacy_elements: i64,
-    pub elements_created: i64,
-    pub elements_updated: i64,
-    pub elements_deleted: i64,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -45,19 +35,7 @@ impl Into<GetItem> for Report {
             id: self.id,
             area_id: self.area_id,
             date: self.date,
-            tags: self.tags.clone(),
-            total_elements: self.tags["total_elements"].as_i64().unwrap_or(0),
-            total_elements_onchain: self.tags["total_elements_onchain"].as_i64().unwrap_or(0),
-            total_elements_lightning: self.tags["total_elements_lightning"].as_i64().unwrap_or(0),
-            total_elements_lightning_contactless: self.tags["total_elements_lightning_contactless"]
-                .as_i64()
-                .unwrap_or(0),
-            up_to_date_elements: self.tags["up_to_date_elements"].as_i64().unwrap_or(0),
-            outdated_elements: self.tags["outdated_elements"].as_i64().unwrap_or(0),
-            legacy_elements: self.tags["legacy_elements"].as_i64().unwrap_or(0),
-            elements_created: 0,
-            elements_updated: 0,
-            elements_deleted: 0,
+            tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
             deleted_at: self.deleted_at,
@@ -68,37 +46,35 @@ impl Into<GetItem> for Report {
 #[get("")]
 async fn get(
     args: Query<GetArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
+    let db = db.lock()?;
+
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => conn
-            .lock()?
+        Some(updated_since) => db
             .prepare(report::SELECT_UPDATED_SINCE)?
             .query_map(
                 &[(":updated_since", updated_since)],
                 report::SELECT_UPDATED_SINCE_MAPPER,
             )?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
-        None => conn
-            .lock()?
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
+        None => db
             .prepare(report::SELECT_ALL)?
             .query_map([], report::SELECT_ALL_MAPPER)?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
     }))
 }
 
 #[get("{id}")]
 pub async fn get_by_id(
     id: Path<String>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    conn.lock()?
+    db.lock()?
         .query_row(
             report::SELECT_BY_ID,
             &[(":id", &id)],
