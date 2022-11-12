@@ -45,37 +45,35 @@ impl Into<GetItem> for Event {
 #[get("")]
 async fn get(
     args: Query<GetArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
+    let db = db.lock()?;
+
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => conn
-            .lock()?
+        Some(updated_since) => db
             .prepare(event::SELECT_UPDATED_SINCE)?
             .query_map(
-                &[(":updated_since", &updated_since)],
+                &[(":updated_since", updated_since)],
                 event::SELECT_UPDATED_SINCE_MAPPER,
             )?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
-        None => conn
-            .lock()?
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
+        None => db
             .prepare(event::SELECT_ALL)?
             .query_map([], event::SELECT_ALL_MAPPER)?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
     }))
 }
 
 #[get("{id}")]
 pub async fn get_by_id(
     id: Path<String>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    conn.lock()?
+    db.lock()?
         .query_row(
             event::SELECT_BY_ID,
             &[(":id", &id)],
