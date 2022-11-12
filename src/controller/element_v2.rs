@@ -57,37 +57,35 @@ struct PostTagsArgs {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
+    let db = db.lock()?;
+
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => conn
-            .lock()?
+        Some(updated_since) => db
             .prepare(element::SELECT_UPDATED_SINCE)?
             .query_map(
-                &[(":updated_since", &updated_since)],
+                &[(":updated_since", updated_since)],
                 element::SELECT_UPDATED_SINCE_MAPPER,
             )?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
-        None => conn
-            .lock()?
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
+        None => db
             .prepare(element::SELECT_ALL)?
             .query_map([], element::SELECT_ALL_MAPPER)?
-            .filter(|it| it.is_ok())
-            .map(|it| it.unwrap().into())
-            .collect(),
+            .map(|it| it.map(|it| it.into()))
+            .collect::<Result<_, _>>()?,
     }))
 }
 
 #[get("{id}")]
 pub async fn get_by_id(
     id: Path<String>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    conn.lock()?
+    db.lock()?
         .query_row(
             element::SELECT_BY_ID,
             &[(":id", &id)],
@@ -106,16 +104,16 @@ async fn post_tags(
     id: Path<String>,
     req: HttpRequest,
     args: Form<PostTagsArgs>,
-    conn: Data<Mutex<Connection>>,
+    db: Data<Mutex<Connection>>,
 ) -> Result<impl Responder, ApiError> {
     if let Err(err) = is_from_admin(&req) {
         return Err(err);
     };
 
     let id = id.into_inner();
-    let conn = conn.lock()?;
+    let db = db.lock()?;
 
-    let element: Option<Element> = conn
+    let element: Option<Element> = db
         .query_row(
             element::SELECT_BY_ID,
             &[(":id", &id)],
@@ -126,20 +124,20 @@ async fn post_tags(
     match element {
         Some(element) => {
             if args.value.len() > 0 {
-                conn.execute(
+                db.execute(
                     element::INSERT_TAG,
                     named_params! {
-                        ":element_id": &element.id,
-                        ":tag_name": format!("$.{}", &args.name),
+                        ":element_id": element.id,
+                        ":tag_name": format!("$.{}", args.name),
                         ":tag_value": args.value,
                     },
                 )?;
             } else {
-                conn.execute(
+                db.execute(
                     element::DELETE_TAG,
                     named_params! {
-                        ":element_id": &element.id,
-                        ":tag_name": format!("$.{}", &args.name),
+                        ":element_id": element.id,
+                        ":tag_name": format!("$.{}", args.name),
                     },
                 )?;
             }
@@ -206,6 +204,35 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn get_updated_since() {
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        db.execute(
+            "INSERT INTO element (id, osm_json, updated_at) VALUES ('node:1', '{}', '2022-01-05')",
+            [],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO element (id, osm_json, updated_at) VALUES ('node:2', '{}', '2022-02-05')",
+            [],
+        )
+        .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Mutex::new(db)))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?updated_since=2022-01-10")
+            .to_request();
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+    }
+
+    #[actix_web::test]
     async fn get_by_id() {
         let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
         let mut db =
@@ -226,7 +253,9 @@ mod tests {
                 .service(super::get_by_id),
         )
         .await;
-        let req = TestRequest::get().uri(&format!("/{element_id}")).to_request();
+        let req = TestRequest::get()
+            .uri(&format!("/{element_id}"))
+            .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, element_id);
     }

@@ -1,8 +1,8 @@
-use serde_json::Value;
 use crate::model::element;
 use crate::model::Element;
 use rusqlite::named_params;
 use rusqlite::Connection;
+use serde_json::Value;
 use tokio::time::sleep;
 use tokio::time::Duration;
 
