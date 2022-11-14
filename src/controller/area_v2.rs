@@ -18,7 +18,6 @@ use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize)]
 struct PostArgs {
@@ -61,25 +60,19 @@ struct PostTagsArgs {
 async fn post(
     args: Form<PostArgs>,
     req: HttpRequest,
-    db: Data<Mutex<Connection>>,
+    db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     if let Err(err) = is_from_admin(&req) {
         return Err(err);
     };
 
-    let db = db.lock()?;
     db.execute(area::INSERT, named_params![ ":id": args.id ])?;
 
     Ok(HttpResponse::Created())
 }
 
 #[get("")]
-async fn get(
-    args: Query<GetArgs>,
-    db: Data<Mutex<Connection>>,
-) -> Result<Json<Vec<GetItem>>, ApiError> {
-    let db = db.lock()?;
-
+async fn get(args: Query<GetArgs>, db: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
         Some(updated_since) => db
             .prepare(area::SELECT_UPDATED_SINCE)?
@@ -98,24 +91,20 @@ async fn get(
 }
 
 #[get("{id}")]
-async fn get_by_id(
-    id: Path<String>,
-    db: Data<Mutex<Connection>>,
-) -> Result<Json<GetItem>, ApiError> {
+async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    db.lock()?
-        .query_row(
-            area::SELECT_BY_ID,
-            &[(":id", &id)],
-            area::SELECT_BY_ID_MAPPER,
-        )
-        .optional()?
-        .map(|it| Json(it.into()))
-        .ok_or(ApiError::new(
-            404,
-            &format!("Area with id {id} doesn't exist"),
-        ))
+    db.query_row(
+        area::SELECT_BY_ID,
+        &[(":id", &id)],
+        area::SELECT_BY_ID_MAPPER,
+    )
+    .optional()?
+    .map(|it| Json(it.into()))
+    .ok_or(ApiError::new(
+        404,
+        &format!("Area with id {id} doesn't exist"),
+    ))
 }
 
 #[post("{id}/tags")]
@@ -123,14 +112,13 @@ async fn post_tags(
     id: Path<String>,
     req: HttpRequest,
     args: Form<PostTagsArgs>,
-    db: Data<Mutex<Connection>>,
+    db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     if let Err(err) = is_from_admin(&req) {
         return Err(err);
     };
 
     let id = id.into_inner();
-    let db = db.lock()?;
 
     let area: Option<Area> = db
         .query_row(
@@ -191,7 +179,7 @@ mod tests {
         db::migrate(&mut db).unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::post)),
         )
         .await;
@@ -216,7 +204,7 @@ mod tests {
         db.execute("DELETE FROM area", []).unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -236,7 +224,7 @@ mod tests {
             .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -255,12 +243,8 @@ mod tests {
         let area_id = "test";
         db.execute(area::INSERT, named_params! { ":id": area_id })
             .unwrap();
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(Mutex::new(db)))
-                .service(super::get_by_id),
-        )
-        .await;
+        let app =
+            test::init_service(App::new().app_data(Data::new(db)).service(super::get_by_id)).await;
         let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, area_id);
@@ -278,12 +262,8 @@ mod tests {
         let area_id = "test";
         db.execute(area::INSERT, named_params![":id": area_id])
             .unwrap();
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(Mutex::new(db)))
-                .service(super::post_tags),
-        )
-        .await;
+        let app =
+            test::init_service(App::new().app_data(Data::new(db)).service(super::post_tags)).await;
         let req = TestRequest::post()
             .uri(&format!("/{area_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))

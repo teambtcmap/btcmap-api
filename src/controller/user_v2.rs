@@ -18,7 +18,6 @@ use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use std::sync::Mutex;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -55,12 +54,7 @@ struct PostTagsArgs {
 }
 
 #[get("")]
-async fn get(
-    args: Query<GetArgs>,
-    db: Data<Mutex<Connection>>,
-) -> Result<Json<Vec<GetItem>>, ApiError> {
-    let db = db.lock()?;
-
+async fn get(args: Query<GetArgs>, db: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
         Some(updated_since) => db
             .prepare(user::SELECT_UPDATED_SINCE)?
@@ -79,24 +73,20 @@ async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(
-    id: Path<String>,
-    db: Data<Mutex<Connection>>,
-) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    db.lock()?
-        .query_row(
-            user::SELECT_BY_ID,
-            &[(":id", &id)],
-            user::SELECT_BY_ID_MAPPER,
-        )
-        .optional()?
-        .map(|it| Json(it.into()))
-        .ok_or(ApiError::new(
-            404,
-            &format!("User with id {id} doesn't exist"),
-        ))
+    db.query_row(
+        user::SELECT_BY_ID,
+        &[(":id", &id)],
+        user::SELECT_BY_ID_MAPPER,
+    )
+    .optional()?
+    .map(|it| Json(it.into()))
+    .ok_or(ApiError::new(
+        404,
+        &format!("User with id {id} doesn't exist"),
+    ))
 }
 
 #[post("{id}/tags")]
@@ -104,14 +94,13 @@ async fn post_tags(
     id: Path<String>,
     req: HttpRequest,
     args: Form<PostTagsArgs>,
-    db: Data<Mutex<Connection>>,
+    db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     if let Err(err) = is_from_admin(&req) {
         return Err(err);
     };
 
     let id = id.into_inner();
-    let db = db.lock()?;
 
     let user: Option<User> = db
         .query_row(
@@ -172,7 +161,7 @@ mod tests {
         db::migrate(&mut db).unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -197,7 +186,7 @@ mod tests {
         .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -224,7 +213,7 @@ mod tests {
         .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -250,12 +239,8 @@ mod tests {
             },
         )
         .unwrap();
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(Mutex::new(db)))
-                .service(super::get_by_id),
-        )
-        .await;
+        let app =
+            test::init_service(App::new().app_data(Data::new(db)).service(super::get_by_id)).await;
         let req = TestRequest::get().uri(&format!("/{user_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, user_id);
@@ -278,12 +263,8 @@ mod tests {
             },
         )
         .unwrap();
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(Mutex::new(db)))
-                .service(super::post_tags),
-        )
-        .await;
+        let app =
+            test::init_service(App::new().app_data(Data::new(db)).service(super::post_tags)).await;
         let req = TestRequest::post()
             .uri(&format!("/{user_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))

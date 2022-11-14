@@ -39,7 +39,7 @@ pub fn migrate(db: &mut Connection) -> Result<(), Box<dyn Error>> {
                 let sql = file
                     .contents_utf8()
                     .ok_or(format!("Can't read {file_name} in UTF-8"))?;
-                log::warn!("{sql}");
+                log::warn!("Executing query:\n{sql}");
                 let tx = db.transaction()?;
                 tx.execute_batch(sql)?;
                 tx.execute_batch(&format!("PRAGMA user_version={}", schema_ver + 1))?;

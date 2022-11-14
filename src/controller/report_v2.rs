@@ -11,7 +11,6 @@ use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use std::sync::Mutex;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -44,12 +43,7 @@ impl Into<GetItem> for Report {
 }
 
 #[get("")]
-async fn get(
-    args: Query<GetArgs>,
-    db: Data<Mutex<Connection>>,
-) -> Result<Json<Vec<GetItem>>, ApiError> {
-    let db = db.lock()?;
-
+async fn get(args: Query<GetArgs>, db: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
         Some(updated_since) => db
             .prepare(report::SELECT_UPDATED_SINCE)?
@@ -68,24 +62,20 @@ async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(
-    id: Path<String>,
-    db: Data<Mutex<Connection>>,
-) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    db.lock()?
-        .query_row(
-            report::SELECT_BY_ID,
-            &[(":id", &id)],
-            report::SELECT_BY_ID_MAPPER,
-        )
-        .optional()?
-        .map(|it| Json(it.into()))
-        .ok_or(ApiError::new(
-            404,
-            &format!("Report with id {id} doesn't exist"),
-        ))
+    db.query_row(
+        report::SELECT_BY_ID,
+        &[(":id", &id)],
+        report::SELECT_BY_ID_MAPPER,
+    )
+    .optional()?
+    .map(|it| Json(it.into()))
+    .ok_or(ApiError::new(
+        404,
+        &format!("Report with id {id} doesn't exist"),
+    ))
 }
 
 #[cfg(test)]
@@ -107,7 +97,7 @@ mod tests {
         db::migrate(&mut db).unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -133,7 +123,7 @@ mod tests {
         .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -160,7 +150,7 @@ mod tests {
         .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Mutex::new(db)))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::get)),
         )
         .await;

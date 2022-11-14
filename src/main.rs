@@ -16,9 +16,9 @@ mod sync;
 mod sync_users;
 
 use std::env;
+use std::error::Error;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
@@ -46,16 +46,23 @@ async fn main() -> std::io::Result<()> {
 
     let args: Vec<String> = env::args().collect();
     log::info!("Got {} arguments ({:?})", args.len(), args);
-    let mut db_conn = Connection::open(get_db_file_path()).unwrap();
+
+    let mut shared_conn = match open_db_connection() {
+        Ok(shared_conn) => shared_conn,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to connect to database",
+            ))
+        }
+    };
 
     match args.len() {
         1 => {
-            if let Err(err) = db::migrate(&mut db_conn) {
+            if let Err(err) = db::migrate(&mut shared_conn) {
                 log::error!("Migration faied: {err}");
                 std::process::exit(1);
             }
-
-            let db_conn = Data::new(Mutex::new(db_conn));
 
             log::info!("Starting HTTP server");
             HttpServer::new(move || {
@@ -63,7 +70,7 @@ async fn main() -> std::io::Result<()> {
                     .wrap(Logger::default())
                     .wrap(NormalizePath::trim())
                     .wrap(Compress::default())
-                    .app_data(db_conn.clone())
+                    .app_data(Data::new(open_db_connection().unwrap()))
                     .service(
                         scope("elements")
                             .service(controller::element_v2::get)
@@ -131,29 +138,27 @@ async fn main() -> std::io::Result<()> {
             .await
         }
         _ => {
-            let db_conn = Connection::open(get_db_file_path()).unwrap();
-
             match args.get(1).unwrap().as_str() {
                 "db" => {
-                    db::cli_main(&args[2..], db_conn);
+                    db::cli_main(&args[2..], shared_conn);
                 }
                 "sync" => {
-                    sync::sync(db_conn).await;
+                    sync::sync(shared_conn).await;
                 }
                 "sync-users" => {
-                    sync_users::sync(db_conn).await;
+                    sync_users::sync(shared_conn).await;
                 }
                 "generate-report" => {
-                    generate_report::generate_report(db_conn).await;
+                    generate_report::generate_report(shared_conn).await;
                 }
                 "generate-android-icons" => {
-                    generate_android_icons::generate_android_icons(db_conn).await;
+                    generate_android_icons::generate_android_icons(shared_conn).await;
                 }
                 "generate-element-categories" => {
-                    generate_element_categories::generate_element_categories(db_conn).await;
+                    generate_element_categories::generate_element_categories(shared_conn).await;
                 }
                 "pouch" => {
-                    pouch::pouch(db_conn).await;
+                    pouch::pouch(shared_conn).await;
                 }
                 _ => {
                     log::error!("Unknown action");
@@ -166,16 +171,22 @@ async fn main() -> std::io::Result<()> {
     }
 }
 
-fn get_db_file_path() -> PathBuf {
-    let project_dirs = get_project_dirs();
+fn open_db_connection() -> Result<Connection, Box<dyn Error>> {
+    let conn = Connection::open(get_db_file_path()?)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    Ok(conn)
+}
+
+fn get_db_file_path() -> Result<PathBuf, Box<dyn Error>> {
+    let project_dirs = match ProjectDirs::from("org", "BTC Map", "BTC Map") {
+        Some(project_dirs) => project_dirs,
+        None => Err("Can't find a home directory")?,
+    };
 
     if !project_dirs.data_dir().exists() {
         create_dir_all(project_dirs.data_dir()).unwrap()
     }
 
-    project_dirs.data_dir().join("btcmap.db")
-}
-
-fn get_project_dirs() -> ProjectDirs {
-    return ProjectDirs::from("org", "BTC Map", "BTC Map").unwrap();
+    Ok(project_dirs.data_dir().join("btcmap.db"))
 }
