@@ -1,7 +1,7 @@
 use crate::auth::is_from_admin;
 use crate::model::area;
-use crate::model::ApiError;
 use crate::model::Area;
+use crate::ApiError;
 use actix_web::get;
 use actix_web::post;
 use actix_web::web::Data;
@@ -201,7 +201,6 @@ mod tests {
         let mut db =
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
-        db.execute("DELETE FROM area", []).unwrap();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db))
@@ -219,7 +218,6 @@ mod tests {
         let mut db =
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
-        db.execute("DELETE FROM area", []).unwrap();
         db.execute(area::INSERT, named_params! { ":id": "test" })
             .unwrap();
         let app = test::init_service(
@@ -239,7 +237,6 @@ mod tests {
         let mut db =
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
-        db.execute("DELETE FROM area", []).unwrap();
         let area_id = "test";
         db.execute(area::INSERT, named_params! { ":id": area_id })
             .unwrap();
@@ -258,7 +255,6 @@ mod tests {
         let mut db =
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
-        db.execute("DELETE FROM area", []).unwrap();
         let area_id = "test";
         db.execute(area::INSERT, named_params![":id": area_id])
             .unwrap();

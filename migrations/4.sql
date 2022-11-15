@@ -1,1 +1,0 @@
-INSERT INTO area (id, name, type, min_lon, min_lat, max_lon, max_lat) VALUES ('london-bitcoin-space', 'London Bitcoin Space', 'area', -0.54791, 51.27915, 0.35022, 51.69389);

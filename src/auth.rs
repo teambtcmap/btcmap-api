@@ -1,4 +1,4 @@
-use crate::model::ApiError;
+use crate::ApiError;
 use actix_web::HttpRequest;
 use std::env;
 

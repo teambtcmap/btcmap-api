@@ -1,9 +1,14 @@
+extern crate core;
+
+pub use api_error::ApiError;
+pub use error::Error;
+
 use actix_web::middleware::Compress;
 use actix_web::middleware::NormalizePath;
 use actix_web::web::scope;
 use actix_web::web::Data;
-extern crate core;
 
+mod api_error;
 mod auth;
 mod controller;
 mod db;
@@ -15,8 +20,6 @@ mod model;
 mod pouch;
 mod sync;
 mod sync_users;
-
-use crate::error::Error;
 
 use std::env;
 use std::fs::create_dir_all;

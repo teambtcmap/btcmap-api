@@ -1,6 +1,6 @@
 use crate::model::event;
-use crate::model::ApiError;
 use crate::model::Event;
+use crate::ApiError;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;

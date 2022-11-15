@@ -1,2 +1,0 @@
-INSERT INTO area (id, name, type, min_lon, min_lat, max_lon, max_lat) VALUES ('iom', 'Isle of Man', 'area', 54.01989, -4.93704, 54.43413, -4.14054);
-INSERT INTO area (id, name, type, min_lon, min_lat, max_lon, max_lat) VALUES ('bitcoin-rock', 'Bitcoin Rock', 'area', 36.10543, -5.40304, 36.15576, -5.30142);
