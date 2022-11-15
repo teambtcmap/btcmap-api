@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum Error {
+    CLI(String),
     IO(std::io::Error),
     DB(rusqlite::Error),
 }
@@ -9,6 +10,7 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Error::CLI(err) => write!(f, "{}", err),
             Error::IO(err) => err.fmt(f),
             Error::DB(err) => err.fmt(f),
         }

@@ -29,14 +29,10 @@ use rusqlite::Connection;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
-    }
-
-    if env::var("ADMIN_TOKEN").is_err() && cfg!(debug_assertions) {
-        env::set_var("ADMIN_TOKEN", "debug");
     }
 
     if cfg!(debug_assertions) {
@@ -45,25 +41,73 @@ async fn main() -> std::io::Result<()> {
         env_logger::builder().format_timestamp(None).init();
     }
 
-    if env::var("RUST_BACKTRACE").is_err() {
-        log::info!("Activating RUST_BACKTRACE");
-        env::set_var("RUST_BACKTRACE", "1");
+    if env::var("ADMIN_TOKEN").is_err() && cfg!(debug_assertions) {
+        env::set_var("ADMIN_TOKEN", "debug");
     }
 
-    let mut db = open_db_connection()?;
+    let mut db = match open_db_connection() {
+        Ok(ok) => ok,
+        Err(e) => {
+            log::error!("Failed to connect to database: {e}");
+            return;
+        }
+    };
+
+    if let Err(e) = db::migrate(&mut db) {
+        log::error!("Migration failed: {e}");
+        return;
+    }
+
     let args: Vec<String> = env::args().collect();
 
     match args.len() {
-        1 => {
-            db::migrate(&mut db)?;
+        1 => start_server().await,
+        _ => {
+            if let Err(e) = cli_main(&args[1..], db).await {
+                log::error!("{e}");
+            }
+        }
+    }
+}
 
-            log::info!("Starting HTTP server");
-            HttpServer::new(move || {
-                App::new()
-                    .wrap(Logger::default())
-                    .wrap(NormalizePath::trim())
-                    .wrap(Compress::default())
-                    .app_data(Data::new(open_db_connection().unwrap()))
+async fn start_server() {
+    HttpServer::new(move || {
+        App::new()
+            .wrap(Logger::default())
+            .wrap(NormalizePath::trim())
+            .wrap(Compress::default())
+            .app_data(Data::new(open_db_connection().unwrap()))
+            .service(
+                scope("elements")
+                    .service(controller::element_v2::get)
+                    .service(controller::element_v2::get_by_id)
+                    .service(controller::element_v2::post_tags),
+            )
+            .service(
+                scope("events")
+                    .service(controller::event_v2::get)
+                    .service(controller::event_v2::get_by_id),
+            )
+            .service(
+                scope("users")
+                    .service(controller::user_v2::get)
+                    .service(controller::user_v2::get_by_id)
+                    .service(controller::user_v2::post_tags),
+            )
+            .service(
+                scope("areas")
+                    .service(controller::area_v2::post)
+                    .service(controller::area_v2::get)
+                    .service(controller::area_v2::get_by_id)
+                    .service(controller::area_v2::post_tags),
+            )
+            .service(
+                scope("reports")
+                    .service(controller::report_v2::get)
+                    .service(controller::report_v2::get_by_id),
+            )
+            .service(
+                scope("v2")
                     .service(
                         scope("elements")
                             .service(controller::element_v2::get)
@@ -92,76 +136,48 @@ async fn main() -> std::io::Result<()> {
                         scope("reports")
                             .service(controller::report_v2::get)
                             .service(controller::report_v2::get_by_id),
-                    )
-                    .service(
-                        scope("v2")
-                            .service(
-                                scope("elements")
-                                    .service(controller::element_v2::get)
-                                    .service(controller::element_v2::get_by_id)
-                                    .service(controller::element_v2::post_tags),
-                            )
-                            .service(
-                                scope("events")
-                                    .service(controller::event_v2::get)
-                                    .service(controller::event_v2::get_by_id),
-                            )
-                            .service(
-                                scope("users")
-                                    .service(controller::user_v2::get)
-                                    .service(controller::user_v2::get_by_id)
-                                    .service(controller::user_v2::post_tags),
-                            )
-                            .service(
-                                scope("areas")
-                                    .service(controller::area_v2::post)
-                                    .service(controller::area_v2::get)
-                                    .service(controller::area_v2::get_by_id)
-                                    .service(controller::area_v2::post_tags),
-                            )
-                            .service(
-                                scope("reports")
-                                    .service(controller::report_v2::get)
-                                    .service(controller::report_v2::get_by_id),
-                            ),
-                    )
-            })
-            .bind(("127.0.0.1", 8000))?
-            .run()
-            .await
-        }
-        _ => {
-            match args.get(1).unwrap().as_str() {
-                "db" => {
-                    db::cli_main(&args[2..], db).unwrap();
-                }
-                "sync" => {
-                    sync::sync(db).await;
-                }
-                "sync-users" => {
-                    sync_users::sync(db).await;
-                }
-                "generate-report" => {
-                    generate_report::generate_report(db).await;
-                }
-                "generate-android-icons" => {
-                    generate_android_icons::generate_android_icons(db).await;
-                }
-                "generate-element-categories" => {
-                    generate_element_categories::generate_element_categories(db).await;
-                }
-                "pouch" => {
-                    pouch::pouch(db).await;
-                }
-                _ => {
-                    log::error!("Unknown action");
-                    std::process::exit(1);
-                }
-            }
+                    ),
+            )
+    })
+    .bind(("127.0.0.1", 8000))
+    .unwrap()
+    .run()
+    .await
+    .unwrap();
+}
 
-            Ok(())
+async fn cli_main(args: &[String], db: Connection) -> Result<()> {
+    let first_arg = match args.first() {
+        Some(some) => some,
+        None => Err(Error::CLI("No actions passed".into()))?,
+    };
+
+    match first_arg.as_str() {
+        "db" => {
+            db::cli_main(&args[1..], db)?;
         }
+        "sync" => {
+            sync::sync(db).await;
+        }
+        "sync-users" => {
+            sync_users::sync(db).await;
+        }
+        "generate-report" => {
+            generate_report::generate_report(db).await;
+        }
+        "generate-android-icons" => {
+            generate_android_icons::generate_android_icons(db).await;
+        }
+        "generate-element-categories" => {
+            generate_element_categories::generate_element_categories(db).await;
+        }
+        "pouch" => {
+            pouch::pouch(db).await;
+        }
+        first_arg => Err(Error::CLI(format!("Unknown action: {first_arg}")))?,
     }
+
+    Ok(())
 }
 
 fn open_db_connection() -> Result<Connection> {

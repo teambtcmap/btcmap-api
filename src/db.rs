@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::Result;
 use include_dir::include_dir;
 use include_dir::Dir;
@@ -6,16 +7,16 @@ use std::fs::remove_file;
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-pub fn cli_main(args: &[String], mut db: Connection) -> Result<()> {
-    match args.first() {
-        Some(first_arg) => match first_arg.as_str() {
-            "migrate" => migrate(&mut db)?,
-            "drop" => drop(db)?,
-            _ => panic!("Unknown action {first_arg}"),
-        },
-        None => {
-            panic!("No db actions passed");
-        }
+pub fn cli_main(args: &[String], db: Connection) -> Result<()> {
+    let first_arg = match args.first() {
+        Some(some) => some,
+        None => Err(Error::CLI("No DB actions passed".into()))?,
+    };
+
+    match first_arg.as_str() {
+        "migrate" => {}
+        "drop" => drop(db)?,
+        _ => Err(Error::CLI(format!("Unknown action: {first_arg}")))?,
     }
 
     Ok(())
