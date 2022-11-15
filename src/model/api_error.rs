@@ -2,11 +2,8 @@ use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::ResponseError;
-use rusqlite::Connection;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::sync::MutexGuard;
-use std::sync::PoisonError;
 
 #[derive(Debug)]
 pub struct ApiError {
@@ -47,11 +44,5 @@ impl Display for ApiError {
 impl From<rusqlite::Error> for ApiError {
     fn from(error: rusqlite::Error) -> Self {
         ApiError::new(500, &error.to_string())
-    }
-}
-
-impl From<PoisonError<MutexGuard<'_, Connection>>> for ApiError {
-    fn from(_: PoisonError<MutexGuard<'_, Connection>>) -> Self {
-        ApiError::new(500, "Failed to lock database connection")
     }
 }

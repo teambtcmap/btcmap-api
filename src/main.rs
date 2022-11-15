@@ -7,6 +7,7 @@ extern crate core;
 mod auth;
 mod controller;
 mod db;
+mod error;
 mod generate_android_icons;
 mod generate_element_categories;
 mod generate_report;
@@ -15,8 +16,9 @@ mod pouch;
 mod sync;
 mod sync_users;
 
+use crate::error::Error;
+
 use std::env;
-use std::error::Error;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 
@@ -24,6 +26,8 @@ use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use directories::ProjectDirs;
 use rusqlite::Connection;
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -37,32 +41,17 @@ async fn main() -> std::io::Result<()> {
 
     env_logger::init();
 
-    log::info!("Initializing BTC Map API");
-
     if env::var("RUST_BACKTRACE").is_err() {
         log::info!("Activating RUST_BACKTRACE");
         env::set_var("RUST_BACKTRACE", "1");
     }
 
+    let mut db = open_db_connection()?;
     let args: Vec<String> = env::args().collect();
-    log::info!("Got {} arguments ({:?})", args.len(), args);
-
-    let mut shared_conn = match open_db_connection() {
-        Ok(shared_conn) => shared_conn,
-        Err(_) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to connect to database",
-            ))
-        }
-    };
 
     match args.len() {
         1 => {
-            if let Err(err) = db::migrate(&mut shared_conn) {
-                log::error!("Migration faied: {err}");
-                std::process::exit(1);
-            }
+            db::migrate(&mut db)?;
 
             log::info!("Starting HTTP server");
             HttpServer::new(move || {
@@ -140,25 +129,25 @@ async fn main() -> std::io::Result<()> {
         _ => {
             match args.get(1).unwrap().as_str() {
                 "db" => {
-                    db::cli_main(&args[2..], shared_conn);
+                    db::cli_main(&args[2..], db).unwrap();
                 }
                 "sync" => {
-                    sync::sync(shared_conn).await;
+                    sync::sync(db).await;
                 }
                 "sync-users" => {
-                    sync_users::sync(shared_conn).await;
+                    sync_users::sync(db).await;
                 }
                 "generate-report" => {
-                    generate_report::generate_report(shared_conn).await;
+                    generate_report::generate_report(db).await;
                 }
                 "generate-android-icons" => {
-                    generate_android_icons::generate_android_icons(shared_conn).await;
+                    generate_android_icons::generate_android_icons(db).await;
                 }
                 "generate-element-categories" => {
-                    generate_element_categories::generate_element_categories(shared_conn).await;
+                    generate_element_categories::generate_element_categories(db).await;
                 }
                 "pouch" => {
-                    pouch::pouch(shared_conn).await;
+                    pouch::pouch(db).await;
                 }
                 _ => {
                     log::error!("Unknown action");
@@ -171,21 +160,24 @@ async fn main() -> std::io::Result<()> {
     }
 }
 
-fn open_db_connection() -> Result<Connection, Box<dyn Error>> {
+fn open_db_connection() -> Result<Connection> {
     let conn = Connection::open(get_db_file_path()?)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     Ok(conn)
 }
 
-fn get_db_file_path() -> Result<PathBuf, Box<dyn Error>> {
+fn get_db_file_path() -> Result<PathBuf, std::io::Error> {
     let project_dirs = match ProjectDirs::from("org", "BTC Map", "BTC Map") {
         Some(project_dirs) => project_dirs,
-        None => Err("Can't find a home directory")?,
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Can't find home directory",
+        ))?,
     };
 
     if !project_dirs.data_dir().exists() {
-        create_dir_all(project_dirs.data_dir()).unwrap()
+        create_dir_all(project_dirs.data_dir())?;
     }
 
     Ok(project_dirs.data_dir().join("btcmap.db"))

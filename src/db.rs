@@ -1,30 +1,27 @@
+use crate::Result;
 use include_dir::include_dir;
 use include_dir::Dir;
 use rusqlite::Connection;
-use std::error::Error;
 use std::fs::remove_file;
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-pub fn cli_main(args: &[String], mut db: Connection) {
+pub fn cli_main(args: &[String], mut db: Connection) -> Result<()> {
     match args.first() {
         Some(first_arg) => match first_arg.as_str() {
-            "migrate" => {
-                if let Err(err) = migrate(&mut db) {
-                    log::error!("Migration faied: {err}");
-                    std::process::exit(1);
-                }
-            }
-            "drop" => drop(db),
+            "migrate" => migrate(&mut db)?,
+            "drop" => drop(db)?,
             _ => panic!("Unknown action {first_arg}"),
         },
         None => {
             panic!("No db actions passed");
         }
     }
+
+    Ok(())
 }
 
-pub fn migrate(db: &mut Connection) -> Result<(), Box<dyn Error>> {
+pub fn migrate(db: &mut Connection) -> Result<()> {
     let mut schema_ver: i16 =
         db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
             row.get(0)
@@ -36,9 +33,10 @@ pub fn migrate(db: &mut Connection) -> Result<(), Box<dyn Error>> {
         match file {
             Some(file) => {
                 log::warn!("Found new migration: {file_name}");
-                let sql = file
-                    .contents_utf8()
-                    .ok_or(format!("Can't read {file_name} in UTF-8"))?;
+                let sql = file.contents_utf8().ok_or(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Can't read {file_name} in UTF-8"),
+                ))?;
                 log::warn!("Executing query:\n{sql}");
                 let tx = db.transaction()?;
                 tx.execute_batch(sql)?;
@@ -57,15 +55,10 @@ pub fn migrate(db: &mut Connection) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn drop(db: Connection) {
-    if !db.path().unwrap().exists() {
-        log::error!("Database does not exist");
-        std::process::exit(1);
-    } else {
-        log::info!("Found database at {}", db.path().unwrap().to_str().unwrap());
-        remove_file(db.path().unwrap()).unwrap();
-        log::info!("Database file was removed");
-    }
+fn drop(db: Connection) -> Result<()> {
+    remove_file(db.path().unwrap())?;
+    log::info!("Database file was removed");
+    Ok(())
 }
 
 #[cfg(test)]
