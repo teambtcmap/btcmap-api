@@ -39,7 +39,11 @@ async fn main() -> std::io::Result<()> {
         env::set_var("ADMIN_TOKEN", "debug");
     }
 
-    env_logger::init();
+    if cfg!(debug_assertions) {
+        env_logger::init();
+    } else {
+        env_logger::builder().format_timestamp(None).init();
+    }
 
     if env::var("RUST_BACKTRACE").is_err() {
         log::info!("Activating RUST_BACKTRACE");
