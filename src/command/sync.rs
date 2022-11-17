@@ -3,6 +3,8 @@ use crate::model::event;
 use crate::model::user;
 use crate::model::Element;
 use crate::model::User;
+use crate::Error;
+use crate::Result;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
@@ -13,10 +15,12 @@ use std::collections::HashSet;
 use std::env;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use tokio::time::sleep;
+use tokio::time::Duration;
 
-static OVERPASS_API_URL: &str = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
+pub static OVERPASS_API_URL: &str = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
 
-static OVERPASS_API_QUERY: &str = r#"
+pub static OVERPASS_API_QUERY: &str = r#"
     [out:json][timeout:300];
     (
     nwr["currency:XBT"="yes"];
@@ -25,50 +29,34 @@ static OVERPASS_API_QUERY: &str = r#"
     out meta geom;
 "#;
 
-pub async fn sync(mut db_conn: Connection) {
+pub async fn run(mut db: Connection) -> Result<()> {
     log::info!("Starting sync");
     log::info!("Querying OSM API, it could take a while...");
-    let response = match reqwest::Client::new()
+    let response = reqwest::Client::new()
         .post(OVERPASS_API_URL)
         .body(OVERPASS_API_QUERY)
         .send()
-        .await
-    {
-        Ok(ok) => ok,
-        Err(err) => {
-            log::error!("Failed to fetch response: {err}");
-            return;
-        }
-    };
+        .await?;
 
     log::info!("Fetched new data, response code: {}", response.status());
 
-    let response = match response.json::<Value>().await {
-        Ok(ok) => ok,
-        Err(err) => {
-            log::error!("Failed to read response body: {err}");
-            return;
-        }
-    };
+    let response = response.json::<Value>().await?;
 
-    let fresh_elements: &Vec<Value> = match response["elements"].as_array() {
-        Some(some) => some,
-        None => {
-            log::error!("Failed to parse elements");
-            return;
-        }
-    };
+    let fresh_elements: &Vec<Value> = response["elements"]
+        .as_array()
+        .ok_or(Error::Other("Failed to parse elements".into()))?;
 
     log::info!("Fetched {} elements", fresh_elements.len());
 
     if fresh_elements.len() < 5000 {
-        log::error!("Data set is most likely invalid, skipping the sync");
         send_discord_message("Got a suspicious resopnse from OSM, check server logs".to_string())
             .await;
-        return;
+        Err(Error::Other(
+            "Data set is most likely invalid, skipping the sync".into(),
+        ))?
     }
 
-    let tx: Transaction = db_conn.transaction().unwrap();
+    let tx: Transaction = db.transaction()?;
     let elements: Vec<Element> = tx
         .prepare(element::SELECT_ALL)
         .unwrap()
@@ -124,9 +112,8 @@ pub async fn sync(mut db_conn: Connection) {
                 if bitcoin_tag_value == "yes" || legacy_bitcoin_tag_value == "yes" {
                     let message =
                         format!("Overpass lied about {element_type}/{osm_id} being deleted!");
-                    log::error!("{}", message);
-                    send_discord_message(message).await;
-                    return;
+                    send_discord_message(message.clone()).await;
+                    Err(Error::Other(message))?
                 }
             }
 
@@ -149,19 +136,17 @@ pub async fn sync(mut db_conn: Connection) {
                     ":type": "delete",
                     ":user_id": user_id,
                 },
-            )
-            .unwrap();
+            )?;
 
             send_discord_message(format!(
                 "{name} was deleted by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
             ))
             .await;
-            log::info!("Marking element {} as deleted", &element.id);
+            log::info!("Marking element {} as deleted", element.id);
             tx.execute(
                 element::MARK_AS_DELETED,
-                named_params! { ":id": &element.id },
-            )
-            .unwrap();
+                named_params! { ":id": element.id },
+            )?;
         }
     }
 
@@ -177,8 +162,8 @@ pub async fn sync(mut db_conn: Connection) {
 
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
-                let old_element_osm_json = serde_json::to_string(&element.osm_json).unwrap();
-                let new_element_osm_json = serde_json::to_string(fresh_element).unwrap();
+                let old_element_osm_json = serde_json::to_string(&element.osm_json)?;
+                let new_element_osm_json = serde_json::to_string(fresh_element)?;
 
                 if new_element_osm_json != old_element_osm_json {
                     log::info!("Element {btcmap_id} was updated");
@@ -193,8 +178,7 @@ pub async fn sync(mut db_conn: Connection) {
                             ":type": "update",
                             ":user_id": user_id,
                         },
-                    )
-                    .unwrap();
+                    )?;
 
                     send_discord_message(format!(
                         "{name} was updated by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
@@ -207,8 +191,7 @@ pub async fn sync(mut db_conn: Connection) {
                             ":id": &btcmap_id,
                             ":osm_json": &new_element_osm_json,
                         },
-                    )
-                    .unwrap();
+                    )?;
                 }
 
                 if element.deleted_at.len() > 0 {
@@ -218,8 +201,7 @@ pub async fn sync(mut db_conn: Connection) {
                             ":id": &btcmap_id,
                             ":deleted_at": "",
                         },
-                    )
-                    .unwrap();
+                    )?;
                 }
             }
             None => {
@@ -235,25 +217,21 @@ pub async fn sync(mut db_conn: Connection) {
                         ":type": "create",
                         ":user_id": user_id,
                     },
-                )
-                .unwrap();
+                )?;
 
                 tx.execute(
                     element::INSERT,
                     named_params! {
                         ":id": &btcmap_id,
-                        ":osm_json": serde_json::to_string(fresh_element).unwrap(),
+                        ":osm_json": serde_json::to_string(fresh_element)?,
                     },
-                )
-                .unwrap();
+                )?;
 
-                let element = tx
-                    .query_row(
-                        element::SELECT_BY_ID,
-                        &[(":id", &btcmap_id)],
-                        element::SELECT_BY_ID_MAPPER,
-                    )
-                    .unwrap();
+                let element = tx.query_row(
+                    element::SELECT_BY_ID,
+                    &[(":id", &btcmap_id)],
+                    element::SELECT_BY_ID_MAPPER,
+                )?;
 
                 let category = element.category();
                 let android_icon = element.android_icon();
@@ -265,8 +243,7 @@ pub async fn sync(mut db_conn: Connection) {
                         ":tag_name": "$.category",
                         ":tag_value": &category,
                     },
-                )
-                .unwrap();
+                )?;
 
                 tx.execute(
                     element::INSERT_TAG,
@@ -275,8 +252,7 @@ pub async fn sync(mut db_conn: Connection) {
                         ":tag_name": "$.icon:android",
                         ":tag_value": &android_icon,
                     },
-                )
-                .unwrap();
+                )?;
 
                 log::info!("Category: {category}, icon: {android_icon}");
 
@@ -288,8 +264,10 @@ pub async fn sync(mut db_conn: Connection) {
         }
     }
 
-    tx.commit().expect("Failed to save sync results");
+    tx.commit()?;
     log::info!("Finished sync");
+
+    Ok(())
 }
 
 async fn send_discord_message(text: String) {
@@ -317,6 +295,8 @@ async fn send_discord_message(text: String) {
 }
 
 async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
+    sleep(Duration::from_millis(1000)).await;
+
     let url = format!(
         "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
     );

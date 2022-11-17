@@ -161,7 +161,7 @@ async fn post_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db;
+    use crate::command::db;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;

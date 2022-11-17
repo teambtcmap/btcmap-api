@@ -1,4 +1,7 @@
+use crate::command::sync;
 use crate::model::report;
+use crate::Error;
+use crate::Result;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use serde_json::Value;
@@ -7,22 +10,11 @@ use std::ops::Sub;
 use time::Duration;
 use time::OffsetDateTime;
 
-static OVERPASS_API_URL: &str = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
-
-static OVERPASS_API_QUERY: &str = r#"
-    [out:json][timeout:300];
-    (
-    nwr["currency:XBT"="yes"];
-    nwr["payment:bitcoin"="yes"];
-    );
-    out meta geom;
-"#;
-
-pub async fn generate_report(db_conn: Connection) {
+pub async fn run(db: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
     log::info!("Generating report for {today}");
 
-    let existing_report = db_conn.query_row(
+    let existing_report = db.query_row(
         report::SELECT_BY_AREA_ID_AND_DATE,
         named_params![
             ":area_id": "",
@@ -33,54 +25,38 @@ pub async fn generate_report(db_conn: Connection) {
 
     if existing_report.is_ok() {
         log::info!("Found existing report, aborting");
-        return;
+        return Ok(());
     }
 
     log::info!("Querying OSM API, it could take a while...");
 
-    let response = match reqwest::Client::new()
-        .post(OVERPASS_API_URL)
-        .body(OVERPASS_API_QUERY)
+    let response = reqwest::Client::new()
+        .post(sync::OVERPASS_API_URL)
+        .body(sync::OVERPASS_API_QUERY)
         .send()
-        .await
-    {
-        Ok(ok) => ok,
-        Err(err) => {
-            log::error!("Failed to fetch response: {err}");
-            return;
-        }
-    };
+        .await?;
 
     log::info!("Fetched new data, response code: {}", response.status());
 
-    let response = match response.json::<Value>().await {
-        Ok(ok) => ok,
-        Err(err) => {
-            log::error!("Failed to read response body: {err}");
-            return;
-        }
-    };
+    let response = response.json::<Value>().await?;
 
-    let elements: &Vec<Value> = match response["elements"].as_array() {
-        Some(some) => some,
-        None => {
-            log::error!("Failed to parse elements");
-            return;
-        }
-    };
+    let elements: &Vec<Value> = response["elements"]
+        .as_array()
+        .ok_or(Error::Other("Failed to parse elements".into()))?;
 
     if elements.len() == 0 {
-        log::error!(
+        Err(Error::Other(format!(
             "Got suspicious response: {}",
-            serde_json::to_string_pretty(&response).unwrap()
-        );
+            serde_json::to_string_pretty(&response)?
+        )))?
     }
 
     log::info!("Fetched {} elements", elements.len());
 
     if elements.len() < 5000 {
-        log::error!("Data set is most likely invalid, aborting report generation");
-        return;
+        Err(Error::Other(
+            "Data set is most likely invalid, aborting report generation".into(),
+        ))?
     }
 
     let onchain_elements: Vec<&Value> = elements
@@ -144,21 +120,21 @@ pub async fn generate_report(db_conn: Connection) {
     tags.insert("up_to_date_elements", up_to_date_elements.len());
     tags.insert("outdated_elements", outdated_elements.len());
     tags.insert("legacy_elements", legacy_elements.len());
-    let tags: Value = serde_json::to_value(tags).unwrap();
+    let tags: Value = serde_json::to_value(tags)?;
 
     log::info!("Inserting new report");
-    log::info!("{}", serde_json::to_string_pretty(&tags).unwrap());
+    log::info!("{}", serde_json::to_string_pretty(&tags)?);
 
-    db_conn
-        .execute(
-            report::INSERT,
-            named_params! {
-                ":area_id" : "",
-                ":date" : today.to_string(),
-                ":tags" : serde_json::to_string(&tags).unwrap(),
-            },
-        )
-        .unwrap();
+    db.execute(
+        report::INSERT,
+        named_params! {
+            ":area_id" : "",
+            ":date" : today.to_string(),
+            ":tags" : serde_json::to_string(&tags)?,
+        },
+    )?;
 
     log::info!("Finished generating report");
+
+    Ok(())
 }

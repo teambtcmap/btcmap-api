@@ -10,16 +10,10 @@ use actix_web::web::Data;
 
 mod api_error;
 mod auth;
+mod command;
 mod controller;
-mod db;
 mod error;
-mod generate_android_icons;
-mod generate_element_categories;
-mod generate_report;
 mod model;
-mod pouch;
-mod sync;
-mod sync_users;
 
 use std::env;
 use std::fs::create_dir_all;
@@ -56,7 +50,7 @@ async fn main() {
         }
     };
 
-    if let Err(e) = db::migrate(&mut db) {
+    if let Err(e) = command::db::migrate(&mut db) {
         log::error!("Migration failed: {e}");
         return;
     }
@@ -157,25 +151,39 @@ async fn cli_main(args: &[String], db: Connection) -> Result<()> {
 
     match first_arg.as_str() {
         "db" => {
-            db::cli_main(&args[1..], db)?;
+            if let Err(e) = command::db::run(&args[1..], db) {
+                log::error!("{e}")
+            }
         }
         "sync" => {
-            sync::sync(db).await;
+            if let Err(e) = command::sync::run(db).await {
+                log::error!("{e}")
+            }
         }
         "sync-users" => {
-            sync_users::sync(db).await;
+            if let Err(e) = command::sync_users::run(db).await {
+                log::error!("{e}")
+            }
         }
         "generate-report" => {
-            generate_report::generate_report(db).await;
+            if let Err(e) = command::generate_report::run(db).await {
+                log::error!("{e}")
+            }
         }
         "generate-android-icons" => {
-            generate_android_icons::generate_android_icons(db).await;
+            if let Err(e) = command::generate_android_icons::run(db).await {
+                log::error!("{e}")
+            }
         }
         "generate-element-categories" => {
-            generate_element_categories::generate_element_categories(db).await;
+            if let Err(e) = command::generate_element_categories::run(db).await {
+                log::error!("{e}")
+            }
         }
-        "pouch" => {
-            pouch::pouch(db).await;
+        "fetch-pouch-tags" => {
+            if let Err(e) = command::fetch_pouch_tags::run(db).await {
+                log::error!("{e}")
+            }
         }
         first_arg => Err(Error::CLI(format!("Unknown action: {first_arg}")))?,
     }

@@ -81,7 +81,7 @@ pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<Ge
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db;
+    use crate::command::db;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};

@@ -7,7 +7,7 @@ use std::fs::remove_file;
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-pub fn cli_main(args: &[String], db: Connection) -> Result<()> {
+pub fn run(args: &[String], db: Connection) -> Result<()> {
     let first_arg = match args.first() {
         Some(some) => some,
         None => Err(Error::CLI("No DB actions passed".into()))?,
@@ -57,7 +57,10 @@ pub fn migrate(db: &mut Connection) -> Result<()> {
 }
 
 fn drop(db: Connection) -> Result<()> {
-    remove_file(db.path().unwrap())?;
+    remove_file(
+        db.path()
+            .ok_or(Error::Other("Failed to find database path".into()))?,
+    )?;
     log::info!("Database file was removed");
     Ok(())
 }

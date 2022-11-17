@@ -1,46 +1,41 @@
 use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
+use crate::Result;
 use rusqlite::named_params;
 use serde_json::Value;
 
-pub async fn generate_android_icons(db_conn: Connection) {
+pub async fn run(db: Connection) -> Result<()> {
     log::info!("Generating Android icons");
 
-    let elements: Vec<Element> = db_conn
-        .prepare(element::SELECT_ALL)
-        .unwrap()
-        .query_map([], element::SELECT_ALL_MAPPER)
-        .unwrap()
-        .filter(|it| it.is_ok())
-        .map(|it| it.unwrap())
-        .collect();
+    let elements: Vec<Element> = db
+        .prepare(element::SELECT_ALL)?
+        .query_map([], element::SELECT_ALL_MAPPER)?
+        .collect::<Result<_, _>>()?;
 
     log::info!("Found {} elements", elements.len());
 
     let mut known = 0;
     let mut unknown = 0;
 
-    for element in &elements {
+    for element in elements {
         let old_icon = element.tags["icon:android"].as_str().unwrap_or("");
         let new_icon = element.android_icon();
 
         if old_icon != new_icon {
             log::info!(
                 "Updating icon for element {} ({old_icon} -> {new_icon})",
-                &element.id,
+                element.id,
             );
 
-            db_conn
-                .execute(
-                    element::INSERT_TAG,
-                    named_params! {
-                        ":element_id": &element.id,
-                        ":tag_name": "$.icon:android",
-                        ":tag_value": &new_icon,
-                    },
-                )
-                .unwrap();
+            db.execute(
+                element::INSERT_TAG,
+                named_params! {
+                    ":element_id": element.id,
+                    ":tag_name": "$.icon:android",
+                    ":tag_value": new_icon,
+                },
+            )?;
             tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
 
@@ -55,6 +50,8 @@ pub async fn generate_android_icons(db_conn: Connection) {
         "Finished generating Android icons. Known: {known}, unknown: {unknown}, coverage: {:.2}%",
         known as f64 / (known as f64 + unknown as f64) * 100.0
     );
+
+    Ok(())
 }
 
 impl Element {
