@@ -17,6 +17,7 @@ use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 use serde_json::Value;
 
 #[derive(Serialize, Deserialize)]
@@ -66,9 +67,25 @@ async fn post(
         return Err(err);
     };
 
+    if let Some(_) = db
+        .query_row(
+            area::SELECT_BY_ID,
+            &[(":id", &args.id)],
+            area::SELECT_BY_ID_MAPPER,
+        )
+        .optional()?
+    {
+        Err(ApiError::new(
+            303,
+            format!("Area {} already exists", args.id),
+        ))?
+    }
+
     db.execute(area::INSERT, named_params![ ":id": args.id ])?;
 
-    Ok(HttpResponse::Created())
+    Ok(Json(json!({
+        "message": format!("Area {} has been created", args.id),
+    })))
 }
 
 #[get("")]

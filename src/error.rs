@@ -65,10 +65,10 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    pub fn new(http_code: u16, message: &str) -> ApiError {
+    pub fn new<S: AsRef<str>>(http_code: u16, message: S) -> ApiError {
         ApiError {
             http_code: StatusCode::from_u16(http_code).unwrap(),
-            message: message.to_string(),
+            message: message.as_ref().to_string(),
         }
     }
 }
@@ -80,7 +80,7 @@ impl ResponseError for ApiError {
 
         HttpResponse::build(self.http_code)
             .insert_header(ContentType::json())
-            .body(serde_json::to_string_pretty(&body).unwrap() + "\n")
+            .body(serde_json::to_string(&body).unwrap() + "\n")
     }
 
     fn status_code(&self) -> StatusCode {
