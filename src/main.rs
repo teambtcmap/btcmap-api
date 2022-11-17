@@ -1,6 +1,6 @@
 extern crate core;
 
-pub use api_error::ApiError;
+pub use error::ApiError;
 pub use error::Error;
 
 use actix_web::middleware::Compress;
@@ -8,7 +8,6 @@ use actix_web::middleware::NormalizePath;
 use actix_web::web::scope;
 use actix_web::web::Data;
 
-mod api_error;
 mod auth;
 mod command;
 mod controller;
