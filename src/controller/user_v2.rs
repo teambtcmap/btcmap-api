@@ -1,6 +1,6 @@
-use crate::auth::is_from_admin;
 use crate::model::user;
 use crate::model::User;
+use crate::service::auth::is_from_admin;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::post;

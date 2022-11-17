@@ -8,11 +8,11 @@ use actix_web::middleware::NormalizePath;
 use actix_web::web::scope;
 use actix_web::web::Data;
 
-mod auth;
 mod command;
 mod controller;
 mod error;
 mod model;
+mod service;
 
 use std::env;
 use std::fs::create_dir_all;
