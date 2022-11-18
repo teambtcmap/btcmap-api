@@ -30,3 +30,44 @@ pub fn is_from_admin(req: &HttpRequest) -> Result<(), ApiError> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::Connection;
+
+    use super::*;
+    use crate::command::db;
+    use actix_web::{
+        dev::Response,
+        get,
+        test::{self, TestRequest},
+        web::{scope, Data},
+        App, Responder,
+    };
+    use std::sync::atomic::Ordering;
+
+    #[actix_web::test]
+    async fn no_header() {
+        let admin_token = "test";
+        env::set_var("ADMIN_TOKEN", admin_token);
+        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut db =
+            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
+        db::migrate(&mut db).unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(scope("/").service(get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(401, res.status().as_u16())
+    }
+
+    #[get("")]
+    async fn get(req: HttpRequest) -> Result<impl Responder, ApiError> {
+        is_from_admin(&req)?;
+        Ok(Response::ok())
+    }
+}
