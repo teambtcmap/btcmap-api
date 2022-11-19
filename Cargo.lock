@@ -278,6 +278,7 @@ name = "btcmap-api"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "derive_more",
  "directories",
  "env_logger",
  "include_dir",

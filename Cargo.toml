@@ -20,3 +20,4 @@ log = "0.4.0"
 env_logger = "0.8.4"
 include_dir = "0.7.2"
 tokio = { version = "1.21.2", features = ["time", "macros", "rt-multi-thread"] }
+derive_more = "0.99.17"
