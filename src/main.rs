@@ -149,45 +149,15 @@ async fn cli_main(args: &[String], db: Connection) -> Result<()> {
     };
 
     match first_arg.as_str() {
-        "db" => {
-            if let Err(e) = command::db::run(&args[1..], db) {
-                log::error!("{e}")
-            }
-        }
-        "sync" => {
-            if let Err(e) = command::sync::run(db).await {
-                log::error!("{e}")
-            }
-        }
-        "sync-users" => {
-            if let Err(e) = command::sync_users::run(db).await {
-                log::error!("{e}")
-            }
-        }
-        "generate-report" => {
-            if let Err(e) = command::generate_report::run(db).await {
-                log::error!("{e}")
-            }
-        }
-        "generate-android-icons" => {
-            if let Err(e) = command::generate_android_icons::run(db).await {
-                log::error!("{e}")
-            }
-        }
-        "generate-element-categories" => {
-            if let Err(e) = command::generate_element_categories::run(db).await {
-                log::error!("{e}")
-            }
-        }
-        "fetch-pouch-tags" => {
-            if let Err(e) = command::fetch_pouch_tags::run(db).await {
-                log::error!("{e}")
-            }
-        }
-        first_arg => Err(Error::CLI(format!("Unknown action: {first_arg}")))?,
+        "db" => command::db::run(&args[1..], db),
+        "sync" => command::sync::run(db).await,
+        "sync-users" => command::sync_users::run(db).await,
+        "generate-report" => command::generate_report::run(db).await,
+        "generate-android-icons" => command::generate_android_icons::run(db).await,
+        "generate-element-categories" => command::generate_element_categories::run(db).await,
+        "fetch-pouch-tags" => command::fetch_pouch_tags::run(db).await,
+        first_arg => Err(Error::CLI(format!("Unknown action: {first_arg}"))),
     }
-
-    Ok(())
 }
 
 fn open_db_connection() -> Result<Connection> {
