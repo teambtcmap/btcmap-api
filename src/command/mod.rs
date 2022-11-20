@@ -5,3 +5,4 @@ pub mod generate_element_categories;
 pub mod generate_report;
 pub mod sync;
 pub mod sync_users;
+pub mod server;

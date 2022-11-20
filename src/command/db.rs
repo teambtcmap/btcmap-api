@@ -1,9 +1,11 @@
 use crate::error::Error;
 use crate::Result;
+use directories::ProjectDirs;
 use include_dir::include_dir;
 use include_dir::Dir;
 use rusqlite::Connection;
 use std::fmt;
+use std::fs::create_dir_all;
 use std::fs::remove_file;
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
@@ -41,6 +43,29 @@ pub fn run(args: &[String], db: Connection) -> Result<()> {
 
 pub fn migrate(db: &mut Connection) -> Result<()> {
     execute_migrations(&get_migrations()?, db)
+}
+
+pub fn open_connection() -> Result<Connection> {
+    let conn = Connection::open(get_file_path()?)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    Ok(conn)
+}
+
+pub fn get_file_path() -> Result<PathBuf> {
+    let project_dirs = match ProjectDirs::from("org", "BTC Map", "BTC Map") {
+        Some(project_dirs) => project_dirs,
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Can't find home directory",
+        ))?,
+    };
+
+    if !project_dirs.data_dir().exists() {
+        create_dir_all(project_dirs.data_dir())?;
+    }
+
+    Ok(project_dirs.data_dir().join("btcmap.db"))
 }
 
 fn execute_migrations(migrations: &Vec<Migration>, db: &mut Connection) -> Result<()> {
@@ -102,6 +127,7 @@ fn get_migrations() -> Result<Vec<Migration>> {
     Ok(res)
 }
 
+use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
 
@@ -131,7 +157,10 @@ mod tests {
 
         assert_eq!(1, schema_ver);
 
-        migrations.push(Migration(2, "INSERT INTO foo (bar) values ('qwerty');".into()));
+        migrations.push(Migration(
+            2,
+            "INSERT INTO foo (bar) values ('qwerty');".into(),
+        ));
 
         let res = execute_migrations(&migrations, &mut db);
         assert!(res.is_ok());
