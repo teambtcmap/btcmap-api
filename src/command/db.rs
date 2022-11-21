@@ -35,7 +35,7 @@ pub fn run(args: &[String], db: Connection) -> Result<()> {
     match first_arg.as_str() {
         "migrate" => {}
         "drop" => drop(db)?,
-        _ => Err(Error::CLI(format!("Unknown action: {first_arg}")))?,
+        _ => Err(Error::CLI(format!("Unknown command: {first_arg}")))?,
     }
 
     Ok(())

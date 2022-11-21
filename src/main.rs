@@ -22,21 +22,21 @@ async fn main() -> Result<()> {
 
     let args: Vec<String> = env::args().collect();
 
-    let first_arg = match args.first() {
+    let command = match args.get(1) {
         Some(some) => some,
         None => Err(Error::CLI("No actions passed".into()))?,
     };
 
-    match first_arg.as_str() {
+    match command.as_str() {
         "server" => command::server::run().await?,
-        "db" => command::db::run(&args[1..], db)?,
+        "db" => command::db::run(&args[2..], db)?,
         "sync" => command::sync::run(db).await?,
         "sync-users" => command::sync_users::run(db).await?,
         "generate-report" => command::generate_report::run(db).await?,
         "generate-android-icons" => command::generate_android_icons::run(db).await?,
         "generate-element-categories" => command::generate_element_categories::run(db).await?,
         "fetch-pouch-tags" => command::fetch_pouch_tags::run(db).await?,
-        first_arg => Err(Error::CLI(format!("Unknown action: {first_arg}")))?,
+        first_arg => Err(Error::CLI(format!("Unknown command: {first_arg}")))?,
     }
 
     Ok(())
