@@ -26,7 +26,7 @@ pub static INSERT: &str = r#"
 
 pub static SELECT_ALL: &str = r#"
     SELECT
-        ROWID,
+        id,
         area_id,
         date,
         tags,
@@ -41,7 +41,7 @@ pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 
 pub static SELECT_UPDATED_SINCE: &str = r#"
     SELECT
-        ROWID,
+        id,
         area_id,
         date,
         tags,
@@ -57,7 +57,7 @@ pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Report> = full_mapper
 
 pub static SELECT_BY_ID: &str = r#"
     SELECT
-        ROWID,
+        id,
         area_id,
         date,
         tags,
@@ -72,7 +72,7 @@ pub static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 
 pub static SELECT_BY_AREA_ID_AND_DATE: &str = r#"
     SELECT
-        ROWID,
+        id,
         area_id,
         date,
         tags,
