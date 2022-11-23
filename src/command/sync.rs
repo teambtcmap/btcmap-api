@@ -13,8 +13,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
 use tokio::time::sleep;
 use tokio::time::Duration;
 
@@ -131,10 +129,9 @@ pub async fn run(mut db: Connection) -> Result<()> {
             tx.execute(
                 event::INSERT,
                 named_params! {
-                    ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+                    ":user_id": user_id,
                     ":element_id": element.id,
                     ":type": "delete",
-                    ":user_id": user_id,
                 },
             )?;
 
@@ -173,10 +170,9 @@ pub async fn run(mut db: Connection) -> Result<()> {
                     tx.execute(
                         event::INSERT,
                         named_params! {
-                            ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+                            ":user_id": user_id,
                             ":element_id": btcmap_id,
                             ":type": "update",
-                            ":user_id": user_id,
                         },
                     )?;
 
@@ -212,10 +208,9 @@ pub async fn run(mut db: Connection) -> Result<()> {
                 tx.execute(
                     event::INSERT,
                     named_params! {
-                        ":date": OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+                        ":user_id": user_id,
                         ":element_id": btcmap_id,
                         ":type": "create",
-                        ":user_id": user_id,
                     },
                 )?;
 

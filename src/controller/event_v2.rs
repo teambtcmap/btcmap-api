@@ -114,10 +114,9 @@ mod tests {
         db.execute(
             event::INSERT,
             named_params! {
-                ":date": "",
+                ":user_id": "0",
                 ":element_id": "",
                 ":type": "",
-                ":user_id": "0",
             },
         )
         .unwrap();
@@ -139,12 +138,12 @@ mod tests {
             Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
         db::migrate(&mut db).unwrap();
         db.execute(
-            "INSERT INTO event (date, element_id, type, user_id, updated_at) VALUES ('', '', '', 0, '2022-01-05')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-01-05')",
             [],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO event (date, element_id, type, user_id, updated_at) VALUES ('', '', '', 0, '2022-02-05')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-02-05')",
             [],
         )
         .unwrap();
@@ -171,10 +170,9 @@ mod tests {
         db.execute(
             event::INSERT,
             named_params! {
-                ":date": "",
+                ":user_id": "0",
                 ":element_id": "",
                 ":type": "",
-                ":user_id": "0",
             },
         )
         .unwrap();
