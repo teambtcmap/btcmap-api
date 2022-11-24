@@ -250,7 +250,7 @@ impl Element {
         }
 
         if tourism == "camp_site" {
-            icon_id = "camping";
+            icon_id = "holiday_village";
         }
 
         if tourism == "gallery" {
