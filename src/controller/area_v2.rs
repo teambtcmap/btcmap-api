@@ -174,25 +174,21 @@ async fn post_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::db;
+    use crate::command::db::tests::db;
+    use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
     use std::env;
-    use std::sync::atomic::Ordering;
 
     #[actix_web::test]
-    async fn post() {
+    async fn post() -> Result<()> {
         let admin_token = "test";
         env::set_var("ADMIN_TOKEN", admin_token);
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(db()?))
                 .service(scope("/").service(super::post)),
         )
         .await;
@@ -206,33 +202,27 @@ mod tests {
         let res = test::call_service(&app, req).await;
         log::info!("Response status: {}", res.status());
         assert!(res.status().is_success());
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn get_empty_table() {
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+    async fn get_empty_table() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(db()?))
                 .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn get_one_row() {
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
-        db.execute(area::INSERT, named_params! { ":id": "test" })
-            .unwrap();
+    async fn get_one_row() -> Result<()> {
+        let db = db()?;
+        db.execute(area::INSERT, named_params! { ":id": "test" })?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db))
@@ -242,35 +232,29 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn get_by_id() {
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+    async fn get_by_id() -> Result<()> {
+        let db = db()?;
         let area_id = "test";
-        db.execute(area::INSERT, named_params! { ":id": area_id })
-            .unwrap();
+        db.execute(area::INSERT, named_params! { ":id": area_id })?;
         let app =
             test::init_service(App::new().app_data(Data::new(db)).service(super::get_by_id)).await;
         let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, area_id);
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn post_tags() {
+    async fn post_tags() -> Result<()> {
         let admin_token = "test";
         env::set_var("ADMIN_TOKEN", admin_token);
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+        let db = db()?;
         let area_id = "test";
-        db.execute(area::INSERT, named_params![":id": area_id])
-            .unwrap();
+        db.execute(area::INSERT, named_params![":id": area_id])?;
         let app =
             test::init_service(App::new().app_data(Data::new(db)).service(super::post_tags)).await;
         let req = TestRequest::post()
@@ -284,5 +268,6 @@ mod tests {
         let res = test::call_service(&app, req).await;
         log::info!("Response status: {}", res.status());
         assert_eq!(res.status(), StatusCode::CREATED);
+        Ok(())
     }
 }

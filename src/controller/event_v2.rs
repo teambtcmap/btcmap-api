@@ -80,37 +80,31 @@ pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<Ge
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::db;
+    use crate::command::db::tests::db;
+    use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
     use rusqlite::named_params;
     use serde_json::Value;
-    use std::sync::atomic::Ordering;
 
     #[actix_web::test]
-    async fn get_empty_table() {
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+    async fn get_empty_table() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(db()?))
                 .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn get_one_row() {
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+    async fn get_one_row() -> Result<()> {
+        let db = db()?;
         db.execute(
             event::INSERT,
             named_params! {
@@ -118,8 +112,7 @@ mod tests {
                 ":element_id": "",
                 ":type": "",
             },
-        )
-        .unwrap();
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db))
@@ -129,24 +122,20 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn get_updated_since() {
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+    async fn get_updated_since() -> Result<()> {
+        let db = db()?;
         db.execute(
             "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-01-05')",
             [],
-        )
-        .unwrap();
+        )?;
         db.execute(
             "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-02-05')",
             [],
-        )
-        .unwrap();
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db))
@@ -158,14 +147,12 @@ mod tests {
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn get_by_id() {
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+    async fn get_by_id() -> Result<()> {
+        let db = db()?;
         let element_id = 1;
         db.execute(
             event::INSERT,
@@ -174,8 +161,7 @@ mod tests {
                 ":element_id": "",
                 ":type": "",
             },
-        )
-        .unwrap();
+        )?;
         let app =
             test::init_service(App::new().app_data(Data::new(db)).service(super::get_by_id)).await;
         let req = TestRequest::get()
@@ -183,5 +169,6 @@ mod tests {
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, element_id);
+        Ok(())
     }
 }

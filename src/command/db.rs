@@ -135,25 +135,28 @@ use std::sync::atomic::AtomicUsize;
 pub static COUNTER: AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
 
 #[cfg(test)]
-mod tests {
-    use std::sync::atomic::Ordering;
-
+pub mod tests {
     use super::*;
 
-    #[test]
-    fn run_migrations() {
-        let db_name = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        let mut migrations = vec![Migration(1, "CREATE TABLE foo(bar);".into())];
-        let res = execute_migrations(&migrations, &mut db);
-        assert!(res.is_ok());
+    pub fn db() -> Result<Connection> {
+        let db_name = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let mut db = Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared"))?;
+        migrate(&mut db)?;
+        Ok(db)
+    }
 
-        let schema_ver: i16 = db
-            .query_row("SELECT user_version FROM pragma_user_version", [], |row| {
+    #[test]
+    fn run_migrations() -> Result<()> {
+        let db_name = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let mut db = Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared"))?;
+
+        let mut migrations = vec![Migration(1, "CREATE TABLE foo(bar);".into())];
+        execute_migrations(&migrations, &mut db)?;
+
+        let schema_ver: i16 =
+            db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
                 row.get(0)
-            })
-            .unwrap();
+            })?;
 
         assert_eq!(1, schema_ver);
 
@@ -162,15 +165,15 @@ mod tests {
             "INSERT INTO foo (bar) values ('qwerty');".into(),
         ));
 
-        let res = execute_migrations(&migrations, &mut db);
-        assert!(res.is_ok());
+        execute_migrations(&migrations, &mut db)?;
 
-        let schema_ver: i16 = db
-            .query_row("SELECT user_version FROM pragma_user_version", [], |row| {
+        let schema_ver: i16 =
+            db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
                 row.get(0)
-            })
-            .unwrap();
+            })?;
 
         assert_eq!(2, schema_ver);
+
+        Ok(())
     }
 }
