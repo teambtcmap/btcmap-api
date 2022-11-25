@@ -82,32 +82,8 @@ pub async fn run(db: Connection) -> Result<()> {
     let year_ago = today.sub(Duration::days(365));
     log::info!("Today: {today}, year ago: {year_ago}");
 
-    let up_to_date_elements: Vec<&Value> = elements
-        .iter()
-        .filter(|it| {
-            (it["tags"].get("survey:date").is_some()
-                && it["tags"]["survey:date"].as_str().unwrap().to_string() > year_ago.to_string())
-                || (it["tags"].get("check_date").is_some()
-                    && it["tags"]["check_date"].as_str().unwrap().to_string()
-                        > year_ago.to_string())
-        })
-        .collect();
-
-    let outdated_elements: Vec<&Value> = elements
-        .iter()
-        .filter(|it| {
-            (it["tags"].get("check_date").is_none()
-                && (it["tags"].get("survey:date").is_none()
-                    || (it["tags"].get("survey:date").is_some()
-                        && it["tags"]["survey:date"].as_str().unwrap().to_string()
-                            <= year_ago.to_string())))
-                || (it["tags"].get("survey:date").is_none()
-                    && (it["tags"].get("check_date").is_none()
-                        || (it["tags"].get("check_date").is_some()
-                            && it["tags"]["check_date"].as_str().unwrap().to_string()
-                                <= year_ago.to_string())))
-        })
-        .collect();
+    let up_to_date_elements: Vec<&Value> = elements.iter().filter(|it| up_to_date(it)).collect();
+    let outdated_elements: Vec<&Value> = elements.iter().filter(|it| !up_to_date(it)).collect();
 
     let mut tags: HashMap<&str, usize> = HashMap::new();
     tags.insert("total_elements", elements.len());
@@ -137,4 +113,30 @@ pub async fn run(db: Connection) -> Result<()> {
     log::info!("Finished generating report");
 
     Ok(())
+}
+
+pub fn up_to_date(osm_json: &Value) -> bool {
+    let tags: &Value = &osm_json["tags"];
+
+    let survey_date = tags["survey:date"].as_str().unwrap_or("");
+    let check_date = tags["check_date"].as_str().unwrap_or("");
+    let bitcoin_check_date = tags["check_date:currency:XBT"].as_str().unwrap_or("");
+
+    let mut most_recent_date = "";
+
+    if survey_date > most_recent_date {
+        most_recent_date = survey_date;
+    }
+
+    if check_date > most_recent_date {
+        most_recent_date = check_date;
+    }
+
+    if bitcoin_check_date > most_recent_date {
+        most_recent_date = bitcoin_check_date;
+    }
+
+    let year_ago = OffsetDateTime::now_utc().date().sub(Duration::days(365));
+
+    most_recent_date > year_ago.to_string().as_str()
 }
