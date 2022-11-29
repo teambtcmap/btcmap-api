@@ -11,7 +11,10 @@ pub async fn run(db: Connection) -> Result<()> {
     let elements: Vec<Element> = db
         .prepare(element::SELECT_ALL)?
         .query_map([], element::SELECT_ALL_MAPPER)?
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<Vec<Element>, _>>()?
+        .into_iter()
+        .filter(|it| it.deleted_at.len() == 0)
+        .collect();
 
     log::info!("Found {} elements", elements.len());
 
@@ -64,6 +67,14 @@ impl Element {
 
         if amenity == "atm" {
             category = "atm";
+        }
+
+        if amenity == "cafe" {
+            category = "cafe";
+        }
+
+        if amenity == "restaurant" {
+            category = "restaurant";
         }
 
         category.to_string()
