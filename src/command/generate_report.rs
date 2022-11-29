@@ -137,6 +137,17 @@ fn generate_report(
         .copied()
         .collect();
 
+    let up_to_date_percent: f64 = up_to_date_elements.len() as f64 / elements.len() as f64 * 100.0;
+    let up_to_date_percent: i64 = up_to_date_percent as i64;
+
+    let grade = match up_to_date_percent {
+        95..100 => 5,
+        75..95 => 4,
+        50..75 => 3,
+        25..50 => 2,
+        _ => 1,
+    };
+
     let mut tags: HashMap<&str, usize> = HashMap::new();
     tags.insert("total_elements", elements.len());
     tags.insert("total_elements_onchain", onchain_elements.len());
@@ -148,6 +159,8 @@ fn generate_report(
     tags.insert("up_to_date_elements", up_to_date_elements.len());
     tags.insert("outdated_elements", outdated_elements.len());
     tags.insert("legacy_elements", legacy_elements.len());
+    tags.insert("up_to_date_percent", up_to_date_percent as usize);
+    tags.insert("grade", grade);
     let tags: Value = serde_json::to_value(tags)?;
 
     log::info!("Inserting new report");

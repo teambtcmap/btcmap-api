@@ -1,3 +1,5 @@
+#![feature(exclusive_range_pattern)]
+
 extern crate core;
 
 pub use error::ApiError;
