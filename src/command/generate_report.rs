@@ -1,5 +1,7 @@
 use crate::command::sync;
+use crate::model::area;
 use crate::model::report;
+use crate::model::Area;
 use crate::Error;
 use crate::Result;
 use rusqlite::named_params;
@@ -7,10 +9,11 @@ use rusqlite::Connection;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Sub;
+use time::Date;
 use time::Duration;
 use time::OffsetDateTime;
 
-pub async fn run(db: Connection) -> Result<()> {
+pub async fn run(mut db: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
     log::info!("Generating report for {today}");
 
@@ -40,9 +43,10 @@ pub async fn run(db: Connection) -> Result<()> {
 
     let response = response.json::<Value>().await?;
 
-    let elements: &Vec<Value> = response["elements"]
+    let elements: Vec<Value> = response["elements"]
         .as_array()
-        .ok_or(Error::Other("Failed to parse elements".into()))?;
+        .ok_or(Error::Other("Failed to parse elements".into()))?
+        .to_owned();
 
     if elements.len() == 0 {
         Err(Error::Other(format!(
@@ -59,31 +63,79 @@ pub async fn run(db: Connection) -> Result<()> {
         ))?
     }
 
+    let areas: Vec<Area> = db
+        .prepare(area::SELECT_ALL)?
+        .query_map([], area::SELECT_ALL_MAPPER)?
+        .collect::<Result<Vec<Area>, _>>()?
+        .into_iter()
+        .filter(|it| it.deleted_at.len() == 0)
+        .collect();
+
+    let tx = db.transaction()?;
+
+    generate_report("", &today, elements.iter().collect(), &tx)?;
+
+    for area in areas {
+        let area_elements: Vec<&Value> = elements
+            .iter()
+            .filter(|it| area.contains(lat(it), lon(it)))
+            .collect();
+
+        log::info!("Area: {}, elements: {}", area.id, area_elements.len());
+        generate_report(&area.id, &today, area_elements, &tx)?;
+    }
+
+    tx.commit()?;
+
+    Ok(())
+}
+
+fn generate_report(
+    area_id: &str,
+    date: &Date,
+    elements: Vec<&Value>,
+    db: &Connection,
+) -> Result<()> {
+    log::info!("Generating report for date = {date}, area = {area_id}");
+
     let onchain_elements: Vec<&Value> = elements
         .iter()
         .filter(|it| it["tags"]["payment:onchain"].as_str() == Some("yes"))
+        .copied()
         .collect();
 
     let lightning_elements: Vec<&Value> = elements
         .iter()
         .filter(|it| it["tags"]["payment:lightning"].as_str() == Some("yes"))
+        .copied()
         .collect();
 
     let lightning_contactless_elements: Vec<&Value> = elements
         .iter()
         .filter(|it| it["tags"]["payment:lightning_contactless"].as_str() == Some("yes"))
+        .copied()
         .collect();
 
     let legacy_elements: Vec<&Value> = elements
         .iter()
         .filter(|it| it["tags"].get("payment:bitcoin").is_some())
+        .copied()
         .collect();
 
-    let year_ago = today.sub(Duration::days(365));
-    log::info!("Today: {today}, year ago: {year_ago}");
+    let year_ago = date.sub(Duration::days(365));
+    log::info!("Date: {date}, year ago: {year_ago}");
 
-    let up_to_date_elements: Vec<&Value> = elements.iter().filter(|it| up_to_date(it)).collect();
-    let outdated_elements: Vec<&Value> = elements.iter().filter(|it| !up_to_date(it)).collect();
+    let up_to_date_elements: Vec<&Value> = elements
+        .iter()
+        .filter(|it| up_to_date(it))
+        .copied()
+        .collect();
+
+    let outdated_elements: Vec<&Value> = elements
+        .iter()
+        .filter(|it| !up_to_date(it))
+        .copied()
+        .collect();
 
     let mut tags: HashMap<&str, usize> = HashMap::new();
     tags.insert("total_elements", elements.len());
@@ -104,18 +156,18 @@ pub async fn run(db: Connection) -> Result<()> {
     db.execute(
         report::INSERT,
         named_params! {
-            ":area_id" : "",
-            ":date" : today.to_string(),
+            ":area_id" : area_id,
+            ":date" : date.to_string(),
             ":tags" : serde_json::to_string(&tags)?,
         },
     )?;
 
-    log::info!("Finished generating report");
+    log::info!("Finished generating report for date = {date}, area = {area_id}");
 
     Ok(())
 }
 
-pub fn up_to_date(osm_json: &Value) -> bool {
+fn up_to_date(osm_json: &Value) -> bool {
     let tags: &Value = &osm_json["tags"];
 
     let survey_date = tags["survey:date"].as_str().unwrap_or("");
@@ -139,4 +191,26 @@ pub fn up_to_date(osm_json: &Value) -> bool {
     let year_ago = OffsetDateTime::now_utc().date().sub(Duration::days(365));
 
     most_recent_date > year_ago.to_string().as_str()
+}
+
+pub fn lat(osm_json: &Value) -> f64 {
+    match osm_json["type"].as_str().unwrap() {
+        "node" => osm_json["lat"].as_f64().unwrap(),
+        _ => {
+            let min_lat = osm_json["bounds"]["minlat"].as_f64().unwrap();
+            let max_lat = osm_json["bounds"]["maxlat"].as_f64().unwrap();
+            (min_lat + max_lat) / 2.0
+        }
+    }
+}
+
+pub fn lon(osm_json: &Value) -> f64 {
+    match osm_json["type"].as_str().unwrap() {
+        "node" => osm_json["lon"].as_f64().unwrap(),
+        _ => {
+            let min_lon = osm_json["bounds"]["minlon"].as_f64().unwrap();
+            let max_lon = osm_json["bounds"]["maxlon"].as_f64().unwrap();
+            (min_lon + max_lon) / 2.0
+        }
+    }
 }

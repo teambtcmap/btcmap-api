@@ -12,31 +12,97 @@ pub struct Area {
 
 impl Area {
     pub fn contains(&self, lat: f64, lon: f64) -> bool {
-        let north = self.tags.get("box:north");
-        let east = self.tags.get("box:east");
-        let south = self.tags.get("box:south");
-        let west = self.tags.get("box:west");
+        let north = match self.tags.get("box:north") {
+            Some(north) => {
+                if north.is_f64() {
+                    north.as_f64().unwrap()
+                } else {
+                    let res = north.as_str().map(|it| it.parse::<f64>());
 
-        if north.is_none() || north.unwrap().as_f64().is_none() {
-            return false;
-        }
+                    if res.is_none() {
+                        return false;
+                    }
 
-        if east.is_none() || east.unwrap().as_f64().is_none() {
-            return false;
-        }
+                    let res = res.unwrap();
 
-        if south.is_none() || south.unwrap().as_f64().is_none() {
-            return false;
-        }
+                    if res.is_err() {
+                        return false;
+                    }
 
-        if west.is_none() || west.unwrap().as_f64().is_none() {
-            return false;
-        }
+                    res.unwrap()
+                }
+            }
+            None => return false,
+        };
 
-        let north = north.unwrap().as_f64().unwrap();
-        let east = east.unwrap().as_f64().unwrap();
-        let south = south.unwrap().as_f64().unwrap();
-        let west = west.unwrap().as_f64().unwrap();
+        let east = match self.tags.get("box:east") {
+            Some(east) => {
+                if east.is_f64() {
+                    east.as_f64().unwrap()
+                } else {
+                    let res = east.as_str().map(|it| it.parse::<f64>());
+
+                    if res.is_none() {
+                        return false;
+                    }
+
+                    let res = res.unwrap();
+
+                    if res.is_err() {
+                        return false;
+                    }
+
+                    res.unwrap()
+                }
+            }
+            None => return false,
+        };
+
+        let south = match self.tags.get("box:south") {
+            Some(south) => {
+                if south.is_f64() {
+                    south.as_f64().unwrap()
+                } else {
+                    let res = south.as_str().map(|it| it.parse::<f64>());
+
+                    if res.is_none() {
+                        return false;
+                    }
+
+                    let res = res.unwrap();
+
+                    if res.is_err() {
+                        return false;
+                    }
+
+                    res.unwrap()
+                }
+            }
+            None => return false,
+        };
+
+        let west = match self.tags.get("box:west") {
+            Some(west) => {
+                if west.is_f64() {
+                    west.as_f64().unwrap()
+                } else {
+                    let res = west.as_str().map(|it| it.parse::<f64>());
+
+                    if res.is_none() {
+                        return false;
+                    }
+
+                    let res = res.unwrap();
+
+                    if res.is_err() {
+                        return false;
+                    }
+
+                    res.unwrap()
+                }
+            }
+            None => return false,
+        };
 
         lat < north && lat > south && lon > west && lon < east
     }
@@ -143,6 +209,23 @@ mod tests {
 
         assert_eq!(area.contains(49.2623463, -123.0886088), true);
         assert_eq!(area.contains(47.6084752, -122.3270694), false);
+
+        let tags = serde_json::json!({
+            "box:north": "18.86515",
+            "box:east": "99.07234",
+            "box:south": "18.70702",
+            "box:west": "98.92883",
+        });
+
+        let area = Area {
+            id: "".into(),
+            tags: tags,
+            created_at: "".into(),
+            updated_at: "".into(),
+            deleted_at: "".into(),
+        };
+
+        assert_eq!(area.contains(18.78407, 98.99283), true);
 
         Ok(())
     }
