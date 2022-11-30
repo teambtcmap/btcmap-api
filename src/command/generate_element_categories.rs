@@ -62,6 +62,7 @@ impl Element {
         let tags: &Value = &self.osm_json["tags"];
 
         let amenity = tags["amenity"].as_str().unwrap_or("");
+        let tourism = tags["tourism"].as_str().unwrap_or("");
 
         let mut category: &str = "other";
 
@@ -75,6 +76,18 @@ impl Element {
 
         if amenity == "restaurant" {
             category = "restaurant";
+        }
+
+        if amenity == "bar" {
+            category = "bar";
+        }
+
+        if amenity == "pub" {
+            category = "pub";
+        }
+
+        if tourism == "hotel" {
+            category = "hotel";
         }
 
         category.to_string()
