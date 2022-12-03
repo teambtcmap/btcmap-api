@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
         "generate-android-icons" => command::generate_android_icons::run(db).await?,
         "generate-element-categories" => command::generate_element_categories::run(db).await?,
         "fetch-pouch-tags" => command::fetch_pouch_tags::run(db).await?,
+        "lint" => command::lint::run(db).await?,
         first_arg => Err(Error::CLI(format!("Unknown command: {first_arg}")))?,
     }
 

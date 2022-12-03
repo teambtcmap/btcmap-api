@@ -6,3 +6,4 @@ pub mod generate_report;
 pub mod sync;
 pub mod sync_users;
 pub mod server;
+pub mod lint;
