@@ -14,10 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    
+    - name: Install latest rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        default: true
+        override: true
+        
     - name: Run tests
       run: cargo test --release --verbose
+      
     - name: Build
       run: cargo build --release --verbose
+      
     - name: Create preview release
       uses: marvinpinto/action-automatic-releases@latest
       with:
