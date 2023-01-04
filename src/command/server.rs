@@ -42,7 +42,8 @@ pub async fn run() -> Result<()> {
             .service(
                 scope("reports")
                     .service(controller::report_v2::get)
-                    .service(controller::report_v2::get_by_id),
+                    .service(controller::report_v2::get_by_id)
+                    .service(controller::report_v2::post_tags),
             )
             .service(
                 scope("v2")
@@ -73,7 +74,8 @@ pub async fn run() -> Result<()> {
                     .service(
                         scope("reports")
                             .service(controller::report_v2::get)
-                            .service(controller::report_v2::get_by_id),
+                            .service(controller::report_v2::get_by_id)
+                            .service(controller::report_v2::post_tags),
                     ),
             )
     })

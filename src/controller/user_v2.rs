@@ -255,7 +255,6 @@ mod tests {
             })
             .to_request();
         let res = test::call_service(&app, req).await;
-        log::info!("Response status: {}", res.status());
         assert_eq!(res.status(), StatusCode::CREATED);
         Ok(())
     }

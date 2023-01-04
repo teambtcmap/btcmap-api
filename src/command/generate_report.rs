@@ -141,7 +141,7 @@ fn generate_report(
     let up_to_date_percent: i64 = up_to_date_percent as i64;
 
     let grade = match up_to_date_percent {
-        95..100 => 5,
+        95..101 => 5,
         75..95 => 4,
         50..75 => 3,
         25..50 => 2,

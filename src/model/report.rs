@@ -85,6 +85,18 @@ pub static SELECT_BY_AREA_ID_AND_DATE: &str = r#"
 
 pub static SELECT_BY_AREA_ID_AND_DATE_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 
+pub static INSERT_TAG: &str = r#"
+    UPDATE report
+    SET tags = json_set(tags, :tag_name, :tag_value)
+    WHERE id = :report_id
+"#;
+
+pub static DELETE_TAG: &str = r#"
+    UPDATE report
+    SET tags = json_remove(tags, :tag_name)
+    where id = :report_id
+"#;
+
 const fn full_mapper() -> fn(&Row) -> Result<Report> {
     |row: &Row| -> Result<Report> {
         let tags: String = row.get(3)?;

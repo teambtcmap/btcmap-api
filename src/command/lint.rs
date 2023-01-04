@@ -76,6 +76,21 @@ pub async fn run(db: Connection) -> Result<()> {
         if payment_lighting.len() > 0 {
             log::error!("{} Spelling issue: payment:lighting", element.id);
         }
+
+        let currency_xbt = element.osm_json["tags"]["currency:XBT"]
+            .as_str()
+            .unwrap_or("");
+
+        let payment_bitcoin = element.osm_json["tags"]["payment:bitcoin"]
+            .as_str()
+            .unwrap_or("");
+
+        if currency_xbt == "yes" && payment_bitcoin == "yes" {
+            log::error!(
+                "{} Both currency:XBT and payment:bitcoin are set to \"yes\"",
+                element.id,
+            );
+        }
     }
 
     log::info!("Finished linting");
