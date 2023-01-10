@@ -91,6 +91,27 @@ pub async fn run(db: Connection) -> Result<()> {
                 element.id,
             );
         }
+
+        if payment_bitcoin == "yes" && survey_date != "" {
+            log::error!(
+                "{} Legacy payment:bitcoin tag is present but survey:date is availale, worth upgrading to currency:XBT",
+                element.id,
+            );
+        }
+
+        if payment_bitcoin == "yes" && check_date != "" {
+            log::error!(
+                "{} Legacy payment:bitcoin tag is present but check_date is availale, worth upgrading to currency:XBT",
+                element.id,
+            );
+        }
+
+        if payment_bitcoin == "yes" && check_date_currency_xbt != "" {
+            log::error!(
+                "{} Legacy payment:bitcoin tag is present but check_date:currency:XBT is availale, worth upgrading to currency:XBT",
+                element.id,
+            );
+        }
     }
 
     log::info!("Finished linting");

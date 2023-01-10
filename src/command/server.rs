@@ -1,6 +1,7 @@
 use crate::command;
 use crate::controller;
 use crate::Result;
+use actix_web::web;
 use actix_web::web::scope;
 use actix_web::{
     middleware::{Compress, Logger, NormalizePath},
@@ -15,6 +16,7 @@ pub async fn run() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(command::db::open_connection().unwrap()))
+            .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")
                     .service(controller::element_v2::get)
