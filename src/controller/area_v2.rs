@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::model::area;
 use crate::model::Area;
 use crate::service::auth::is_from_admin;
@@ -33,7 +35,7 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: String,
-    pub tags: Value,
+    pub tags: HashMap<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,

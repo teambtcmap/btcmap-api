@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::env;
+
 use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
@@ -21,6 +24,8 @@ pub async fn run(db: Connection) -> Result<()> {
     let date_format = format_description!("[year]-[month]-[day]");
 
     for element in elements {
+        let url = format!("https://openstreetmap.org/{}", element.id.replace(":", "/"));
+
         let survey_date = element.osm_json["tags"]["survey:date"]
             .as_str()
             .unwrap_or("");
@@ -29,11 +34,13 @@ pub async fn run(db: Connection) -> Result<()> {
             let parsed_date = Date::parse(survey_date, &date_format);
 
             if parsed_date.is_err() {
-                log::error!(
+                let message = format!(
                     "{} survey:date is not formatted properly: {}",
-                    element.id,
-                    survey_date
+                    url,
+                    survey_date,
                 );
+                log::error!("{}", message);
+                send_discord_message(message).await;
             }
         }
 
@@ -45,11 +52,13 @@ pub async fn run(db: Connection) -> Result<()> {
             let parsed_date = Date::parse(check_date, &date_format);
 
             if parsed_date.is_err() {
-                log::error!(
+                let message = format!(
                     "{} check_date is not formatted properly: {}",
-                    element.id,
+                    url,
                     check_date,
                 );
+                log::error!("{}", message);
+                send_discord_message(message).await;
             }
         }
 
@@ -61,11 +70,13 @@ pub async fn run(db: Connection) -> Result<()> {
             let parsed_date = Date::parse(check_date_currency_xbt, &date_format);
 
             if parsed_date.is_err() {
-                log::error!(
+                let message = format!(
                     "{} check_date:currency:XBT is not formatted properly: {}",
-                    element.id,
+                    url,
                     check_date_currency_xbt,
                 );
+                log::error!("{}", message);
+                send_discord_message(message).await;
             }
         }
 
@@ -86,35 +97,67 @@ pub async fn run(db: Connection) -> Result<()> {
             .unwrap_or("");
 
         if currency_xbt == "yes" && payment_bitcoin == "yes" {
-            log::error!(
+            let message = format!(
                 "{} Both currency:XBT and payment:bitcoin are set to \"yes\"",
-                element.id,
+                url,
             );
+            log::error!("{}", message);
+            send_discord_message(message).await;
         }
 
         if payment_bitcoin == "yes" && survey_date != "" {
-            log::error!(
+            let message = format!(
                 "{} Legacy payment:bitcoin tag is present but survey:date is availale, worth upgrading to currency:XBT",
-                element.id,
+                url,
             );
+            log::error!("{}", message);
+            send_discord_message(message).await;
         }
 
         if payment_bitcoin == "yes" && check_date != "" {
-            log::error!(
+            let message = format!(
                 "{} Legacy payment:bitcoin tag is present but check_date is availale, worth upgrading to currency:XBT",
-                element.id,
+                url,
             );
+            log::error!("{}", message);
+            send_discord_message(message).await;
         }
 
         if payment_bitcoin == "yes" && check_date_currency_xbt != "" {
-            log::error!(
+            let message = format!(
                 "{} Legacy payment:bitcoin tag is present but check_date:currency:XBT is availale, worth upgrading to currency:XBT",
-                element.id,
+                url,
             );
+            log::error!("{}", message);
+            send_discord_message(message).await;
         }
     }
 
     log::info!("Finished linting");
 
     Ok(())
+}
+
+async fn send_discord_message(text: String) {
+    if let Ok(discord_webhook_url) = env::var("LINT_DISCORD_WEBHOOK_URL") {
+        log::info!("Sending Discord message");
+        let mut args = HashMap::new();
+        args.insert("username", "btcmap.org".to_string());
+        args.insert("content", text);
+
+        let response = reqwest::Client::new()
+            .post(discord_webhook_url)
+            .json(&args)
+            .send()
+            .await;
+
+        match response {
+            Ok(response) => {
+                log::info!("Discord response status: {:?}", response.status());
+            }
+            Err(_) => {
+                log::error!("Failed to send Discord message");
+            }
+        }
+    }
 }

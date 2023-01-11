@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use rusqlite::Result;
 use rusqlite::Row;
 use serde_json::Value;
 
 pub struct Area {
     pub id: String,
-    pub tags: Value,
+    pub tags: HashMap<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -172,7 +174,16 @@ pub static DELETE_TAG: &str = r#"
 const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: String = row.get(1)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
+        log::error!("{}", tags);
+        let mut tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
+
+        let geo_json = tags.get("geo_json");
+
+        if geo_json.is_some() && geo_json.unwrap().is_string() {
+            let unescaped: String = geo_json.unwrap().as_str().unwrap().replace("\\\"", "\"");
+            let unescaped: Value = serde_json::from_str(&unescaped).unwrap_or_default();
+            tags.insert("geo_json".into(), unescaped);
+        }
 
         Ok(Area {
             id: row.get(0)?,
@@ -186,18 +197,27 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use serde_json::{Number, Value};
+
     use crate::Result;
 
     use super::Area;
 
     #[test]
     fn contains() -> Result<()> {
-        let tags = serde_json::json!({
-            "box:north": 49.60003042758964,
-            "box:east": -121.77932739257814,
-            "box:south": 48.81861991362668,
-            "box:west": -124.41604614257814,
-        });
+        let mut tags: HashMap<_, Value> = HashMap::new();
+        tags.insert("box:north".into(), 49.60003042758964.into());
+        tags.insert(
+            "box:east".into(),
+            Number::from_f64(-121.77932739257814).unwrap().into(),
+        );
+        tags.insert("box:south".into(), 48.81861991362668.into());
+        tags.insert(
+            "box:west".into(),
+            Number::from_f64(-124.41604614257814).unwrap().into(),
+        );
 
         let area = Area {
             id: "".into(),
@@ -210,12 +230,11 @@ mod tests {
         assert_eq!(area.contains(49.2623463, -123.0886088), true);
         assert_eq!(area.contains(47.6084752, -122.3270694), false);
 
-        let tags = serde_json::json!({
-            "box:north": "18.86515",
-            "box:east": "99.07234",
-            "box:south": "18.70702",
-            "box:west": "98.92883",
-        });
+        let mut tags: HashMap<_, Value> = HashMap::new();
+        tags.insert("box:north".into(), "18.86515".into());
+        tags.insert("box:east".into(), "99.07234".into());
+        tags.insert("box:south".into(), "18.70702".into());
+        tags.insert("box:west".into(), "98.92883".into());
 
         let area = Area {
             id: "".into(),
