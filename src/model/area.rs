@@ -174,7 +174,6 @@ pub static DELETE_TAG: &str = r#"
 const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: String = row.get(1)?;
-        log::error!("{}", tags);
         let mut tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         let geo_json = tags.get("geo_json");

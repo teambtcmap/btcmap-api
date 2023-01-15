@@ -4,6 +4,11 @@ use crate::model::report;
 use crate::model::Area;
 use crate::Error;
 use crate::Result;
+use geo::coord;
+use geo::Contains;
+use geo::LineString;
+use geo::MultiPolygon;
+use geojson::GeoJson;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use serde_json::Value;
@@ -76,10 +81,71 @@ pub async fn run(mut db: Connection) -> Result<()> {
     generate_report("", &today, elements.iter().collect(), &tx)?;
 
     for area in areas {
-        let area_elements: Vec<&Value> = elements
-            .iter()
-            .filter(|it| area.contains(lat(it), lon(it)))
-            .collect();
+        log::info!("Generating report for area {}", area.id);
+        let mut area_elements: Vec<&Value> = vec![];
+
+        if area.tags.contains_key("geo_json") {
+            let geo_json = area.tags["geo_json"].to_string();
+            let geo_json: Result<GeoJson, _> = geo_json.parse();
+
+            let geo_json = match geo_json {
+                Ok(geo_json) => geo_json,
+                Err(e) => {
+                    log::error!("Failed to parse GeoJSON: {}", e);
+                    continue;
+                }
+            };
+
+            let feature_collection = match geo_json {
+                GeoJson::FeatureCollection(v) => v.features,
+                GeoJson::Feature(v) => {
+                    vec![v]
+                }
+                GeoJson::Geometry(_) => {
+                    log::error!("GeoJSON geometry type is not supported");
+                    continue;
+                }
+            };
+
+            for element in &elements {
+                for feature in &feature_collection {
+                    let geometry = match &feature.geometry {
+                        Some(v) => v,
+                        None => {
+                            log::error!("One of the GeoJSON features has no geometry");
+                            continue;
+                        }
+                    };
+
+                    match geometry.value {
+                        geojson::Value::MultiPolygon(_) => {
+                            let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
+
+                            if multi_poly.contains(&coord! { x: lon(element), y: lat(element) }) {
+                                area_elements.push(element);
+                            }
+                        }
+                        geojson::Value::LineString(_) => {
+                            let line_string: LineString = (&geometry.value).try_into().unwrap();
+
+                            if line_string.contains(&coord! { x: lon(element), y: lat(element) }) {
+                                area_elements.push(element);
+                            }
+                        }
+                        _ => {
+                            log::error!("Unrecognized feature geometry type");
+                            continue;
+                        }
+                    }
+                }
+            }
+        } else {
+            for element in &elements {
+                if area.contains(lat(element), lon(element)) {
+                    area_elements.push(element)
+                }
+            }
+        }
 
         log::info!("Area: {}, elements: {}", area.id, area_elements.len());
         generate_report(&area.id, &today, area_elements, &tx)?;

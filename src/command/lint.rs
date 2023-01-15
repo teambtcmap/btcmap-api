@@ -107,7 +107,7 @@ pub async fn run(db: Connection) -> Result<()> {
 
         if payment_bitcoin == "yes" && survey_date != "" {
             let message = format!(
-                "{} Legacy payment:bitcoin tag is present but survey:date is availale, worth upgrading to currency:XBT",
+                "{} Legacy payment:bitcoin tag is present but survey:date is available, worth upgrading to currency:XBT",
                 url,
             );
             log::error!("{}", message);
@@ -116,7 +116,7 @@ pub async fn run(db: Connection) -> Result<()> {
 
         if payment_bitcoin == "yes" && check_date != "" {
             let message = format!(
-                "{} Legacy payment:bitcoin tag is present but check_date is availale, worth upgrading to currency:XBT",
+                "{} Legacy payment:bitcoin tag is present but check_date is available, worth upgrading to currency:XBT",
                 url,
             );
             log::error!("{}", message);
@@ -125,7 +125,7 @@ pub async fn run(db: Connection) -> Result<()> {
 
         if payment_bitcoin == "yes" && check_date_currency_xbt != "" {
             let message = format!(
-                "{} Legacy payment:bitcoin tag is present but check_date:currency:XBT is availale, worth upgrading to currency:XBT",
+                "{} Legacy payment:bitcoin tag is present but check_date:currency:XBT is available, worth upgrading to currency:XBT",
                 url,
             );
             log::error!("{}", message);
