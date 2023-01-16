@@ -8,7 +8,9 @@ use geo::coord;
 use geo::Contains;
 use geo::LineString;
 use geo::MultiPolygon;
+use geo::Polygon;
 use geojson::GeoJson;
+use geojson::Geometry;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use serde_json::Value;
@@ -96,32 +98,38 @@ pub async fn run(mut db: Connection) -> Result<()> {
                 }
             };
 
-            let feature_collection = match geo_json {
-                GeoJson::FeatureCollection(v) => v.features,
+            let mut geometries: Vec<&Geometry> = vec![];
+
+            match &geo_json {
+                GeoJson::FeatureCollection(v) => {
+                    for feature in &v.features {
+                        if let Some(v) = &feature.geometry {
+                            geometries.push(v);
+                        }
+                    }
+                }
                 GeoJson::Feature(v) => {
-                    vec![v]
+                    if let Some(v) = &v.geometry {
+                        geometries.push(v);
+                    }
                 }
-                GeoJson::Geometry(_) => {
-                    log::error!("GeoJSON geometry type is not supported");
-                    continue;
-                }
+                GeoJson::Geometry(v) => geometries.push(v),
             };
 
             for element in &elements {
-                for feature in &feature_collection {
-                    let geometry = match &feature.geometry {
-                        Some(v) => v,
-                        None => {
-                            log::error!("One of the GeoJSON features has no geometry");
-                            continue;
-                        }
-                    };
-
-                    match geometry.value {
+                for geometry in &geometries {
+                    match &geometry.value {
                         geojson::Value::MultiPolygon(_) => {
                             let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
 
                             if multi_poly.contains(&coord! { x: lon(element), y: lat(element) }) {
+                                area_elements.push(element);
+                            }
+                        }
+                        geojson::Value::Polygon(_) => {
+                            let poly: Polygon = (&geometry.value).try_into().unwrap();
+
+                            if poly.contains(&coord! { x: lon(element), y: lat(element) }) {
                                 area_elements.push(element);
                             }
                         }
@@ -132,10 +140,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
                                 area_elements.push(element);
                             }
                         }
-                        _ => {
-                            log::error!("Unrecognized feature geometry type");
-                            continue;
-                        }
+                        _ => continue,
                     }
                 }
             }
