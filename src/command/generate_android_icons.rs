@@ -250,7 +250,7 @@ impl Element {
         }
 
         if tourism == "camp_site" {
-            icon_id = "holiday_village";
+            icon_id = "camping";
         }
 
         if tourism == "gallery" {
@@ -979,6 +979,10 @@ impl Element {
 
         if sport == "scuba_diving" {
             icon_id = "scuba_diving"
+        }
+
+        if sport == "soccer" {
+            icon_id = "sports_soccer"
         }
 
         if craft == "blacksmith" {
