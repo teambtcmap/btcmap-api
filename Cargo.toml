@@ -9,17 +9,42 @@ edition = "2021"
 strip = "symbols"
 
 [dependencies]
-actix-web = { version = "4.2.1", default-features = false, features = ["macros", "compress-brotli"] }
+
+# https://github.com/actix/actix-web/releases
+actix-web = { version = "4.3.0", default-features = false, features = ["macros", "compress-brotli"] }
+
+# https://github.com/rusqlite/rusqlite/releases
 rusqlite = { version = "0.28.0", features = ["bundled"] }
-reqwest = { version = "0.11.10", default-features = false, features = ["rustls-tls", "json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-time = { version = "0.3.9", features = ["formatting", "parsing", "macros"] }
+
+# https://github.com/seanmonstar/reqwest/releases
+reqwest = { version = "0.11.14", default-features = false, features = ["rustls-tls", "json"] }
+
+# https://github.com/serde-rs/serde/releases
+serde = { version = "1.0.152", features = ["derive"] }
+
+# https://github.com/serde-rs/json/releases
+serde_json = "1.0.91"
+
+# https://github.com/time-rs/time/releases
+time = { version = "0.3.17", features = ["formatting", "parsing", "macros"] }
+
+# https://crates.io/crates/directories
 directories = "4.0.1"
-log = "0.4.0"
-env_logger = "0.8.4"
-include_dir = "0.7.2"
-tokio = { version = "1.21.2", features = ["time", "macros", "rt-multi-thread"] }
-derive_more = "0.99.17"
+
+# https://github.com/rust-lang/log/releases
+log = "0.4.17"
+
+# https://github.com/rust-cli/env_logger/releases
+env_logger = "0.9.3"
+
+# https://github.com/Michael-F-Bryan/include_dir/tags
+include_dir = "0.7.3"
+
+# https://github.com/tokio-rs/tokio/releases
+tokio = { version = "1.24.1", features = ["time", "macros", "rt-multi-thread"] }
+
+# https://github.com/georust/geojson/tags
 geojson = "0.24.0"
+
+# https://github.com/georust/geo/tags
 geo = "0.23.1"
