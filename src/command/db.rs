@@ -146,6 +146,23 @@ pub mod tests {
     }
 
     #[test]
+    fn run() -> Result<()> {
+        let res = super::run(&[], db()?);
+        assert!(res.is_err());
+
+        let res = super::run(&["test".into()], db()?);
+        assert!(res.is_err());
+
+        let res = super::run(&["migrate".into()], db()?);
+        assert!(res.is_ok());
+
+        let res = super::run(&["drop".into()], db()?);
+        assert!(res.is_err());
+
+        Ok(())
+    }
+
+    #[test]
     fn run_migrations() -> Result<()> {
         let db_name = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut db = Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared"))?;

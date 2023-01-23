@@ -171,6 +171,12 @@ pub static DELETE_TAG: &str = r#"
     where id = :area_id
 "#;
 
+pub static MARK_AS_DELETED: &str = r#"
+    UPDATE area
+    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ')
+    WHERE id = :id
+"#;
+
 const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: String = row.get(1)?;

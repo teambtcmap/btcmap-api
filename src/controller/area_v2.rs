@@ -4,6 +4,7 @@ use crate::model::area;
 use crate::model::Area;
 use crate::service::auth::is_from_admin;
 use crate::ApiError;
+use actix_web::delete;
 use actix_web::get;
 use actix_web::post;
 use actix_web::web::Data;
@@ -173,6 +174,37 @@ async fn post_tags(
     }
 }
 
+#[delete("{id}")]
+async fn delete_by_id(
+    id: Path<String>,
+    req: HttpRequest,
+    db: Data<Connection>,
+) -> Result<impl Responder, ApiError> {
+    is_from_admin(&req)?;
+
+    let id = id.into_inner();
+
+    let area: Option<Area> = db
+        .query_row(
+            area::SELECT_BY_ID,
+            &[(":id", &id)],
+            area::SELECT_BY_ID_MAPPER,
+        )
+        .optional()?;
+
+    match area {
+        Some(_area) => {
+            db.execute(area::MARK_AS_DELETED, named_params! { ":id": id })?;
+
+            Ok(HttpResponse::Ok())
+        }
+        None => Err(ApiError::new(
+            404,
+            &format!("There is no area with id {id}"),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,6 +301,42 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::CREATED);
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn delete() -> Result<()> {
+        let admin_token = "test";
+        env::set_var("ADMIN_TOKEN", admin_token);
+        let db = db()?;
+        let db_clone = Connection::open(db.path().unwrap())?;
+        let area_id = "test";
+        db.execute(area::INSERT, named_params! { ":id": area_id })?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(super::delete_by_id),
+        )
+        .await;
+        let req = TestRequest::delete()
+            .uri(&format!("/{area_id}"))
+            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let area: Option<Area> = db_clone
+            .query_row(
+                area::SELECT_BY_ID,
+                &[(":id", &area_id)],
+                area::SELECT_BY_ID_MAPPER,
+            )
+            .optional()?;
+
+        assert!(area.is_some());
+
+        assert!(area.unwrap().deleted_at.len() > 0);
+
         Ok(())
     }
 }
