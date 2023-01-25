@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-
 use rusqlite::Result;
 use rusqlite::Row;
+use serde_json::Map;
 use serde_json::Value;
 
 pub struct Area {
     pub id: String,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -159,6 +158,12 @@ pub static SELECT_UPDATED_SINCE: &str = r#"
 
 pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
 
+pub static INSERT_TAGS: &str = r#"
+    UPDATE area
+    SET tags = :tags
+    WHERE id = :area_id
+"#;
+
 pub static INSERT_TAG: &str = r#"
     UPDATE area
     SET tags = json_set(tags, :tag_name, :tag_value)
@@ -180,7 +185,7 @@ pub static MARK_AS_DELETED: &str = r#"
 const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: String = row.get(1)?;
-        let mut tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
+        let mut tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         let geo_json = tags.get("geo_json");
 
@@ -202,9 +207,7 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use serde_json::{Number, Value};
+    use serde_json::{Number, Value, Map};
 
     use crate::Result;
 
@@ -212,7 +215,7 @@ mod tests {
 
     #[test]
     fn contains() -> Result<()> {
-        let mut tags: HashMap<_, Value> = HashMap::new();
+        let mut tags: Map<_, Value> = Map::new();
         tags.insert("box:north".into(), 49.60003042758964.into());
         tags.insert(
             "box:east".into(),
@@ -235,7 +238,7 @@ mod tests {
         assert_eq!(area.contains(49.2623463, -123.0886088), true);
         assert_eq!(area.contains(47.6084752, -122.3270694), false);
 
-        let mut tags: HashMap<_, Value> = HashMap::new();
+        let mut tags: Map<_, Value> = Map::new();
         tags.insert("box:north".into(), "18.86515".into());
         tags.insert("box:east".into(), "99.07234".into());
         tags.insert("box:south".into(), "18.70702".into());

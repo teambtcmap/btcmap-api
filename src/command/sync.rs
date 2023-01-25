@@ -16,7 +16,7 @@ use std::env;
 use tokio::time::sleep;
 use tokio::time::Duration;
 
-pub static OVERPASS_API_URL: &str = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
+pub static OVERPASS_API_URL: &str = "https://z.overpass-api.de/api/interpreter";
 
 pub static OVERPASS_API_QUERY: &str = r#"
     [out:json][timeout:300];

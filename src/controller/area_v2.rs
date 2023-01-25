@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use crate::model::area;
 use crate::model::Area;
 use crate::service::auth::is_from_admin;
 use crate::ApiError;
 use actix_web::delete;
 use actix_web::get;
+use actix_web::patch;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Form;
@@ -21,6 +20,7 @@ use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use serde_json::Map;
 use serde_json::Value;
 
 #[derive(Serialize, Deserialize)]
@@ -36,7 +36,7 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: String,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -52,6 +52,11 @@ impl Into<GetItem> for Area {
             deleted_at: self.deleted_at,
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct PatchArgs {
+    tags: Value,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -123,6 +128,62 @@ async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<GetIte
         404,
         &format!("Area with id {id} doesn't exist"),
     ))
+}
+
+#[patch("{id}")]
+async fn patch_by_id(
+    id: Path<String>,
+    req: HttpRequest,
+    args: Json<PatchArgs>,
+    db: Data<Connection>,
+) -> Result<impl Responder, ApiError> {
+    is_from_admin(&req)?;
+
+    let id = id.into_inner();
+
+    let area: Option<Area> = db
+        .query_row(
+            area::SELECT_BY_ID,
+            &[(":id", &id)],
+            area::SELECT_BY_ID_MAPPER,
+        )
+        .optional()?;
+
+    let area = match area {
+        Some(v) => v,
+        None => {
+            return Err(ApiError::new(
+                404,
+                &format!("There is no area with id {id}"),
+            ));
+        }
+    };
+
+    let mut new_tags = match args.tags.clone() {
+        Value::Object(v) => v,
+        _ => {
+            return Err(ApiError::new(
+                400,
+                &format!("The field tags should be an object"),
+            ));
+        }
+    };
+
+    let mut old_tags = area.tags.clone();
+
+    let mut merged_tags = Map::new();
+    merged_tags.append(&mut old_tags);
+    merged_tags.append(&mut new_tags);
+
+    db.execute(
+        area::INSERT_TAGS,
+        named_params! {
+            ":area_id": area.id,
+            ":tags": serde_json::to_string(&merged_tags).unwrap(),
+        },
+    )?;
+
+    Ok(HttpResponse::Ok())
 }
 
 #[post("{id}/tags")]
@@ -279,6 +340,57 @@ mod tests {
         let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, area_id);
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn patch_by_id() -> Result<()> {
+        let admin_token = "test";
+        env::set_var("ADMIN_TOKEN", admin_token);
+        let db = db()?;
+        let db_clone = Connection::open(db.path().unwrap())?;
+        let area_id = "test";
+        db.execute(area::INSERT, named_params![":id": area_id])?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(super::patch_by_id),
+        )
+        .await;
+
+        let args = r#"
+        {
+            "tags": {
+                "string": "bar",
+                "unsigned": 5,
+                "float": 12.34,
+                "bool": true
+            }
+        }
+        "#;
+
+        let args: Value = serde_json::from_str(args)?;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/{area_id}"))
+            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .set_json(args)
+            .to_request();
+
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let area = db_clone.query_row(
+            area::SELECT_BY_ID,
+            &[(":id", &area_id)],
+            area::SELECT_BY_ID_MAPPER,
+        )?;
+
+        assert!(area.tags["string"].is_string());
+        assert!(area.tags["unsigned"].is_u64());
+        assert!(area.tags["float"].is_f64());
+        assert!(area.tags["bool"].is_boolean());
+
         Ok(())
     }
 
