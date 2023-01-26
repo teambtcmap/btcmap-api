@@ -37,6 +37,7 @@ pub async fn run() -> Result<()> {
             .service(
                 scope("areas")
                     .service(controller::area_v2::post)
+                    .service(controller::area_v2::post_json)
                     .service(controller::area_v2::get)
                     .service(controller::area_v2::get_by_id)
                     .service(controller::area_v2::patch_by_id)
@@ -71,6 +72,7 @@ pub async fn run() -> Result<()> {
                     .service(
                         scope("areas")
                             .service(controller::area_v2::post)
+                            .service(controller::area_v2::post_json)
                             .service(controller::area_v2::get)
                             .service(controller::area_v2::get_by_id)
                             .service(controller::area_v2::patch_by_id)

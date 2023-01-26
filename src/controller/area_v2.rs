@@ -28,6 +28,12 @@ struct PostArgs {
     id: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct PostJsonArgs {
+    id: String,
+    tags: Map<String, Value>,
+}
+
 #[derive(Deserialize)]
 pub struct GetArgs {
     updated_since: Option<String>,
@@ -88,6 +94,40 @@ async fn post(
     }
 
     db.execute(area::INSERT, named_params![ ":id": args.id ])?;
+
+    Ok(Json(json!({
+        "message": format!("Area {} has been created", args.id),
+    })))
+}
+
+#[post("")]
+async fn post_json(
+    args: Json<PostJsonArgs>,
+    req: HttpRequest,
+    db: Data<Connection>,
+) -> Result<impl Responder, ApiError> {
+    is_from_admin(&req)?;
+
+    if let Some(_) = db
+        .query_row(
+            area::SELECT_BY_ID,
+            &[(":id", &args.id)],
+            area::SELECT_BY_ID_MAPPER,
+        )
+        .optional()?
+    {
+        Err(ApiError::new(
+            303,
+            format!("Area {} already exists", args.id),
+        ))?
+    }
+
+    db.execute(area::INSERT, named_params![ ":id": args.id ])?;
+
+    db.execute(
+        area::INSERT_TAGS,
+        named_params![ ":area_id": args.id, ":tags": serde_json::to_string(&args.tags).unwrap() ],
+    )?;
 
     Ok(Json(json!({
         "message": format!("Area {} has been created", args.id),
@@ -297,6 +337,57 @@ mod tests {
         let res = test::call_service(&app, req).await;
         log::info!("Response status: {}", res.status());
         assert!(res.status().is_success());
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn post_json() -> Result<()> {
+        let admin_token = "test";
+        env::set_var("ADMIN_TOKEN", admin_token);
+        let db = db()?;
+        let db_clone = Connection::open(db.path().unwrap())?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(scope("/").service(super::post_json)),
+        )
+        .await;
+
+        let args = r#"
+        {
+            "id": "test-area",
+            "tags": {
+                "string": "bar",
+                "int": 5,
+                "float": 12.34,
+                "bool": false
+            }
+        }
+        "#;
+
+        let args: Value = serde_json::from_str(args)?;
+
+        let req = TestRequest::post()
+            .uri("/")
+            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .set_json(args)
+            .to_request();
+
+        let res = test::call_service(&app, req).await;
+        log::info!("Response status: {}", res.status());
+        assert!(res.status().is_success());
+
+        let area = db_clone.query_row(
+            area::SELECT_BY_ID,
+            &[(":id", "test-area")],
+            area::SELECT_BY_ID_MAPPER,
+        )?;
+
+        assert!(area.tags["string"].is_string());
+        assert!(area.tags["int"].is_u64());
+        assert!(area.tags["float"].is_f64());
+        assert!(area.tags["bool"].is_boolean());
+
         Ok(())
     }
 
