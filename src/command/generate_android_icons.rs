@@ -1009,6 +1009,10 @@ impl Element {
             icon_id = "cake";
         }
 
+        if craft == "tiler" {
+            icon_id = "grid_view";
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }

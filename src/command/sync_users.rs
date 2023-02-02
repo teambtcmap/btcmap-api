@@ -3,6 +3,7 @@ use crate::model::User;
 use crate::Connection;
 use crate::Error;
 use crate::Result;
+use reqwest::StatusCode;
 use rusqlite::named_params;
 use serde_json::Value;
 use tokio::time::sleep;
@@ -25,6 +26,12 @@ pub async fn run(db: Connection) -> Result<()> {
         );
         log::info!("Querying {url}");
         let res = reqwest::get(&url).await?;
+
+        if res.status() != StatusCode::OK {
+            log::error!("Failed to query a user with id {}, response code: {}", db_user.id, res.status());
+            continue;
+        }
+
         let body = res.text().await?;
         let body: Value = serde_json::from_str(&body)?;
         let fresh_user: &Value = body
