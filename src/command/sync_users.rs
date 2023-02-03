@@ -19,26 +19,38 @@ pub async fn run(db: Connection) -> Result<()> {
 
     log::info!("Found {} cached users", users.len());
 
-    for db_user in &users {
+    for cached_user in &users {
         let url = format!(
             "https://api.openstreetmap.org/api/0.6/user/{}.json",
-            db_user.id,
+            cached_user.id,
         );
         log::info!("Querying {url}");
-        let res = reqwest::get(&url).await?;
+
+        let res = match reqwest::get(&url).await {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Failed to sync user {}: {:?}", cached_user.id, e);
+                continue;
+            }
+        };
 
         if res.status() != StatusCode::OK {
-            log::error!("Failed to query a user with id {}, response code: {}", db_user.id, res.status());
+            log::error!(
+                "Failed to query a user with id {}, response status: {:?}",
+                cached_user.id,
+                res.status(),
+            );
             continue;
         }
 
         let body = res.text().await?;
         let body: Value = serde_json::from_str(&body)?;
-        let fresh_user: &Value = body
-            .get("user")
-            .ok_or(Error::Other(format!("Failed to fetch user {}", db_user.id)))?;
+        let fresh_user: &Value = body.get("user").ok_or(Error::Other(format!(
+            "Failed to fetch user {}",
+            cached_user.id
+        )))?;
 
-        let db_user_str = serde_json::to_string(&db_user.osm_json)?;
+        let db_user_str = serde_json::to_string(&cached_user.osm_json)?;
         let fresh_user_str = serde_json::to_string(&fresh_user)?;
 
         if fresh_user_str != db_user_str {
@@ -47,7 +59,7 @@ pub async fn run(db: Connection) -> Result<()> {
             db.execute(
                 user::UPDATE_OSM_JSON,
                 named_params! {
-                    ":id": db_user.id,
+                    ":id": cached_user.id,
                     ":osm_json": fresh_user_str,
                 },
             )?;

@@ -1013,6 +1013,10 @@ impl Element {
             icon_id = "grid_view";
         }
 
+        if craft == "painter" {
+            icon_id = "imagesearch_roller";
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }
