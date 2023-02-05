@@ -93,6 +93,10 @@ impl Element {
             icon_id = "church"
         }
 
+        if building == "school" {
+            icon_id = "school"
+        }
+
         if office != "" {
             icon_id = "business"
         }

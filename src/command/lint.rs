@@ -36,8 +36,7 @@ pub async fn run(db: Connection) -> Result<()> {
             if parsed_date.is_err() {
                 let message = format!(
                     "{} survey:date is not formatted properly: {}",
-                    url,
-                    survey_date,
+                    url, survey_date,
                 );
                 log::error!("{}", message);
                 send_discord_message(message).await;
@@ -54,8 +53,7 @@ pub async fn run(db: Connection) -> Result<()> {
             if parsed_date.is_err() {
                 let message = format!(
                     "{} check_date is not formatted properly: {}",
-                    url,
-                    check_date,
+                    url, check_date,
                 );
                 log::error!("{}", message);
                 send_discord_message(message).await;
@@ -72,8 +70,7 @@ pub async fn run(db: Connection) -> Result<()> {
             if parsed_date.is_err() {
                 let message = format!(
                     "{} check_date:currency:XBT is not formatted properly: {}",
-                    url,
-                    check_date_currency_xbt,
+                    url, check_date_currency_xbt,
                 );
                 log::error!("{}", message);
                 send_discord_message(message).await;
@@ -86,6 +83,28 @@ pub async fn run(db: Connection) -> Result<()> {
 
         if payment_lighting.len() > 0 {
             log::error!("{} Spelling issue: payment:lighting", element.id);
+        }
+
+        let payment_lightning_contacless = element.osm_json["tags"]["payment:lightning_contacless"]
+            .as_str()
+            .unwrap_or("");
+
+        if payment_lightning_contacless.len() > 0 {
+            log::error!(
+                "{} Spelling issue: payment:lightning_contacless",
+                element.id
+            );
+        }
+
+        let payment_lighting_contactless = element.osm_json["tags"]["payment:lighting_contactless"]
+            .as_str()
+            .unwrap_or("");
+
+        if payment_lighting_contactless.len() > 0 {
+            log::error!(
+                "{} Spelling issue: payment:lighting_contactless",
+                element.id
+            );
         }
 
         let currency_xbt = element.osm_json["tags"]["currency:XBT"]
