@@ -1025,6 +1025,10 @@ impl Element {
             icon_id = "construction";
         }
 
+        if craft == "carpenter" {
+            icon_id = "carpenter";
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }
