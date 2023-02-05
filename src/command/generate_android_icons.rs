@@ -1017,6 +1017,14 @@ impl Element {
             icon_id = "imagesearch_roller";
         }
 
+        if craft == "gardener" {
+            icon_id = "grass";
+        }
+
+        if craft == "metal_construction" {
+            icon_id = "construction";
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }
