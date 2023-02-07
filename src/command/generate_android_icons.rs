@@ -957,6 +957,10 @@ impl Element {
             icon_id = "pool"
         }
 
+        if leisure == "horse_riding" {
+            icon_id = "bedroom_baby"
+        }
+
         if healthcare != "" {
             icon_id = "medical_services"
         }
@@ -1031,6 +1035,18 @@ impl Element {
 
         if craft == "carpenter" {
             icon_id = "carpenter";
+        }
+
+        if craft == "cleaning" {
+            icon_id = "cleaning_services";
+        }
+
+        if craft == "electrician" {
+            icon_id = "electric_bolt";
+        }
+
+        if craft == "cabinet_maker" {
+            icon_id = "chair";
         }
 
         if company == "transport" {

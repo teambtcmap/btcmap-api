@@ -251,7 +251,7 @@ fn generate_report(
     Ok(())
 }
 
-fn up_to_date(osm_json: &Value) -> bool {
+pub fn up_to_date(osm_json: &Value) -> bool {
     let tags: &Value = &osm_json["tags"];
 
     let survey_date = tags["survey:date"].as_str().unwrap_or("");

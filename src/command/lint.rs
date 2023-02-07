@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 
+use crate::command::generate_report;
 use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
@@ -149,6 +150,12 @@ pub async fn run(db: Connection) -> Result<()> {
             );
             log::error!("{}", message);
             send_discord_message(message).await;
+        }
+
+        if generate_report::up_to_date(&element.osm_json)
+            && element.android_icon() == "question_mark"
+        {
+            log::error!("{} Up-to-date element with no icon", element.id);
         }
     }
 
