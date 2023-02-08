@@ -228,7 +228,8 @@ pub async fn run(mut db: Connection) -> Result<()> {
                     element::SELECT_BY_ID_MAPPER,
                 )?;
 
-                let category = element.category();
+                let category_singular = element.category_singular();
+                let category_plural = element.category_plural();
                 let android_icon = element.android_icon();
 
                 tx.execute(
@@ -236,7 +237,16 @@ pub async fn run(mut db: Connection) -> Result<()> {
                     named_params! {
                         ":element_id": &element.id,
                         ":tag_name": "$.category",
-                        ":tag_value": &category,
+                        ":tag_value": &category_singular,
+                    },
+                )?;
+
+                tx.execute(
+                    element::INSERT_TAG,
+                    named_params! {
+                        ":element_id": &element.id,
+                        ":tag_name": "$.category:plural",
+                        ":tag_value": &category_plural,
                     },
                 )?;
 
@@ -249,10 +259,10 @@ pub async fn run(mut db: Connection) -> Result<()> {
                     },
                 )?;
 
-                log::info!("Category: {category}, icon: {android_icon}");
+                log::info!("Category: {category_singular}, icon: {android_icon}");
 
                 send_discord_message(format!(
-                    "{name} was added by {user_display_name} (category: {category}, icon: {android_icon}) https://www.openstreetmap.org/{element_type}/{osm_id}"
+                    "{name} was added by {user_display_name} (category: {category_singular}, icon: {android_icon}) https://www.openstreetmap.org/{element_type}/{osm_id}"
                 ))
                 .await;
             }
