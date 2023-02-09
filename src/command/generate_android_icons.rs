@@ -73,6 +73,7 @@ impl Element {
         let craft = tags["craft"].as_str().unwrap_or("");
         let company = tags["company"].as_str().unwrap_or("");
         let telecom = tags["telecom"].as_str().unwrap_or("");
+        let school = tags["school"].as_str().unwrap_or("");
         let place = tags["place"].as_str().unwrap_or("");
 
         let mut icon_id: &str = "question_mark";
@@ -901,6 +902,10 @@ impl Element {
             icon_id = "two_wheeler"
         }
 
+        if amenity == "dojo" {
+            icon_id = "sports_martial_arts"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -959,6 +964,10 @@ impl Element {
 
         if leisure == "horse_riding" {
             icon_id = "bedroom_baby"
+        }
+
+        if leisure == "adventure_park" {
+            icon_id = "nature_people"
         }
 
         if healthcare != "" {
@@ -1067,6 +1076,10 @@ impl Element {
 
         if place == "farm" {
             icon_id = "agriculture"
+        }
+
+        if school == "music" {
+            icon_id = "music_note"
         }
 
         if amenity == "fast_food" && cuisine == "ice_cream" {

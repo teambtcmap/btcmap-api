@@ -2,7 +2,7 @@
 
 case "$1" in
     fetch-prod-db)
-        rsync -v btcmap:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
+        rsync -v btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
         ;;
 
     deploy)
