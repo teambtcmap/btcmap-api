@@ -75,8 +75,13 @@ impl Element {
         let telecom = tags["telecom"].as_str().unwrap_or("");
         let school = tags["school"].as_str().unwrap_or("");
         let place = tags["place"].as_str().unwrap_or("");
+        let landuse = tags["landuse"].as_str().unwrap_or("");
 
         let mut icon_id: &str = "question_mark";
+
+        if landuse == "retail" {
+            icon_id = "storefront"
+        }
 
         if building == "commercial" {
             icon_id = "business"
