@@ -76,6 +76,7 @@ impl Element {
         let school = tags["school"].as_str().unwrap_or("");
         let place = tags["place"].as_str().unwrap_or("");
         let landuse = tags["landuse"].as_str().unwrap_or("");
+        let club = tags["club"].as_str().unwrap_or("");
 
         let mut icon_id: &str = "question_mark";
 
@@ -975,6 +976,14 @@ impl Element {
             icon_id = "nature_people"
         }
 
+        if leisure == "casino" {
+            icon_id = "casino"
+        }
+
+        if leisure == "amusement_arcade" {
+            icon_id = "videogame_asset"
+        }
+
         if healthcare != "" {
             icon_id = "medical_services"
         }
@@ -1063,6 +1072,18 @@ impl Element {
             icon_id = "chair";
         }
 
+        if craft == "jeweller" {
+            icon_id = "diamond";
+        }
+
+        if craft == "winery" {
+            icon_id = "wine_bar";
+        }
+
+        if craft == "electronics_repair" {
+            icon_id = "build";
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }
@@ -1087,8 +1108,20 @@ impl Element {
             icon_id = "music_note"
         }
 
+        if club == "tech" {
+            icon_id = "lan"
+        }
+
         if amenity == "fast_food" && cuisine == "ice_cream" {
             icon_id = "icecream";
+        }
+
+        if craft == "electronics_repair" && shop == "mobile_phone" {
+            icon_id = "smartphone";
+        }
+
+        if craft == "electronics_repair" && shop == "computer" {
+            icon_id = "computer";
         }
 
         icon_id.to_string()
