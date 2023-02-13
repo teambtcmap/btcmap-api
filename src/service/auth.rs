@@ -1,14 +1,9 @@
-use crate::ApiError;
+use crate::{model::token, ApiError};
 use actix_web::HttpRequest;
+use rusqlite::{Connection, OptionalExtension};
 use std::env;
 
-pub fn is_from_admin(req: &HttpRequest) -> Result<(), ApiError> {
-    let admin_token = env::var("ADMIN_TOKEN").unwrap_or("".to_string());
-
-    if admin_token.len() == 0 {
-        return Err(ApiError::new(401, "Admin token is not set"));
-    }
-
+pub fn is_from_admin(db: &Connection, req: &HttpRequest) -> Result<(), ApiError> {
     let auth_header = req
         .headers()
         .get("Authorization")
@@ -24,7 +19,27 @@ pub fn is_from_admin(req: &HttpRequest) -> Result<(), ApiError> {
         return Err(ApiError::new(401, "Authorization header is invalid"));
     }
 
-    if auth_header_parts[1] != admin_token {
+    let secret = auth_header_parts[1];
+
+    let existing_token = db
+        .query_row(
+            token::SELECT_BY_SECRET,
+            &[(":secret", &secret)],
+            token::SELECT_BY_SECRET_MAPPER,
+        )
+        .optional()?;
+
+    if existing_token.is_some() {
+        return Ok(());
+    }
+
+    let admin_token = env::var("ADMIN_TOKEN").unwrap_or("".to_string());
+
+    if admin_token.len() == 0 {
+        return Err(ApiError::new(401, "Admin token is not set"));
+    }
+
+    if secret != admin_token {
         return Err(ApiError::new(401, "Invalid token"));
     }
 
@@ -33,7 +48,7 @@ pub fn is_from_admin(req: &HttpRequest) -> Result<(), ApiError> {
 
 #[cfg(test)]
 mod tests {
-    use rusqlite::Connection;
+    use rusqlite::{named_params, Connection};
 
     use super::*;
     use crate::command::db;
@@ -44,16 +59,12 @@ mod tests {
         web::{scope, Data},
         App, Responder,
     };
-    use std::sync::atomic::Ordering;
 
     #[actix_web::test]
     async fn no_header() {
         let admin_token = "test";
         env::set_var("ADMIN_TOKEN", admin_token);
-        let db_name = db::COUNTER.fetch_add(1, Ordering::Relaxed);
-        let mut db =
-            Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared")).unwrap();
-        db::migrate(&mut db).unwrap();
+        let db = db::tests::db().unwrap();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db))
@@ -65,9 +76,36 @@ mod tests {
         assert_eq!(401, res.status().as_u16())
     }
 
+    #[actix_web::test]
+    async fn valid_token() {
+        let db = db::tests::db().unwrap();
+
+        db.execute(
+            token::INSERT,
+            named_params! {
+                ":user_id": 1,
+                ":secret": "qwerty",
+            },
+        )
+        .unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(Connection::open(db.path().unwrap()).unwrap()))
+                .service(scope("/").service(get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/")
+            .append_header(("Authorization", "Bearer qwerty"))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(200, res.status().as_u16())
+    }
+
     #[get("")]
-    async fn get(req: HttpRequest) -> Result<impl Responder, ApiError> {
-        is_from_admin(&req)?;
+    async fn get(req: HttpRequest, db: Data<Connection>) -> Result<impl Responder, ApiError> {
+        is_from_admin(&db, &req)?;
         Ok(Response::ok())
     }
 }

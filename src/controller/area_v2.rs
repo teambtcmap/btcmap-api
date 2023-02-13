@@ -77,7 +77,7 @@ async fn post(
     req: HttpRequest,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&req)?;
+    is_from_admin(&db, &req)?;
 
     if let Some(_) = db
         .query_row(
@@ -106,7 +106,7 @@ async fn post_json(
     req: HttpRequest,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&req)?;
+    is_from_admin(&db, &req)?;
 
     if let Some(_) = db
         .query_row(
@@ -177,7 +177,7 @@ async fn patch_by_id(
     args: Json<PatchArgs>,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&req)?;
+    is_from_admin(&db, &req)?;
 
     let id = id.into_inner();
 
@@ -233,7 +233,7 @@ async fn post_tags(
     args: Form<PostTagsArgs>,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&req)?;
+    is_from_admin(&db, &req)?;
 
     let id = id.into_inner();
 
@@ -281,7 +281,7 @@ async fn delete_by_id(
     req: HttpRequest,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&req)?;
+    is_from_admin(&db, &req)?;
 
     let id = id.into_inner();
 

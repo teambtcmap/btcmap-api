@@ -99,7 +99,7 @@ async fn post_tags(
     args: Form<PostTagsArgs>,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&req)?;
+    is_from_admin(&db, &req)?;
 
     let id = id.into_inner();
 
