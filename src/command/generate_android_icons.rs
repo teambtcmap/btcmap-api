@@ -77,6 +77,7 @@ impl Element {
         let place = tags["place"].as_str().unwrap_or("");
         let landuse = tags["landuse"].as_str().unwrap_or("");
         let club = tags["club"].as_str().unwrap_or("");
+        let playground = tags["playground"].as_str().unwrap_or("");
 
         let mut icon_id: &str = "question_mark";
 
@@ -912,6 +913,14 @@ impl Element {
             icon_id = "sports_martial_arts"
         }
 
+        if amenity == "animal_breeding" {
+            icon_id = "cruelty_free"
+        }
+
+        if amenity == "food_court" {
+            icon_id = "restaurant"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -1110,6 +1119,10 @@ impl Element {
 
         if club == "tech" {
             icon_id = "lan"
+        }
+
+        if playground == "structure" {
+            icon_id = "attractions"
         }
 
         if amenity == "fast_food" && cuisine == "ice_cream" {
