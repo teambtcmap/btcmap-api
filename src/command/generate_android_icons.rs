@@ -917,6 +917,10 @@ impl Element {
             icon_id = "cruelty_free"
         }
 
+        if amenity == "animal_shelter" {
+            icon_id = "pets"
+        }
+
         if amenity == "food_court" {
             icon_id = "restaurant"
         }
@@ -1115,6 +1119,10 @@ impl Element {
 
         if school == "music" {
             icon_id = "music_note"
+        }
+
+        if club == "yes" {
+            icon_id = "groups"
         }
 
         if club == "tech" {
