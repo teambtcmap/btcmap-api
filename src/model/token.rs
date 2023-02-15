@@ -10,6 +10,17 @@ pub struct Token {
     pub deleted_at: String,
 }
 
+#[cfg(test)]
+pub static INSERT: &str = r#"
+    INSERT INTO token (
+        user_id,
+        secret
+    ) VALUES (
+        :user_id,
+        :secret
+    )
+"#;
+
 pub static SELECT_BY_SECRET: &str = r#"
     SELECT
         id,
