@@ -12,7 +12,9 @@ use actix_web::{
 pub async fn run() -> Result<()> {
     HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())
+            .wrap(Logger::new(
+                r#"%{r}a "%r" %s %b "%{Referer}i" "%{User-Agent}i" %T"#,
+            ))
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(command::db::open_connection().unwrap()))
