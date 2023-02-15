@@ -48,3 +48,6 @@ geojson = "0.24.0"
 
 # https://github.com/georust/geo/tags
 geo = "0.23.1"
+
+# https://github.com/utkarshkukreti/diff.rs/tags
+diff = "0.1.13"
