@@ -105,6 +105,10 @@ impl Element {
             icon_id = "school"
         }
 
+        if building == "industrial" {
+            icon_id = "factory"
+        }
+
         if office != "" {
             icon_id = "business"
         }
@@ -1095,6 +1099,10 @@ impl Element {
 
         if craft == "electronics_repair" {
             icon_id = "build";
+        }
+
+        if craft == "caterer" {
+            icon_id = "cooking";
         }
 
         if company == "transport" {
