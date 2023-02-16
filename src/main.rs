@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
         "fetch-pouch-tags" => command::fetch_pouch_tags::run(db).await?,
         "lint" => command::lint::run(db).await?,
         "fetch-areas" => command::fetch_areas::run(db, args[2].clone()).await?,
+        "analyze-logs" => command::analyze_logs::run().await?,
         first_arg => Err(Error::CLI(format!("Unknown command: {first_arg}")))?,
     }
 
