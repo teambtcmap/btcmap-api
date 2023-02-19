@@ -1034,6 +1034,10 @@ impl Element {
             icon_id = "sports_soccer"
         }
 
+        if craft == "yes" {
+            icon_id = "construction"
+        }
+
         if craft == "blacksmith" {
             icon_id = "hardware"
         }
