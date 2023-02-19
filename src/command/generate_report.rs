@@ -72,7 +72,10 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     let areas: Vec<Area> = db
         .prepare(area::SELECT_ALL)?
-        .query_map([], area::SELECT_ALL_MAPPER)?
+        .query_map(
+            named_params! { ":limit": std::i32::MAX },
+            area::SELECT_ALL_MAPPER,
+        )?
         .collect::<Result<Vec<Area>, _>>()?
         .into_iter()
         .filter(|it| it.deleted_at.len() == 0)

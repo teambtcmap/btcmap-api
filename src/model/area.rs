@@ -127,6 +127,7 @@ pub static SELECT_ALL: &str = r#"
         deleted_at
     FROM area
     ORDER BY updated_at
+    LIMIT :limit
 "#;
 
 pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
@@ -154,6 +155,7 @@ pub static SELECT_UPDATED_SINCE: &str = r#"
     FROM area
     WHERE updated_at > :updated_since
     ORDER BY updated_at
+    LIMIT :limit
 "#;
 
 pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
