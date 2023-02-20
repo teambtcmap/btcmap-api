@@ -294,6 +294,10 @@ impl Element {
             icon_id = "spa";
         }
 
+        if tourism == "theme_park" {
+            icon_id = "attractions";
+        }
+
         if shop != "" {
             icon_id = "storefront";
         }
@@ -1108,6 +1112,14 @@ impl Element {
 
         if craft == "caterer" {
             icon_id = "cooking";
+        }
+
+        if craft == "agricultural_engines" {
+            icon_id = "agriculture";
+        }
+
+        if craft == "roofer" {
+            icon_id = "roofing";
         }
 
         if company == "transport" {
