@@ -37,7 +37,6 @@ async fn main() -> Result<()> {
         "generate-report" => command::generate_report::run(db).await?,
         "generate-android-icons" => command::generate_android_icons::run(db).await?,
         "generate-element-categories" => command::generate_element_categories::run(db).await?,
-        "fetch-pouch-tags" => command::fetch_pouch_tags::run(db).await?,
         "lint" => command::lint::run(db).await?,
         "fetch-areas" => command::fetch_areas::run(db, args[2].clone()).await?,
         "analyze-logs" => command::analyze_logs::run().await?,

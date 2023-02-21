@@ -33,6 +33,7 @@ pub static SELECT_ALL: &str = r#"
         deleted_at
     FROM element
     ORDER BY updated_at
+    LIMIT :limit
 "#;
 
 pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<Element> = full_mapper();
@@ -62,6 +63,7 @@ pub static SELECT_UPDATED_SINCE: &str = r#"
     FROM element
     WHERE updated_at > :updated_since
     ORDER BY updated_at
+    LIMIT :limit
 "#;
 
 pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Element> = full_mapper();

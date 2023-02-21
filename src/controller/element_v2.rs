@@ -22,6 +22,7 @@ use serde_json::Value;
 #[derive(Deserialize)]
 pub struct GetArgs {
     updated_since: Option<String>,
+    limit: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,14 +63,20 @@ pub async fn get(
         Some(updated_since) => db
             .prepare(element::SELECT_UPDATED_SINCE)?
             .query_map(
-                &[(":updated_since", updated_since)],
+                named_params! {
+                    ":updated_since": updated_since,
+                    ":limit": args.limit.unwrap_or(std::i32::MAX),
+                },
                 element::SELECT_UPDATED_SINCE_MAPPER,
             )?
             .map(|it| it.map(|it| it.into()))
             .collect::<Result<_, _>>()?,
         None => db
             .prepare(element::SELECT_ALL)?
-            .query_map([], element::SELECT_ALL_MAPPER)?
+            .query_map(
+                named_params! { ":limit": args.limit.unwrap_or(std::i32::MAX) },
+                element::SELECT_ALL_MAPPER,
+            )?
             .map(|it| it.map(|it| it.into()))
             .collect::<Result<_, _>>()?,
     }))
@@ -186,6 +193,42 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn get_with_limit() -> Result<()> {
+        let db = db()?;
+        db.execute(
+            element::INSERT,
+            named_params! {
+                ":id": "node:1",
+                ":osm_json": "{}",
+            },
+        )?;
+        db.execute(
+            element::INSERT,
+            named_params! {
+                ":id": "node:2",
+                ":osm_json": "{}",
+            },
+        )?;
+        db.execute(
+            element::INSERT,
+            named_params! {
+                ":id": "node:3",
+                ":osm_json": "{}",
+            },
+        )?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?limit=2").to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.as_array().unwrap().len(), 2);
         Ok(())
     }
 

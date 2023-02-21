@@ -10,7 +10,10 @@ pub async fn run(db: Connection) -> Result<()> {
 
     let elements: Vec<Element> = db
         .prepare(element::SELECT_ALL)?
-        .query_map([], element::SELECT_ALL_MAPPER)?
+        .query_map(
+            named_params! { ":limit": std::i32::MAX },
+            element::SELECT_ALL_MAPPER,
+        )?
         .collect::<Result<Vec<Element>, _>>()?
         .into_iter()
         .filter(|it| it.deleted_at.len() == 0)

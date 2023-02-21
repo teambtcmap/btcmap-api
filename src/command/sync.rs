@@ -58,7 +58,10 @@ pub async fn run(mut db: Connection) -> Result<()> {
     let elements: Vec<Element> = tx
         .prepare(element::SELECT_ALL)
         .unwrap()
-        .query_map([], element::SELECT_ALL_MAPPER)
+        .query_map(
+            named_params! { ":limit": std::i32::MAX },
+            element::SELECT_ALL_MAPPER,
+        )
         .unwrap()
         .map(|row| row.unwrap())
         .collect();
