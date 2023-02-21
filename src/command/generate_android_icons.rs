@@ -1086,6 +1086,10 @@ impl Element {
             icon_id = "carpenter";
         }
 
+        if craft == "joiner" {
+            icon_id = "carpenter";
+        }
+
         if craft == "cleaning" {
             icon_id = "cleaning_services";
         }
@@ -1120,6 +1124,14 @@ impl Element {
 
         if craft == "roofer" {
             icon_id = "roofing";
+        }
+
+        if craft == "art" {
+            icon_id = "palette";
+        }
+
+        if craft == "glaziery" {
+            icon_id = "window";
         }
 
         if company == "transport" {
