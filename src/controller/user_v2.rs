@@ -22,6 +22,7 @@ use serde_json::Value;
 #[derive(Deserialize)]
 pub struct GetArgs {
     updated_since: Option<String>,
+    limit: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -59,14 +60,20 @@ async fn get(args: Query<GetArgs>, db: Data<Connection>) -> Result<Json<Vec<GetI
         Some(updated_since) => db
             .prepare(user::SELECT_UPDATED_SINCE)?
             .query_map(
-                &[(":updated_since", updated_since)],
+                named_params! {
+                   ":updated_since": updated_since,
+                   ":limit": args.limit.unwrap_or(std::i32::MAX),
+                },
                 user::SELECT_UPDATED_SINCE_MAPPER,
             )?
             .map(|it| it.map(|it| it.into()))
             .collect::<Result<_, _>>()?,
         None => db
             .prepare(user::SELECT_ALL)?
-            .query_map([], user::SELECT_ALL_MAPPER)?
+            .query_map(
+                named_params! { ":limit": args.limit.unwrap_or(std::i32::MAX) },
+                user::SELECT_ALL_MAPPER,
+            )?
             .map(|it| it.map(|it| it.into()))
             .collect::<Result<_, _>>()?,
     }))

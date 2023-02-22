@@ -35,25 +35,10 @@ pub static SELECT_ALL: &str = r#"
         deleted_at
     FROM report
     ORDER BY updated_at
+    LIMIT :limit
 "#;
 
 pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
-
-pub static SELECT_UPDATED_SINCE: &str = r#"
-    SELECT
-        id,
-        area_id,
-        date,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM report
-    WHERE updated_at > :updated_since
-    ORDER BY updated_at
-"#;
-
-pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 
 pub static SELECT_BY_ID: &str = r#"
     SELECT
@@ -69,6 +54,23 @@ pub static SELECT_BY_ID: &str = r#"
 "#;
 
 pub static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
+
+pub static SELECT_UPDATED_SINCE: &str = r#"
+    SELECT
+        id,
+        area_id,
+        date,
+        tags,
+        created_at,
+        updated_at,
+        deleted_at
+    FROM report
+    WHERE updated_at > :updated_since
+    ORDER BY updated_at
+    LIMIT :limit
+"#;
+
+pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 
 pub static SELECT_BY_AREA_ID_AND_DATE: &str = r#"
     SELECT

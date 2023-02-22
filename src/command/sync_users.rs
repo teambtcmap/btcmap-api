@@ -14,7 +14,10 @@ pub async fn run(db: Connection) -> Result<()> {
 
     let users: Vec<User> = db
         .prepare(user::SELECT_ALL)?
-        .query_map([], user::SELECT_ALL_MAPPER)?
+        .query_map(
+            named_params! { ":limit": std::i32::MAX },
+            user::SELECT_ALL_MAPPER,
+        )?
         .collect::<Result<_, _>>()?;
 
     log::info!("Found {} cached users", users.len());
