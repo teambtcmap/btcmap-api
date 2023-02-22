@@ -1137,6 +1137,10 @@ impl Element {
             icon_id = "window";
         }
 
+        if craft == "beekeeper" {
+            icon_id = "hive"
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }
