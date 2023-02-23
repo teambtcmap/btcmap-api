@@ -301,6 +301,10 @@ impl Element {
             icon_id = "attractions";
         }
 
+        if tourism == "alpine_hut" {
+            icon_id = "cottage";
+        }
+
         if shop != "" {
             icon_id = "storefront";
         }
@@ -935,6 +939,10 @@ impl Element {
 
         if amenity == "food_court" {
             icon_id = "restaurant"
+        }
+
+        if amenity == "dive_centre" {
+            icon_id = "scuba_diving"
         }
 
         if leisure == "sports_centre" {
