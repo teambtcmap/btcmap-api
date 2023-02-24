@@ -82,6 +82,7 @@ impl Element {
         let club = tags["club"].as_str().unwrap_or("");
         let playground = tags["playground"].as_str().unwrap_or("");
         let industrial = tags["industrial"].as_str().unwrap_or("");
+        let historic = tags["historic"].as_str().unwrap_or("");
 
         let mut icon_id: &str = "question_mark";
 
@@ -1149,6 +1150,10 @@ impl Element {
             icon_id = "hive"
         }
 
+        if craft == "handicraft" {
+            icon_id = "volunteer_activism"
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }
@@ -1187,6 +1192,10 @@ impl Element {
 
         if industrial == "slaughterhouse" {
             icon_id = "surgical"
+        }
+
+        if historic == "castle" {
+            icon_id = "castle"
         }
 
         if amenity == "fast_food" && cuisine == "ice_cream" {
