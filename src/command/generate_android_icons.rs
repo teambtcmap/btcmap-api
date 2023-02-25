@@ -946,6 +946,10 @@ impl Element {
             icon_id = "scuba_diving"
         }
 
+        if amenity == "post_depot" {
+            icon_id = "mail"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -1048,6 +1052,10 @@ impl Element {
 
         if sport == "soccer" {
             icon_id = "sports_soccer"
+        }
+
+        if sport == "kitesurfing" {
+            icon_id = "kitesurfing"
         }
 
         if craft == "yes" {
@@ -1156,6 +1164,10 @@ impl Element {
 
         if company == "transport" {
             icon_id = "directions_car"
+        }
+
+        if company == "internet_shop" {
+            icon_id = "shopping_cart"
         }
 
         if cuisine == "burger" {
