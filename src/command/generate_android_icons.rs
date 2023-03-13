@@ -71,6 +71,7 @@ impl Element {
         let office = tags["office"].as_str().unwrap_or("");
         let leisure = tags["leisure"].as_str().unwrap_or("");
         let healthcare = tags["healthcare"].as_str().unwrap_or("");
+        let healthcare_speciality = tags["healthcare:speciality"].as_str().unwrap_or("");
         let building = tags["building"].as_str().unwrap_or("");
         let sport = tags["sport"].as_str().unwrap_or("");
         let craft = tags["craft"].as_str().unwrap_or("");
@@ -83,6 +84,10 @@ impl Element {
         let playground = tags["playground"].as_str().unwrap_or("");
         let industrial = tags["industrial"].as_str().unwrap_or("");
         let historic = tags["historic"].as_str().unwrap_or("");
+        let public_transport = tags["public_transport"].as_str().unwrap_or("");
+        let man_made = tags["man_made"].as_str().unwrap_or("");
+        let waterway = tags["waterway"].as_str().unwrap_or("");
+        let rental = tags["rental"].as_str().unwrap_or("");
 
         let mut icon_id: &str = "question_mark";
 
@@ -244,6 +249,10 @@ impl Element {
 
         if office == "limousine_service" {
             icon_id = "local_taxi"
+        }
+
+        if office == "translator" {
+            icon_id = "translate"
         }
 
         if tourism == "hotel" {
@@ -710,6 +719,14 @@ impl Element {
             icon_id = "surfing";
         }
 
+        if shop == "swimming_pool" {
+            icon_id = "pool";
+        }
+
+        if shop == "gold_buyer" {
+            icon_id = "diamond";
+        }
+
         if amenity == "restaurant" {
             icon_id = "restaurant"
         }
@@ -950,6 +967,30 @@ impl Element {
             icon_id = "mail"
         }
 
+        if amenity == "animal_boarding" {
+            icon_id = "pets"
+        }
+
+        if amenity == "events_venue" {
+            icon_id = "celebration"
+        }
+
+        if amenity == "sport_school" {
+            icon_id = "sports_score"
+        }
+
+        if amenity == "casino" {
+            icon_id = "casino"
+        }
+
+        if amenity == "music_school" {
+            icon_id = "music_note"
+        }
+
+        if amenity == "parking" {
+            icon_id = "local_parking"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -983,6 +1024,10 @@ impl Element {
         }
 
         if leisure == "golf_course" {
+            icon_id = "golf_course"
+        }
+
+        if leisure == "miniature_golf" {
             icon_id = "golf_course"
         }
 
@@ -1022,6 +1067,14 @@ impl Element {
             icon_id = "videogame_asset"
         }
 
+        if leisure == "playground" {
+            icon_id = "toys"
+        }
+
+        if leisure == "bowling_alley" {
+            icon_id = "directions_walk"
+        }
+
         if healthcare != "" {
             icon_id = "medical_services"
         }
@@ -1046,6 +1099,14 @@ impl Element {
             icon_id = "visibility"
         }
 
+        if healthcare == "physiotherapist" {
+            icon_id = "medical_services"
+        }
+
+        if healthcare_speciality == "orthodontics" {
+            icon_id = "dentistry"
+        }
+
         if sport == "scuba_diving" {
             icon_id = "scuba_diving"
         }
@@ -1056,6 +1117,18 @@ impl Element {
 
         if sport == "kitesurfing" {
             icon_id = "kitesurfing"
+        }
+
+        if sport == "surfing" {
+            icon_id = "surfing"
+        }
+
+        if sport == "parachuting" {
+            icon_id = "paragliding"
+        }
+
+        if sport == "bowling" {
+            icon_id = "directions_walk"
         }
 
         if craft == "yes" {
@@ -1162,12 +1235,64 @@ impl Element {
             icon_id = "volunteer_activism"
         }
 
+        if craft == "parquet_layer" {
+            icon_id = "grid_view"
+        }
+
+        if craft == "pottery" {
+            icon_id = "potted_plant"
+        }
+
+        if craft == "plumber" {
+            icon_id = "plumbing"
+        }
+
+        if craft == "piano_tuner" {
+            icon_id = "piano"
+        }
+
+        if craft == "watchmaker" {
+            icon_id = "watch"
+        }
+
+        if craft == "goldsmith" {
+            icon_id = "diamond"
+        }
+
+        if craft == "printer" {
+            icon_id = "local_printshop";
+        }
+
+        if craft == "builder" {
+            icon_id = "construction";
+        }
+
+        if craft == "atelier" {
+            icon_id = "palette";
+        }
+
+        if craft == "shoemaker" {
+            icon_id = "footprint";
+        }
+
+        if craft == "stonemason" {
+            icon_id = "architecture";
+        }
+
+        if craft == "sculptor" {
+            icon_id = "architecture";
+        }
+
         if company == "transport" {
             icon_id = "directions_car"
         }
 
         if company == "internet_shop" {
             icon_id = "shopping_cart"
+        }
+
+        if company == "construction" {
+            icon_id = "construction"
         }
 
         if cuisine == "burger" {
@@ -1198,6 +1323,18 @@ impl Element {
             icon_id = "lan"
         }
 
+        if club == "social" {
+            icon_id = "group"
+        }
+
+        if club == "charity" {
+            icon_id = "group"
+        }
+
+        if club == "sport" {
+            icon_id = "sports_score"
+        }
+
         if playground == "structure" {
             icon_id = "attractions"
         }
@@ -1208,6 +1345,22 @@ impl Element {
 
         if historic == "castle" {
             icon_id = "castle"
+        }
+
+        if public_transport == "station" {
+            icon_id = "commute"
+        }
+
+        if man_made == "works" {
+            icon_id = "factory"
+        }
+
+        if waterway == "boatyard" {
+            icon_id = "directions_boat"
+        }
+
+        if rental == "event" {
+            icon_id = "celebration"
         }
 
         if amenity == "fast_food" && cuisine == "ice_cream" {
