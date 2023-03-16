@@ -159,7 +159,12 @@ pub async fn run(db: Connection) -> Result<()> {
         if generate_report::up_to_date(&element.osm_json)
             && element.android_icon() == "question_mark"
         {
-            log::error!("{} Up-to-date element with no icon", element.id);
+            let message = format!(
+                "{} Up-to-date element has no icon",
+                url,
+            );
+            log::error!("{}", message);
+            send_discord_message(message).await;
         }
     }
 

@@ -255,6 +255,10 @@ impl Element {
             icon_id = "translate"
         }
 
+        if office == "charity" {
+            icon_id = "group"
+        }
+
         if tourism == "hotel" {
             icon_id = "hotel";
         }
@@ -989,6 +993,10 @@ impl Element {
 
         if amenity == "parking" {
             icon_id = "local_parking"
+        }
+
+        if amenity == "biergarten" {
+            icon_id = "sports_bar"
         }
 
         if leisure == "sports_centre" {
