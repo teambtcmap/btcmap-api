@@ -1,9 +1,9 @@
 use crate::{model::token, ApiError};
 use actix_web::HttpRequest;
 use rusqlite::{Connection, OptionalExtension};
-use std::env;
+use token::Token;
 
-pub fn is_from_admin(db: &Connection, req: &HttpRequest) -> Result<(), ApiError> {
+pub fn get_admin_token(db: &Connection, req: &HttpRequest) -> Result<Token, ApiError> {
     let auth_header = req
         .headers()
         .get("Authorization")
@@ -21,7 +21,7 @@ pub fn is_from_admin(db: &Connection, req: &HttpRequest) -> Result<(), ApiError>
 
     let secret = auth_header_parts[1];
 
-    let existing_token = db
+    let token = db
         .query_row(
             token::SELECT_BY_SECRET,
             &[(":secret", &secret)],
@@ -29,21 +29,14 @@ pub fn is_from_admin(db: &Connection, req: &HttpRequest) -> Result<(), ApiError>
         )
         .optional()?;
 
-    if existing_token.is_some() {
-        return Ok(());
+    match token {
+        Some(token) => {
+            return Ok(token);
+        }
+        None => {
+            return Err(ApiError::new(401, "Invalid token"));
+        }
     }
-
-    let admin_token = env::var("ADMIN_TOKEN").unwrap_or("".to_string());
-
-    if admin_token.len() == 0 {
-        return Err(ApiError::new(401, "Admin token is not set"));
-    }
-
-    if secret != admin_token {
-        return Err(ApiError::new(401, "Invalid token"));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -62,9 +55,17 @@ mod tests {
 
     #[actix_web::test]
     async fn no_header() {
-        let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
         let db = db::tests::db().unwrap();
+
+        db.execute(
+            token::INSERT,
+            named_params! {
+                ":user_id": "1",
+                ":secret": "test",
+            },
+        )
+        .unwrap();
+
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db))
@@ -105,7 +106,7 @@ mod tests {
 
     #[get("")]
     async fn get(req: HttpRequest, db: Data<Connection>) -> Result<impl Responder, ApiError> {
-        is_from_admin(&db, &req)?;
+        get_admin_token(&db, &req)?;
         Ok(Response::ok())
     }
 }

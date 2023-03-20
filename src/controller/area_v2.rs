@@ -1,6 +1,7 @@
+use crate::model::admin_action;
 use crate::model::area;
 use crate::model::Area;
-use crate::service::auth::is_from_admin;
+use crate::service::auth::get_admin_token;
 use crate::ApiError;
 use actix_web::delete;
 use actix_web::get;
@@ -78,12 +79,20 @@ async fn post(
     req: HttpRequest,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&db, &req)?;
+    let token = get_admin_token(&db, &req)?;
+
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!("User {} attempted to create area {}", token.user_id, args.id),
+        },
+    )?;
 
     if let Some(_) = db
         .query_row(
             area::SELECT_BY_ID,
-            &[(":id", &args.id)],
+            named_params! { ":id": args.id },
             area::SELECT_BY_ID_MAPPER,
         )
         .optional()?
@@ -107,12 +116,20 @@ async fn post_json(
     req: HttpRequest,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&db, &req)?;
+    let token = get_admin_token(&db, &req)?;
+
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!("User {} attempted to create area {}", token.user_id, args.id),
+        },
+    )?;
 
     if let Some(_) = db
         .query_row(
             area::SELECT_BY_ID,
-            &[(":id", &args.id)],
+            named_params! { ":id": args.id },
             area::SELECT_BY_ID_MAPPER,
         )
         .optional()?
@@ -166,7 +183,7 @@ async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<GetIte
 
     db.query_row(
         area::SELECT_BY_ID,
-        &[(":id", &id)],
+        named_params! { ":id": id },
         area::SELECT_BY_ID_MAPPER,
     )
     .optional()?
@@ -184,14 +201,21 @@ async fn patch_by_id(
     args: Json<PatchArgs>,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&db, &req)?;
+    let token = get_admin_token(&db, &req)?;
+    let area_id = id.into_inner();
 
-    let id = id.into_inner();
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!("User {} attempted to update tags for area {}", token.user_id, area_id),
+        },
+    )?;
 
     let area: Option<Area> = db
         .query_row(
             area::SELECT_BY_ID,
-            &[(":id", &id)],
+            named_params! { ":id": area_id },
             area::SELECT_BY_ID_MAPPER,
         )
         .optional()?;
@@ -201,7 +225,7 @@ async fn patch_by_id(
         None => {
             return Err(ApiError::new(
                 404,
-                &format!("There is no area with id {id}"),
+                &format!("There is no area with id {area_id}"),
             ));
         }
     };
@@ -240,14 +264,21 @@ async fn post_tags(
     args: Form<PostTagsArgs>,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&db, &req)?;
+    let token = get_admin_token(&db, &req)?;
+    let area_id = id.into_inner();
 
-    let id = id.into_inner();
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!("[deprecated_api] User {} attempted to update tag {} for area {}", token.user_id, args.name, area_id),
+        },
+    )?;
 
     let area: Option<Area> = db
         .query_row(
             area::SELECT_BY_ID,
-            &[(":id", &id)],
+            named_params! { ":id": area_id },
             area::SELECT_BY_ID_MAPPER,
         )
         .optional()?;
@@ -277,7 +308,7 @@ async fn post_tags(
         }
         None => Err(ApiError::new(
             404,
-            &format!("There is no area with id {id}"),
+            &format!("There is no area with id {area_id}"),
         )),
     }
 }
@@ -288,9 +319,16 @@ async fn delete_by_id(
     req: HttpRequest,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&db, &req)?;
-
+    let token = get_admin_token(&db, &req)?;
     let id = id.into_inner();
+
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!("User {} attempted to delete area {}", token.user_id, id),
+        },
+    )?;
 
     let area: Option<Area> = db
         .query_row(
@@ -317,20 +355,24 @@ async fn delete_by_id(
 mod tests {
     use super::*;
     use crate::command::db::tests::db;
+    use crate::model::token;
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
-    use std::env;
 
     #[actix_web::test]
     async fn post() -> Result<()> {
         let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
+        let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db()?))
+                .app_data(Data::new(db))
                 .service(scope("/").service(super::post)),
         )
         .await;
@@ -350,8 +392,11 @@ mod tests {
     #[actix_web::test]
     async fn post_json() -> Result<()> {
         let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
         let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
         let db_clone = Connection::open(db.path().unwrap())?;
         let app = test::init_service(
             App::new()
@@ -462,8 +507,11 @@ mod tests {
     #[actix_web::test]
     async fn patch_by_id() -> Result<()> {
         let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
         let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
         let db_clone = Connection::open(db.path().unwrap())?;
         let area_id = "test";
         db.execute(area::INSERT, named_params![":id": area_id])?;
@@ -513,8 +561,11 @@ mod tests {
     #[actix_web::test]
     async fn post_tags() -> Result<()> {
         let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
         let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
         let area_id = "test";
         db.execute(area::INSERT, named_params![":id": area_id])?;
         let app =
@@ -535,8 +586,11 @@ mod tests {
     #[actix_web::test]
     async fn delete() -> Result<()> {
         let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
         let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
         let db_clone = Connection::open(db.path().unwrap())?;
         let area_id = "test";
         db.execute(area::INSERT, named_params! { ":id": area_id })?;

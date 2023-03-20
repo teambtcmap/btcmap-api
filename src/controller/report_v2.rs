@@ -1,6 +1,7 @@
+use crate::model::admin_action;
 use crate::model::report;
 use crate::model::Report;
-use crate::service::auth::is_from_admin;
+use crate::service::auth::get_admin_token;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::post;
@@ -105,14 +106,21 @@ async fn post_tags(
     args: Form<PostTagsArgs>,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&db, &req)?;
+    let token = get_admin_token(&db, &req)?;
+    let report_id = id.into_inner();
 
-    let id = id.into_inner();
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!("[deprecated_api] User {} attempted to update tag {} for report {}", token.user_id, args.name, report_id),
+        },
+    )?;
 
     let report: Option<Report> = db
         .query_row(
             report::SELECT_BY_ID,
-            &[(":id", &id)],
+            named_params! { ":id": report_id },
             report::SELECT_BY_ID_MAPPER,
         )
         .optional()?;
@@ -142,18 +150,17 @@ async fn post_tags(
         }
         None => Err(ApiError::new(
             404,
-            &format!("There is no area with id {id}"),
+            &format!("There is no report with id {report_id}"),
         )),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
     use super::*;
     use crate::command::db::tests::db;
     use crate::Result;
+    use crate::model::token;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
@@ -265,8 +272,11 @@ mod tests {
     #[actix_web::test]
     async fn post_tags() -> Result<()> {
         let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
         let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
         db.execute(
             report::INSERT,
             named_params! {

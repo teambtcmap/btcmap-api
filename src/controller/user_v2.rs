@@ -1,6 +1,7 @@
+use crate::model::admin_action;
 use crate::model::user;
 use crate::model::User;
-use crate::service::auth::is_from_admin;
+use crate::service::auth::get_admin_token;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::post;
@@ -103,14 +104,21 @@ async fn post_tags(
     args: Form<PostTagsArgs>,
     db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    is_from_admin(&db, &req)?;
+    let token = get_admin_token(&db, &req)?;
+    let user_id = id.into_inner();
 
-    let id = id.into_inner();
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!("[deprecated_api] User {} attempted to update tag {} for user {}", token.user_id, args.name, user_id),
+        },
+    )?;
 
     let user: Option<User> = db
         .query_row(
             user::SELECT_BY_ID,
-            &[(":id", &id)],
+            named_params! { ":id": user_id },
             user::SELECT_BY_ID_MAPPER,
         )
         .optional()?;
@@ -140,7 +148,7 @@ async fn post_tags(
         }
         None => Err(ApiError::new(
             404,
-            &format!("There is no user with id {id}"),
+            &format!("There is no user with id {user_id}"),
         )),
     }
 }
@@ -149,6 +157,7 @@ async fn post_tags(
 mod tests {
     use super::*;
     use crate::command::db::tests::db;
+    use crate::model::token;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -156,7 +165,6 @@ mod tests {
     use reqwest::StatusCode;
     use rusqlite::named_params;
     use serde_json::Value;
-    use std::env;
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
@@ -241,8 +249,11 @@ mod tests {
     #[actix_web::test]
     async fn post_tags() -> Result<()> {
         let admin_token = "test";
-        env::set_var("ADMIN_TOKEN", admin_token);
         let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
         let user_id = 1;
         db.execute(
             user::INSERT,
