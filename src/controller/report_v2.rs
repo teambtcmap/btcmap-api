@@ -4,9 +4,8 @@ use crate::model::Report;
 use crate::service::auth::get_admin_token;
 use crate::ApiError;
 use actix_web::get;
-use actix_web::post;
+use actix_web::patch;
 use actix_web::web::Data;
-use actix_web::web::Form;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
@@ -18,6 +17,7 @@ use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
 
 #[derive(Deserialize)]
@@ -31,7 +31,7 @@ pub struct GetItem {
     pub id: i64,
     pub area_id: String,
     pub date: String,
-    pub tags: Value,
+    pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -99,21 +99,28 @@ pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<Ge
     ))
 }
 
-#[post("{id}/tags")]
-async fn post_tags(
+#[patch("{id}/tags")]
+async fn patch_tags(
+    args: Json<Map<String, Value>>,
+    db: Data<Connection>,
     id: Path<String>,
     req: HttpRequest,
-    args: Form<PostTagsArgs>,
-    db: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&db, &req)?;
     let report_id = id.into_inner();
+
+    let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
 
     db.execute(
         admin_action::INSERT,
         named_params! {
             ":user_id": token.user_id,
-            ":message": format!("[deprecated_api] User {} attempted to update tag {} for report {}", token.user_id, args.name, report_id),
+            ":message": format!(
+                "User {} attempted to update tags {} for report {}",
+                token.user_id,
+                keys.join(", "),
+                report_id,
+            ),
         },
     )?;
 
@@ -125,34 +132,31 @@ async fn post_tags(
         )
         .optional()?;
 
-    match report {
-        Some(report) => {
-            if args.value.len() > 0 {
-                db.execute(
-                    report::INSERT_TAG,
-                    named_params! {
-                        ":report_id": report.id,
-                        ":tag_name": format!("$.{}", args.name),
-                        ":tag_value": args.value,
-                    },
-                )?;
-            } else {
-                db.execute(
-                    report::DELETE_TAG,
-                    named_params! {
-                        ":report_id": report.id,
-                        ":tag_name": format!("$.{}", args.name),
-                    },
-                )?;
-            }
-
-            Ok(HttpResponse::Created())
+    let report = match report {
+        Some(v) => v,
+        None => {
+            return Err(ApiError::new(
+                404,
+                &format!("There is no report with id {report_id}"),
+            ));
         }
-        None => Err(ApiError::new(
-            404,
-            &format!("There is no report with id {report_id}"),
-        )),
-    }
+    };
+
+    let mut old_tags = report.tags.clone();
+
+    let mut merged_tags = Map::new();
+    merged_tags.append(&mut old_tags);
+    merged_tags.append(&mut args.clone());
+
+    db.execute(
+        report::UPDATE_TAGS,
+        named_params! {
+            ":report_id": report_id,
+            ":tags": serde_json::to_string(&merged_tags).unwrap(),
+        },
+    )?;
+
+    Ok(HttpResponse::Ok())
 }
 
 #[cfg(test)]
@@ -166,7 +170,7 @@ mod tests {
     use actix_web::{test, App};
     use reqwest::StatusCode;
     use rusqlite::named_params;
-    use serde_json::Value;
+    use serde_json::{Value, json};
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
@@ -270,7 +274,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn post_tags() -> Result<()> {
+    async fn patch_tags() -> Result<()> {
         let admin_token = "test";
         let db = db()?;
         db.execute(
@@ -278,25 +282,18 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         db.execute(
-            report::INSERT,
-            named_params! {
-                ":area_id" : "",
-                ":date" : "",
-                ":tags" : "{}",
-            },
+            "INSERT INTO report (area_id, date, updated_at) VALUES ('', '', '2022-01-05')",
+            [],
         )?;
         let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::post_tags)).await;
-        let req = TestRequest::post()
+            test::init_service(App::new().app_data(Data::new(db)).service(super::patch_tags)).await;
+        let req = TestRequest::patch()
             .uri(&format!("/1/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
-            .set_form(PostTagsArgs {
-                name: "foo".into(),
-                value: "bar".into(),
-            })
+            .set_json(json!({ "foo": "bar" }))
             .to_request();
         let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::CREATED);
+        assert_eq!(res.status(), StatusCode::OK);
         Ok(())
     }
 }

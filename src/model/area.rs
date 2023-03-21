@@ -160,7 +160,7 @@ pub static SELECT_UPDATED_SINCE: &str = r#"
 
 pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
 
-pub static INSERT_TAGS: &str = r#"
+pub static UPDATE_TAGS: &str = r#"
     UPDATE area
     SET tags = :tags
     WHERE id = :area_id

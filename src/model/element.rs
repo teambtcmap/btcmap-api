@@ -1,13 +1,14 @@
 use rusqlite::Result;
 use rusqlite::Row;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
 
 #[derive(Serialize)]
 pub struct Element {
     pub id: String,
     pub osm_json: Value,
-    pub tags: Value,
+    pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -68,6 +69,12 @@ pub static SELECT_UPDATED_SINCE: &str = r#"
 
 pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Element> = full_mapper();
 
+pub static UPDATE_TAGS: &str = r#"
+    UPDATE element
+    SET tags = :tags
+    WHERE id = :element_id
+"#;
+
 pub static UPDATE_DELETED_AT: &str = r#"
     UPDATE element
     SET deleted_at = :deleted_at
@@ -104,7 +111,7 @@ const fn full_mapper() -> fn(&Row) -> Result<Element> {
         let osm_json: Value = serde_json::from_str(&osm_json).unwrap_or_default();
 
         let tags: String = row.get(2)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
+        let tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(Element {
             id: row.get(0)?,

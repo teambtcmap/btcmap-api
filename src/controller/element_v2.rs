@@ -4,6 +4,7 @@ use crate::model::Element;
 use crate::service::auth::get_admin_token;
 use crate::ApiError;
 use actix_web::get;
+use actix_web::patch;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Form;
@@ -18,6 +19,7 @@ use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
 
 #[derive(Deserialize)]
@@ -30,7 +32,7 @@ pub struct GetArgs {
 pub struct GetItem {
     pub id: String,
     pub osm_json: Value,
-    pub tags: Value,
+    pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -100,6 +102,66 @@ pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<Ge
     ))
 }
 
+#[patch("{id}/tags")]
+async fn patch_tags(
+    args: Json<Map<String, Value>>,
+    db: Data<Connection>,
+    id: Path<String>,
+    req: HttpRequest,
+) -> Result<impl Responder, ApiError> {
+    let token = get_admin_token(&db, &req)?;
+    let element_id = id.into_inner();
+
+    let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
+
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!(
+                "User {} attempted to update tags {} for element {}",
+                token.user_id,
+                keys.join(", "),
+                element_id,
+            ),
+        },
+    )?;
+
+    let element: Option<Element> = db
+        .query_row(
+            element::SELECT_BY_ID,
+            named_params! { ":id": element_id },
+            element::SELECT_BY_ID_MAPPER,
+        )
+        .optional()?;
+
+    let element = match element {
+        Some(v) => v,
+        None => {
+            return Err(ApiError::new(
+                404,
+                &format!("There is no element with id {element_id}"),
+            ));
+        }
+    };
+
+    let mut old_tags = element.tags.clone();
+
+    let mut merged_tags = Map::new();
+    merged_tags.append(&mut old_tags);
+    merged_tags.append(&mut args.clone());
+
+    db.execute(
+        element::UPDATE_TAGS,
+        named_params! {
+            ":element_id": element_id,
+            ":tags": serde_json::to_string(&merged_tags).unwrap(),
+        },
+    )?;
+
+    Ok(HttpResponse::Ok())
+}
+
 #[post("{id}/tags")]
 async fn post_tags(
     id: Path<String>,
@@ -160,13 +222,14 @@ async fn post_tags(
 mod tests {
     use super::*;
     use crate::command::db::tests::db;
-    use crate::Result;
     use crate::model::token;
+    use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
     use reqwest::StatusCode;
     use rusqlite::named_params;
+    use serde_json::json;
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
@@ -283,6 +346,34 @@ mod tests {
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, element_id);
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn patch_tags() -> Result<()> {
+        let admin_token = "test";
+        let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
+        let element_id = "node:1";
+        db.execute(
+            element::INSERT,
+            named_params! {
+                ":id": element_id,
+                ":osm_json": "{}",
+            },
+        )?;
+        let app =
+            test::init_service(App::new().app_data(Data::new(db)).service(super::patch_tags)).await;
+        let req = TestRequest::patch()
+            .uri(&format!("/{element_id}/tags"))
+            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .set_json(json!({ "foo": "bar" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
         Ok(())
     }
 

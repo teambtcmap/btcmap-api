@@ -84,7 +84,7 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
                 merged_tags.append(&mut new_tags_sorted);
 
                 db.execute(
-                    area::INSERT_TAGS,
+                    area::UPDATE_TAGS,
                     named_params! {
                         ":area_id": new_area.id,
                         ":tags": serde_json::to_string(&merged_tags).unwrap(),
@@ -108,7 +108,7 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
                 )?;
 
                 db.execute(
-                    area::INSERT_TAGS,
+                    area::UPDATE_TAGS,
                     named_params! {
                         ":area_id": new_area.id,
                         ":tags": serde_json::to_string(&new_tags_sorted).unwrap(),

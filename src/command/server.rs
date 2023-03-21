@@ -23,18 +23,20 @@ pub async fn run() -> Result<()> {
                 scope("elements")
                     .service(controller::element_v2::get)
                     .service(controller::element_v2::get_by_id)
+                    .service(controller::element_v2::patch_tags)
                     .service(controller::element_v2::post_tags),
             )
             .service(
                 scope("events")
                     .service(controller::event_v2::get)
-                    .service(controller::event_v2::get_by_id),
+                    .service(controller::event_v2::get_by_id)
+                    .service(controller::event_v2::patch_tags),
             )
             .service(
                 scope("users")
                     .service(controller::user_v2::get)
                     .service(controller::user_v2::get_by_id)
-                    .service(controller::user_v2::post_tags),
+                    .service(controller::user_v2::patch_tags)
             )
             .service(
                 scope("areas")
@@ -42,6 +44,7 @@ pub async fn run() -> Result<()> {
                     .service(controller::area_v2::post_json)
                     .service(controller::area_v2::get)
                     .service(controller::area_v2::get_by_id)
+                    .service(controller::area_v2::patch_tags)
                     .service(controller::area_v2::patch_by_id)
                     .service(controller::area_v2::post_tags)
                     .service(controller::area_v2::delete_by_id),
@@ -50,7 +53,7 @@ pub async fn run() -> Result<()> {
                 scope("reports")
                     .service(controller::report_v2::get)
                     .service(controller::report_v2::get_by_id)
-                    .service(controller::report_v2::post_tags),
+                    .service(controller::report_v2::patch_tags),
             )
             .service(
                 scope("v2")
@@ -58,18 +61,20 @@ pub async fn run() -> Result<()> {
                         scope("elements")
                             .service(controller::element_v2::get)
                             .service(controller::element_v2::get_by_id)
+                            .service(controller::element_v2::patch_tags)
                             .service(controller::element_v2::post_tags),
                     )
                     .service(
                         scope("events")
                             .service(controller::event_v2::get)
-                            .service(controller::event_v2::get_by_id),
+                            .service(controller::event_v2::get_by_id)
+                            .service(controller::event_v2::patch_tags),
                     )
                     .service(
                         scope("users")
                             .service(controller::user_v2::get)
                             .service(controller::user_v2::get_by_id)
-                            .service(controller::user_v2::post_tags),
+                            .service(controller::user_v2::patch_tags)
                     )
                     .service(
                         scope("areas")
@@ -77,6 +82,7 @@ pub async fn run() -> Result<()> {
                             .service(controller::area_v2::post_json)
                             .service(controller::area_v2::get)
                             .service(controller::area_v2::get_by_id)
+                            .service(controller::area_v2::patch_tags)
                             .service(controller::area_v2::patch_by_id)
                             .service(controller::area_v2::post_tags)
                             .service(controller::area_v2::delete_by_id),
@@ -85,7 +91,7 @@ pub async fn run() -> Result<()> {
                         scope("reports")
                             .service(controller::report_v2::get)
                             .service(controller::report_v2::get_by_id)
-                            .service(controller::report_v2::post_tags),
+                            .service(controller::report_v2::patch_tags),
                     ),
             )
     })

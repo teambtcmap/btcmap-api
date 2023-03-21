@@ -85,7 +85,7 @@ async fn post(
         admin_action::INSERT,
         named_params! {
             ":user_id": token.user_id,
-            ":message": format!("User {} attempted to create area {}", token.user_id, args.id),
+            ":message": format!("[legacy_api] User {} attempted to create area {}", token.user_id, args.id),
         },
     )?;
 
@@ -143,7 +143,7 @@ async fn post_json(
     db.execute(area::INSERT, named_params![ ":id": args.id ])?;
 
     db.execute(
-        area::INSERT_TAGS,
+        area::UPDATE_TAGS,
         named_params![ ":area_id": args.id, ":tags": serde_json::to_string(&args.tags).unwrap() ],
     )?;
 
@@ -247,9 +247,69 @@ async fn patch_by_id(
     merged_tags.append(&mut new_tags);
 
     db.execute(
-        area::INSERT_TAGS,
+        area::UPDATE_TAGS,
         named_params! {
             ":area_id": area.id,
+            ":tags": serde_json::to_string(&merged_tags).unwrap(),
+        },
+    )?;
+
+    Ok(HttpResponse::Ok())
+}
+
+#[patch("{id}/tags")]
+async fn patch_tags(
+    args: Json<Map<String, Value>>,
+    db: Data<Connection>,
+    id: Path<String>,
+    req: HttpRequest,
+) -> Result<impl Responder, ApiError> {
+    let token = get_admin_token(&db, &req)?;
+    let area_id = id.into_inner();
+
+    let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
+
+    db.execute(
+        admin_action::INSERT,
+        named_params! {
+            ":user_id": token.user_id,
+            ":message": format!(
+                "User {} attempted to update tags {} for area {}",
+                token.user_id,
+                keys.join(", "),
+                area_id,
+            ),
+        },
+    )?;
+
+    let area: Option<Area> = db
+        .query_row(
+            area::SELECT_BY_ID,
+            named_params! { ":id": area_id },
+            area::SELECT_BY_ID_MAPPER,
+        )
+        .optional()?;
+
+    let area = match area {
+        Some(v) => v,
+        None => {
+            return Err(ApiError::new(
+                404,
+                &format!("There is no area with id {area_id}"),
+            ));
+        }
+    };
+
+    let mut old_tags = area.tags.clone();
+
+    let mut merged_tags = Map::new();
+    merged_tags.append(&mut old_tags);
+    merged_tags.append(&mut args.clone());
+
+    db.execute(
+        area::UPDATE_TAGS,
+        named_params! {
+            ":area_id": area_id,
             ":tags": serde_json::to_string(&merged_tags).unwrap(),
         },
     )?;
@@ -501,6 +561,28 @@ mod tests {
         let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, area_id);
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn patch_tags() -> Result<()> {
+        let admin_token = "test";
+        let db = db()?;
+        db.execute(
+            token::INSERT,
+            named_params! { ":user_id": 1, ":secret": admin_token },
+        )?;
+        let area_id = "test";
+        db.execute(area::INSERT, named_params![":id": area_id])?;
+        let app =
+            test::init_service(App::new().app_data(Data::new(db)).service(super::patch_tags)).await;
+        let req = TestRequest::patch()
+            .uri(&format!("/{area_id}/tags"))
+            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .set_json(json!({ "foo": "bar" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
         Ok(())
     }
 

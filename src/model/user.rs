@@ -1,11 +1,12 @@
 use rusqlite::Result;
 use rusqlite::Row;
+use serde_json::Map;
 use serde_json::Value;
 
 pub struct User {
     pub id: i64,
     pub osm_json: Value,
-    pub tags: Value,
+    pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -66,9 +67,9 @@ pub static SELECT_UPDATED_SINCE: &str = r#"
 
 pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<User> = full_mapper();
 
-pub static INSERT_TAG: &str = r#"
+pub static UPDATE_TAGS: &str = r#"
     UPDATE user
-    SET tags = json_set(tags, :tag_name, :tag_value)
+    SET tags = :tags
     WHERE id = :user_id
 "#;
 
@@ -78,19 +79,13 @@ pub static UPDATE_OSM_JSON: &str = r#"
     WHERE id = :id
 "#;
 
-pub static DELETE_TAG: &str = r#"
-    UPDATE user
-    SET tags = json_remove(tags, :tag_name)
-    WHERE id = :user_id
-"#;
-
 const fn full_mapper() -> fn(&Row) -> Result<User> {
     |row: &Row| -> Result<User> {
         let osm_json: String = row.get(1)?;
         let osm_json: Value = serde_json::from_str(&osm_json).unwrap_or_default();
 
         let tags: String = row.get(2)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
+        let tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(User {
             id: row.get(0)?,

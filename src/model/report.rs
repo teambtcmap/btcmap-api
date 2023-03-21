@@ -1,12 +1,13 @@
 use rusqlite::Result;
 use rusqlite::Row;
+use serde_json::Map;
 use serde_json::Value;
 
 pub struct Report {
     pub id: i64,
     pub area_id: String,
     pub date: String,
-    pub tags: Value,
+    pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -87,22 +88,16 @@ pub static SELECT_BY_AREA_ID_AND_DATE: &str = r#"
 
 pub static SELECT_BY_AREA_ID_AND_DATE_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 
-pub static INSERT_TAG: &str = r#"
+pub static UPDATE_TAGS: &str = r#"
     UPDATE report
-    SET tags = json_set(tags, :tag_name, :tag_value)
+    SET tags = :tags
     WHERE id = :report_id
-"#;
-
-pub static DELETE_TAG: &str = r#"
-    UPDATE report
-    SET tags = json_remove(tags, :tag_name)
-    where id = :report_id
 "#;
 
 const fn full_mapper() -> fn(&Row) -> Result<Report> {
     |row: &Row| -> Result<Report> {
         let tags: String = row.get(3)?;
-        let tags: Value = serde_json::from_str(&tags).unwrap_or_default();
+        let tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(Report {
             id: row.get(0)?,
