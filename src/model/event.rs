@@ -94,9 +94,9 @@ const fn full_mapper() -> fn(&Row) -> Result<Event> {
             element_id: row.get(2)?,
             r#type: row.get(3)?,
             tags: tags,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
-            deleted_at: row.get(6)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+            deleted_at: row.get(7)?,
         })
     }
 }
