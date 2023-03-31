@@ -9,12 +9,20 @@ use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
+use serde::Deserialize;
+use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use tokio::time::sleep;
 use tokio::time::Duration;
+
+#[cfg(not(test))]
+use log::info;
+
+#[cfg(test)]
+use std::println as info;
 
 pub static OVERPASS_API_URL: &str = "https://z.overpass-api.de/api/interpreter";
 
@@ -27,26 +35,61 @@ pub static OVERPASS_API_QUERY: &str = r#"
     out meta geom;
 "#;
 
-pub async fn run(mut db: Connection) -> Result<()> {
-    log::info!("Starting sync");
-    log::info!("Querying OSM API, it could take a while...");
+#[derive(Deserialize)]
+struct OverpassJson {
+    version: f64,
+    generator: String,
+    osm3s: Osm3s,
+    elements: Vec<Value>,
+}
+
+#[derive(Deserialize)]
+struct Osm3s {
+    timestamp_osm_base: String,
+}
+
+async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson> {
     let response = reqwest::Client::new()
-        .post(OVERPASS_API_URL)
-        .body(OVERPASS_API_QUERY)
+        .post(api_url)
+        .body(query.to_string())
         .send()
         .await?;
 
-    log::info!("Fetched new data, response code: {}", response.status());
+    info!(
+        "{}",
+        json!(
+            {
+                "message": "Got response from Overpass",
+                "http_status_code": response.status().as_u16(),
+            }
+        )
+    );
 
-    let response = response.json::<Value>().await?;
+    let response = response.json::<OverpassJson>().await?;
 
-    let fresh_elements: &Vec<Value> = response["elements"]
-        .as_array()
-        .ok_or(Error::Other("Failed to parse elements".into()))?;
+    info!(
+        "{}",
+        json!(
+            {
+                "message": "Parsed Overpass response",
+                "response_version": response.version,
+                "generator": response.generator,
+                "timestamp_osm_base": response.osm3s.timestamp_osm_base,
+                "elements": response.elements.len(),
+            }
+        )
+    );
 
-    log::info!("Fetched {} elements", fresh_elements.len());
+    Ok(response)
+}
 
-    if fresh_elements.len() < 5000 {
+pub async fn run(mut db: Connection) -> Result<()> {
+    log::info!("Starting sync");
+    log::info!("Querying Overpass API, it could take a while...");
+    let response = fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY).await?;
+    log::info!("Fetched {} elements", response.elements.len());
+
+    if response.elements.len() < 5000 {
         send_discord_message("Got a suspicious resopnse from OSM, check server logs".to_string())
             .await;
         Err(Error::Other(
@@ -68,7 +111,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     log::info!("Found {} cached elements", elements.len());
 
-    let fresh_element_ids: HashSet<String> = fresh_elements
+    let fresh_element_ids: HashSet<String> = response.elements
         .iter()
         .map(|it| {
             format!(
@@ -150,7 +193,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
         }
     }
 
-    for fresh_element in fresh_elements {
+    for fresh_element in response.elements {
         let element_type = fresh_element["type"].as_str().unwrap();
         let osm_id = fresh_element["id"].as_i64().unwrap();
         let btcmap_id = format!("{element_type}:{osm_id}");
@@ -163,7 +206,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
                 let old_element_osm_json = serde_json::to_string(&element.osm_json)?;
-                let new_element_osm_json = serde_json::to_string(fresh_element)?;
+                let new_element_osm_json = serde_json::to_string(&fresh_element)?;
 
                 if new_element_osm_json != old_element_osm_json {
                     log::info!("Element {btcmap_id} was updated");
@@ -221,7 +264,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
                     element::INSERT,
                     named_params! {
                         ":id": &btcmap_id,
-                        ":osm_json": serde_json::to_string(fresh_element)?,
+                        ":osm_json": serde_json::to_string(&fresh_element)?,
                     },
                 )?;
 
@@ -399,4 +442,14 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
         },
     )
     .unwrap();
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::{OVERPASS_API_URL, OVERPASS_API_QUERY};
+
+    #[actix_web::test]
+    async fn fetch_elements_from_osm() {
+        super::fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY).await.unwrap();
+    }
 }
