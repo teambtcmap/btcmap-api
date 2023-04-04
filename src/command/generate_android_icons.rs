@@ -1135,6 +1135,10 @@ impl Element {
             icon_id = "paragliding"
         }
 
+        if sport == "free_flying" {
+            icon_id = "paragliding"
+        }
+
         if sport == "bowling" {
             icon_id = "directions_walk"
         }
