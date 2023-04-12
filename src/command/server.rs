@@ -56,6 +56,10 @@ pub async fn run() -> Result<()> {
                     .service(controller::report_v2::patch_tags),
             )
             .service(
+                scope("tiles")
+                    .service(controller::tile::get),
+            )
+            .service(
                 scope("v2")
                     .service(
                         scope("elements")
@@ -92,6 +96,10 @@ pub async fn run() -> Result<()> {
                             .service(controller::report_v2::get)
                             .service(controller::report_v2::get_by_id)
                             .service(controller::report_v2::patch_tags),
+                    )
+                    .service(
+                        scope("tiles")
+                            .service(controller::tile::get),
                     ),
             )
     })

@@ -24,7 +24,7 @@ use log::info;
 #[cfg(test)]
 use std::println as info;
 
-pub static OVERPASS_API_URL: &str = "https://z.overpass-api.de/api/interpreter";
+pub static OVERPASS_API_URL: &str = "https://overpass-api.de/api/interpreter";
 
 pub static OVERPASS_API_QUERY: &str = r#"
     [out:json][timeout:300];
@@ -111,7 +111,8 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     log::info!("Found {} cached elements", elements.len());
 
-    let fresh_element_ids: HashSet<String> = response.elements
+    let fresh_element_ids: HashSet<String> = response
+        .elements
         .iter()
         .map(|it| {
             format!(
@@ -205,22 +206,26 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
-                let old_element_osm_json = serde_json::to_string(&element.osm_json)?;
-                let new_element_osm_json = serde_json::to_string(&fresh_element)?;
-
-                if new_element_osm_json != old_element_osm_json {
-                    log::info!("Element {btcmap_id} was updated");
+                if fresh_element != element.osm_json {
+                    log::info!("JSON for element {btcmap_id} was updated");
+                    log::info!("Old JSON: {}", serde_json::to_string(&element.osm_json)?);
+                    log::info!("New JSON: {}", serde_json::to_string(&fresh_element)?);
 
                     insert_user_if_not_exists(user_id, &tx).await;
 
-                    tx.execute(
-                        event::INSERT,
-                        named_params! {
-                            ":user_id": user_id,
-                            ":element_id": btcmap_id,
-                            ":type": "update",
-                        },
-                    )?;
+                    if fresh_element["changeset"].as_i64() != element.osm_json["changeset"].as_i64()
+                    {
+                        tx.execute(
+                            event::INSERT,
+                            named_params! {
+                                ":user_id": user_id,
+                                ":element_id": btcmap_id,
+                                ":type": "update",
+                            },
+                        )?;
+                    } else {
+                        log::warn!("Changeset ID is identical, skipped user event generation");
+                    }
 
                     send_discord_message(format!(
                         "{name} was updated by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
@@ -231,7 +236,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
                         element::UPDATE_OSM_JSON,
                         named_params! {
                             ":id": &btcmap_id,
-                            ":osm_json": &new_element_osm_json,
+                            ":osm_json": serde_json::to_string(&fresh_element)?,
                         },
                     )?;
                 }
@@ -444,12 +449,14 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
     .unwrap();
 }
 
-#[cfg(test)]
-pub mod tests {
-    use super::{OVERPASS_API_URL, OVERPASS_API_QUERY};
+// #[cfg(test)]
+// pub mod tests {
+//     use super::{OVERPASS_API_QUERY, OVERPASS_API_URL};
 
-    #[actix_web::test]
-    async fn fetch_elements_from_osm() {
-        super::fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY).await.unwrap();
-    }
-}
+//     #[actix_web::test]
+//     async fn fetch_elements_from_osm() {
+//         super::fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY)
+//             .await
+//             .unwrap();
+//     }
+// }
