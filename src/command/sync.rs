@@ -18,12 +18,6 @@ use std::env;
 use tokio::time::sleep;
 use tokio::time::Duration;
 
-#[cfg(not(test))]
-use log::info;
-
-#[cfg(test)]
-use std::println as info;
-
 pub static OVERPASS_API_URL: &str = "https://overpass-api.de/api/interpreter";
 
 pub static OVERPASS_API_QUERY: &str = r#"
@@ -48,6 +42,31 @@ struct Osm3s {
     timestamp_osm_base: String,
 }
 
+pub async fn run(db: Connection) -> Result<()> {
+    log::info!(
+        "{}",
+        json!({
+            "message": "Starting sync",
+            "db_location": db.path().unwrap(),
+        }),
+    );
+
+    log::info!(
+        "{}",
+        json!({
+            "message": "Querying Overpass API, it could take a while...",
+            "api_url": OVERPASS_API_URL,
+            "query": OVERPASS_API_QUERY,
+        }),
+    );
+
+    let json = fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY).await?;
+    process_overpass_json(json, db).await?;
+
+    log::info!("{}", json!({ "message": "Finished sync" }));
+    Ok(())
+}
+
 async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson> {
     let response = reqwest::Client::new()
         .post(api_url)
@@ -55,7 +74,7 @@ async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson>
         .send()
         .await?;
 
-    info!(
+    log::info!(
         "{}",
         json!(
             {
@@ -67,7 +86,7 @@ async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson>
 
     let response = response.json::<OverpassJson>().await?;
 
-    info!(
+    log::info!(
         "{}",
         json!(
             {
@@ -83,13 +102,8 @@ async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson>
     Ok(response)
 }
 
-pub async fn run(mut db: Connection) -> Result<()> {
-    log::info!("Starting sync");
-    log::info!("Querying Overpass API, it could take a while...");
-    let response = fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY).await?;
-    log::info!("Fetched {} elements", response.elements.len());
-
-    if response.elements.len() < 5000 {
+async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result<()> {
+    if json.elements.len() < 5000 {
         send_discord_message("Got a suspicious resopnse from OSM, check server logs".to_string())
             .await;
         Err(Error::Other(
@@ -111,7 +125,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     log::info!("Found {} cached elements", elements.len());
 
-    let fresh_element_ids: HashSet<String> = response
+    let fresh_element_ids: HashSet<String> = json
         .elements
         .iter()
         .map(|it| {
@@ -194,7 +208,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
         }
     }
 
-    for fresh_element in response.elements {
+    for fresh_element in json.elements {
         let element_type = fresh_element["type"].as_str().unwrap();
         let osm_id = fresh_element["id"].as_i64().unwrap();
         let btcmap_id = format!("{element_type}:{osm_id}");
@@ -321,8 +335,6 @@ pub async fn run(mut db: Connection) -> Result<()> {
     }
 
     tx.commit()?;
-    log::info!("Finished sync");
-
     Ok(())
 }
 
