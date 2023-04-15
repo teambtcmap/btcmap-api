@@ -7,6 +7,8 @@ use rusqlite::Connection;
 use std::fmt;
 use std::fs::create_dir_all;
 use std::fs::remove_file;
+use tracing::info;
+use tracing::warn;
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
@@ -78,7 +80,7 @@ fn execute_migrations(migrations: &Vec<Migration>, db: &mut Connection) -> Resul
         migrations.iter().filter(|it| it.0 > schema_ver).collect();
 
     for migration in new_migrations {
-        log::warn!("Found new migration: {migration}");
+        warn!(%migration, "Found new migration");
         let tx = db.transaction()?;
         tx.execute_batch(&migration.1)?;
         tx.execute_batch(&format!("PRAGMA user_version={}", migration.0))?;
@@ -86,7 +88,7 @@ fn execute_migrations(migrations: &Vec<Migration>, db: &mut Connection) -> Resul
         schema_ver = migration.0;
     }
 
-    log::info!("Database schema is up to date (version {schema_ver})");
+    info!(schema_ver, "Database schema is up to date");
 
     Ok(())
 }
@@ -96,7 +98,8 @@ fn drop(db: Connection) -> Result<()> {
         db.path()
             .ok_or(Error::Other("Failed to find database path".into()))?,
     )?;
-    log::info!("Database file was removed");
+    let db_path = db.path().unwrap();
+    info!(?db_path, "Database file was removed");
     Ok(())
 }
 

@@ -4,9 +4,10 @@ use crate::Connection;
 use crate::Result;
 use rusqlite::named_params;
 use serde_json::Value;
+use tracing::info;
 
 pub async fn run(db: Connection) -> Result<()> {
-    log::info!("Generating Android icons");
+    info!("Generating Android icons");
 
     let elements: Vec<Element> = db
         .prepare(element::SELECT_ALL)?
@@ -19,7 +20,7 @@ pub async fn run(db: Connection) -> Result<()> {
         .filter(|it| it.deleted_at.len() == 0)
         .collect();
 
-    log::info!("Found {} elements", elements.len());
+    info!(elements = elements.len(), "Loaded elements from database");
 
     let mut known = 0;
     let mut unknown = 0;
@@ -29,10 +30,7 @@ pub async fn run(db: Connection) -> Result<()> {
         let new_icon = element.android_icon();
 
         if old_icon != new_icon {
-            log::info!(
-                "Updating icon for element {} ({old_icon} -> {new_icon})",
-                element.id,
-            );
+            info!(element.id, old_icon, new_icon, "Updating icon");
 
             db.execute(
                 element::INSERT_TAG,
@@ -52,9 +50,13 @@ pub async fn run(db: Connection) -> Result<()> {
         }
     }
 
-    log::info!(
-        "Finished generating Android icons. Known: {known}, unknown: {unknown}, coverage: {:.2}%",
-        known as f64 / (known as f64 + unknown as f64) * 100.0
+    let coverage = known as f64 / (known as f64 + unknown as f64) * 100.0;
+
+    info!(
+        known,
+        unknown,
+        coverage = format!("{:.2}", coverage),
+        "Finished generating Android icons",
     );
 
     Ok(())

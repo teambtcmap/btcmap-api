@@ -10,6 +10,7 @@ use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde_json::Map;
 use serde_json::Value;
+use tracing::info;
 
 #[derive(Deserialize)]
 struct ImportedArea {
@@ -18,8 +19,7 @@ struct ImportedArea {
 }
 
 pub async fn run(db: Connection, url: String) -> Result<()> {
-    log::info!("Fetching areas");
-    log::info!("Querying {url}");
+    info!(url, "Fetching areas");
 
     let res = reqwest::get(url).await?;
 
@@ -44,7 +44,7 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
 
         match old_area {
             Some(old_area) => {
-                log::info!("Area {} already exists", new_area.id);
+                info!(new_area.id, "Area already exists");
 
                 let mut old_tags_sorted: BTreeMap<String, Value> = BTreeMap::new();
                 let mut new_tags_sorted: BTreeMap<String, Value> = BTreeMap::new();
@@ -61,7 +61,7 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
                 let new_tags_str = serde_json::to_string_pretty(&new_tags_sorted).unwrap();
 
                 if old_tags_str == new_tags_str {
-                    log::info!("Tags are identical, skipping {}", new_area.id);
+                    info!(new_area.id, "Tags are identical, skipping");
                     continue;
                 } else {
                     let diff = diff::lines(&old_tags_str, &new_tags_str);
@@ -69,10 +69,10 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
                     for line in diff {
                         match line {
                             diff::Result::Left(v) => {
-                                log::info!("- {}", v);
+                                info!("- {}", v);
                             }
                             diff::Result::Right(v) => {
-                                log::info!("+ {}", v);
+                                info!("+ {}", v);
                             }
                             diff::Result::Both(..) => {}
                         }
@@ -92,7 +92,7 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
                 )?;
             }
             None => {
-                log::info!("Area {} doesn't exist", new_area.id);
+                info!(new_area.id, "Area doesn't exist");
 
                 let mut new_tags_sorted: BTreeMap<String, Value> = BTreeMap::new();
 
@@ -118,8 +118,7 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
         }
     }
 
-    log::info!("Fetched {} areas", new_areas.len());
-    log::info!("Finished fetching  areas");
+    info!(areas = new_areas.len(), "Finished fetching areas");
 
     Ok(())
 }

@@ -10,13 +10,16 @@ use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
 use serde::Deserialize;
-use serde_json::json;
 use serde_json::Value;
+use tracing::error;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
+use std::time::SystemTime;
 use tokio::time::sleep;
 use tokio::time::Duration;
+use tracing::info;
+use tracing::warn;
 
 pub static OVERPASS_API_URL: &str = "https://overpass-api.de/api/interpreter";
 
@@ -43,27 +46,30 @@ struct Osm3s {
 }
 
 pub async fn run(db: Connection) -> Result<()> {
-    log::info!(
-        "{}",
-        json!({
-            "message": "Starting sync",
-            "db_location": db.path().unwrap(),
-        }),
+    info!(db_path = ?db.path().unwrap(), "Starting sync");
+    info!(
+        OVERPASS_API_URL,
+        OVERPASS_API_QUERY, "Querying Overpass API, it could take a while..."
     );
 
-    log::info!(
-        "{}",
-        json!({
-            "message": "Querying Overpass API, it could take a while...",
-            "api_url": OVERPASS_API_URL,
-            "query": OVERPASS_API_QUERY,
-        }),
-    );
-
+    let fetch_overpass_json_start = SystemTime::now();
     let json = fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY).await?;
-    process_overpass_json(json, db).await?;
+    let fetch_overpass_json_duration = SystemTime::now()
+        .duration_since(fetch_overpass_json_start)
+        .unwrap();
 
-    log::info!("{}", json!({ "message": "Finished sync" }));
+    let process_overpass_json_start = SystemTime::now();
+    process_overpass_json(json, db).await?;
+    let process_overpass_json_duration = SystemTime::now()
+        .duration_since(process_overpass_json_start)
+        .unwrap();
+
+    info!(
+        fetch_overpass_json_duration_seconds = fetch_overpass_json_duration.as_secs_f64(),
+        process_overpass_json_duration_seconds = process_overpass_json_duration.as_secs_f64(),
+        "Finished sync",
+    );
+
     Ok(())
 }
 
@@ -74,29 +80,19 @@ async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson>
         .send()
         .await?;
 
-    log::info!(
-        "{}",
-        json!(
-            {
-                "message": "Got response from Overpass",
-                "http_status_code": response.status().as_u16(),
-            }
-        )
+    info!(
+        http_status_code = response.status().as_u16(),
+        "Got response from Overpass"
     );
 
     let response = response.json::<OverpassJson>().await?;
 
-    log::info!(
-        "{}",
-        json!(
-            {
-                "message": "Parsed Overpass response",
-                "response_version": response.version,
-                "generator": response.generator,
-                "timestamp_osm_base": response.osm3s.timestamp_osm_base,
-                "elements": response.elements.len(),
-            }
-        )
+    info!(
+        response.version,
+        response.generator,
+        response.osm3s.timestamp_osm_base,
+        elements = response.elements.len(),
+        "Parsed Overpass response",
     );
 
     Ok(response)
@@ -123,7 +119,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
         .map(|row| row.unwrap())
         .collect();
 
-    log::info!("Found {} cached elements", elements.len());
+    info!(db_path = ?tx.path().unwrap(), elements = elements.len(), "Loaded all elements from database");
 
     let fresh_element_ids: HashSet<String> = json
         .elements
@@ -145,9 +141,9 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
             let name = element.osm_json["tags"]["name"]
                 .as_str()
                 .unwrap_or("Unnamed element");
-            log::warn!(
-                "Cached element with id {} was deleted from Overpass or no longer accepts Bitcoin",
-                element.id
+            warn!(
+                element.id,
+                "Cached element was deleted from Overpass or no longer accepts Bitcoin",
             );
 
             let fresh_element = fetch_element(element_type, osm_id).await;
@@ -155,7 +151,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 .clone()
                 .map(|it| it["visible"].as_bool().unwrap_or(true))
                 .unwrap_or(true);
-            log::info!("Deleted from OSM: {deleted_from_osm}");
+            info!(deleted_from_osm);
 
             if !deleted_from_osm {
                 let fresh_element = fresh_element.clone().unwrap();
@@ -165,8 +161,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 let legacy_bitcoin_tag_value = fresh_element["tags"]["payment:bitcoin"]
                     .as_str()
                     .unwrap_or("no");
-                log::info!("Bitcoin tag value: {bitcoin_tag_value}");
-                log::info!("Legacy Bitcoin tag value: {legacy_bitcoin_tag_value}");
+                info!(bitcoin_tag_value, legacy_bitcoin_tag_value);
 
                 if bitcoin_tag_value == "yes" || legacy_bitcoin_tag_value == "yes" {
                     let message =
@@ -200,7 +195,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 "{name} was deleted by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
             ))
             .await;
-            log::info!("Marking element {} as deleted", element.id);
+            info!(element.id, "Marking element as deleted");
             tx.execute(
                 element::MARK_AS_DELETED,
                 named_params! { ":id": element.id },
@@ -221,9 +216,12 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
                 if fresh_element != element.osm_json {
-                    log::info!("JSON for element {btcmap_id} was updated");
-                    log::info!("Old JSON: {}", serde_json::to_string(&element.osm_json)?);
-                    log::info!("New JSON: {}", serde_json::to_string(&fresh_element)?);
+                    info!(
+                        btcmap_id,
+                        old_json = serde_json::to_string(&element.osm_json)?,
+                        new_json = serde_json::to_string(&fresh_element)?,
+                        "Element JSON was updated",
+                    );
 
                     insert_user_if_not_exists(user_id, &tx).await;
 
@@ -238,7 +236,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                             },
                         )?;
                     } else {
-                        log::warn!("Changeset ID is identical, skipped user event generation");
+                        warn!("Changeset ID is identical, skipped user event generation");
                     }
 
                     send_discord_message(format!(
@@ -266,7 +264,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 }
             }
             None => {
-                log::info!("Element {btcmap_id} does not exist, inserting");
+                info!(btcmap_id, "Element does not exist, inserting");
 
                 insert_user_if_not_exists(user_id, &tx).await;
 
@@ -324,7 +322,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                     },
                 )?;
 
-                log::info!("Category: {category_singular}, icon: {android_icon}");
+                info!(category_singular, android_icon);
 
                 send_discord_message(format!(
                     "{name} was added by {user_display_name} (category: {category_singular}, icon: {android_icon}) https://www.openstreetmap.org/{element_type}/{osm_id}"
@@ -340,7 +338,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
 
 async fn send_discord_message(text: String) {
     if let Ok(discord_webhook_url) = env::var("DISCORD_WEBHOOK_URL") {
-        log::info!("Sending Discord message");
+        info!("Sending Discord message");
         let mut args = HashMap::new();
         args.insert("username", "btcmap.org".to_string());
         args.insert("content", text);
@@ -353,10 +351,10 @@ async fn send_discord_message(text: String) {
 
         match response {
             Ok(response) => {
-                log::info!("Discord response status: {:?}", response.status());
+                info!(response_status = ?response.status(), "Got response");
             }
             Err(_) => {
-                log::error!("Failed to send Discord message");
+                error!("Failed to send Discord message");
             }
         }
     }
@@ -368,25 +366,25 @@ async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
     let url = format!(
         "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
     );
-    log::info!("Querying {url}");
+    info!(url, "Querying OSM");
     let res = reqwest::get(&url).await;
 
     if let Err(_) = res {
-        log::error!("Failed to fetch element {element_type}:{element_id}");
+        error!("Failed to fetch element {element_type}:{element_id}");
         return None;
     }
 
     let body = res.unwrap().text().await;
 
     if let Err(_) = body {
-        log::error!("Failed to fetch element {element_type}:{element_id}");
+        error!("Failed to fetch element {element_type}:{element_id}");
         return None;
     }
 
     let body: serde_json::Result<Value> = serde_json::from_str(&body.unwrap());
 
     if let Err(_) = body {
-        log::error!("Failed to fetch element {element_type}:{element_id}");
+        error!("Failed to fetch element {element_type}:{element_id}");
         return None;
     }
 
@@ -394,7 +392,7 @@ async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
     let elements: Option<&Vec<Value>> = body["elements"].as_array();
 
     if elements.is_none() || elements.unwrap().len() == 0 {
-        log::error!("Failed to fetch element {element_type}:{element_id}");
+        error!("Failed to fetch element {element_type}:{element_id}");
         return None;
     }
 
@@ -416,30 +414,30 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
         .unwrap();
 
     if db_user.is_some() {
-        log::info!("User {user_id} already exists");
+        info!(user_id, "User already exists");
         return;
     }
 
     let url = format!("https://api.openstreetmap.org/api/0.6/user/{user_id}.json");
-    log::info!("Querying {url}");
+    info!(url, "Querying OSM");
     let res = reqwest::get(&url).await;
 
     if let Err(_) = res {
-        log::error!("Failed to fetch user {user_id}");
+        error!(user_id, "Failed to fetch user");
         return;
     }
 
     let body = res.unwrap().text().await;
 
     if let Err(_) = body {
-        log::error!("Failed to fetch user {user_id}");
+        error!(user_id, "Failed to fetch user");
         return;
     }
 
     let body: serde_json::Result<Value> = serde_json::from_str(&body.unwrap());
 
     if let Err(_) = body {
-        log::error!("Failed to fetch user {user_id}");
+        error!(user_id, "Failed to fetch user");
         return;
     }
 
@@ -447,7 +445,7 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
     let user: Option<&Value> = body.get("user");
 
     if user.is_none() {
-        log::error!("Failed to fetch user {user_id}");
+        error!(user_id, "Failed to fetch user");
         return;
     }
 

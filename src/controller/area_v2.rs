@@ -421,6 +421,7 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
+    use tracing::info;
 
     #[actix_web::test]
     async fn post() -> Result<()> {
@@ -444,7 +445,7 @@ mod tests {
             })
             .to_request();
         let res = test::call_service(&app, req).await;
-        log::info!("Response status: {}", res.status());
+        info!(response_status = ?res.status());
         assert!(res.status().is_success());
         Ok(())
     }
@@ -486,7 +487,7 @@ mod tests {
             .to_request();
 
         let res = test::call_service(&app, req).await;
-        log::info!("Response status: {}", res.status());
+        info!(response_status = ?res.status());
         assert!(res.status().is_success());
 
         let area = db_clone.query_row(
@@ -574,8 +575,12 @@ mod tests {
         )?;
         let area_id = "test";
         db.execute(area::INSERT, named_params![":id": area_id])?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::patch_tags)).await;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(super::patch_tags),
+        )
+        .await;
         let req = TestRequest::patch()
             .uri(&format!("/{area_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))

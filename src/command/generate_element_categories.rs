@@ -4,9 +4,10 @@ use crate::Connection;
 use crate::Result;
 use rusqlite::named_params;
 use serde_json::Value;
+use tracing::info;
 
 pub async fn run(db: Connection) -> Result<()> {
-    log::info!("Generating element categories");
+    info!("Generating element categories");
 
     let elements: Vec<Element> = db
         .prepare(element::SELECT_ALL)?
@@ -19,7 +20,7 @@ pub async fn run(db: Connection) -> Result<()> {
         .filter(|it| it.deleted_at.len() == 0)
         .collect();
 
-    log::info!("Found {} elements", elements.len());
+    info!(elements = elements.len(), "Loaded elements from database");
 
     let mut known = 0;
     let mut unknown = 0;
@@ -29,9 +30,9 @@ pub async fn run(db: Connection) -> Result<()> {
         let old_category_singular = element.tags["category"].as_str().unwrap_or("");
 
         if new_category_singular != old_category_singular {
-            log::info!(
-                "Updating category for element {} ({old_category_singular} -> {new_category_singular})",
+            info!(
                 element.id,
+                old_category_singular, new_category_singular, "Updating category",
             );
 
             db.execute(
@@ -55,9 +56,9 @@ pub async fn run(db: Connection) -> Result<()> {
         let old_category_plural = element.tags["category:plural"].as_str().unwrap_or("");
 
         if new_category_plural != old_category_plural {
-            log::info!(
-                "Updating category:plural for element {} ({old_category_plural} -> {new_category_plural})",
+            info!(
                 element.id,
+                old_category_plural, new_category_plural, "Updating category:plural",
             );
 
             db.execute(
@@ -72,9 +73,13 @@ pub async fn run(db: Connection) -> Result<()> {
         }
     }
 
-    log::info!(
-        "Finished generating categories. Known: {known}, unknown: {unknown}, coverage: {:.2}%",
-        known as f64 / (known as f64 + unknown as f64) * 100.0
+    let coverage = known as f64 / (known as f64 + unknown as f64) * 100.0;
+
+    info!(
+        known,
+        unknown,
+        coverage = format!("{:.2}", coverage),
+        "Finished generating categories",
     );
 
     Ok(())

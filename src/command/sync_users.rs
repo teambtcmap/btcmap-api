@@ -8,9 +8,11 @@ use rusqlite::named_params;
 use serde_json::Value;
 use tokio::time::sleep;
 use tokio::time::Duration;
+use tracing::error;
+use tracing::info;
 
 pub async fn run(db: Connection) -> Result<()> {
-    log::info!("Syncing users");
+    info!("Syncing users");
 
     let users: Vec<User> = db
         .prepare(user::SELECT_ALL)?
@@ -20,28 +22,28 @@ pub async fn run(db: Connection) -> Result<()> {
         )?
         .collect::<Result<_, _>>()?;
 
-    log::info!("Found {} cached users", users.len());
+    info!(users = users.len(), "Loaded all users from database");
 
     for cached_user in &users {
         let url = format!(
             "https://api.openstreetmap.org/api/0.6/user/{}.json",
             cached_user.id,
         );
-        log::info!("Querying {url}");
+        info!(url, "Querying OSM");
 
         let res = match reqwest::get(&url).await {
             Ok(v) => v,
             Err(e) => {
-                log::error!("Failed to sync user {}: {:?}", cached_user.id, e);
+                error!(cached_user.id, ?e, "Failed to sync user");
                 continue;
             }
         };
 
         if res.status() != StatusCode::OK {
-            log::error!(
-                "Failed to query a user with id {}, response status: {:?}",
+            error!(
                 cached_user.id,
-                res.status(),
+                response_status = ?res.status(),
+                "Failed to query a user",
             );
             continue;
         }
@@ -57,7 +59,7 @@ pub async fn run(db: Connection) -> Result<()> {
         let fresh_user_str = serde_json::to_string(&fresh_user)?;
 
         if fresh_user_str != db_user_str {
-            log::info!("Change detected");
+            info!("Change detected");
 
             db.execute(
                 user::UPDATE_OSM_JSON,

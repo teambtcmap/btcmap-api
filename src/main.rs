@@ -51,9 +51,5 @@ fn init_logging() {
         env::set_var("RUST_LOG", "info");
     }
 
-    if cfg!(debug_assertions) {
-        env_logger::init();
-    } else {
-        env_logger::builder().format_timestamp(None).init();
-    }
+    tracing_subscriber::fmt().json().init();
 }

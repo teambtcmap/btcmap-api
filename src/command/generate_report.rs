@@ -19,10 +19,12 @@ use std::ops::Sub;
 use time::Date;
 use time::Duration;
 use time::OffsetDateTime;
+use tracing::error;
+use tracing::info;
 
 pub async fn run(mut db: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
-    log::info!("Generating report for {today}");
+    info!(date = ?today, "Generating report");
 
     let existing_report = db.query_row(
         report::SELECT_BY_AREA_ID_AND_DATE,
@@ -34,11 +36,11 @@ pub async fn run(mut db: Connection) -> Result<()> {
     );
 
     if existing_report.is_ok() {
-        log::info!("Found existing report, aborting");
+        info!("Found existing report, aborting");
         return Ok(());
     }
 
-    log::info!("Querying OSM API, it could take a while...");
+    info!("Querying OSM API, it could take a while...");
 
     let response = reqwest::Client::new()
         .post(sync::OVERPASS_API_URL)
@@ -46,7 +48,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
         .send()
         .await?;
 
-    log::info!("Fetched new data, response code: {}", response.status());
+    info!(response_status_code = ?response.status(), "Fetched new data");
 
     let response = response.json::<Value>().await?;
 
@@ -62,7 +64,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
         )))?
     }
 
-    log::info!("Fetched {} elements", elements.len());
+    info!(elements = elements.len(), "Fetched elements");
 
     if elements.len() < 5000 {
         Err(Error::Other(
@@ -86,7 +88,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
     generate_report("", &today, elements.iter().collect(), &tx)?;
 
     for area in areas {
-        log::info!("Generating report for area {}", area.id);
+        info!(area.id, "Generating report");
         let mut area_elements: Vec<&Value> = vec![];
 
         if area.tags.contains_key("geo_json") {
@@ -96,7 +98,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
             let geo_json = match geo_json {
                 Ok(geo_json) => geo_json,
                 Err(e) => {
-                    log::error!("Failed to parse GeoJSON: {}", e);
+                    error!(?e, "Failed to parse GeoJSON");
                     continue;
                 }
             };
@@ -155,7 +157,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
             }
         }
 
-        log::info!("Area: {}, elements: {}", area.id, area_elements.len());
+        info!(area.id, elements = area_elements.len(), "Processing area");
         generate_report(&area.id, &today, area_elements, &tx)?;
     }
 
@@ -170,7 +172,7 @@ fn generate_report(
     elements: Vec<&Value>,
     db: &Connection,
 ) -> Result<()> {
-    log::info!("Generating report for date = {date}, area = {area_id}");
+    info!(?date, area_id, "Generating report");
 
     let onchain_elements: Vec<&Value> = elements
         .iter()
@@ -195,9 +197,6 @@ fn generate_report(
         .filter(|it| it["tags"].get("payment:bitcoin").is_some())
         .copied()
         .collect();
-
-    let year_ago = date.sub(Duration::days(365));
-    log::info!("Date: {date}, year ago: {year_ago}");
 
     let up_to_date_elements: Vec<&Value> = elements
         .iter()
@@ -237,8 +236,7 @@ fn generate_report(
     tags.insert("grade", grade);
     let tags: Value = serde_json::to_value(tags)?;
 
-    log::info!("Inserting new report");
-    log::info!("{}", serde_json::to_string_pretty(&tags)?);
+    info!(?tags, "Inserting new report");
 
     db.execute(
         report::INSERT,
@@ -249,7 +247,7 @@ fn generate_report(
         },
     )?;
 
-    log::info!("Finished generating report for date = {date}, area = {area_id}");
+    info!(?date, area_id, "Finished generating report");
 
     Ok(())
 }

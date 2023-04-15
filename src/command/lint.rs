@@ -9,9 +9,11 @@ use crate::Result;
 use rusqlite::named_params;
 use time::macros::format_description;
 use time::Date;
+use tracing::error;
+use tracing::info;
 
 pub async fn run(db: Connection) -> Result<()> {
-    log::info!("Started linting");
+    info!("Started linting");
 
     let elements: Vec<Element> = db
         .prepare(element::SELECT_ALL)?
@@ -24,7 +26,10 @@ pub async fn run(db: Connection) -> Result<()> {
         .filter(|it| it.deleted_at.len() == 0)
         .collect();
 
-    log::info!("Found {} elements", elements.len());
+    info!(
+        elements = elements.len(),
+        "Loaded all elements from database"
+    );
 
     let date_format = format_description!("[year]-[month]-[day]");
 
@@ -43,7 +48,7 @@ pub async fn run(db: Connection) -> Result<()> {
                     "{} survey:date is not formatted properly: {}",
                     url, survey_date,
                 );
-                log::error!("{}", message);
+                error!(message);
                 send_discord_message(message).await;
             }
         }
@@ -60,7 +65,7 @@ pub async fn run(db: Connection) -> Result<()> {
                     "{} check_date is not formatted properly: {}",
                     url, check_date,
                 );
-                log::error!("{}", message);
+                error!(message);
                 send_discord_message(message).await;
             }
         }
@@ -77,7 +82,7 @@ pub async fn run(db: Connection) -> Result<()> {
                     "{} check_date:currency:XBT is not formatted properly: {}",
                     url, check_date_currency_xbt,
                 );
-                log::error!("{}", message);
+                error!(message);
                 send_discord_message(message).await;
             }
         }
@@ -87,7 +92,7 @@ pub async fn run(db: Connection) -> Result<()> {
             .unwrap_or("");
 
         if payment_lighting.len() > 0 {
-            log::error!("{} Spelling issue: payment:lighting", element.id);
+            error!(element.id, "Spelling issue: payment:lighting");
         }
 
         let payment_lightning_contacless = element.osm_json["tags"]["payment:lightning_contacless"]
@@ -95,10 +100,7 @@ pub async fn run(db: Connection) -> Result<()> {
             .unwrap_or("");
 
         if payment_lightning_contacless.len() > 0 {
-            log::error!(
-                "{} Spelling issue: payment:lightning_contacless",
-                element.id
-            );
+            error!(element.id, "Spelling issue: payment:lightning_contacless");
         }
 
         let payment_lighting_contactless = element.osm_json["tags"]["payment:lighting_contactless"]
@@ -106,10 +108,7 @@ pub async fn run(db: Connection) -> Result<()> {
             .unwrap_or("");
 
         if payment_lighting_contactless.len() > 0 {
-            log::error!(
-                "{} Spelling issue: payment:lighting_contactless",
-                element.id
-            );
+            error!(element.id, "Spelling issue: payment:lighting_contactless");
         }
 
         let currency_xbt = element.osm_json["tags"]["currency:XBT"]
@@ -125,7 +124,7 @@ pub async fn run(db: Connection) -> Result<()> {
                 "{} Both currency:XBT and payment:bitcoin are set to \"yes\"",
                 url,
             );
-            log::error!("{}", message);
+            error!(message);
             send_discord_message(message).await;
         }
 
@@ -134,7 +133,7 @@ pub async fn run(db: Connection) -> Result<()> {
                 "{} Legacy payment:bitcoin tag is present but survey:date is available, worth upgrading to currency:XBT",
                 url,
             );
-            log::error!("{}", message);
+            error!(message);
             send_discord_message(message).await;
         }
 
@@ -143,7 +142,7 @@ pub async fn run(db: Connection) -> Result<()> {
                 "{} Legacy payment:bitcoin tag is present but check_date is available, worth upgrading to currency:XBT",
                 url,
             );
-            log::error!("{}", message);
+            error!(message);
             send_discord_message(message).await;
         }
 
@@ -152,30 +151,27 @@ pub async fn run(db: Connection) -> Result<()> {
                 "{} Legacy payment:bitcoin tag is present but check_date:currency:XBT is available, worth upgrading to currency:XBT",
                 url,
             );
-            log::error!("{}", message);
+            error!(message);
             send_discord_message(message).await;
         }
 
         if generate_report::up_to_date(&element.osm_json)
             && element.android_icon() == "question_mark"
         {
-            let message = format!(
-                "{} Up-to-date element has no icon",
-                url,
-            );
-            log::error!("{}", message);
+            let message = format!("{} Up-to-date element has no icon", url,);
+            error!(message);
             send_discord_message(message).await;
         }
     }
 
-    log::info!("Finished linting");
+    info!("Finished linting");
 
     Ok(())
 }
 
 async fn send_discord_message(text: String) {
     if let Ok(discord_webhook_url) = env::var("LINT_DISCORD_WEBHOOK_URL") {
-        log::info!("Sending Discord message");
+        info!("Sending Discord message");
         let mut args = HashMap::new();
         args.insert("username", "btcmap.org".to_string());
         args.insert("content", text);
@@ -188,10 +184,10 @@ async fn send_discord_message(text: String) {
 
         match response {
             Ok(response) => {
-                log::info!("Discord response status: {:?}", response.status());
+                info!(status = ?response.status(), "Got response");
             }
             Err(_) => {
-                log::error!("Failed to send Discord message");
+                error!("Failed to send Discord message");
             }
         }
     }
