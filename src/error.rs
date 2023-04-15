@@ -16,17 +16,15 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", "HUI")
-
-        // match self {
-        //     Error::CLI(err) => write!(f, "{}", "HUI"),
-        //     Error::IO(err) => err.fmt(f),
-        //     Error::DB(err) => err.fmt(f),
-        //     Error::Reqwest(err) => err.fmt(f),
-        //     Error::Serde(err) => err.fmt(f),
-        //     Error::Api(err) => err.fmt(f),
-        //     Error::Other(err) => write!(f, "{}", err),
-        // }
+        match self {
+            Error::CLI(err) => write!(f, "{}", err),
+            Error::IO(err) => err.fmt(f),
+            Error::DB(err) => err.fmt(f),
+            Error::Reqwest(err) => err.fmt(f),
+            Error::Serde(err) => err.fmt(f),
+            Error::Api(err) => err.fmt(f),
+            Error::Other(err) => write!(f, "{}", err),
+        }
     }
 }
 
