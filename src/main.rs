@@ -11,39 +11,106 @@ mod model;
 mod service;
 use rusqlite::Connection;
 use std::env;
+use std::process::ExitCode;
+use tracing::error;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> ExitCode {
     init_logging();
 
-    let mut db = command::db::open_connection()?;
+    let mut db = match command::db::open_connection() {
+        Ok(v) => v,
+        Err(e) => {
+            error!(?e, "Failed to open database connection");
+            return ExitCode::FAILURE;
+        }
+    };
 
-    command::db::migrate(&mut db)?;
+    if let Err(e) = command::db::migrate(&mut db) {
+        error!(?e, "Failed to open database connection");
+        return ExitCode::FAILURE;
+    }
 
     let args: Vec<String> = env::args().collect();
 
     let command = match args.get(1) {
-        Some(some) => some,
-        None => Err(Error::CLI("No actions passed".into()))?,
+        Some(v) => v,
+        None => {
+            error!("No actions passed");
+            return ExitCode::FAILURE;
+        }
     };
 
     match command.as_str() {
-        "server" => command::server::run().await?,
-        "db" => command::db::run(&args[2..], db)?,
-        "sync" => command::sync::run(db).await?,
-        "sync-users" => command::sync_users::run(db).await?,
-        "generate-report" => command::generate_report::run(db).await?,
-        "generate-android-icons" => command::generate_android_icons::run(db).await?,
-        "generate-element-categories" => command::generate_element_categories::run(db).await?,
-        "lint" => command::lint::run(db).await?,
-        "fetch-areas" => command::fetch_areas::run(db, args[2].clone()).await?,
-        "analyze-logs" => command::analyze_logs::run().await?,
-        first_arg => Err(Error::CLI(format!("Unknown command: {first_arg}")))?,
+        "server" => {
+            if let Err(e) = command::server::run().await {
+                error!(?e, "Failed to start a server");
+                return ExitCode::FAILURE;
+            }
+        }
+        "db" => {
+            if let Err(e) = command::db::run(&args[2..], db) {
+                error!(?e, "Failed execute database action");
+                return ExitCode::FAILURE;
+            }
+        }
+        "sync" => {
+            if let Err(e) = command::sync::run(db).await {
+                error!(?e, "Failed to sync elements");
+                return ExitCode::FAILURE;
+            }
+        }
+        "sync-users" => {
+            if let Err(e) = command::sync_users::run(db).await {
+                error!(?e, "Failed to sync users");
+                return ExitCode::FAILURE;
+            }
+        }
+        "generate-report" => {
+            if let Err(e) = command::generate_report::run(db).await {
+                error!(?e, "Failed to generate reports");
+                return ExitCode::FAILURE;
+            }
+        }
+        "generate-android-icons" => {
+            if let Err(e) = command::generate_android_icons::run(db).await {
+                error!(?e, "Failed to generate Android icons");
+                return ExitCode::FAILURE;
+            }
+        }
+        "generate-element-categories" => {
+            if let Err(e) = command::generate_element_categories::run(db).await {
+                error!(?e, "Failed to generate element categories");
+                return ExitCode::FAILURE;
+            }
+        }
+        "lint" => {
+            if let Err(e) = command::lint::run(db).await {
+                error!(?e, "Failed to run linter");
+                return ExitCode::FAILURE;
+            }
+        }
+        "fetch-areas" => {
+            if let Err(e) = command::fetch_areas::run(db, args[2].clone()).await {
+                error!(?e, "Failed to fetch areas");
+                return ExitCode::FAILURE;
+            }
+        }
+        "analyze-logs" => {
+            if let Err(e) = command::analyze_logs::run().await {
+                error!(?e, "Failed to analyze logs");
+                return ExitCode::FAILURE;
+            }
+        }
+        first_arg => {
+            error!(command = first_arg, "Unknown command");
+            return ExitCode::FAILURE;
+        }
     }
 
-    Ok(())
+    ExitCode::SUCCESS
 }
 
 fn init_logging() {
