@@ -325,6 +325,10 @@ impl Element {
             icon_id = "storefront";
         }
 
+        if shop == "general" {
+            icon_id = "storefront";
+        }
+
         if shop == "computer" {
             icon_id = "computer";
         }
