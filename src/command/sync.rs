@@ -11,13 +11,11 @@ use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::error;
-use std::collections::HashMap;
 use std::collections::HashSet;
-use std::env;
 use std::time::SystemTime;
 use tokio::time::sleep;
 use tokio::time::Duration;
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 
@@ -100,11 +98,13 @@ async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson>
 
 async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result<()> {
     if json.elements.len() < 5000 {
-        send_discord_message("Got a suspicious resopnse from OSM, check server logs".to_string())
-            .await;
-        Err(Error::Other(
-            "Data set is most likely invalid, skipping the sync".into(),
-        ))?
+        let message = format!("Overpass returned {} elements", json.elements.len());
+        error!(
+            elements = json.elements.len(),
+            discord_message = message,
+            message,
+        );
+        Err(Error::Other(message.into()))?
     }
 
     let tx: Transaction = db.transaction()?;
@@ -164,10 +164,11 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 info!(bitcoin_tag_value, legacy_bitcoin_tag_value);
 
                 if bitcoin_tag_value == "yes" || legacy_bitcoin_tag_value == "yes" {
-                    let message =
-                        format!("Overpass lied about {element_type}/{osm_id} being deleted!");
-                    send_discord_message(message.clone()).await;
-                    Err(Error::Other(message))?
+                    let message = format!(
+                        "Overpass lied about element {element_type}:{osm_id} being deleted"
+                    );
+                    error!(element_type, osm_id, discord_message = message, message,);
+                    Err(Error::Other(message.into()))?
                 }
             }
 
@@ -191,10 +192,15 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 },
             )?;
 
-            send_discord_message(format!(
-                "{name} was deleted by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
-            ))
-            .await;
+            let message = format!("User {user_display_name} removed element https://www.openstreetmap.org/{element_type}/{osm_id}");
+            info!(
+                element_name = name,
+                element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
+                user_name = user_display_name,
+                discord_message = message,
+                message,
+            );
+
             info!(element.id, "Marking element as deleted");
             tx.execute(
                 element::MARK_AS_DELETED,
@@ -239,10 +245,15 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                         warn!("Changeset ID is identical, skipped user event generation");
                     }
 
-                    send_discord_message(format!(
-                        "{name} was updated by {user_display_name} https://www.openstreetmap.org/{element_type}/{osm_id}"
-                    ))
-                    .await;
+                    let message = format!("User {user_display_name} updated element https://www.openstreetmap.org/{element_type}/{osm_id}");
+                    info!(
+                        element_name = name,
+                        element_url =
+                            format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
+                        user_name = user_display_name,
+                        discord_message = message,
+                        message,
+                    );
 
                     tx.execute(
                         element::UPDATE_OSM_JSON,
@@ -324,40 +335,22 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
 
                 info!(category_singular, android_icon);
 
-                send_discord_message(format!(
-                    "{name} was added by {user_display_name} (category: {category_singular}, icon: {android_icon}) https://www.openstreetmap.org/{element_type}/{osm_id}"
-                ))
-                .await;
+                let message = format!("User {user_display_name} added element https://www.openstreetmap.org/{element_type}/{osm_id}");
+                info!(
+                    element_name = name,
+                    element_category = category_singular,
+                    element_android_icon = android_icon,
+                    element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
+                    user_name = user_display_name,
+                    discord_message = message,
+                    message,
+                );
             }
         }
     }
 
     tx.commit()?;
     Ok(())
-}
-
-async fn send_discord_message(text: String) {
-    if let Ok(discord_webhook_url) = env::var("DISCORD_WEBHOOK_URL") {
-        info!("Sending Discord message");
-        let mut args = HashMap::new();
-        args.insert("username", "btcmap.org".to_string());
-        args.insert("content", text);
-
-        let response = reqwest::Client::new()
-            .post(discord_webhook_url)
-            .json(&args)
-            .send()
-            .await;
-
-        match response {
-            Ok(response) => {
-                info!(response_status = ?response.status(), "Got response");
-            }
-            Err(_) => {
-                error!("Failed to send Discord message");
-            }
-        }
-    }
 }
 
 async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {

@@ -2,6 +2,7 @@
 
 extern crate core;
 
+use discord::DiscordLayer;
 pub use error::ApiError;
 pub use error::Error;
 mod command;
@@ -9,16 +10,29 @@ mod controller;
 mod error;
 mod model;
 mod service;
+mod discord;
 use rusqlite::Connection;
 use std::env;
 use std::process::ExitCode;
 use tracing::error;
+use tracing_subscriber::fmt::Layer;
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    init_logging();
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info");
+    }
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(Layer::new().json())
+        .with(DiscordLayer)
+        .init();
 
     let mut db = match command::db::open_connection() {
         Ok(v) => v,
@@ -111,12 +125,4 @@ async fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
-}
-
-fn init_logging() {
-    if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "info");
-    }
-
-    tracing_subscriber::fmt().json().init();
 }
