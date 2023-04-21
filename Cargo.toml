@@ -51,3 +51,6 @@ geo = "0.23.1"
 
 # https://github.com/utkarshkukreti/diff.rs/tags
 diff = "0.1.13"
+
+# https://github.com/rust-lang/futures-rs/releases
+futures-util = "0.3.28"
