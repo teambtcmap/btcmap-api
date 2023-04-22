@@ -97,6 +97,10 @@ impl Element {
             icon_id = "storefront"
         }
 
+        if landuse == "residential" {
+            icon_id = "home"
+        }
+
         if building == "commercial" {
             icon_id = "business"
         }
@@ -1087,6 +1091,10 @@ impl Element {
 
         if leisure == "bowling_alley" {
             icon_id = "directions_walk"
+        }
+
+        if leisure == "sports_hall" {
+            icon_id = "fitness_center"
         }
 
         if healthcare != "" {
