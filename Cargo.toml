@@ -47,7 +47,7 @@ tokio = { version = "1.24.1", features = ["time", "macros", "rt-multi-thread"] }
 geojson = "0.24.0"
 
 # https://github.com/georust/geo/tags
-geo = "0.23.1"
+geo = "0.24.1"
 
 # https://github.com/utkarshkukreti/diff.rs/tags
 diff = "0.1.13"
