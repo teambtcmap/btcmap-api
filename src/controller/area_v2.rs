@@ -1,4 +1,3 @@
-use crate::model::admin_action;
 use crate::model::area;
 use crate::model::Area;
 use crate::service::auth::get_admin_token;
@@ -23,6 +22,7 @@ use serde::Serialize;
 use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
+use tracing::warn;
 
 #[derive(Serialize, Deserialize)]
 struct PostArgs {
@@ -81,13 +81,12 @@ async fn post(
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&db, &req)?;
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!("[legacy_api] User {} attempted to create area {}", token.user_id, args.id),
-        },
-    )?;
+    warn!(
+        deprecated_api = true,
+        user_id = token.user_id,
+        area_id = args.id,
+        "User attempted to create an area",
+    );
 
     if let Some(_) = db
         .query_row(
@@ -118,13 +117,11 @@ async fn post_json(
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&db, &req)?;
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!("User {} attempted to create area {}", token.user_id, args.id),
-        },
-    )?;
+    warn!(
+        user_id = token.user_id,
+        area_id = args.id,
+        "User attempted to create an area",
+    );
 
     if let Some(_) = db
         .query_row(
@@ -204,13 +201,10 @@ async fn patch_by_id(
     let token = get_admin_token(&db, &req)?;
     let area_id = id.into_inner();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!("User {} attempted to update tags for area {}", token.user_id, area_id),
-        },
-    )?;
+    warn!(
+        user_id = token.user_id,
+        area_id, "User attempted to update an area",
+    );
 
     let area: Option<Area> = db
         .query_row(
@@ -269,18 +263,12 @@ async fn patch_tags(
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!(
-                "User {} attempted to update tags {} for area {}",
-                token.user_id,
-                keys.join(", "),
-                area_id,
-            ),
-        },
-    )?;
+    warn!(
+        user_id = token.user_id,
+        area_id,
+        tags = keys.join(", "),
+        "User attempted to update area tags",
+    );
 
     let area: Option<Area> = db
         .query_row(
@@ -327,13 +315,14 @@ async fn post_tags(
     let token = get_admin_token(&db, &req)?;
     let area_id = id.into_inner();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!("[deprecated_api] User {} attempted to update tag {} for area {}", token.user_id, args.name, area_id),
-        },
-    )?;
+    warn!(
+        deprecated_api = true,
+        user_id = token.user_id,
+        area_id,
+        tag_name = args.name,
+        tag_value = args.value,
+        "User attempted to update area tag",
+    );
 
     let area: Option<Area> = db
         .query_row(
@@ -382,13 +371,11 @@ async fn delete_by_id(
     let token = get_admin_token(&db, &req)?;
     let id = id.into_inner();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!("User {} attempted to delete area {}", token.user_id, id),
-        },
-    )?;
+    warn!(
+        user_id = token.user_id,
+        area_id = id,
+        "User attempted to delete an area",
+    );
 
     let area: Option<Area> = db
         .query_row(

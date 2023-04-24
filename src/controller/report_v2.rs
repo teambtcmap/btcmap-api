@@ -1,4 +1,3 @@
-use crate::model::admin_action;
 use crate::model::report;
 use crate::model::Report;
 use crate::service::auth::get_admin_token;
@@ -19,6 +18,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -111,18 +111,12 @@ async fn patch_tags(
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!(
-                "User {} attempted to update tags {} for report {}",
-                token.user_id,
-                keys.join(", "),
-                report_id,
-            ),
-        },
-    )?;
+    warn!(
+        user_id = token.user_id,
+        report_id,
+        tags = keys.join(", "),
+        "User attempted to update report tags",
+    );
 
     let report: Option<Report> = db
         .query_row(
@@ -163,14 +157,14 @@ async fn patch_tags(
 mod tests {
     use super::*;
     use crate::command::db::tests::db;
-    use crate::Result;
     use crate::model::token;
+    use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
     use reqwest::StatusCode;
     use rusqlite::named_params;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
@@ -285,8 +279,12 @@ mod tests {
             "INSERT INTO report (area_id, date, updated_at) VALUES ('', '', '2022-01-05')",
             [],
         )?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::patch_tags)).await;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(super::patch_tags),
+        )
+        .await;
         let req = TestRequest::patch()
             .uri(&format!("/1/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))

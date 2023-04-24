@@ -15,5 +15,3 @@ pub use user::User;
 
 pub mod token;
 pub use token::Token;
-
-pub mod admin_action;

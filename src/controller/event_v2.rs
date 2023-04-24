@@ -1,4 +1,3 @@
-use crate::model::admin_action;
 use crate::model::event;
 use crate::model::Event;
 use crate::service::auth::get_admin_token;
@@ -19,6 +18,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -107,18 +107,12 @@ async fn patch_tags(
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!(
-                "User {} attempted to update tags {} for event {}",
-                token.user_id,
-                keys.join(", "),
-                event_id,
-            ),
-        },
-    )?;
+    warn!(
+        user_id = token.user_id,
+        event_id,
+        tags = keys.join(", "),
+        "User attempted to update event tags",
+    );
 
     let event: Option<Event> = db
         .query_row(
@@ -159,8 +153,8 @@ async fn patch_tags(
 mod tests {
     use super::*;
     use crate::command::db::tests::db;
-    use crate::Result;
     use crate::model::token;
+    use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};

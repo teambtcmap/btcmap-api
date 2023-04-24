@@ -1,4 +1,3 @@
-use crate::model::admin_action;
 use crate::model::user;
 use crate::model::User;
 use crate::service::auth::get_admin_token;
@@ -19,6 +18,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -103,18 +103,12 @@ async fn patch_tags(
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!(
-                "User {} attempted to update tags {} for user {}",
-                token.user_id,
-                keys.join(", "),
-                user_id,
-            ),
-        },
-    )?;
+    warn!(
+        actor_id = token.user_id,
+        user_id,
+        tags = keys.join(", "),
+        "User attempted to update user tags",
+    );
 
     let user: Option<User> = db
         .query_row(
@@ -162,7 +156,7 @@ mod tests {
     use actix_web::{test, App};
     use reqwest::StatusCode;
     use rusqlite::named_params;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
@@ -260,8 +254,12 @@ mod tests {
                 ":osm_json": "{}",
             },
         )?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::patch_tags)).await;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(super::patch_tags),
+        )
+        .await;
         let req = TestRequest::patch()
             .uri(&format!("/{user_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))

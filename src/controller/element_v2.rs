@@ -1,4 +1,3 @@
-use crate::model::admin_action;
 use crate::model::element;
 use crate::model::Element;
 use crate::service::auth::get_admin_token;
@@ -21,6 +20,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -114,18 +114,12 @@ async fn patch_tags(
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!(
-                "User {} attempted to update tags {} for element {}",
-                token.user_id,
-                keys.join(", "),
-                element_id,
-            ),
-        },
-    )?;
+    warn!(
+        user_id = token.user_id,
+        element_id,
+        tags = keys.join(", "),
+        "User attempted to update element tags",
+    );
 
     let element: Option<Element> = db
         .query_row(
@@ -172,13 +166,14 @@ async fn post_tags(
     let token = get_admin_token(&db, &req)?;
     let element_id = id.into_inner();
 
-    db.execute(
-        admin_action::INSERT,
-        named_params! {
-            ":user_id": token.user_id,
-            ":message": format!("[deprecated_api] User {} attempted to update tag {} for element {}", token.user_id, args.name, element_id),
-        },
-    )?;
+    warn!(
+        deprecated_api = true,
+        user_id = token.user_id,
+        element_id,
+        tag_name = args.name,
+        tag_value = args.value,
+        "User attempted to update element tag",
+    );
 
     let element: Option<Element> = db
         .query_row(
@@ -365,8 +360,12 @@ mod tests {
                 ":osm_json": "{}",
             },
         )?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::patch_tags)).await;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .service(super::patch_tags),
+        )
+        .await;
         let req = TestRequest::patch()
             .uri(&format!("/{element_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
