@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 
+use crate::command::generate_android_icons::android_icon;
 use crate::command::generate_report;
 use crate::model::element;
 use crate::model::Element;
@@ -156,7 +157,7 @@ pub async fn run(db: Connection) -> Result<()> {
         }
 
         if generate_report::up_to_date(&element.osm_json)
-            && element.android_icon() == "question_mark"
+            && android_icon(&element.osm_json["tags"].as_object().unwrap()) == "question_mark"
         {
             let message = format!("{} Up-to-date element has no icon", url,);
             error!(message);

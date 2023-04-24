@@ -1,3 +1,4 @@
+use crate::command::generate_android_icons::android_icon;
 use crate::model::element;
 use crate::model::event;
 use crate::model::user;
@@ -262,6 +263,27 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                             ":osm_json": serde_json::to_string(&fresh_element)?,
                         },
                     )?;
+
+                    let new_android_icon = android_icon(fresh_element["tags"].as_object().unwrap());
+                    let old_android_icon = element
+                        .tags
+                        .get("icon:android")
+                        .unwrap_or(&Value::Null)
+                        .as_str()
+                        .unwrap_or("");
+
+                    if new_android_icon != old_android_icon {
+                        info!(old_android_icon, new_android_icon, "Updating Android icon");
+
+                        tx.execute(
+                            element::INSERT_TAG,
+                            named_params! {
+                                ":element_id": &element.id,
+                                ":tag_name": "$.icon:android",
+                                ":tag_value": &new_android_icon,
+                            },
+                        )?;
+                    }
                 }
 
                 if element.deleted_at.len() > 0 {
@@ -304,7 +326,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
 
                 let category_singular = element.category_singular();
                 let category_plural = element.category_plural();
-                let android_icon = element.android_icon();
+                let android_icon = android_icon(&element.osm_json["tags"].as_object().unwrap());
 
                 tx.execute(
                     element::INSERT_TAG,
