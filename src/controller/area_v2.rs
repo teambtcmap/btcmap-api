@@ -32,7 +32,7 @@ struct PostArgs {
 #[derive(Serialize, Deserialize)]
 struct PostJsonArgs {
     id: String,
-    tags: Map<String, Value>,
+    tags: Value,
 }
 
 #[derive(Deserialize)]
@@ -71,42 +71,6 @@ struct PatchArgs {
 struct PostTagsArgs {
     name: String,
     value: String,
-}
-
-#[post("")]
-async fn post(
-    args: Form<PostArgs>,
-    req: HttpRequest,
-    db: Data<Connection>,
-) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&db, &req)?;
-
-    warn!(
-        deprecated_api = true,
-        user_id = token.user_id,
-        area_id = args.id,
-        "User attempted to create an area",
-    );
-
-    if let Some(_) = db
-        .query_row(
-            area::SELECT_BY_ID,
-            named_params! { ":id": args.id },
-            area::SELECT_BY_ID_MAPPER,
-        )
-        .optional()?
-    {
-        Err(ApiError::new(
-            303,
-            format!("Area {} already exists", args.id),
-        ))?
-    }
-
-    db.execute(area::INSERT, named_params![ ":id": args.id ])?;
-
-    Ok(Json(json!({
-        "message": format!("Area {} has been created", args.id),
-    })))
 }
 
 #[post("")]
@@ -409,33 +373,6 @@ mod tests {
     use actix_web::web::scope;
     use actix_web::{test, App};
     use tracing::info;
-
-    #[actix_web::test]
-    async fn post() -> Result<()> {
-        let admin_token = "test";
-        let db = db()?;
-        db.execute(
-            token::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(db))
-                .service(scope("/").service(super::post)),
-        )
-        .await;
-        let req = TestRequest::post()
-            .uri("/")
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
-            .set_form(PostArgs {
-                id: "test-area".into(),
-            })
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        info!(response_status = ?res.status());
-        assert!(res.status().is_success());
-        Ok(())
-    }
 
     #[actix_web::test]
     async fn post_json() -> Result<()> {

@@ -42,11 +42,6 @@ async fn main() -> ExitCode {
         }
     };
 
-    if let Err(e) = command::db::migrate(&mut db) {
-        error!(?e, "Failed to open database connection");
-        return ExitCode::FAILURE;
-    }
-
     let args: Vec<String> = env::args().collect();
 
     let command = match args.get(1) {
@@ -59,6 +54,11 @@ async fn main() -> ExitCode {
 
     match command.as_str() {
         "server" => {
+            if let Err(e) = command::db::migrate(&mut db) {
+                error!(?e, "Failed to open database connection");
+                return ExitCode::FAILURE;
+            }
+
             if let Err(e) = command::server::run().await {
                 error!(?e, "Failed to start a server");
                 return ExitCode::FAILURE;
