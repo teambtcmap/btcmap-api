@@ -891,6 +891,10 @@ pub fn android_icon(tags: &Map<String, Value>) -> String {
         icon_id = "school"
     }
 
+    if amenity == "prep_school" {
+        icon_id = "school"
+    }
+
     if amenity == "taxi" {
         icon_id = "local_taxi"
     }
@@ -1344,6 +1348,10 @@ pub fn android_icon(tags: &Map<String, Value>) -> String {
     }
 
     if craft == "glaziery" {
+        icon_id = "window";
+    }
+
+    if craft == "window_construction" {
         icon_id = "window";
     }
 
