@@ -216,7 +216,7 @@ async fn post_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::db::tests::db;
+    use crate::command::db;
     use crate::model::token;
     use crate::Result;
     use actix_web::test::TestRequest;
@@ -228,22 +228,29 @@ mod tests {
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db()?))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
+
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let db = db()?;
-        db.execute(
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        conn.execute(
             element::INSERT,
             named_params! {
                 ":id": "node:1",
@@ -252,120 +259,146 @@ mod tests {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
+
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let db = db()?;
-        db.execute(
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        conn.execute(
             element::INSERT,
             named_params! {
                 ":id": "node:1",
                 ":osm_json": "{}",
             },
         )?;
-        db.execute(
+        conn.execute(
             element::INSERT,
             named_params! {
                 ":id": "node:2",
                 ":osm_json": "{}",
             },
         )?;
-        db.execute(
+        conn.execute(
             element::INSERT,
             named_params! {
                 ":id": "node:3",
                 ":osm_json": "{}",
             },
         )?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
+
         let req = TestRequest::get().uri("/?limit=2").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 2);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_updated_since() -> Result<()> {
-        let db = db()?;
-        db.execute(
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        conn.execute(
             "INSERT INTO element (id, osm_json, updated_at) VALUES ('node:1', '{}', '2022-01-05')",
             [],
         )?;
-        db.execute(
+        conn.execute(
             "INSERT INTO element (id, osm_json, updated_at) VALUES ('node:2', '{}', '2022-02-05')",
             [],
         )?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
+
         let req = TestRequest::get()
             .uri("/?updated_since=2022-01-10")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let db = db()?;
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let element_id = "node:1";
-        db.execute(
+        conn.execute(
             element::INSERT,
             named_params! {
                 ":id": element_id,
                 ":osm_json": "{}",
             },
         )?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::get_by_id)).await;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(conn))
+                .service(super::get_by_id),
+        )
+        .await;
+
         let req = TestRequest::get()
             .uri(&format!("/{element_id}"))
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, element_id);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn patch_tags() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let admin_token = "test";
-        let db = db()?;
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
+
         let element_id = "node:1";
-        db.execute(
+        conn.execute(
             element::INSERT,
             named_params! {
                 ":id": element_id,
                 ":osm_json": "{}",
             },
         )?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(super::patch_tags),
         )
         .await;
+
         let req = TestRequest::patch()
             .uri(&format!("/{element_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
@@ -373,27 +406,37 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn post_tags() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let admin_token = "test";
-        let db = db()?;
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
+
         let element_id = "node:1";
-        db.execute(
+        conn.execute(
             element::INSERT,
             named_params! {
                 ":id": element_id,
                 ":osm_json": "{}",
             },
         )?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::post_tags)).await;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(conn))
+                .service(super::post_tags),
+        )
+        .await;
+
         let req = TestRequest::post()
             .uri(&format!("/{element_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
@@ -404,6 +447,7 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::CREATED);
+
         Ok(())
     }
 }

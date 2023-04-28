@@ -131,35 +131,23 @@ fn get_migrations() -> Result<Vec<Migration>> {
 }
 
 use std::path::PathBuf;
-#[cfg(test)]
-use std::sync::atomic::AtomicUsize;
-
-#[cfg(test)]
-pub static COUNTER: AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
 
-    pub fn db() -> Result<Connection> {
-        let db_name = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut db = Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared"))?;
-        migrate(&mut db)?;
-        Ok(db)
-    }
-
     #[test]
     fn run() -> Result<()> {
-        let res = super::run(&[], db()?);
+        let res = super::run(&[], Connection::open_in_memory()?);
         assert!(res.is_err());
 
-        let res = super::run(&["test".into()], db()?);
+        let res = super::run(&["test".into()], Connection::open_in_memory()?);
         assert!(res.is_err());
 
-        let res = super::run(&["migrate".into()], db()?);
+        let res = super::run(&["migrate".into()], Connection::open_in_memory()?);
         assert!(res.is_ok());
 
-        let res = super::run(&["drop".into()], db()?);
+        let res = super::run(&["drop".into()], Connection::open_in_memory()?);
         assert!(res.is_err());
 
         Ok(())
@@ -167,14 +155,13 @@ pub mod tests {
 
     #[test]
     fn run_migrations() -> Result<()> {
-        let db_name = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut db = Connection::open(format!("file::testdb_{db_name}:?mode=memory&cache=shared"))?;
+        let mut conn = Connection::open_in_memory()?;
 
         let mut migrations = vec![Migration(1, "CREATE TABLE foo(bar);".into())];
-        execute_migrations(&migrations, &mut db)?;
+        execute_migrations(&migrations, &mut conn)?;
 
         let schema_ver: i16 =
-            db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
+            conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
                 row.get(0)
             })?;
 
@@ -185,10 +172,10 @@ pub mod tests {
             "INSERT INTO foo (bar) values ('qwerty');".into(),
         ));
 
-        execute_migrations(&migrations, &mut db)?;
+        execute_migrations(&migrations, &mut conn)?;
 
         let schema_ver: i16 =
-            db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
+            conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
                 row.get(0)
             })?;
 

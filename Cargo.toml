@@ -11,16 +11,16 @@ strip = "symbols"
 [dependencies]
 
 # https://github.com/actix/actix-web/releases
-actix-web = { version = "4.3.0", default-features = false, features = ["macros", "compress-brotli"] }
+actix-web = { version = "4.3.1", default-features = false, features = ["macros", "compress-brotli"] }
 
 # https://github.com/rusqlite/rusqlite/releases
-rusqlite = { version = "0.28.0", features = ["bundled"] }
+rusqlite = { version = "0.29.0", features = ["bundled"] }
 
 # https://github.com/seanmonstar/reqwest/releases
-reqwest = { version = "0.11.14", default-features = false, features = ["rustls-tls", "json", "blocking"] }
+reqwest = { version = "0.11.16", default-features = false, features = ["rustls-tls", "json", "blocking"] }
 
 # https://github.com/serde-rs/serde/releases
-serde = { version = "1.0.152", features = ["derive"] }
+serde = { version = "1.0.160", default-features = false, features = ["derive"] }
 
 # https://github.com/serde-rs/json/releases
 serde_json = { version = "1.0.91", features = ["preserve_order"] }

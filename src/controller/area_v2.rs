@@ -365,7 +365,7 @@ async fn delete_by_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::db::tests::db;
+    use crate::command::db;
     use crate::model::token;
     use crate::Result;
     use actix_web::http::StatusCode;
@@ -376,16 +376,19 @@ mod tests {
 
     #[actix_web::test]
     async fn post_json() -> Result<()> {
+        let db_path = "file:area_v2_post_json?mode=memory&cache=shared";
+        let mut conn = Connection::open(db_path)?;
+        db::migrate(&mut conn)?;
+
         let admin_token = "test";
-        let db = db()?;
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-        let db_clone = Connection::open(db.path().unwrap())?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::post_json)),
         )
         .await;
@@ -414,7 +417,7 @@ mod tests {
         info!(response_status = ?res.status());
         assert!(res.status().is_success());
 
-        let area = db_clone.query_row(
+        let area = Connection::open(db_path)?.query_row(
             area::SELECT_BY_ID,
             &[(":id", "test-area")],
             area::SELECT_BY_ID_MAPPER,
@@ -430,9 +433,12 @@ mod tests {
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db()?))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -444,64 +450,87 @@ mod tests {
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let db = db()?;
-        db.execute(area::INSERT, named_params! { ":id": "test" })?;
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        conn.execute(area::INSERT, named_params! { ":id": "test" })?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
+
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let db = db()?;
-        db.execute(area::INSERT, named_params! { ":id": "test1" })?;
-        db.execute(area::INSERT, named_params! { ":id": "test2" })?;
-        db.execute(area::INSERT, named_params! { ":id": "test3" })?;
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        conn.execute(area::INSERT, named_params! { ":id": "test1" })?;
+        conn.execute(area::INSERT, named_params! { ":id": "test2" })?;
+        conn.execute(area::INSERT, named_params! { ":id": "test3" })?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
+
         let req = TestRequest::get().uri("/?limit=2").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 2);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let db = db()?;
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let area_id = "test";
-        db.execute(area::INSERT, named_params! { ":id": area_id })?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::get_by_id)).await;
+        conn.execute(area::INSERT, named_params! { ":id": area_id })?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(conn))
+                .service(super::get_by_id),
+        )
+        .await;
+
         let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, area_id);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn patch_tags() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let admin_token = "test";
-        let db = db()?;
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
+
         let area_id = "test";
-        db.execute(area::INSERT, named_params![":id": area_id])?;
+        conn.execute(area::INSERT, named_params![":id": area_id])?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(super::patch_tags),
         )
         .await;
@@ -517,18 +546,22 @@ mod tests {
 
     #[actix_web::test]
     async fn patch_by_id() -> Result<()> {
+        let db_path = "file:area_v2_patch_by_id?mode=memory&cache=shared";
+        let mut conn = Connection::open(db_path)?;
+        db::migrate(&mut conn)?;
+
         let admin_token = "test";
-        let db = db()?;
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-        let db_clone = Connection::open(db.path().unwrap())?;
+
         let area_id = "test";
-        db.execute(area::INSERT, named_params![":id": area_id])?;
+        conn.execute(area::INSERT, named_params![":id": area_id])?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(super::patch_by_id),
         )
         .await;
@@ -555,7 +588,7 @@ mod tests {
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
-        let area = db_clone.query_row(
+        let area = Connection::open(db_path)?.query_row(
             area::SELECT_BY_ID,
             &[(":id", &area_id)],
             area::SELECT_BY_ID_MAPPER,
@@ -571,16 +604,25 @@ mod tests {
 
     #[actix_web::test]
     async fn post_tags() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
         let admin_token = "test";
-        let db = db()?;
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
+
         let area_id = "test";
-        db.execute(area::INSERT, named_params![":id": area_id])?;
-        let app =
-            test::init_service(App::new().app_data(Data::new(db)).service(super::post_tags)).await;
+        conn.execute(area::INSERT, named_params![":id": area_id])?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(conn))
+                .service(super::post_tags),
+        )
+        .await;
+
         let req = TestRequest::post()
             .uri(&format!("/{area_id}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
@@ -591,23 +633,28 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::CREATED);
+
         Ok(())
     }
 
     #[actix_web::test]
     async fn delete() -> Result<()> {
+        let db_path = "file:area_v2_delete?mode=memory&cache=shared";
+        let mut conn = Connection::open(db_path)?;
+        db::migrate(&mut conn)?;
+
         let admin_token = "test";
-        let db = db()?;
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-        let db_clone = Connection::open(db.path().unwrap())?;
+
         let area_id = "test";
-        db.execute(area::INSERT, named_params! { ":id": area_id })?;
+        conn.execute(area::INSERT, named_params! { ":id": area_id })?;
+
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(super::delete_by_id),
         )
         .await;
@@ -618,7 +665,7 @@ mod tests {
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
-        let area: Option<Area> = db_clone
+        let area: Option<Area> = Connection::open(db_path)?
             .query_row(
                 area::SELECT_BY_ID,
                 &[(":id", &area_id)],

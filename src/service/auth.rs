@@ -45,6 +45,7 @@ mod tests {
 
     use super::*;
     use crate::command::db;
+    use crate::Result;
     use actix_web::{
         dev::Response,
         get,
@@ -54,10 +55,11 @@ mod tests {
     };
 
     #[actix_web::test]
-    async fn no_header() {
-        let db = db::tests::db().unwrap();
+    async fn no_header() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
 
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! {
                 ":user_id": "1",
@@ -68,20 +70,23 @@ mod tests {
 
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
         let res = test::call_service(&app, req).await;
-        assert_eq!(401, res.status().as_u16())
+        assert_eq!(401, res.status().as_u16());
+
+        Ok(())
     }
 
     #[actix_web::test]
-    async fn valid_token() {
-        let db = db::tests::db().unwrap();
+    async fn valid_token() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
 
-        db.execute(
+        conn.execute(
             token::INSERT,
             named_params! {
                 ":user_id": 1,
@@ -92,16 +97,19 @@ mod tests {
 
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(Connection::open(db.path().unwrap()).unwrap()))
+                .app_data(Data::new(conn))
                 .service(scope("/").service(get)),
         )
         .await;
+
         let req = TestRequest::get()
             .uri("/")
             .append_header(("Authorization", "Bearer qwerty"))
             .to_request();
         let res = test::call_service(&app, req).await;
-        assert_eq!(200, res.status().as_u16())
+        assert_eq!(200, res.status().as_u16());
+
+        Ok(())
     }
 
     #[get("")]
