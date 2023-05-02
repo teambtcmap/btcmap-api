@@ -5,7 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Compiler settings and optimizations
 [profile.release]
+opt-level = "s"
 strip = "symbols"
 
 [dependencies]
