@@ -76,6 +76,16 @@ pub async fn run() -> Result<()> {
         .collect();
     let most_freq_req = serde_json::to_string(&most_frequent_req).unwrap();
 
+    let mut res_times_seconds: Vec<f64> = http_requests
+        .iter()
+        .map(|it| it.fields["res_time_sec"].as_f64().unwrap())
+        .collect();
+    res_times_seconds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mean_res_time_seconds = mean(&res_times_seconds);
+    let median_res_time_seconds = median(&res_times_seconds);
+    let min_res_time_seconds = res_times_seconds.first().unwrap();
+    let max_res_time_seconds = res_times_seconds.last().unwrap();
+
     info!(
         start = ?period_start,
         end = ?period_end, period_seconds =
@@ -85,7 +95,26 @@ pub async fn run() -> Result<()> {
         http_requests = http_requests.len(),
         http_requests_per_second,
         most_freq_req,
+        mean_res_time_seconds,
+        median_res_time_seconds,
+        min_res_time_seconds,
+        max_res_time_seconds,
     );
 
     Ok(())
+}
+
+fn median(numbers: &Vec<f64>) -> f64 {
+    let mid = numbers.len() / 2;
+
+    if numbers.len() % 2 == 0 {
+        mean(&vec![numbers[mid - 1], numbers[mid]])
+    } else {
+        numbers[mid]
+    }
+}
+
+fn mean(numbers: &Vec<f64>) -> f64 {
+    let sum: f64 = numbers.iter().sum();
+    sum / numbers.len() as f64
 }
