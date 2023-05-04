@@ -1,6 +1,10 @@
-use std::{fmt::Write, env, collections::HashMap};
+use std::{collections::HashMap, env, fmt::Write};
 
-use tracing::{field::{Visit, Field}, info, error};
+use tracing::{
+    error,
+    field::{Field, Visit},
+    info, warn,
+};
 
 pub struct DiscordLayer;
 
@@ -20,9 +24,7 @@ where
                     message: &mut message,
                 };
                 event.record(&mut visitor);
-                tokio::runtime::Handle::current().spawn_blocking(|| {
-                    send_discord_message(message)
-                });
+                tokio::runtime::Handle::current().spawn_blocking(|| send_discord_message(message));
             }
         }
     }
@@ -63,5 +65,7 @@ fn send_discord_message(message: String) {
                 error!("Failed to send Discord message");
             }
         };
+    } else {
+        warn!("DISCORD_WEBHOOK_URL is not set");
     }
 }
