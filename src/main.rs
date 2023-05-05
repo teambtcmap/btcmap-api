@@ -118,6 +118,12 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        "deduplicate-updated-at" => {
+            if let Err(e) = command::deduplicate_updated_at::run(db) {
+                error!(?e, "Failed to deduplicate updated_at");
+                return ExitCode::FAILURE;
+            }
+        }
         first_arg => {
             error!(command = first_arg, "Unknown command");
             return ExitCode::FAILURE;

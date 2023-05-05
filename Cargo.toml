@@ -36,6 +36,9 @@ directories = { version = "5.0.0", default-features = false }
 # https://github.com/tokio-rs/tracing/releases
 tracing = { versin = "0.1.38", default-features = false }
 
+# https://github.com/dbrgn/tracing-test/tags
+tracing-test = { versin = "0.2.4", default-features = false }
+
 # https://github.com/tokio-rs/tracing/releases
 tracing-subscriber = { version = "0.3.17", default-features = false, features = ["json", "env-filter", "registry", "fmt"] }
 
