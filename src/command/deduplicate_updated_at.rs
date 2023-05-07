@@ -1,4 +1,6 @@
+use crate::model::Area;
 use crate::model::Event;
+use crate::model::area;
 use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
@@ -12,6 +14,7 @@ pub fn run(db: Connection) -> Result<i128> {
     let mut duplicates = 0;
     duplicates += deduplicate_elements(&db)?;
     duplicates += deduplicate_events(&db)?;
+    duplicates += deduplicate_areas(&db)?;
     warn!(duplicates, "Removed duplicate updated_at");
     Ok(duplicates)
 }
@@ -114,6 +117,55 @@ fn find_duplicate_events(conn: &Connection) -> Result<Option<(Event, Event)>> {
     Ok(None)
 }
 
+fn deduplicate_areas(db: &Connection) -> Result<i128> {
+    info!("Looking for duplicate areas");
+
+    let mut duplicates = 0;
+
+    loop {
+        match find_duplicate_areas(db)? {
+            Some((e1, _)) => {
+                db.execute(area::TOUCH, named_params! { ":id": e1.id })?;
+                duplicates += 1;
+            }
+            None => break,
+        }
+    }
+
+    Ok(duplicates)
+}
+
+fn find_duplicate_areas(conn: &Connection) -> Result<Option<(Area, Area)>> {
+    let areas: Vec<Area> = conn
+        .prepare(area::SELECT_ALL)?
+        .query_map(
+            named_params! { ":limit": std::i32::MAX },
+            area::SELECT_ALL_MAPPER,
+        )?
+        .collect::<Result<Vec<Area>, _>>()?
+        .into_iter()
+        .collect();
+
+    for a1 in &areas {
+        for a2 in &areas {
+            if a1.id == a2.id {
+                continue;
+            }
+
+            if a1.updated_at == a2.updated_at {
+                warn!(
+                    a1.id,
+                    a2.id, a1.updated_at, a2.updated_at, "Found a duplicate updated_at",
+                );
+
+                return Ok(Some((a1.clone(), a2.clone())));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use rusqlite::{named_params, Connection};
@@ -203,6 +255,45 @@ mod tests {
                 ":user_id": 1,
                 ":element_id": "node:1",
                 ":type": "test",
+                ":updated_at": "2023-05-05",
+            },
+        )?;
+
+        let duplicates = super::run(conn).unwrap();
+        assert_eq!(1, duplicates);
+
+        Ok(())
+    }
+
+    #[traced_test]
+    #[test]
+    #[ignore]
+    fn deduplicate_areas() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        let insert = r#"
+            INSERT INTO area (
+                id,
+                updated_at
+            ) VALUES (
+                :id,
+                :updated_at
+            )
+        "#;
+
+        conn.execute(
+            insert,
+            named_params! {
+                ":id": "test1",
+                ":updated_at": "2023-05-05",
+            },
+        )?;
+
+        conn.execute(
+            insert,
+            named_params! {
+                ":id": "test2",
                 ":updated_at": "2023-05-05",
             },
         )?;

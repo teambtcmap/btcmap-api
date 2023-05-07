@@ -3,6 +3,7 @@ use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
 
+#[derive(Clone)]
 pub struct Area {
     pub id: String,
     pub tags: Map<String, Value>,
@@ -180,7 +181,13 @@ pub static DELETE_TAG: &str = r#"
 
 pub static MARK_AS_DELETED: &str = r#"
     UPDATE area
-    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%SZ')
+    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ')
+    WHERE id = :id
+"#;
+
+pub static TOUCH: &str = r#"
+    UPDATE area
+    SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ')
     WHERE id = :id
 "#;
 

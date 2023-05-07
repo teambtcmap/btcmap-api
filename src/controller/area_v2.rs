@@ -474,9 +474,9 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute(area::INSERT, named_params! { ":id": "test1" })?;
-        conn.execute(area::INSERT, named_params! { ":id": "test2" })?;
-        conn.execute(area::INSERT, named_params! { ":id": "test3" })?;
+        conn.execute("INSERT INTO area (id, updated_at) VALUES ('test1', '2023-05-05')", [])?;
+        conn.execute("INSERT INTO area (id, updated_at) VALUES ('test2', '2023-05-06')", [])?;
+        conn.execute("INSERT INTO area (id, updated_at) VALUES ('test3', '2023-05-07')", [])?;
 
         let app = test::init_service(
             App::new()
