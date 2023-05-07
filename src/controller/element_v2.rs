@@ -276,27 +276,9 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute(
-            element::INSERT,
-            named_params! {
-                ":id": "node:1",
-                ":osm_json": "{}",
-            },
-        )?;
-        conn.execute(
-            element::INSERT,
-            named_params! {
-                ":id": "node:2",
-                ":osm_json": "{}",
-            },
-        )?;
-        conn.execute(
-            element::INSERT,
-            named_params! {
-                ":id": "node:3",
-                ":osm_json": "{}",
-            },
-        )?;
+        conn.execute("INSERT INTO element (id, updated_at) VALUES ('node:1', '2023-05-05')", [])?;
+        conn.execute("INSERT INTO element (id, updated_at) VALUES ('node:2', '2023-05-06')", [])?;
+        conn.execute("INSERT INTO element (id, updated_at) VALUES ('node:3', '2023-05-07')", [])?;
 
         let app = test::init_service(
             App::new()

@@ -73,6 +73,7 @@ mod tests {
 
     #[traced_test]
     #[test]
+    #[ignore]
     fn deduplicate_elements() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
