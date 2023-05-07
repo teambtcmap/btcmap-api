@@ -212,30 +212,9 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute(
-            event::INSERT,
-            named_params! {
-                ":user_id": "0",
-                ":element_id": "",
-                ":type": "",
-            },
-        )?;
-        conn.execute(
-            event::INSERT,
-            named_params! {
-                ":user_id": "0",
-                ":element_id": "",
-                ":type": "",
-            },
-        )?;
-        conn.execute(
-            event::INSERT,
-            named_params! {
-                ":user_id": "0",
-                ":element_id": "",
-                ":type": "",
-            },
-        )?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-05')", [])?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-06')", [])?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-07')", [])?;
 
         let app = test::init_service(
             App::new()
