@@ -3,7 +3,6 @@ use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
 
-#[derive(Clone)]
 pub struct Area {
     pub id: String,
     pub tags: Map<String, Value>,
@@ -185,12 +184,6 @@ pub static MARK_AS_DELETED: &str = r#"
     WHERE id = :id
 "#;
 
-pub static TOUCH: &str = r#"
-    UPDATE area
-    SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ')
-    WHERE id = :id
-"#;
-
 const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: String = row.get(1)?;
@@ -216,7 +209,7 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::{Number, Value, Map};
+    use serde_json::{Map, Number, Value};
 
     use crate::Result;
 

@@ -1,10 +1,8 @@
 use rusqlite::Result;
 use rusqlite::Row;
-use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 
-#[derive(Serialize, Clone)]
 pub struct Element {
     pub id: String,
     pub osm_json: Value,
@@ -103,12 +101,6 @@ pub static DELETE_TAG: &str = r#"
     UPDATE element
     SET tags = json_remove(tags, :tag_name)
     WHERE id = :element_id
-"#;
-
-pub static TOUCH: &str = r#"
-    UPDATE element
-    SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ')
-    WHERE id = :id
 "#;
 
 const fn full_mapper() -> fn(&Row) -> Result<Element> {

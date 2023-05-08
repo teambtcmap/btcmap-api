@@ -3,7 +3,6 @@ use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
 
-#[derive(Clone)]
 pub struct Report {
     pub id: i64,
     pub area_id: String,
@@ -93,12 +92,6 @@ pub static UPDATE_TAGS: &str = r#"
     UPDATE report
     SET tags = :tags
     WHERE id = :report_id
-"#;
-
-pub static TOUCH: &str = r#"
-    UPDATE report
-    SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ')
-    WHERE id = :id
 "#;
 
 const fn full_mapper() -> fn(&Row) -> Result<Report> {

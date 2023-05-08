@@ -3,7 +3,6 @@ use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
 
-#[derive(Clone)]
 pub struct Event {
     pub id: i64,
     pub user_id: i64,
@@ -82,12 +81,6 @@ pub static UPDATE_TAGS: &str = r#"
     UPDATE event
     SET tags = :tags
     WHERE id = :event_id
-"#;
-
-pub static TOUCH: &str = r#"
-    UPDATE event
-    SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ')
-    WHERE id = :id
 "#;
 
 const fn full_mapper() -> fn(&Row) -> Result<Event> {
