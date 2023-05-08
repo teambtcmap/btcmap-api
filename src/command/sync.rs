@@ -193,7 +193,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 },
             )?;
 
-            let message = format!("User {user_display_name} removed element https://www.openstreetmap.org/{element_type}/{osm_id}");
+            let message = format!("User {user_display_name} removed https://www.openstreetmap.org/{element_type}/{osm_id}");
             info!(
                 element_name = name,
                 element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
@@ -246,7 +246,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                         warn!("Changeset ID is identical, skipped user event generation");
                     }
 
-                    let message = format!("User {user_display_name} updated element https://www.openstreetmap.org/{element_type}/{osm_id}");
+                    let message = format!("User {user_display_name} updated https://www.openstreetmap.org/{element_type}/{osm_id}");
                     info!(
                         element_name = name,
                         element_url =
@@ -357,7 +357,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
 
                 info!(category_singular, android_icon);
 
-                let message = format!("User {user_display_name} added element https://www.openstreetmap.org/{element_type}/{osm_id}");
+                let message = format!("User {user_display_name} added https://www.openstreetmap.org/{element_type}/{osm_id}");
                 info!(
                     element_name = name,
                     element_category = category_singular,

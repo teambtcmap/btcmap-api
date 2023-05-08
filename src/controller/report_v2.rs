@@ -219,30 +219,42 @@ mod tests {
         db::migrate(&mut conn)?;
 
         conn.execute(
-            report::INSERT,
-            named_params! {
-                ":area_id" : "",
-                ":date" : "",
-                ":tags" : "{}",
-            },
+            "INSERT INTO report (
+                area_id,
+                date,
+                updated_at
+            ) VALUES (
+                'test1',
+                '2023-05-06',
+                '2023-05-06'
+            )",
+            [],
         )?;
 
         conn.execute(
-            report::INSERT,
-            named_params! {
-                ":area_id" : "",
-                ":date" : "",
-                ":tags" : "{}",
-            },
+            "INSERT INTO report (
+                area_id,
+                date,
+                updated_at
+            ) VALUES (
+                'test1',
+                '2023-05-07',
+                '2023-05-07'
+            )",
+            [],
         )?;
 
         conn.execute(
-            report::INSERT,
-            named_params! {
-                ":area_id" : "",
-                ":date" : "",
-                ":tags" : "{}",
-            },
+            "INSERT INTO report (
+                area_id,
+                date,
+                updated_at
+            ) VALUES (
+                'test1',
+                '2023-05-08',
+                '2023-05-08'
+            )",
+            [],
         )?;
 
         let app = test::init_service(

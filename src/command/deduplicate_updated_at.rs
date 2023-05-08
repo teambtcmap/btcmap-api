@@ -1,11 +1,13 @@
 use crate::model::Area;
 use crate::model::Event;
+use crate::model::Report;
 use crate::model::area;
 use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
 use crate::Result;
 use crate::model::event;
+use crate::model::report;
 use rusqlite::named_params;
 use tracing::info;
 use tracing::warn;
@@ -15,6 +17,7 @@ pub fn run(db: Connection) -> Result<i128> {
     duplicates += deduplicate_elements(&db)?;
     duplicates += deduplicate_events(&db)?;
     duplicates += deduplicate_areas(&db)?;
+    duplicates += deduplicate_reports(&db)?;
     warn!(duplicates, "Removed duplicate updated_at");
     Ok(duplicates)
 }
@@ -166,6 +169,55 @@ fn find_duplicate_areas(conn: &Connection) -> Result<Option<(Area, Area)>> {
     Ok(None)
 }
 
+fn deduplicate_reports(db: &Connection) -> Result<i128> {
+    info!("Looking for duplicate reports");
+
+    let mut duplicates = 0;
+
+    loop {
+        match find_duplicate_reports(db)? {
+            Some((r1, _)) => {
+                db.execute(report::TOUCH, named_params! { ":id": r1.id })?;
+                duplicates += 1;
+            }
+            None => break,
+        }
+    }
+
+    Ok(duplicates)
+}
+
+fn find_duplicate_reports(conn: &Connection) -> Result<Option<(Report, Report)>> {
+    let reports: Vec<Report> = conn
+        .prepare(report::SELECT_ALL)?
+        .query_map(
+            named_params! { ":limit": std::i32::MAX },
+            report::SELECT_ALL_MAPPER,
+        )?
+        .collect::<Result<Vec<Report>, _>>()?
+        .into_iter()
+        .collect();
+
+    for r1 in &reports {
+        for r2 in &reports {
+            if r1.id == r2.id {
+                continue;
+            }
+
+            if r1.updated_at == r2.updated_at {
+                warn!(
+                    r1.id,
+                    r2.id, r1.updated_at, r2.updated_at, "Found a duplicate updated_at",
+                );
+
+                return Ok(Some((r1.clone(), r2.clone())));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use rusqlite::{named_params, Connection};
@@ -294,6 +346,49 @@ mod tests {
             insert,
             named_params! {
                 ":id": "test2",
+                ":updated_at": "2023-05-05",
+            },
+        )?;
+
+        let duplicates = super::run(conn).unwrap();
+        assert_eq!(1, duplicates);
+
+        Ok(())
+    }
+
+    #[traced_test]
+    #[test]
+    #[ignore]
+    fn deduplicate_reports() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        let insert = r#"
+            INSERT INTO report (
+                area_id,
+                date,
+                updated_at
+            ) VALUES (
+                :area_id,
+                :date,
+                :updated_at
+            )
+        "#;
+
+        conn.execute(
+            insert,
+            named_params! {
+                ":area_id": "test1",
+                ":date": "2023-05-05",
+                ":updated_at": "2023-05-05",
+            },
+        )?;
+
+        conn.execute(
+            insert,
+            named_params! {
+                ":area_id": "test2",
+                ":date": "2023-05-05",
                 ":updated_at": "2023-05-05",
             },
         )?;
