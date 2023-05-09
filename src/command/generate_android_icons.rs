@@ -419,6 +419,10 @@ pub fn android_icon(tags: &Map<String, Value>) -> String {
         icon_id = "cottage";
     }
 
+    if tourism == "caravan_site" {
+        icon_id = "airport_shuttle";
+    }
+
     if shop != "" {
         icon_id = "storefront";
     }

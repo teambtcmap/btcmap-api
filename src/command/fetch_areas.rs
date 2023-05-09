@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use crate::model::area;
 use crate::Error;
@@ -10,6 +11,7 @@ use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde_json::Map;
 use serde_json::Value;
+use tokio::time::sleep;
 use tracing::info;
 
 #[derive(Deserialize)]
@@ -34,6 +36,8 @@ pub async fn run(db: Connection, url: String) -> Result<()> {
     let new_areas: Vec<ImportedArea> = serde_json::from_str(&body)?;
 
     for new_area in &new_areas {
+        sleep(Duration::from_millis(10)).await;
+
         let old_area = db
             .query_row(
                 area::SELECT_BY_ID,
