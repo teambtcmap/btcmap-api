@@ -27,7 +27,13 @@ pub async fn run(db: Connection) -> Result<()> {
 
     for element in elements {
         let new_category_singular = element.category_singular();
-        let old_category_singular = element.tags["category"].as_str().unwrap_or("");
+
+        let old_category_singular = element
+            .tags
+            .get("category")
+            .unwrap_or(&Value::Null)
+            .as_str()
+            .unwrap_or("");
 
         if new_category_singular != old_category_singular {
             info!(
@@ -53,7 +59,13 @@ pub async fn run(db: Connection) -> Result<()> {
         }
 
         let new_category_plural = element.category_plural();
-        let old_category_plural = element.tags["category:plural"].as_str().unwrap_or("");
+
+        let old_category_plural = element
+            .tags
+            .get("category:plural")
+            .unwrap_or(&Value::Null)
+            .as_str()
+            .unwrap_or("");
 
         if new_category_plural != old_category_plural {
             info!(
