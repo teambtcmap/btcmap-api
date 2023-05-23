@@ -15,4 +15,10 @@ case "$1" in
     db)
         sqlite3 ~/.local/share/btcmap/btcmap.db
         ;;
+
+    analyze-logs)
+        ssh btcmap-api 'journalctl --unit btcmap-api.service --since "24 hours ago" --output json --output-fields=MESSAGE | jq -r ".MESSAGE" > /tmp/btcmap-api-log' \
+	    && rsync -v btcmap-api:/tmp/btcmap-api-log /tmp/btcmap-api-log \
+	    && cargo run analyze-logs < /tmp/btcmap-api-log | jq
+	;;
 esac
