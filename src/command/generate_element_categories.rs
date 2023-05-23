@@ -26,60 +26,48 @@ pub async fn run(db: Connection) -> Result<()> {
     let mut unknown = 0;
 
     for element in elements {
-        let new_category_singular = element.category_singular();
+        let new_category = element.category();
 
-        let old_category_singular = element
+        let old_category = element
             .tags
             .get("category")
             .unwrap_or(&Value::Null)
             .as_str()
             .unwrap_or("");
 
-        if new_category_singular != old_category_singular {
-            info!(
-                element.id,
-                old_category_singular, new_category_singular, "Updating category",
-            );
+        if new_category != old_category {
+            info!(element.id, old_category, new_category, "Updating category",);
 
             db.execute(
                 element::INSERT_TAG,
                 named_params! {
                     ":element_id": element.id,
                     ":tag_name": "$.category",
-                    ":tag_value": new_category_singular,
+                    ":tag_value": new_category,
                 },
             )?;
             tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
 
-        if new_category_singular == "other" {
+        if new_category == "other" {
             unknown += 1;
         } else {
             known += 1;
         }
 
-        let new_category_plural = element.category_plural();
-
-        let old_category_plural = element
+        let category_plural = element
             .tags
             .get("category:plural")
             .unwrap_or(&Value::Null)
             .as_str()
             .unwrap_or("");
 
-        if new_category_plural != old_category_plural {
-            info!(
-                element.id,
-                old_category_plural, new_category_plural, "Updating category:plural",
-            );
+        if category_plural.len() > 0 {
+            info!(element.id, category_plural, "Removing category:plural",);
 
             db.execute(
-                element::INSERT_TAG,
-                named_params! {
-                    ":element_id": element.id,
-                    ":tag_name": "$.category:plural",
-                    ":tag_value": new_category_plural,
-                },
+                "update element set tags = json_remove(tags, '$.category:plural') where id = :element_id;",
+                named_params! { ":element_id": element.id },
             )?;
             tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
@@ -98,7 +86,7 @@ pub async fn run(db: Connection) -> Result<()> {
 }
 
 impl Element {
-    pub fn category_singular(&self) -> String {
+    pub fn category(&self) -> String {
         let tags: &Value = &self.osm_json["tags"];
 
         let amenity = tags["amenity"].as_str().unwrap_or("");
@@ -128,41 +116,6 @@ impl Element {
 
         if tourism == "hotel" {
             category = "hotel";
-        }
-
-        category.to_string()
-    }
-
-    pub fn category_plural(&self) -> String {
-        let tags: &Value = &self.osm_json["tags"];
-
-        let amenity = tags["amenity"].as_str().unwrap_or("");
-        let tourism = tags["tourism"].as_str().unwrap_or("");
-
-        let mut category: &str = "other";
-
-        if amenity == "atm" {
-            category = "atms";
-        }
-
-        if amenity == "cafe" {
-            category = "cafes";
-        }
-
-        if amenity == "restaurant" {
-            category = "restaurants";
-        }
-
-        if amenity == "bar" {
-            category = "bars";
-        }
-
-        if amenity == "pub" {
-            category = "pubs";
-        }
-
-        if tourism == "hotel" {
-            category = "hotels";
         }
 
         category.to_string()

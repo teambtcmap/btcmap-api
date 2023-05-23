@@ -324,8 +324,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                     element::SELECT_BY_ID_MAPPER,
                 )?;
 
-                let category_singular = element.category_singular();
-                let category_plural = element.category_plural();
+                let category = element.category();
                 let android_icon = android_icon(&element.osm_json["tags"].as_object().unwrap());
 
                 tx.execute(
@@ -333,16 +332,7 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                     named_params! {
                         ":element_id": &element.id,
                         ":tag_name": "$.category",
-                        ":tag_value": &category_singular,
-                    },
-                )?;
-
-                tx.execute(
-                    element::INSERT_TAG,
-                    named_params! {
-                        ":element_id": &element.id,
-                        ":tag_name": "$.category:plural",
-                        ":tag_value": &category_plural,
+                        ":tag_value": &category,
                     },
                 )?;
 
@@ -355,12 +345,12 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                     },
                 )?;
 
-                info!(category_singular, android_icon);
+                info!(category, android_icon);
 
                 let message = format!("User {user_display_name} added https://www.openstreetmap.org/{element_type}/{osm_id}");
                 info!(
                     element_name = name,
-                    element_category = category_singular,
+                    element_category = category,
                     element_android_icon = android_icon,
                     element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
                     user_name = user_display_name,
