@@ -106,12 +106,6 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        "fetch-areas" => {
-            if let Err(e) = command::fetch_areas::run(db, args[2].clone()).await {
-                error!(?e, "Failed to fetch areas");
-                return ExitCode::FAILURE;
-            }
-        }
         "analyze-logs" => {
             if let Err(e) = command::analyze_logs::run().await {
                 error!(?e, "Failed to analyze logs");

@@ -54,8 +54,5 @@ geojson = { version = "0.24.0", default-features = false, features = ["geo-types
 # https://github.com/georust/geo/tags
 geo = { version = "0.24.1", default-features = false }
 
-# https://github.com/utkarshkukreti/diff.rs/tags
-diff = { version = "0.1.13", default-features = false }
-
 # https://github.com/rust-lang/futures-rs/releases
 futures-util = { version = "0.3.28", default-features = false }

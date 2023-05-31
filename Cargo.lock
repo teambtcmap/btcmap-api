@@ -293,7 +293,6 @@ name = "btcmap-api"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "diff",
  "directories",
  "futures-util",
  "geo",
@@ -392,12 +391,6 @@ dependencies = [
  "rustc_version",
  "syn 1.0.107",
 ]
-
-[[package]]
-name = "diff"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
 name = "digest"
