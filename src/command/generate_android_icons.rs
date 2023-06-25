@@ -189,6 +189,11 @@ pub fn android_icon(tags: &Map<String, Value>) -> String {
         .unwrap_or(&Value::Null)
         .as_str()
         .unwrap_or("");
+    let golf = tags
+        .get("golf")
+        .unwrap_or(&Value::Null)
+        .as_str()
+        .unwrap_or("");
 
     let mut icon_id: &str = "question_mark";
 
@@ -225,6 +230,10 @@ pub fn android_icon(tags: &Map<String, Value>) -> String {
     }
 
     if office != "" {
+        icon_id = "business"
+    }
+
+    if office != "yes" {
         icon_id = "business"
     }
 
@@ -1514,6 +1523,10 @@ pub fn android_icon(tags: &Map<String, Value>) -> String {
 
     if attraction == "animal" {
         icon_id = "pets"
+    }
+
+    if golf == "clubhouse" {
+        icon_id = "golf_course"
     }
 
     if amenity == "fast_food" && cuisine == "ice_cream" {
