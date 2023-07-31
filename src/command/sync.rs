@@ -24,10 +24,7 @@ pub static OVERPASS_API_URL: &str = "https://overpass-api.de/api/interpreter";
 
 pub static OVERPASS_API_QUERY: &str = r#"
     [out:json][timeout:300];
-    (
-    nwr["currency:XBT"="yes"];
-    nwr["payment:bitcoin"="yes"];
-    );
+    nwr["currency:XBT"=yes];
     out meta geom;
 "#;
 
@@ -159,12 +156,9 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                 let bitcoin_tag_value = fresh_element["tags"]["currency:XBT"]
                     .as_str()
                     .unwrap_or("no");
-                let legacy_bitcoin_tag_value = fresh_element["tags"]["payment:bitcoin"]
-                    .as_str()
-                    .unwrap_or("no");
-                info!(bitcoin_tag_value, legacy_bitcoin_tag_value);
+                info!(bitcoin_tag_value);
 
-                if bitcoin_tag_value == "yes" || legacy_bitcoin_tag_value == "yes" {
+                if bitcoin_tag_value == "yes" {
                     let message = format!(
                         "Overpass lied about element {element_type}:{osm_id} being deleted"
                     );
