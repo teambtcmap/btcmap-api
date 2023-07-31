@@ -16,6 +16,7 @@ use rusqlite::Connection;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Sub;
+use time::format_description::well_known::Iso8601;
 use time::Date;
 use time::Duration;
 use time::OffsetDateTime;
@@ -221,19 +222,39 @@ fn generate_report(
         _ => 1,
     };
 
-    let mut tags: HashMap<&str, usize> = HashMap::new();
-    tags.insert("total_elements", elements.len());
-    tags.insert("total_elements_onchain", onchain_elements.len());
-    tags.insert("total_elements_lightning", lightning_elements.len());
+    let mut tags: HashMap<&str, Value> = HashMap::new();
+    tags.insert("total_elements", elements.len().into());
+    tags.insert("total_elements_onchain", onchain_elements.len().into());
+    tags.insert("total_elements_lightning", lightning_elements.len().into());
     tags.insert(
         "total_elements_lightning_contactless",
-        lightning_contactless_elements.len(),
+        lightning_contactless_elements.len().into(),
     );
-    tags.insert("up_to_date_elements", up_to_date_elements.len());
-    tags.insert("outdated_elements", outdated_elements.len());
-    tags.insert("legacy_elements", legacy_elements.len());
-    tags.insert("up_to_date_percent", up_to_date_percent as usize);
-    tags.insert("grade", grade);
+    tags.insert("up_to_date_elements", up_to_date_elements.len().into());
+    tags.insert("outdated_elements", outdated_elements.len().into());
+    tags.insert("legacy_elements", legacy_elements.len().into());
+    tags.insert("up_to_date_percent", (up_to_date_percent as usize).into());
+    tags.insert("grade", grade.into());
+
+    let verification_dates: Vec<i64> = elements
+        .iter()
+        .filter_map(|it| verification_date(it).map(|it| it.unix_timestamp()))
+        .collect();
+
+    if verification_dates.len() > 0 {
+        let avg_verification_date: f64 =
+            verification_dates.iter().sum::<i64>() as f64 / verification_dates.len() as f64;
+        let avg_verification_date: i64 = avg_verification_date as i64;
+        let avg_verification_date = OffsetDateTime::from_unix_timestamp(avg_verification_date);
+
+        if let Ok(avg_verification_date) = avg_verification_date {
+            tags.insert(
+                "avg_verification_date",
+                avg_verification_date.format(&Iso8601::DEFAULT).unwrap().into(),
+            );
+        }
+    }
+
     let tags: Value = serde_json::to_value(tags)?;
 
     info!(?tags, "Inserting new report");
@@ -253,6 +274,14 @@ fn generate_report(
 }
 
 pub fn up_to_date(osm_json: &Value) -> bool {
+    let verification_date = verification_date(osm_json)
+        .map(|it| it.to_string().to_string())
+        .unwrap_or(String::new());
+    let year_ago = OffsetDateTime::now_utc().date().sub(Duration::days(365));
+    verification_date.as_str() > year_ago.to_string().as_str()
+}
+
+pub fn verification_date(osm_json: &Value) -> Option<OffsetDateTime> {
     let tags: &Value = &osm_json["tags"];
 
     let survey_date = tags["survey:date"].as_str().unwrap_or("");
@@ -273,9 +302,11 @@ pub fn up_to_date(osm_json: &Value) -> bool {
         most_recent_date = bitcoin_check_date;
     }
 
-    let year_ago = OffsetDateTime::now_utc().date().sub(Duration::days(365));
-
-    most_recent_date > year_ago.to_string().as_str()
+    OffsetDateTime::parse(
+        &format!("{}T00:00:00Z", most_recent_date),
+        &Iso8601::DEFAULT,
+    )
+    .ok()
 }
 
 pub fn lat(osm_json: &Value) -> f64 {
