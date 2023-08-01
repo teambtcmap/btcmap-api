@@ -17,11 +17,12 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Sub;
 use time::format_description::well_known::Iso8601;
-use time::Date;
 use time::Duration;
 use time::OffsetDateTime;
+use tokio::time::sleep;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 pub async fn run(mut db: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
@@ -86,7 +87,8 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     let tx = db.transaction()?;
 
-    generate_report("", &today, elements.iter().collect(), &tx)?;
+    let report_tags = generate_report_tags(elements.iter().collect())?;
+    insert_report("", report_tags, &tx).await?;
 
     for area in areas {
         info!(area.id, "Generating report");
@@ -159,7 +161,8 @@ pub async fn run(mut db: Connection) -> Result<()> {
         }
 
         info!(area.id, elements = area_elements.len(), "Processing area");
-        generate_report(&area.id, &today, area_elements, &tx)?;
+        let report_tags = generate_report_tags(area_elements)?;
+        insert_report(&area.id, report_tags, &tx).await?;
     }
 
     tx.commit()?;
@@ -167,13 +170,8 @@ pub async fn run(mut db: Connection) -> Result<()> {
     Ok(())
 }
 
-fn generate_report(
-    area_id: &str,
-    date: &Date,
-    elements: Vec<&Value>,
-    db: &Connection,
-) -> Result<()> {
-    info!(?date, area_id, "Generating report");
+fn generate_report_tags(elements: Vec<&Value>) -> Result<Value> {
+    info!("Generating report tags");
 
     let onchain_elements: Vec<&Value> = elements
         .iter()
@@ -195,7 +193,7 @@ fn generate_report(
 
     let legacy_elements: Vec<&Value> = elements
         .iter()
-        .filter(|it| it["tags"].get("payment:bitcoin").is_some())
+        .filter(|it| it["tags"]["payment:bitcoin"].as_str() == Some("yes"))
         .copied()
         .collect();
 
@@ -222,19 +220,31 @@ fn generate_report(
         _ => 1,
     };
 
-    let mut tags: HashMap<&str, Value> = HashMap::new();
-    tags.insert("total_elements", elements.len().into());
-    tags.insert("total_elements_onchain", onchain_elements.len().into());
-    tags.insert("total_elements_lightning", lightning_elements.len().into());
+    let mut tags: HashMap<String, Value> = HashMap::new();
+    tags.insert("total_elements".into(), elements.len().into());
     tags.insert(
-        "total_elements_lightning_contactless",
+        "total_elements_onchain".into(),
+        onchain_elements.len().into(),
+    );
+    tags.insert(
+        "total_elements_lightning".into(),
+        lightning_elements.len().into(),
+    );
+    tags.insert(
+        "total_elements_lightning_contactless".into(),
         lightning_contactless_elements.len().into(),
     );
-    tags.insert("up_to_date_elements", up_to_date_elements.len().into());
-    tags.insert("outdated_elements", outdated_elements.len().into());
-    tags.insert("legacy_elements", legacy_elements.len().into());
-    tags.insert("up_to_date_percent", (up_to_date_percent as usize).into());
-    tags.insert("grade", grade.into());
+    tags.insert(
+        "up_to_date_elements".into(),
+        up_to_date_elements.len().into(),
+    );
+    tags.insert("outdated_elements".into(), outdated_elements.len().into());
+    tags.insert("legacy_elements".into(), legacy_elements.len().into());
+    tags.insert(
+        "up_to_date_percent".into(),
+        (up_to_date_percent as usize).into(),
+    );
+    tags.insert("grade".into(), grade.into());
 
     let verification_dates: Vec<i64> = elements
         .iter()
@@ -249,27 +259,55 @@ fn generate_report(
 
         if let Ok(avg_verification_date) = avg_verification_date {
             tags.insert(
-                "avg_verification_date",
-                avg_verification_date.format(&Iso8601::DEFAULT).unwrap().into(),
+                "avg_verification_date".into(),
+                avg_verification_date
+                    .format(&Iso8601::DEFAULT)
+                    .unwrap()
+                    .into(),
             );
         }
     }
 
     let tags: Value = serde_json::to_value(tags)?;
 
-    info!(?tags, "Inserting new report");
+    Ok(tags)
+}
 
-    db.execute(
-        report::INSERT,
-        named_params! {
-            ":area_id" : area_id,
-            ":date" : date.to_string(),
-            ":tags" : serde_json::to_string(&tags)?,
-        },
-    )?;
+async fn insert_report(area_id: &str, tags: Value, db: &Connection) -> Result<()> {
+    let date = OffsetDateTime::now_utc().date().to_string();
+    info!(area_id, date, ?tags, "Inserting new report");
 
-    info!(?date, area_id, "Finished generating report");
+    for attempt in 1..10 {
+        let res = db.execute(
+            report::INSERT,
+            named_params! {
+                ":area_id" : area_id,
+                ":date" : date,
+                ":tags" : serde_json::to_string(&tags)?,
+            },
+        );
 
+        match &res {
+            Ok(_) => {
+                break;
+            }
+            Err(e) => {
+                if e.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) {
+                    warn!(
+                        area_id,
+                        ?date,
+                        attempt,
+                        "Failed to insert report due to constraint violation",
+                    );
+                    sleep(tokio::time::Duration::from_millis(10)).await
+                } else {
+                    res?;
+                }
+            }
+        }
+    }
+
+    info!(area_id, ?date, "Inserted new report");
     Ok(())
 }
 
@@ -328,5 +366,24 @@ pub fn lon(osm_json: &Value) -> f64 {
             let max_lon = osm_json["bounds"]["maxlon"].as_f64().unwrap();
             (min_lon + max_lon) / 2.0
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::command::db;
+
+    use super::*;
+
+    #[actix_web::test]
+    async fn insert_report() -> Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+        db::migrate(&mut conn)?;
+
+        for i in 1..100 {
+            super::insert_report(&i.to_string(), Value::Null, &conn).await?;
+        }
+
+        Ok(())
     }
 }
