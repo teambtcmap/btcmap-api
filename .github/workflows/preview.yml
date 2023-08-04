@@ -24,7 +24,7 @@ jobs:
         override: true
 
     - name: Install musl
-      run: sudo apt-get install -y musl
+      run: sudo apt-get install -y musl musl-tools
 
     - name: Run tests
       run: cargo test --release --verbose
