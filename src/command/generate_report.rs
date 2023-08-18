@@ -246,9 +246,18 @@ fn generate_report_tags(elements: Vec<&Value>) -> Result<Value> {
     );
     tags.insert("grade".into(), grade.into());
 
+    let now = OffsetDateTime::now_utc();
+
     let verification_dates: Vec<i64> = elements
         .iter()
         .filter_map(|it| verification_date(it).map(|it| it.unix_timestamp()))
+        .filter_map(|it| {
+            if it > now.unix_timestamp() {
+                None
+            } else {
+                Some(it)
+            }
+        })
         .collect();
 
     if verification_dates.len() > 0 {
@@ -371,6 +380,8 @@ pub fn lon(osm_json: &Value) -> f64 {
 
 #[cfg(test)]
 mod test {
+    use serde_json::json;
+
     use crate::command::db;
 
     use super::*;
@@ -383,6 +394,93 @@ mod test {
         for i in 1..100 {
             super::insert_report(&i.to_string(), Value::Null, &conn).await?;
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn generate_report_tags() -> Result<()> {
+        let element_1 = json!({
+          "type": "node",
+          "id": 25338659,
+          "lat": -33.9491670,
+          "lon": 25.5640810,
+          "timestamp": "2023-02-25T09:22:38Z",
+          "version": 16,
+          "changeset": 132997506,
+          "user": "BTC Map",
+          "uid": 18545877,
+          "tags": {
+            "addr:city": "Gqeberha",
+            "addr:postcode": "6045",
+            "addr:street": "4th Avenue",
+            "air_conditioning": "yes",
+            "branch": "Newton Park",
+            "brand": "Pick n Pay",
+            "brand:wikidata": "Q7190735",
+            "brand:wikipedia": "en:Pick n Pay Stores",
+            "check_date": "2023-02-15",
+            "check_date:currency:XBT": "2023-02-25",
+            "contact:website": "https://www.pnp.co.za/",
+            "currency:XBT": "yes",
+            "currency:ZAR": "yes",
+            "diet:vegetarian": "yes",
+            "level": "0",
+            "name": "Pick n Pay",
+            "payment:credit_cards": "yes",
+            "payment:debit_cards": "yes",
+            "payment:mastercard": "yes",
+            "payment:visa": "yes",
+            "phone": "+27 41 365 1268",
+            "second_hand": "no",
+            "shop": "supermarket",
+            "source": "survey",
+            "stroller": "yes",
+            "wheelchair": "yes"
+          }
+        });
+
+        let mut element_2 = json!({
+          "type": "node",
+          "id": 6402700275 as i64,
+          "lat": 28.4077730,
+          "lon": -106.8668376,
+          "timestamp": "2023-03-15T18:24:05Z",
+          "version": 4,
+          "changeset": 133721045,
+          "user": "CENTSOARER",
+          "uid": 232801,
+          "tags": {
+            "addr:city": "Cd. Cuauhtémoc",
+            "addr:street": "Avenida Agustín Melgar",
+            "brand": "Elektra",
+            "brand:wikidata": "Q1142753",
+            "brand:wikipedia": "es:Grupo Elektra",
+            "check_date:currency:XBT": "2023-03-09",
+            "currency:XBT": "yes",
+            "name": "Elektra",
+            "payment:cash": "yes",
+            "payment:debit_cards": "yes",
+            "payment:lightning": "yes",
+            "payment:lightning_contactless": "no",
+            "payment:onchain": "yes",
+            "shop": "department_store",
+            "website": "https://www.elektra.mx"
+          }
+        });
+
+        let today = OffsetDateTime::now_utc().date();
+        let today_plus_year = today.checked_add(Duration::days(356)).unwrap();
+        element_2["tags"].as_object_mut().unwrap()["check_date:currency:XBT"] =
+            today_plus_year.to_string().into();
+
+        let report_tags = super::generate_report_tags(vec![&element_1, &element_2])?;
+
+        assert_eq!(2, report_tags["total_elements"].as_i64().unwrap());
+        assert_eq!(
+            "2023-02-25T00:00:00.000000000Z",
+            report_tags["avg_verification_date"].as_str().unwrap(),
+        );
 
         Ok(())
     }
