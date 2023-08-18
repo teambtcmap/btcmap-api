@@ -7,3 +7,4 @@ pub mod lint;
 pub mod server;
 pub mod sync;
 pub mod sync_users;
+pub mod add_area;

@@ -112,6 +112,12 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        "add-area" => {
+            if let Err(e) = command::add_area::run(&mut db).await {
+                error!(?e, "Failed to add area");
+                return ExitCode::FAILURE;
+            }
+        }
         first_arg => {
             error!(command = first_arg, "Unknown command");
             return ExitCode::FAILURE;
