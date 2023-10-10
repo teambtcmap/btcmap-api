@@ -1,5 +1,6 @@
 use crate::model::element;
 use crate::model::Element;
+use crate::model::OverpassElement;
 use crate::service::auth::get_admin_token;
 use crate::ApiError;
 use actix_web::get;
@@ -31,7 +32,7 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: String,
-    pub osm_json: Value,
+    pub osm_json: OverpassElement,
     pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
@@ -214,7 +215,7 @@ async fn post_tags(
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use crate::command::db;
     use crate::model::token;
@@ -250,13 +251,9 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute(
-            element::INSERT,
-            named_params! {
-                ":id": "node:1",
-                ":osm_json": "{}",
-            },
-        )?;
+        let element = Element::mock();
+        element.insert(&conn)?;
+
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -276,9 +273,44 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute("INSERT INTO element (id, updated_at) VALUES ('node:1', '2023-05-05')", [])?;
-        conn.execute("INSERT INTO element (id, updated_at) VALUES ('node:2', '2023-05-06')", [])?;
-        conn.execute("INSERT INTO element (id, updated_at) VALUES ('node:3', '2023-05-07')", [])?;
+        let element_1 = OverpassElement {
+            r#type: "node".into(),
+            id: 1,
+            ..OverpassElement::mock()
+        };
+        let element_1 = Element {
+            id: element_1.btcmap_id(),
+            osm_json: element_1,
+            updated_at: "2023-05-05".into(),
+            ..Element::mock()
+        };
+        element_1.insert(&conn)?;
+
+        let element_2 = OverpassElement {
+            r#type: "node".into(),
+            id: 2,
+            ..OverpassElement::mock()
+        };
+        let element_2 = Element {
+            id: element_2.btcmap_id(),
+            osm_json: element_2,
+            updated_at: "2023-05-06".into(),
+            ..Element::mock()
+        };
+        element_2.insert(&conn)?;
+
+        let element_3 = OverpassElement {
+            r#type: "node".into(),
+            id: 3,
+            ..OverpassElement::mock()
+        };
+        let element_3 = Element {
+            id: element_3.btcmap_id(),
+            osm_json: element_3,
+            updated_at: "2023-05-07".into(),
+            ..Element::mock()
+        };
+        element_3.insert(&conn)?;
 
         let app = test::init_service(
             App::new()
@@ -299,14 +331,11 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute(
-            "INSERT INTO element (id, osm_json, updated_at) VALUES ('node:1', '{}', '2022-01-05')",
-            [],
-        )?;
-        conn.execute(
-            "INSERT INTO element (id, osm_json, updated_at) VALUES ('node:2', '{}', '2022-02-05')",
-            [],
-        )?;
+        let element_1 = Element { id: "node:1".into(), updated_at: "2022-01-05".into(), ..Element::mock() };
+        element_1.insert(&conn)?;
+
+        let element_2 = Element { id: "node:2".into(), updated_at: "2022-02-05".into(), ..Element::mock() };
+        element_2.insert(&conn)?;
 
         let app = test::init_service(
             App::new()
@@ -329,14 +358,8 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element_id = "node:1";
-        conn.execute(
-            element::INSERT,
-            named_params! {
-                ":id": element_id,
-                ":osm_json": "{}",
-            },
-        )?;
+        let element = Element::mock();
+        element.insert(&conn)?;
 
         let app = test::init_service(
             App::new()
@@ -346,10 +369,10 @@ mod tests {
         .await;
 
         let req = TestRequest::get()
-            .uri(&format!("/{element_id}"))
+            .uri(&format!("/{}", element.id))
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.id, element_id);
+        assert_eq!(res.id, element.id);
 
         Ok(())
     }
@@ -365,14 +388,8 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let element_id = "node:1";
-        conn.execute(
-            element::INSERT,
-            named_params! {
-                ":id": element_id,
-                ":osm_json": "{}",
-            },
-        )?;
+        let element = Element::mock();
+        element.insert(&conn)?;
 
         let app = test::init_service(
             App::new()
@@ -382,7 +399,7 @@ mod tests {
         .await;
 
         let req = TestRequest::patch()
-            .uri(&format!("/{element_id}/tags"))
+            .uri(&format!("/{}/tags", element.id))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
@@ -403,14 +420,8 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let element_id = "node:1";
-        conn.execute(
-            element::INSERT,
-            named_params! {
-                ":id": element_id,
-                ":osm_json": "{}",
-            },
-        )?;
+        let element = Element::mock();
+        element.insert(&conn)?;
 
         let app = test::init_service(
             App::new()
@@ -420,7 +431,7 @@ mod tests {
         .await;
 
         let req = TestRequest::post()
-            .uri(&format!("/{element_id}/tags"))
+            .uri(&format!("/{}/tags", element.id))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),

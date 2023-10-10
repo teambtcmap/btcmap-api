@@ -1,10 +1,9 @@
-use crate::command::sync;
 use crate::model::area;
 use crate::model::report;
 use crate::model::Area;
-use crate::Error;
+use crate::model::OverpassElement;
+use crate::service::overpass;
 use crate::Result;
-use geo::coord;
 use geo::Contains;
 use geo::LineString;
 use geo::MultiPolygon;
@@ -15,9 +14,7 @@ use rusqlite::named_params;
 use rusqlite::Connection;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::ops::Sub;
 use time::format_description::well_known::Iso8601;
-use time::Duration;
 use time::OffsetDateTime;
 use tokio::time::sleep;
 use tracing::error;
@@ -42,37 +39,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
         return Ok(());
     }
 
-    info!("Querying OSM API, it could take a while...");
-
-    let response = reqwest::Client::new()
-        .post(sync::OVERPASS_API_URL)
-        .body(sync::OVERPASS_API_QUERY)
-        .send()
-        .await?;
-
-    info!(response_status_code = ?response.status(), "Fetched new data");
-
-    let response = response.json::<Value>().await?;
-
-    let elements: Vec<Value> = response["elements"]
-        .as_array()
-        .ok_or(Error::Other("Failed to parse elements".into()))?
-        .to_owned();
-
-    if elements.len() == 0 {
-        Err(Error::Other(format!(
-            "Got suspicious response: {}",
-            serde_json::to_string_pretty(&response)?
-        )))?
-    }
-
-    info!(elements = elements.len(), "Fetched elements");
-
-    if elements.len() < 5000 {
-        Err(Error::Other(
-            "Data set is most likely invalid, aborting report generation".into(),
-        ))?
-    }
+    let elements = overpass::query_bitcoin_merchants().await?;
 
     let areas: Vec<Area> = db
         .prepare(area::SELECT_ALL)?
@@ -87,12 +54,12 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     let tx = db.transaction()?;
 
-    let report_tags = generate_report_tags(elements.iter().collect())?;
+    let report_tags = generate_report_tags(&elements.iter().collect::<Vec<_>>())?;
     insert_report("", report_tags, &tx).await?;
 
     for area in areas {
         info!(area.id, "Generating report");
-        let mut area_elements: Vec<&Value> = vec![];
+        let mut area_elements: Vec<&OverpassElement> = vec![];
 
         if area.tags.contains_key("geo_json") {
             let geo_json = area.tags["geo_json"].to_string();
@@ -130,21 +97,21 @@ pub async fn run(mut db: Connection) -> Result<()> {
                         geojson::Value::MultiPolygon(_) => {
                             let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
 
-                            if multi_poly.contains(&coord! { x: lon(element), y: lat(element) }) {
+                            if multi_poly.contains(&element.coord()) {
                                 area_elements.push(element);
                             }
                         }
                         geojson::Value::Polygon(_) => {
                             let poly: Polygon = (&geometry.value).try_into().unwrap();
 
-                            if poly.contains(&coord! { x: lon(element), y: lat(element) }) {
+                            if poly.contains(&element.coord()) {
                                 area_elements.push(element);
                             }
                         }
                         geojson::Value::LineString(_) => {
                             let line_string: LineString = (&geometry.value).try_into().unwrap();
 
-                            if line_string.contains(&coord! { x: lon(element), y: lat(element) }) {
+                            if line_string.contains(&element.coord()) {
                                 area_elements.push(element);
                             }
                         }
@@ -154,14 +121,16 @@ pub async fn run(mut db: Connection) -> Result<()> {
             }
         } else {
             for element in &elements {
-                if area.contains(lat(element), lon(element)) {
+                let coord = element.coord();
+
+                if area.contains(coord.y, coord.x) {
                     area_elements.push(element)
                 }
             }
         }
 
         info!(area.id, elements = area_elements.len(), "Processing area");
-        let report_tags = generate_report_tags(area_elements)?;
+        let report_tags = generate_report_tags(&area_elements)?;
         insert_report(&area.id, report_tags, &tx).await?;
     }
 
@@ -170,42 +139,34 @@ pub async fn run(mut db: Connection) -> Result<()> {
     Ok(())
 }
 
-fn generate_report_tags(elements: Vec<&Value>) -> Result<Value> {
+fn generate_report_tags(elements: &[&OverpassElement]) -> Result<Value> {
     info!("Generating report tags");
 
-    let onchain_elements: Vec<&Value> = elements
+    let onchain_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it["tags"]["payment:onchain"].as_str() == Some("yes"))
-        .copied()
+        .filter(|it| it.get_tag_value("payment:onchain") == "yes")
         .collect();
 
-    let lightning_elements: Vec<&Value> = elements
+    let lightning_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it["tags"]["payment:lightning"].as_str() == Some("yes"))
-        .copied()
+        .filter(|it| it.get_tag_value("payment:lightning") == "yes")
         .collect();
 
-    let lightning_contactless_elements: Vec<&Value> = elements
+    let lightning_contactless_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it["tags"]["payment:lightning_contactless"].as_str() == Some("yes"))
-        .copied()
+        .filter(|it| it.get_tag_value("payment:lightning_contactless") == "yes")
         .collect();
 
-    let legacy_elements: Vec<&Value> = elements
+    let legacy_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it["tags"]["payment:bitcoin"].as_str() == Some("yes"))
-        .copied()
+        .filter(|it| it.get_tag_value("payment:bitcoin") == "yes")
         .collect();
 
-    let up_to_date_elements: Vec<&Value> = elements
-        .iter()
-        .filter(|it| up_to_date(it))
-        .copied()
-        .collect();
+    let up_to_date_elements: Vec<_> = elements.iter().filter(|it| it.up_to_date()).collect();
 
-    let outdated_elements: Vec<&Value> = elements
+    let outdated_elements: Vec<_> = elements
         .iter()
-        .filter(|it| !up_to_date(it))
+        .filter(|it| !it.up_to_date())
         .copied()
         .collect();
 
@@ -250,7 +211,7 @@ fn generate_report_tags(elements: Vec<&Value>) -> Result<Value> {
 
     let verification_dates: Vec<i64> = elements
         .iter()
-        .filter_map(|it| verification_date(it).map(|it| it.unix_timestamp()))
+        .filter_map(|it| it.verification_date().map(|it| it.unix_timestamp()))
         .filter_map(|it| {
             if it > now.unix_timestamp() {
                 None
@@ -320,67 +281,10 @@ async fn insert_report(area_id: &str, tags: Value, db: &Connection) -> Result<()
     Ok(())
 }
 
-pub fn up_to_date(osm_json: &Value) -> bool {
-    let verification_date = verification_date(osm_json)
-        .map(|it| it.to_string().to_string())
-        .unwrap_or(String::new());
-    let year_ago = OffsetDateTime::now_utc().date().sub(Duration::days(365));
-    verification_date.as_str() > year_ago.to_string().as_str()
-}
-
-pub fn verification_date(osm_json: &Value) -> Option<OffsetDateTime> {
-    let tags: &Value = &osm_json["tags"];
-
-    let survey_date = tags["survey:date"].as_str().unwrap_or("");
-    let check_date = tags["check_date"].as_str().unwrap_or("");
-    let bitcoin_check_date = tags["check_date:currency:XBT"].as_str().unwrap_or("");
-
-    let mut most_recent_date = "";
-
-    if survey_date > most_recent_date {
-        most_recent_date = survey_date;
-    }
-
-    if check_date > most_recent_date {
-        most_recent_date = check_date;
-    }
-
-    if bitcoin_check_date > most_recent_date {
-        most_recent_date = bitcoin_check_date;
-    }
-
-    OffsetDateTime::parse(
-        &format!("{}T00:00:00Z", most_recent_date),
-        &Iso8601::DEFAULT,
-    )
-    .ok()
-}
-
-pub fn lat(osm_json: &Value) -> f64 {
-    match osm_json["type"].as_str().unwrap() {
-        "node" => osm_json["lat"].as_f64().unwrap(),
-        _ => {
-            let min_lat = osm_json["bounds"]["minlat"].as_f64().unwrap();
-            let max_lat = osm_json["bounds"]["maxlat"].as_f64().unwrap();
-            (min_lat + max_lat) / 2.0
-        }
-    }
-}
-
-pub fn lon(osm_json: &Value) -> f64 {
-    match osm_json["type"].as_str().unwrap() {
-        "node" => osm_json["lon"].as_f64().unwrap(),
-        _ => {
-            let min_lon = osm_json["bounds"]["minlon"].as_f64().unwrap();
-            let max_lon = osm_json["bounds"]["maxlon"].as_f64().unwrap();
-            (min_lon + max_lon) / 2.0
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use serde_json::json;
+    use time::Duration;
 
     use crate::command::db;
 
@@ -440,7 +344,9 @@ mod test {
           }
         });
 
-        let mut element_2 = json!({
+        let element_1: OverpassElement = serde_json::from_value(element_1)?;
+
+        let element_2 = json!({
           "type": "node",
           "id": 6402700275 as i64,
           "lat": 28.4077730,
@@ -469,12 +375,16 @@ mod test {
           }
         });
 
+        let mut element_2: OverpassElement = serde_json::from_value(element_2)?;
+
         let today = OffsetDateTime::now_utc().date();
         let today_plus_year = today.checked_add(Duration::days(356)).unwrap();
-        element_2["tags"].as_object_mut().unwrap()["check_date:currency:XBT"] =
-            today_plus_year.to_string().into();
+        element_2.tags.as_mut().unwrap().insert(
+            "check_date:currency:XBT".into(),
+            today_plus_year.to_string().into(),
+        );
 
-        let report_tags = super::generate_report_tags(vec![&element_1, &element_2])?;
+        let report_tags = super::generate_report_tags(&vec![&element_1, &element_2])?;
 
         assert_eq!(2, report_tags["total_elements"].as_i64().unwrap());
         assert_eq!(

@@ -1,6 +1,5 @@
 pub mod area_v2;
 pub mod element_v2;
-pub mod element_v3;
 pub mod event_v2;
 pub mod report_v2;
 pub mod tile;

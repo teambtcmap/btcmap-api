@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::env;
 
-use crate::command::generate_android_icons::android_icon;
-use crate::command::generate_report;
 use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
@@ -37,9 +35,7 @@ pub async fn run(db: Connection) -> Result<()> {
     for element in elements {
         let url = format!("https://openstreetmap.org/{}", element.id.replace(":", "/"));
 
-        let survey_date = element.osm_json["tags"]["survey:date"]
-            .as_str()
-            .unwrap_or("");
+        let survey_date = element.get_osm_tag_value("survey:date");
 
         if survey_date.len() > 0 {
             let parsed_date = Date::parse(survey_date, &date_format);
@@ -54,9 +50,7 @@ pub async fn run(db: Connection) -> Result<()> {
             }
         }
 
-        let check_date = element.osm_json["tags"]["check_date"]
-            .as_str()
-            .unwrap_or("");
+        let check_date = element.get_osm_tag_value("check_date");
 
         if check_date.len() > 0 {
             let parsed_date = Date::parse(check_date, &date_format);
@@ -71,9 +65,7 @@ pub async fn run(db: Connection) -> Result<()> {
             }
         }
 
-        let check_date_currency_xbt = element.osm_json["tags"]["check_date:currency:XBT"]
-            .as_str()
-            .unwrap_or("");
+        let check_date_currency_xbt = element.get_osm_tag_value("check_date:currency:XBT");
 
         if check_date_currency_xbt.len() > 0 {
             let parsed_date = Date::parse(check_date_currency_xbt, &date_format);
@@ -88,37 +80,27 @@ pub async fn run(db: Connection) -> Result<()> {
             }
         }
 
-        let payment_lighting = element.osm_json["tags"]["payment:lighting"]
-            .as_str()
-            .unwrap_or("");
+        let payment_lighting = element.get_osm_tag_value("payment:lighting");
 
         if payment_lighting.len() > 0 {
             error!(element.id, "Spelling issue: payment:lighting");
         }
 
-        let payment_lightning_contacless = element.osm_json["tags"]["payment:lightning_contacless"]
-            .as_str()
-            .unwrap_or("");
+        let payment_lightning_contacless = element.get_osm_tag_value("payment:lightning_contacless");
 
         if payment_lightning_contacless.len() > 0 {
             error!(element.id, "Spelling issue: payment:lightning_contacless");
         }
 
-        let payment_lighting_contactless = element.osm_json["tags"]["payment:lighting_contactless"]
-            .as_str()
-            .unwrap_or("");
+        let payment_lighting_contactless = element.get_osm_tag_value("payment:lighting_contactless");
 
         if payment_lighting_contactless.len() > 0 {
             error!(element.id, "Spelling issue: payment:lighting_contactless");
         }
 
-        let currency_xbt = element.osm_json["tags"]["currency:XBT"]
-            .as_str()
-            .unwrap_or("");
+        let currency_xbt = element.get_osm_tag_value("currency:XBT");
 
-        let payment_bitcoin = element.osm_json["tags"]["payment:bitcoin"]
-            .as_str()
-            .unwrap_or("");
+        let payment_bitcoin = element.get_osm_tag_value("payment:bitcoin");
 
         if currency_xbt == "yes" && payment_bitcoin == "yes" {
             let message = format!(
@@ -156,8 +138,9 @@ pub async fn run(db: Connection) -> Result<()> {
             send_discord_message(message).await;
         }
 
-        if generate_report::up_to_date(&element.osm_json)
-            && android_icon(&element.osm_json["tags"].as_object().unwrap()) == "question_mark"
+        if element.osm_json.up_to_date()
+            && (element.get_btcmap_tag_value_str("icon:android") == ""
+                || element.get_btcmap_tag_value_str("icon:android") == "question_mark")
         {
             let message = format!("{} Up-to-date element has no icon", url,);
             error!(message);

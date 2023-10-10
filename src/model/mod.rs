@@ -15,3 +15,6 @@ pub use user::User;
 
 pub mod token;
 pub use token::Token;
+
+pub mod overpass_element;
+pub use overpass_element::OverpassElement;

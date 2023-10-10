@@ -7,10 +7,10 @@ pub use error::ApiError;
 pub use error::Error;
 mod command;
 mod controller;
+mod discord;
 mod error;
 mod model;
 mod service;
-mod discord;
 use rusqlite::Connection;
 use std::env;
 use std::process::ExitCode;
@@ -83,19 +83,25 @@ async fn main() -> ExitCode {
             }
         }
         "generate-report" => {
-            if let Err(e) = command::generate_report::run(db).await {
+            if let Err(e) = command::generate_reports::run(db).await {
+                error!(?e, "Failed to generate reports");
+                return ExitCode::FAILURE;
+            }
+        }
+        "generate-reports" => {
+            if let Err(e) = command::generate_reports::run(db).await {
                 error!(?e, "Failed to generate reports");
                 return ExitCode::FAILURE;
             }
         }
         "generate-android-icons" => {
-            if let Err(e) = command::generate_android_icons::run(db).await {
+            if let Err(e) = command::generate_android_icons::run(&db).await {
                 error!(?e, "Failed to generate Android icons");
                 return ExitCode::FAILURE;
             }
         }
         "generate-element-categories" => {
-            if let Err(e) = command::generate_element_categories::run(db).await {
+            if let Err(e) = command::generate_element_categories::run(&db).await {
                 error!(?e, "Failed to generate element categories");
                 return ExitCode::FAILURE;
             }

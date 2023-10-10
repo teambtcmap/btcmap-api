@@ -1,16 +1,16 @@
-use crate::command::generate_android_icons::android_icon;
 use crate::model::element;
 use crate::model::event;
 use crate::model::user;
 use crate::model::Element;
+use crate::model::OverpassElement;
 use crate::model::User;
+use crate::service::overpass::query_bitcoin_merchants;
 use crate::Error;
 use crate::Result;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
-use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::time::SystemTime;
@@ -20,91 +20,31 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-pub static OVERPASS_API_URL: &str = "https://overpass-api.de/api/interpreter";
-
-pub static OVERPASS_API_QUERY: &str = r#"
-    [out:json][timeout:300];
-    nwr["currency:XBT"=yes];
-    out meta geom;
-"#;
-
-#[derive(Deserialize)]
-struct OverpassJson {
-    version: f64,
-    generator: String,
-    osm3s: Osm3s,
-    elements: Vec<Value>,
-}
-
-#[derive(Deserialize)]
-struct Osm3s {
-    timestamp_osm_base: String,
-}
-
 pub async fn run(db: Connection) -> Result<()> {
     info!(db_path = ?db.path().unwrap(), "Starting sync");
-    info!(
-        OVERPASS_API_URL,
-        OVERPASS_API_QUERY, "Querying Overpass API, it could take a while..."
-    );
 
-    let fetch_overpass_json_start = SystemTime::now();
-    let json = fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY).await?;
-    let fetch_overpass_json_duration = SystemTime::now()
-        .duration_since(fetch_overpass_json_start)
+    let query_elements_start = SystemTime::now();
+    let elements = query_bitcoin_merchants().await?;
+    let query_elements_duration = SystemTime::now()
+        .duration_since(query_elements_start)
         .unwrap();
 
-    let process_overpass_json_start = SystemTime::now();
-    process_overpass_json(json, db).await?;
-    let process_overpass_json_duration = SystemTime::now()
-        .duration_since(process_overpass_json_start)
+    let process_elements_start = SystemTime::now();
+    process_elements(elements, db).await?;
+    let process_elements_duration = SystemTime::now()
+        .duration_since(process_elements_start)
         .unwrap();
 
     info!(
-        fetch_overpass_json_duration_seconds = fetch_overpass_json_duration.as_secs_f64(),
-        process_overpass_json_duration_seconds = process_overpass_json_duration.as_secs_f64(),
+        query_elements_duration_seconds = query_elements_duration.as_secs_f64(),
+        process_elements_duration_seconds = process_elements_duration.as_secs_f64(),
         "Finished sync",
     );
 
     Ok(())
 }
 
-async fn fetch_overpass_json(api_url: &str, query: &str) -> Result<OverpassJson> {
-    let response = reqwest::Client::new()
-        .post(api_url)
-        .body(query.to_string())
-        .send()
-        .await?;
-
-    info!(
-        http_status_code = response.status().as_u16(),
-        "Got response from Overpass"
-    );
-
-    let response = response.json::<OverpassJson>().await?;
-
-    info!(
-        response.version,
-        response.generator,
-        response.osm3s.timestamp_osm_base,
-        elements = response.elements.len(),
-        "Parsed Overpass response",
-    );
-
-    Ok(response)
-}
-
-async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result<()> {
-    if json.elements.len() < 5000 {
-        let message = format!("Overpass returned {} elements", json.elements.len());
-        error!(
-            elements = json.elements.len(),
-            discord_message = message,
-            message,
-        );
-        Err(Error::Other(message.into()))?
-    }
-
+async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connection) -> Result<()> {
     let tx: Transaction = db.transaction()?;
     let elements: Vec<Element> = tx
         .prepare(element::SELECT_ALL)
@@ -119,30 +59,21 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
 
     info!(db_path = ?tx.path().unwrap(), elements = elements.len(), "Loaded all elements from database");
 
-    let fresh_element_ids: HashSet<String> = json
-        .elements
+    let fresh_element_ids: HashSet<String> = fresh_elements
         .iter()
-        .map(|it| {
-            format!(
-                "{}:{}",
-                it["type"].as_str().unwrap(),
-                it["id"].as_i64().unwrap(),
-            )
-        })
+        .map(|it| format!("{}:{}", it.r#type, it.id,))
         .collect();
 
     // First, let's check if any of the cached elements no longer accept bitcoins
     for element in &elements {
         if !fresh_element_ids.contains(&element.id) && element.deleted_at.len() == 0 {
-            let osm_id = element.osm_json["id"].as_i64().unwrap();
-            let element_type = element.osm_json["type"].as_str().unwrap();
-            let name = element.osm_json["tags"]["name"]
-                .as_str()
-                .unwrap_or("Unnamed element");
             warn!(
                 element.id,
                 "Cached element was deleted from Overpass or no longer accepts Bitcoin",
             );
+            let osm_id = element.osm_json.id;
+            let element_type = &element.osm_json.r#type;
+            let name = element.get_osm_tag_value("name");
 
             let fresh_element = fetch_element(element_type, osm_id).await;
             let deleted_from_osm = !fresh_element
@@ -204,15 +135,13 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
         }
     }
 
-    for fresh_element in json.elements {
-        let element_type = fresh_element["type"].as_str().unwrap();
-        let osm_id = fresh_element["id"].as_i64().unwrap();
-        let btcmap_id = format!("{element_type}:{osm_id}");
-        let name = fresh_element["tags"]["name"]
-            .as_str()
-            .unwrap_or("Unnamed element");
-        let user_id = fresh_element["uid"].as_i64().unwrap_or(0);
-        let user_display_name = fresh_element["user"].as_str().unwrap_or("");
+    for fresh_element in fresh_elements {
+        let element_type = &fresh_element.r#type;
+        let osm_id = fresh_element.id;
+        let btcmap_id = fresh_element.btcmap_id();
+        let name = fresh_element.get_tag_value("name");
+        let user_id = fresh_element.uid;
+        let user_display_name = &fresh_element.user.clone().unwrap_or("".into());
 
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
@@ -224,10 +153,11 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                         "Element JSON was updated",
                     );
 
-                    insert_user_if_not_exists(user_id, &tx).await;
+                    if let Some(user_id) = user_id {
+                        insert_user_if_not_exists(user_id, &tx).await;
+                    }
 
-                    if fresh_element["changeset"].as_i64() != element.osm_json["changeset"].as_i64()
-                    {
+                    if fresh_element.changeset != element.osm_json.changeset {
                         tx.execute(
                             event::INSERT,
                             named_params! {
@@ -258,13 +188,8 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                         },
                     )?;
 
-                    let new_android_icon = android_icon(fresh_element["tags"].as_object().unwrap());
-                    let old_android_icon = element
-                        .tags
-                        .get("icon:android")
-                        .unwrap_or(&Value::Null)
-                        .as_str()
-                        .unwrap_or("");
+                    let new_android_icon = fresh_element.generate_android_icon();
+                    let old_android_icon = element.get_btcmap_tag_value_str("icon:android");
 
                     if new_android_icon != old_android_icon {
                         info!(old_android_icon, new_android_icon, "Updating Android icon");
@@ -293,7 +218,9 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
             None => {
                 info!(btcmap_id, "Element does not exist, inserting");
 
-                insert_user_if_not_exists(user_id, &tx).await;
+                if let Some(user_id) = user_id {
+                    insert_user_if_not_exists(user_id, &tx).await;
+                }
 
                 tx.execute(
                     event::INSERT,
@@ -318,8 +245,8 @@ async fn process_overpass_json(json: OverpassJson, mut db: Connection) -> Result
                     element::SELECT_BY_ID_MAPPER,
                 )?;
 
-                let category = element.category();
-                let android_icon = android_icon(&element.osm_json["tags"].as_object().unwrap());
+                let category = element.generate_category();
+                let android_icon = element.generate_android_icon();
 
                 tx.execute(
                     element::INSERT_TAG,
@@ -457,15 +384,3 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
     )
     .unwrap();
 }
-
-// #[cfg(test)]
-// pub mod tests {
-//     use super::{OVERPASS_API_QUERY, OVERPASS_API_URL};
-
-//     #[actix_web::test]
-//     async fn fetch_elements_from_osm() {
-//         super::fetch_overpass_json(OVERPASS_API_URL, OVERPASS_API_QUERY)
-//             .await
-//             .unwrap();
-//     }
-// }
