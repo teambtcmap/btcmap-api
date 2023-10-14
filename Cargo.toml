@@ -13,28 +13,28 @@ strip = "symbols"
 [dependencies]
 
 # https://github.com/actix/actix-web/releases
-actix-web = { version = "4.3.1", default-features = false, features = ["macros", "compress-brotli"] }
+actix-web = { version = "4.4.0", default-features = false, features = ["macros", "compress-brotli"] }
 
 # https://github.com/rusqlite/rusqlite/releases
 rusqlite = { version = "0.29.0", default-features = false, features = ["bundled"] }
 
 # https://github.com/seanmonstar/reqwest/releases
-reqwest = { version = "0.11.18", default-features = false, features = ["rustls-tls", "json", "blocking"] }
+reqwest = { version = "0.11.21", default-features = false, features = ["rustls-tls", "json", "blocking"] }
 
 # https://github.com/serde-rs/serde/releases
-serde = { version = "1.0.180", default-features = false, features = ["derive"] }
+serde = { version = "1.0.189", default-features = false, features = ["derive"] }
 
 # https://github.com/serde-rs/json/releases
 serde_json = { version = "1.0.104", default-features = false }
 
 # https://github.com/time-rs/time/releases
-time = { version = "0.3.24", default-features = false, features = ["macros", "serde-well-known"] }
+time = { version = "0.3.30", default-features = false, features = ["macros", "serde-well-known"] }
 
 # https://crates.io/crates/directories
 directories = { version = "5.0.1", default-features = false }
 
 # https://github.com/tokio-rs/tracing/releases
-tracing = { versin = "0.1.38", default-features = false }
+tracing = { version = "0.1.39", default-features = false }
 
 # https://github.com/tokio-rs/tracing/releases
 tracing-subscriber = { version = "0.3.17", default-features = false, features = ["json", "env-filter", "registry", "fmt"] }
@@ -43,7 +43,7 @@ tracing-subscriber = { version = "0.3.17", default-features = false, features = 
 include_dir = { version = "0.7.3", default-features = false }
 
 # https://github.com/tokio-rs/tokio/releases
-tokio = { version = "1.28.1", default-features = false, features = ["macros"] }
+tokio = { version = "1.33.0", default-features = false, features = ["macros"] }
 
 # https://github.com/georust/geojson/tags
 geojson = { version = "0.24.1", default-features = false, features = ["geo-types"] }
