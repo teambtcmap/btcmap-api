@@ -1,17 +1,59 @@
+use std::collections::HashMap;
+use std::thread::sleep;
+use std::time::Duration;
+
+use rusqlite::named_params;
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 use rusqlite::Result;
 use rusqlite::Row;
-use serde_json::Map;
 use serde_json::Value;
 
 pub struct Area {
     pub id: String,
-    pub tags: Map<String, Value>,
+    pub tags: HashMap<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
 }
 
 impl Area {
+    pub fn select_by_id(id: &str, conn: &Connection) -> Result<Option<Area>> {
+        let res = conn.query_row(
+            SELECT_BY_ID,
+            named_params! { ":id": id },
+            SELECT_BY_ID_MAPPER,
+        );
+
+        Ok(res.optional()?)
+    }
+
+    pub fn insert_or_replace(
+        id: &str,
+        tags: &HashMap<String, Value>,
+        conn: &Connection,
+    ) -> crate::Result<()> {
+        let area = Area::select_by_id(id, conn)?;
+
+        match area {
+            Some(_) => {
+                conn.execute(
+                    "UPDATE AREA SET tags = :tags WHERE id = :id",
+                    named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
+                )?;
+            }
+            None => {
+                conn.execute(
+                    "INSERT INTO area (id, tags) VALUES (:id, :tags)",
+                    named_params! { ":id": id, ":tags": &serde_json::to_string(tags)?},
+                )?;
+            }
+        }
+
+        sleep(Duration::from_millis(5));
+        Ok(())
+    }
+
     pub fn contains(&self, lat: f64, lon: f64) -> bool {
         let north = match self.tags.get("box:north") {
             Some(north) => {
@@ -109,6 +151,7 @@ impl Area {
     }
 }
 
+#[cfg(test)]
 pub static INSERT: &str = r#"
     INSERT INTO area (
         id
@@ -132,7 +175,7 @@ pub static SELECT_ALL: &str = r#"
 
 pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
 
-pub static SELECT_BY_ID: &str = r#"
+static SELECT_BY_ID: &str = r#"
     SELECT
         id,
         tags,
@@ -143,7 +186,7 @@ pub static SELECT_BY_ID: &str = r#"
     WHERE id = :id
 "#;
 
-pub static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
+static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
 
 pub static SELECT_UPDATED_SINCE: &str = r#"
     SELECT
@@ -187,7 +230,7 @@ pub static MARK_AS_DELETED: &str = r#"
 const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: String = row.get(1)?;
-        let mut tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
+        let mut tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         let geo_json = tags.get("geo_json");
 
@@ -209,7 +252,9 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::{Map, Number, Value};
+    use std::collections::HashMap;
+
+    use serde_json::{Number, Value};
 
     use crate::Result;
 
@@ -217,7 +262,7 @@ mod tests {
 
     #[test]
     fn contains() -> Result<()> {
-        let mut tags: Map<_, Value> = Map::new();
+        let mut tags: HashMap<_, Value> = HashMap::new();
         tags.insert("box:north".into(), 49.60003042758964.into());
         tags.insert(
             "box:east".into(),
@@ -240,7 +285,7 @@ mod tests {
         assert_eq!(area.contains(49.2623463, -123.0886088), true);
         assert_eq!(area.contains(47.6084752, -122.3270694), false);
 
-        let mut tags: Map<_, Value> = Map::new();
+        let mut tags: HashMap<_, Value> = HashMap::new();
         tags.insert("box:north".into(), "18.86515".into());
         tags.insert("box:east".into(), "99.07234".into());
         tags.insert("box:south".into(), "18.70702".into());

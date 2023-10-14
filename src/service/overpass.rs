@@ -1,4 +1,4 @@
-use crate::{Error, Result, model::OverpassElement};
+use crate::{model::OverpassElement, Error, Result};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 

@@ -248,8 +248,12 @@ mod tests {
             },
         )?;
 
-        let app =
-            test::init_service(App::new().app_data(Data::new(conn)).service(super::get_by_id)).await;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(conn))
+                .service(super::get_by_id),
+        )
+        .await;
         let req = TestRequest::get().uri(&format!("/{user_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, user_id);
@@ -291,7 +295,7 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-        
+
         Ok(())
     }
 }

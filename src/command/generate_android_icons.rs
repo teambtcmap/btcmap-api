@@ -1493,8 +1493,14 @@ mod test {
             .into_iter()
             .collect();
 
-        assert_eq!("golf_course", elements[0].get_btcmap_tag_value_str("icon:android"));
-        assert_eq!("factory", elements[1].get_btcmap_tag_value_str("icon:android"));
+        assert_eq!(
+            "golf_course",
+            elements[0].get_btcmap_tag_value_str("icon:android")
+        );
+        assert_eq!(
+            "factory",
+            elements[1].get_btcmap_tag_value_str("icon:android")
+        );
 
         Ok(())
     }

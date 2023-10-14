@@ -86,13 +86,15 @@ pub async fn run(db: Connection) -> Result<()> {
             error!(element.id, "Spelling issue: payment:lighting");
         }
 
-        let payment_lightning_contacless = element.get_osm_tag_value("payment:lightning_contacless");
+        let payment_lightning_contacless =
+            element.get_osm_tag_value("payment:lightning_contacless");
 
         if payment_lightning_contacless.len() > 0 {
             error!(element.id, "Spelling issue: payment:lightning_contacless");
         }
 
-        let payment_lighting_contactless = element.get_osm_tag_value("payment:lighting_contactless");
+        let payment_lighting_contactless =
+            element.get_osm_tag_value("payment:lighting_contactless");
 
         if payment_lighting_contactless.len() > 0 {
             error!(element.id, "Spelling issue: payment:lighting_contactless");

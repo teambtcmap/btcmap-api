@@ -331,10 +331,18 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element_1 = Element { id: "node:1".into(), updated_at: "2022-01-05".into(), ..Element::mock() };
+        let element_1 = Element {
+            id: "node:1".into(),
+            updated_at: "2022-01-05".into(),
+            ..Element::mock()
+        };
         element_1.insert(&conn)?;
 
-        let element_2 = Element { id: "node:2".into(), updated_at: "2022-02-05".into(), ..Element::mock() };
+        let element_2 = Element {
+            id: "node:2".into(),
+            updated_at: "2022-02-05".into(),
+            ..Element::mock()
+        };
         element_2.insert(&conn)?;
 
         let app = test::init_service(

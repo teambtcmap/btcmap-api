@@ -124,6 +124,14 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        "import-countries" => {
+            if let Err(e) =
+                command::import_countries::run(args.get(2).unwrap_or(&"".into()), &mut db)
+            {
+                error!(?e, "Failed to import countries");
+                return ExitCode::FAILURE;
+            }
+        }
         first_arg => {
             error!(command = first_arg, "Unknown command");
             return ExitCode::FAILURE;
