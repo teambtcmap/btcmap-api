@@ -1,4 +1,3 @@
-use crate::model::area;
 use crate::model::report;
 use crate::model::Area;
 use crate::model::OverpassElement;
@@ -28,7 +27,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
     let existing_report = db.query_row(
         report::SELECT_BY_AREA_ID_AND_DATE,
         named_params![
-            ":area_id": "",
+            ":area_url_alias": "",
             ":date": today.to_string()
         ],
         report::SELECT_BY_AREA_ID_AND_DATE_MAPPER,
@@ -41,15 +40,9 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     let elements = overpass::query_bitcoin_merchants().await?;
 
-    let areas: Vec<Area> = db
-        .prepare(area::SELECT_ALL)?
-        .query_map(
-            named_params! { ":limit": std::i32::MAX },
-            area::SELECT_ALL_MAPPER,
-        )?
-        .collect::<Result<Vec<Area>, _>>()?
+    let areas: Vec<Area> = Area::select_all(&db, None)?
         .into_iter()
-        .filter(|it| it.deleted_at.len() == 0)
+        .filter(|it| it.deleted_at == None)
         .collect();
 
     let tx = db.transaction()?;
@@ -60,10 +53,10 @@ pub async fn run(mut db: Connection) -> Result<()> {
     for area in areas {
         info!(area.id, "Generating report");
         let mut area_elements: Vec<&OverpassElement> = vec![];
+        let geo_json = area.tag("geo_json");
 
-        if area.tags.contains_key("geo_json") {
-            let geo_json = area.tags["geo_json"].to_string();
-            let geo_json: Result<GeoJson, _> = geo_json.parse();
+        if geo_json.is_object() {
+            let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json)?.parse();
 
             let geo_json = match geo_json {
                 Ok(geo_json) => geo_json,
@@ -119,19 +112,11 @@ pub async fn run(mut db: Connection) -> Result<()> {
                     }
                 }
             }
-        } else {
-            for element in &elements {
-                let coord = element.coord();
-
-                if area.contains(coord.y, coord.x) {
-                    area_elements.push(element)
-                }
-            }
         }
 
         info!(area.id, elements = area_elements.len(), "Processing area");
         let report_tags = generate_report_tags(&area_elements)?;
-        insert_report(&area.id, report_tags, &tx).await?;
+        insert_report(area.tag("url_alias").as_str().unwrap(), report_tags, &tx).await?;
     }
 
     tx.commit()?;
@@ -243,15 +228,15 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<Value> {
     Ok(tags)
 }
 
-async fn insert_report(area_id: &str, tags: Value, db: &Connection) -> Result<()> {
+async fn insert_report(area_url_alias: &str, tags: Value, db: &Connection) -> Result<()> {
     let date = OffsetDateTime::now_utc().date().to_string();
-    info!(area_id, date, ?tags, "Inserting new report");
+    info!(area_url_alias, date, ?tags, "Inserting new report");
 
     for attempt in 1..10 {
         let res = db.execute(
             report::INSERT,
             named_params! {
-                ":area_id" : area_id,
+                ":area_url_alias" : area_url_alias.to_string(),
                 ":date" : date,
                 ":tags" : serde_json::to_string(&tags)?,
             },
@@ -264,7 +249,7 @@ async fn insert_report(area_id: &str, tags: Value, db: &Connection) -> Result<()
             Err(e) => {
                 if e.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) {
                     warn!(
-                        area_id,
+                        area_url_alias,
                         ?date,
                         attempt,
                         "Failed to insert report due to constraint violation",
@@ -277,7 +262,7 @@ async fn insert_report(area_id: &str, tags: Value, db: &Connection) -> Result<()
         }
     }
 
-    info!(area_id, ?date, "Inserted new report");
+    info!(area_url_alias, ?date, "Inserted new report");
     Ok(())
 }
 

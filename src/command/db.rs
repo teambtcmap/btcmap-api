@@ -54,6 +54,13 @@ pub fn open_connection() -> Result<Connection> {
     Ok(conn)
 }
 
+#[cfg(test)]
+pub fn setup_connection() -> Result<Connection> {
+    let mut conn = Connection::open_in_memory()?;
+    self::migrate(&mut conn)?;
+    Ok(conn)
+}
+
 pub fn get_file_path() -> Result<PathBuf> {
     let project_dirs = match ProjectDirs::from("org", "BTC Map", "BTC Map") {
         Some(project_dirs) => project_dirs,

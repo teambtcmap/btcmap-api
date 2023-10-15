@@ -99,3 +99,9 @@ impl From<rusqlite::Error> for ApiError {
         ApiError::new(500, &error.to_string())
     }
 }
+
+impl From<crate::Error> for ApiError {
+    fn from(error: crate::Error) -> Self {
+        ApiError::new(500, &error.to_string())
+    }
+}

@@ -1,16 +1,20 @@
-use std::io::{stdin, stdout, Write};
+use std::{
+    collections::HashMap,
+    io::{stdin, stdout, Write},
+};
 
-use crate::Result;
+use crate::{model::Area, Result};
 use rusqlite::Connection;
+use serde_json::Value;
 
-pub async fn run(db: &mut Connection) -> Result<()> {
+pub async fn run(conn: &mut Connection) -> Result<()> {
     println!("Adding area");
 
-    print!("Enter area ID: ");
+    print!("Enter area url_alias: ");
     stdout().flush().unwrap();
-    let mut area_id = String::new();
-    stdin().read_line(&mut area_id).unwrap();
-    let area_id = area_id.trim();
+    let mut url_alias = String::new();
+    stdin().read_line(&mut url_alias).unwrap();
+    let url_alias = url_alias.trim();
 
     print!("Enter area name: ");
     stdout().flush().unwrap();
@@ -60,72 +64,41 @@ pub async fn run(db: &mut Connection) -> Result<()> {
     stdin().read_line(&mut contact_twitter).unwrap();
     let contact_twitter = contact_twitter.trim();
 
-    let tx = db.transaction().unwrap();
-
-    tx.execute("INSERT INTO area (id) VALUES (?)", [&area_id])
-        .unwrap();
-
-    tx.execute(
-        "UPDATE AREA SET tags = json_set(tags, '$.name', ?) WHERE id = ?",
-        [&area_name, &area_id],
-    )
-    .unwrap();
-
-    tx.execute(
-        "UPDATE AREA SET tags = json_set(tags, '$.geo_json', json(?)) WHERE id = ?",
-        [&geo_json, &area_id],
-    )
-    .unwrap();
-
-    tx.execute(
-        "UPDATE AREA SET tags = json_set(tags, '$.icon:square', ?) WHERE id = ?",
-        [
-            format!(
-                "https://static.btcmap.org/images/communities/{}.{}",
-                area_id, icon_square_ext,
-            ),
-            area_id.into(),
-        ],
-    )
-    .unwrap();
-
-    tx.execute(
-        "UPDATE AREA SET tags = json_set(tags, '$.type', ?) WHERE id = ?",
-        [&area_type, &area_id],
-    )
-    .unwrap();
-
-    tx.execute(
-        "UPDATE AREA SET tags = json_set(tags, '$.continent', ?) WHERE id = ?",
-        [&area_continent, &area_id],
-    )
-    .unwrap();
+    let mut tags: HashMap<String, Value> = HashMap::new();
+    tags.insert("name".into(), Value::String(area_name.into()));
+    tags.insert("geo_json".into(), Value::String(geo_json.into()));
+    tags.insert(
+        "icon:square".into(),
+        Value::String(format!(
+            "https://static.btcmap.org/images/communities/{}.{}",
+            url_alias, icon_square_ext,
+        )),
+    );
+    tags.insert("type".into(), Value::String(area_type.into()));
+    tags.insert("continent".into(), Value::String(area_continent.into()));
 
     if contact_website.len() > 0 {
-        tx.execute(
-            "UPDATE AREA SET tags = json_set(tags, '$.contact:website', ?) WHERE id = ?",
-            [&contact_website, &area_id],
-        )
-        .unwrap();
+        tags.insert(
+            "contact:website".into(),
+            Value::String(contact_website.into()),
+        );
     }
 
     if contact_telegram.len() > 0 {
-        tx.execute(
-            "UPDATE AREA SET tags = json_set(tags, '$.contact:telegram', ?) WHERE id = ?",
-            [&contact_telegram, &area_id],
-        )
-        .unwrap();
+        tags.insert(
+            "contact:telegram".into(),
+            Value::String(contact_telegram.into()),
+        );
     }
 
     if contact_twitter.len() > 0 {
-        tx.execute(
-            "UPDATE AREA SET tags = json_set(tags, '$.contact:twitter', ?) WHERE id = ?",
-            [&contact_twitter, &area_id],
-        )
-        .unwrap();
+        tags.insert(
+            "contact:twitter".into(),
+            Value::String(contact_twitter.into()),
+        );
     }
 
-    tx.commit().unwrap();
+    Area::insert_or_replace(url_alias, Some(&tags), &conn)?;
 
     Ok(())
 }

@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::thread::sleep;
-use std::time::Duration;
 
 use rusqlite::named_params;
 use rusqlite::Connection;
@@ -8,237 +6,173 @@ use rusqlite::OptionalExtension;
 use rusqlite::Result;
 use rusqlite::Row;
 use serde_json::Value;
+use time::OffsetDateTime;
 
 pub struct Area {
-    pub id: String,
-    pub tags: HashMap<String, Value>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: String,
+    pub id: i32,
+    pub tags: Option<HashMap<String, Value>>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+    pub deleted_at: Option<OffsetDateTime>,
 }
 
 impl Area {
-    pub fn select_by_id(id: &str, conn: &Connection) -> Result<Option<Area>> {
+    pub fn insert_or_replace(
+        url_alias: &str,
+        tags: Option<&HashMap<String, Value>>,
+        conn: &Connection,
+    ) -> crate::Result<()> {
+        let area = Area::select_by_url_alias(url_alias, conn)?;
+
+        match area {
+            Some(area) => {
+                conn.execute(
+                    "UPDATE area SET tags = json_set(:tags, '$.url_alias', :url_alias) WHERE rowid = :id",
+                    named_params! { ":id": area.id, ":url_alias": url_alias, ":tags": &serde_json::to_string(tags.unwrap_or(&HashMap::default()))? },
+                )?;
+            }
+            None => {
+                conn.execute(
+                    "INSERT INTO area (tags) VALUES (json_set(:tags, '$.url_alias', :url_alias))",
+                    named_params! { ":url_alias": url_alias, ":tags": &serde_json::to_string(tags.unwrap_or(&HashMap::default()))? },
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn select_all(conn: &Connection, limit: Option<i32>) -> Result<Vec<Area>> {
+        let query = r#"
+            SELECT
+                rowid,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM area
+            ORDER BY updated_at
+            LIMIT :limit
+        "#;
+
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! { ":limit": limit.unwrap_or(std::i32::MAX) },
+                full_mapper(),
+            )?
+            .collect::<Result<Vec<Area>, _>>()?)
+    }
+
+    pub fn select_updated_since(
+        conn: &Connection,
+        updated_since: &str,
+        limit: Option<i32>,
+    ) -> Result<Vec<Area>> {
+        let query = r#"
+            SELECT
+                rowid,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM area
+            WHERE updated_at > :updated_since
+            ORDER BY updated_at
+            LIMIT :limit
+        "#;
+
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(std::i32::MAX) },
+                full_mapper(),
+            )?
+            .collect::<Result<Vec<Area>, _>>()?)
+    }
+
+    pub fn select_by_url_alias(url_alias: &str, conn: &Connection) -> Result<Option<Area>> {
+        let query = r#"
+            SELECT
+                rowid,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM area
+            WHERE json_extract(tags, '$.url_alias') = :url_alias
+        "#;
+
         let res = conn.query_row(
-            SELECT_BY_ID,
-            named_params! { ":id": id },
-            SELECT_BY_ID_MAPPER,
+            query,
+            named_params! { ":url_alias": url_alias },
+            full_mapper(),
         );
 
         Ok(res.optional()?)
     }
 
-    pub fn insert_or_replace(
-        id: &str,
-        tags: &HashMap<String, Value>,
+    pub fn insert_tag(
+        &self,
+        tag_name: &str,
+        tag_value: &str,
         conn: &Connection,
     ) -> crate::Result<()> {
-        let area = Area::select_by_id(id, conn)?;
+        let tag_name = format!("$.{tag_name}");
 
-        match area {
-            Some(_) => {
-                conn.execute(
-                    "UPDATE AREA SET tags = :tags WHERE id = :id",
-                    named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
-                )?;
-            }
-            None => {
-                conn.execute(
-                    "INSERT INTO area (id, tags) VALUES (:id, :tags)",
-                    named_params! { ":id": id, ":tags": &serde_json::to_string(tags)?},
-                )?;
-            }
-        }
+        let query = r#"
+            UPDATE area
+            SET tags = json_set(tags, :tag_name, :tag_value)
+            WHERE rowid = :id
+        "#;
 
-        sleep(Duration::from_millis(5));
+        conn.execute(
+            query,
+            named_params! { ":id": self.id, ":tag_name": tag_name, ":tag_value": tag_value },
+        )?;
+
         Ok(())
     }
 
-    pub fn contains(&self, lat: f64, lon: f64) -> bool {
-        let north = match self.tags.get("box:north") {
-            Some(north) => {
-                if north.is_f64() {
-                    north.as_f64().unwrap()
-                } else {
-                    let res = north.as_str().map(|it| it.parse::<f64>());
+    pub fn delete_tag(&self, tag: &str, conn: &Connection) -> crate::Result<()> {
+        let tag = format!("$.{tag}");
 
-                    if res.is_none() {
-                        return false;
-                    }
+        let query = r#"
+            UPDATE area
+            SET tags = json_remove(tags, :tag)
+            WHERE rowid = :id
+        "#;
 
-                    let res = res.unwrap();
+        conn.execute(query, named_params! { ":id": self.id, ":tag": tag })?;
 
-                    if res.is_err() {
-                        return false;
-                    }
+        Ok(())
+    }
 
-                    res.unwrap()
-                }
-            }
-            None => return false,
-        };
+    pub fn delete(&self, conn: &Connection) -> crate::Result<()> {
+        let query = r#"
+            UPDATE area
+            SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ')
+            WHERE rowid = :id
+        "#;
 
-        let east = match self.tags.get("box:east") {
-            Some(east) => {
-                if east.is_f64() {
-                    east.as_f64().unwrap()
-                } else {
-                    let res = east.as_str().map(|it| it.parse::<f64>());
+        conn.execute(query, named_params! { ":id": self.id })?;
 
-                    if res.is_none() {
-                        return false;
-                    }
+        Ok(())
+    }
 
-                    let res = res.unwrap();
-
-                    if res.is_err() {
-                        return false;
-                    }
-
-                    res.unwrap()
-                }
-            }
-            None => return false,
-        };
-
-        let south = match self.tags.get("box:south") {
-            Some(south) => {
-                if south.is_f64() {
-                    south.as_f64().unwrap()
-                } else {
-                    let res = south.as_str().map(|it| it.parse::<f64>());
-
-                    if res.is_none() {
-                        return false;
-                    }
-
-                    let res = res.unwrap();
-
-                    if res.is_err() {
-                        return false;
-                    }
-
-                    res.unwrap()
-                }
-            }
-            None => return false,
-        };
-
-        let west = match self.tags.get("box:west") {
-            Some(west) => {
-                if west.is_f64() {
-                    west.as_f64().unwrap()
-                } else {
-                    let res = west.as_str().map(|it| it.parse::<f64>());
-
-                    if res.is_none() {
-                        return false;
-                    }
-
-                    let res = res.unwrap();
-
-                    if res.is_err() {
-                        return false;
-                    }
-
-                    res.unwrap()
-                }
-            }
-            None => return false,
-        };
-
-        lat < north && lat > south && lon > west && lon < east
+    pub fn tag(&self, name: &str) -> &Value {
+        match &self.tags {
+            Some(tags) => tags.get(name).unwrap_or(&Value::Null),
+            None => &Value::Null,
+        }
     }
 }
 
-#[cfg(test)]
-pub static INSERT: &str = r#"
-    INSERT INTO area (
-        id
-    )
-    VALUES (
-        :id
-    )
-"#;
-
-pub static SELECT_ALL: &str = r#"
-    SELECT
-        id,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM area
-    ORDER BY updated_at
-    LIMIT :limit
-"#;
-
-pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
-
-static SELECT_BY_ID: &str = r#"
-    SELECT
-        id,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM area
-    WHERE id = :id
-"#;
-
-static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
-
-pub static SELECT_UPDATED_SINCE: &str = r#"
-    SELECT
-        id,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM area
-    WHERE updated_at > :updated_since
-    ORDER BY updated_at
-    LIMIT :limit
-"#;
-
-pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Area> = full_mapper();
-
-pub static UPDATE_TAGS: &str = r#"
-    UPDATE area
-    SET tags = :tags
-    WHERE id = :area_id
-"#;
-
-pub static INSERT_TAG: &str = r#"
-    UPDATE area
-    SET tags = json_set(tags, :tag_name, :tag_value)
-    WHERE id = :area_id
-"#;
-
-pub static DELETE_TAG: &str = r#"
-    UPDATE area
-    SET tags = json_remove(tags, :tag_name)
-    where id = :area_id
-"#;
-
-pub static MARK_AS_DELETED: &str = r#"
-    UPDATE area
-    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ')
-    WHERE id = :id
-"#;
-
 const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
-        let tags: String = row.get(1)?;
-        let mut tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
-
-        let geo_json = tags.get("geo_json");
-
-        if geo_json.is_some() && geo_json.unwrap().is_string() {
-            let unescaped: String = geo_json.unwrap().as_str().unwrap().replace("\\\"", "\"");
-            let unescaped: Value = serde_json::from_str(&unescaped).unwrap_or_default();
-            tags.insert("geo_json".into(), unescaped);
-        }
+        let tags: Option<String> = row.get(1)?;
+        let tags: Option<HashMap<String, Value>> =
+            tags.map(|it| serde_json::from_str(&it).unwrap_or_default());
 
         Ok(Area {
             id: row.get(0)?,
@@ -251,56 +185,109 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use std::collections::HashMap;
 
-    use serde_json::{Number, Value};
+    use serde_json::Value;
 
-    use crate::Result;
+    use crate::{command::db, Result};
 
     use super::Area;
 
     #[test]
-    fn contains() -> Result<()> {
-        let mut tags: HashMap<_, Value> = HashMap::new();
-        tags.insert("box:north".into(), 49.60003042758964.into());
-        tags.insert(
-            "box:east".into(),
-            Number::from_f64(-121.77932739257814).unwrap().into(),
+    fn insert_or_replace() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let url = "test";
+        Area::insert_or_replace(url, None, &conn)?;
+        let mut tags: HashMap<String, Value> = HashMap::new();
+        tags.insert("foo".into(), Value::String("bar".into()));
+        Area::insert_or_replace(url, Some(&tags), &conn)?;
+        Ok(())
+    }
+
+    #[test]
+    fn select_all() -> Result<()> {
+        let conn = db::setup_connection()?;
+        Area::insert_or_replace("test_1", None, &conn)?;
+        Area::insert_or_replace("test_2", None, &conn)?;
+        Area::insert_or_replace("test_3", None, &conn)?;
+        assert_eq!(3, Area::select_all(&conn, None)?.len());
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since() -> Result<()> {
+        let conn = db::setup_connection()?;
+        conn.execute(
+            "INSERT INTO area (rowid, updated_at) VALUES (1, '2020-01-01T00:00:00Z')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO area (rowid, updated_at) VALUES (2, '2020-01-02T00:00:00Z')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO area (rowid, updated_at) VALUES (3, '2020-01-03T00:00:00Z')",
+            [],
+        )?;
+        assert_eq!(
+            2,
+            Area::select_updated_since(&conn, "2020-01-01T00:00:00Z", None)?.len()
         );
-        tags.insert("box:south".into(), 48.81861991362668.into());
-        tags.insert(
-            "box:west".into(),
-            Number::from_f64(-124.41604614257814).unwrap().into(),
-        );
+        Ok(())
+    }
 
-        let area = Area {
-            id: "".into(),
-            tags: tags,
-            created_at: "".into(),
-            updated_at: "".into(),
-            deleted_at: "".into(),
-        };
+    #[test]
+    fn select_by_url_alias() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let alias = "test";
+        Area::insert_or_replace(alias, None, &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?;
+        assert!(area.is_some());
+        assert_eq!(alias, area.unwrap().tag("url_alias").as_str().unwrap());
+        Ok(())
+    }
 
-        assert_eq!(area.contains(49.2623463, -123.0886088), true);
-        assert_eq!(area.contains(47.6084752, -122.3270694), false);
+    #[test]
+    fn insert_tag() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let alias = "test";
+        let tag_name = "foo";
+        let tag_value = "bar";
+        Area::insert_or_replace(alias, None, &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        area.insert_tag(tag_name, tag_value, &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        assert_eq!(tag_value, area.tag(tag_name).as_str().unwrap());
+        Ok(())
+    }
 
-        let mut tags: HashMap<_, Value> = HashMap::new();
-        tags.insert("box:north".into(), "18.86515".into());
-        tags.insert("box:east".into(), "99.07234".into());
-        tags.insert("box:south".into(), "18.70702".into());
-        tags.insert("box:west".into(), "98.92883".into());
+    #[test]
+    fn delete_tag() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let alias = "test";
+        let tag_name = "foo";
+        let tag_value = "bar";
+        let mut tags: HashMap<String, Value> = HashMap::new();
+        tags.insert(tag_name.into(), tag_value.into());
+        Area::insert_or_replace(alias, Some(&tags), &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        assert_eq!(tag_value, area.tag(tag_name).as_str().unwrap());
+        area.delete_tag(tag_name, &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        assert!(area.tag(tag_name).is_null());
+        Ok(())
+    }
 
-        let area = Area {
-            id: "".into(),
-            tags: tags,
-            created_at: "".into(),
-            updated_at: "".into(),
-            deleted_at: "".into(),
-        };
-
-        assert_eq!(area.contains(18.78407, 98.99283), true);
-
+    #[test]
+    fn delete() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let alias = "test";
+        Area::insert_or_replace(alias, None, &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        area.delete(&conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        assert!(area.deleted_at.is_some());
         Ok(())
     }
 }

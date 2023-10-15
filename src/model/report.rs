@@ -5,7 +5,7 @@ use serde_json::Value;
 
 pub struct Report {
     pub id: i64,
-    pub area_id: String,
+    pub area_url_alias: String,
     pub date: String,
     pub tags: Map<String, Value>,
     pub created_at: String,
@@ -15,11 +15,11 @@ pub struct Report {
 
 pub static INSERT: &str = r#"
     INSERT INTO report (
-        area_id,
+        area_url_alias,
         date,
         tags
     ) VALUES (
-        :area_id,
+        :area_url_alias,
         :date,
         :tags
     )
@@ -28,7 +28,7 @@ pub static INSERT: &str = r#"
 pub static SELECT_ALL: &str = r#"
     SELECT
         id,
-        area_id,
+        area_url_alias,
         date,
         tags,
         created_at,
@@ -44,7 +44,7 @@ pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 pub static SELECT_BY_ID: &str = r#"
     SELECT
         id,
-        area_id,
+        area_url_alias,
         date,
         tags,
         created_at,
@@ -59,7 +59,7 @@ pub static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
 pub static SELECT_UPDATED_SINCE: &str = r#"
     SELECT
         id,
-        area_id,
+        area_url_alias,
         date,
         tags,
         created_at,
@@ -76,14 +76,14 @@ pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<Report> = full_mapper
 pub static SELECT_BY_AREA_ID_AND_DATE: &str = r#"
     SELECT
         id,
-        area_id,
+        area_url_alias,
         date,
         tags,
         created_at,
         updated_at,
         deleted_at
     FROM report
-    WHERE area_id = :area_id AND date = :date
+    WHERE area_url_alias = :area_url_alias AND date = :date
 "#;
 
 pub static SELECT_BY_AREA_ID_AND_DATE_MAPPER: fn(&Row) -> Result<Report> = full_mapper();
@@ -101,7 +101,7 @@ const fn full_mapper() -> fn(&Row) -> Result<Report> {
 
         Ok(Report {
             id: row.get(0)?,
-            area_id: row.get(1)?,
+            area_url_alias: row.get(1)?,
             date: row.get(2)?,
             tags: tags,
             created_at: row.get(4)?,

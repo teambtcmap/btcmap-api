@@ -35,14 +35,17 @@ pub fn run(path: &str, conn: &mut Connection) -> Result<()> {
             }
 
             if dir_entry.file_name().len() != 7 {
-                Err(Error::Other(format!("Invalid file name: {:?}", dir_entry.file_name())))?;
+                Err(Error::Other(format!(
+                    "Invalid file name: {:?}",
+                    dir_entry.file_name()
+                )))?;
             }
 
             let file = File::open(dir_entry.path())?;
             let reader = BufReader::new(file);
             let json: CountryJson = serde_json::from_reader(reader)?;
 
-            Area::insert_or_replace(&json.id, &json.tags, &tx)?;
+            Area::insert_or_replace(&json.id, Some(&json.tags), &tx)?;
             debug!(id = &json.id, "Inserted or replaced area");
         }
     }

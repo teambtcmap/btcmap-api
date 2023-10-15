@@ -41,7 +41,7 @@ impl Into<GetItem> for Report {
     fn into(self) -> GetItem {
         GetItem {
             id: self.id,
-            area_id: self.area_id,
+            area_id: self.area_url_alias,
             date: self.date,
             tags: self.tags,
             created_at: self.created_at,
@@ -193,7 +193,7 @@ mod tests {
         conn.execute(
             report::INSERT,
             named_params! {
-                ":area_id" : "",
+                ":area_url_alias" : "",
                 ":date" : "",
                 ":tags" : "{}",
             },
@@ -220,7 +220,7 @@ mod tests {
 
         conn.execute(
             "INSERT INTO report (
-                area_id,
+                area_url_alias,
                 date,
                 updated_at
             ) VALUES (
@@ -233,7 +233,7 @@ mod tests {
 
         conn.execute(
             "INSERT INTO report (
-                area_id,
+                area_url_alias,
                 date,
                 updated_at
             ) VALUES (
@@ -246,7 +246,7 @@ mod tests {
 
         conn.execute(
             "INSERT INTO report (
-                area_id,
+                area_url_alias,
                 date,
                 updated_at
             ) VALUES (
@@ -277,11 +277,11 @@ mod tests {
         db::migrate(&mut conn)?;
 
         conn.execute(
-            "INSERT INTO report (area_id, date, updated_at) VALUES ('', '', '2022-01-05')",
+            "INSERT INTO report (area_url_alias, date, updated_at) VALUES ('', '', '2022-01-05')",
             [],
         )?;
         conn.execute(
-            "INSERT INTO report (area_id, date, updated_at) VALUES ('', '', '2022-02-05')",
+            "INSERT INTO report (area_url_alias, date, updated_at) VALUES ('', '', '2022-02-05')",
             [],
         )?;
 
@@ -313,7 +313,7 @@ mod tests {
         )?;
 
         conn.execute(
-            "INSERT INTO report (area_id, date, updated_at) VALUES ('', '', '2022-01-05')",
+            "INSERT INTO report (area_url_alias, date, updated_at) VALUES ('', '', '2022-01-05')",
             [],
         )?;
 

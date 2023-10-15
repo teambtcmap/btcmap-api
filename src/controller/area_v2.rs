@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::model::area;
 use crate::model::Area;
 use crate::service::auth::get_admin_token;
 use crate::ApiError;
@@ -16,12 +15,13 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use rusqlite::named_params;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use serde_json::Value;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use tracing::warn;
 
 #[derive(Serialize, Deserialize)]
@@ -45,19 +45,25 @@ pub struct GetArgs {
 pub struct GetItem {
     pub id: String,
     pub tags: HashMap<String, Value>,
-    pub created_at: String,
-    pub updated_at: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
     pub deleted_at: String,
 }
 
 impl Into<GetItem> for Area {
     fn into(self) -> GetItem {
         GetItem {
-            id: self.id,
-            tags: self.tags,
+            id: self.tag("url_alias").as_str().unwrap_or_default().into(),
+            tags: self.tags.unwrap_or_default(),
             created_at: self.created_at,
             updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            deleted_at: self
+                .deleted_at
+                .map(|it| it.format(&Rfc3339).unwrap())
+                .unwrap_or_default()
+                .into(),
         }
     }
 }
@@ -83,87 +89,79 @@ async fn post_json(
 
     warn!(
         user_id = token.user_id,
-        area_id = args.id,
+        area_url = args.id,
         "User attempted to create an area",
     );
 
-    if let Some(_) = Area::select_by_id(&args.id, &conn)? {
+    if let Some(_) = Area::select_by_url_alias(&args.id, &conn)? {
         Err(ApiError::new(
             303,
-            format!("Area {} already exists", args.id),
+            format!("Area with url = {} already exists", args.id),
         ))?
     }
 
-    if let Err(_) = Area::insert_or_replace(&args.id, &args.tags, &conn) {
+    if let Err(_) = Area::insert_or_replace(&args.id, Some(&args.tags), &conn) {
         Err(ApiError::new(
             500,
-            format!("Failed to insert area {}", args.id),
+            format!("Failed to insert area with url = {}", args.id),
         ))?
     }
 
     Ok(Json(json!({
-        "message": format!("Area {} has been created", args.id),
+        "message": format!("Area with url = {} has been created", args.id),
     })))
 }
 
 #[get("")]
 async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => conn
-            .prepare(area::SELECT_UPDATED_SINCE)?
-            .query_map(
-                named_params! {
-                    ":updated_since": updated_since,
-                    ":limit": args.limit.unwrap_or(std::i32::MAX),
-                },
-                area::SELECT_UPDATED_SINCE_MAPPER,
-            )?
-            .map(|it| it.map(|it| it.into()))
-            .collect::<Result<_, _>>()?,
-        None => conn
-            .prepare(area::SELECT_ALL)?
-            .query_map(
-                named_params! { ":limit": args.limit.unwrap_or(std::i32::MAX) },
-                area::SELECT_ALL_MAPPER,
-            )?
-            .map(|it| it.map(|it| it.into()))
-            .collect::<Result<_, _>>()?,
+        Some(updated_since) => Area::select_updated_since(&conn, updated_since, args.limit)?
+            .into_iter()
+            .map(|it| it.into())
+            .collect(),
+        None => Area::select_all(&conn, args.limit)?
+            .into_iter()
+            .map(|it| it.into())
+            .collect(),
     }))
 }
 
-#[get("{id}")]
-async fn get_by_id(id: Path<String>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
-    Area::select_by_id(&id, &conn)?
+#[get("{url_alias}")]
+async fn get_by_url_alias(
+    url_alias: Path<String>,
+    conn: Data<Connection>,
+) -> Result<Json<GetItem>, ApiError> {
+    Area::select_by_url_alias(&url_alias, &conn)?
         .map(|it| Json(it.into()))
         .ok_or(ApiError::new(
             404,
-            &format!("Area with id {id} doesn't exist"),
+            &format!("Area with url_alias = {url_alias} doesn't exist"),
         ))
 }
 
-#[patch("{id}")]
-async fn patch_by_id(
-    id: Path<String>,
+#[patch("{url_alias}")]
+async fn patch_by_url_alias(
+    url_alias: Path<String>,
     req: HttpRequest,
     args: Json<PatchArgs>,
     conn: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
-    let area_id = id.into_inner();
+    let area_url_alias = url_alias.into_inner();
 
     warn!(
-        user_id = token.user_id,
-        area_id, "User attempted to update an area",
+        token.user_id,
+        area_url_alias, "User attempted to update an area",
     );
 
-    let area: Option<Area> = Area::select_by_id(&area_id, &conn)?;
+    let area: Option<Area> = Area::select_by_url_alias(&area_url_alias, &conn)?;
 
     let area = match area {
         Some(v) => v,
         None => {
             return Err(ApiError::new(
                 404,
-                &format!("There is no area with id {area_id}"),
+                &format!("There is no area with url_alias = {area_url_alias}"),
             ));
         }
     };
@@ -178,13 +176,13 @@ async fn patch_by_id(
         }
     };
 
-    let mut merged_tags = area.tags.clone();
+    let mut merged_tags = area.tags.clone().unwrap_or_default();
 
     for (new_key, new_value) in &new_tags {
         if merged_tags.contains_key(new_key) {
             warn!(
-                user_id = token.user_id,
-                area_id,
+                token.user_id,
+                area_url_alias,
                 tag = new_key,
                 old_value = serde_json::to_string(&merged_tags[new_key]).unwrap(),
                 new_value = serde_json::to_string(new_value).unwrap(),
@@ -192,8 +190,8 @@ async fn patch_by_id(
             );
         } else {
             warn!(
-                user_id = token.user_id,
-                area_id,
+                token.user_id,
+                area_url_alias,
                 tag_name = new_key,
                 tag_value = serde_json::to_string(new_value).unwrap(),
                 "Admin user added new tag",
@@ -203,46 +201,40 @@ async fn patch_by_id(
         merged_tags.insert(new_key.clone(), new_value.clone());
     }
 
-    conn.execute(
-        area::UPDATE_TAGS,
-        named_params! {
-            ":area_id": area.id,
-            ":tags": serde_json::to_string(&merged_tags).unwrap(),
-        },
-    )?;
+    Area::insert_or_replace(&area_url_alias, Some(&merged_tags), &conn)?;
 
     Ok(HttpResponse::Ok())
 }
 
-#[patch("{id}/tags")]
+#[patch("{url_alias}/tags")]
 async fn patch_tags(
     args: Json<HashMap<String, Value>>,
     conn: Data<Connection>,
-    id: Path<String>,
+    url_alias: Path<String>,
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
-    let area_id = id.into_inner();
+    let area_url_alias = url_alias.into_inner();
 
-    let area: Option<Area> = Area::select_by_id(&area_id, &conn)?;
+    let area: Option<Area> = Area::select_by_url_alias(&area_url_alias, &conn)?;
 
     let area = match area {
         Some(v) => v,
         None => {
             return Err(ApiError::new(
                 404,
-                &format!("There is no area with id {area_id}"),
+                &format!("There is no area with url = {area_url_alias}"),
             ));
         }
     };
 
-    let mut merged_tags = area.tags.clone();
+    let mut merged_tags = area.tags.clone().unwrap_or_default();
 
     for (new_key, new_value) in &args.0 {
         if merged_tags.contains_key(new_key) {
             warn!(
-                user_id = token.user_id,
-                area_id,
+                token.user_id,
+                area_url_alias,
                 tag = new_key,
                 old_value = serde_json::to_string(&merged_tags[new_key]).unwrap(),
                 new_value = serde_json::to_string(new_value).unwrap(),
@@ -250,8 +242,8 @@ async fn patch_tags(
             );
         } else {
             warn!(
-                user_id = token.user_id,
-                area_id,
+                token.user_id,
+                area_url_alias,
                 tag_name = new_key,
                 tag_value = serde_json::to_string(new_value).unwrap(),
                 "Admin user added new tag",
@@ -261,94 +253,70 @@ async fn patch_tags(
         merged_tags.insert(new_key.clone(), new_value.clone());
     }
 
-    conn.execute(
-        area::UPDATE_TAGS,
-        named_params! {
-            ":area_id": area_id,
-            ":tags": serde_json::to_string(&merged_tags).unwrap(),
-        },
-    )?;
+    Area::insert_or_replace(&area_url_alias, Some(&merged_tags), &conn)?;
 
     Ok(HttpResponse::Ok())
 }
 
-#[post("{id}/tags")]
+#[post("{url_alias}/tags")]
 async fn post_tags(
-    id: Path<String>,
+    url_alias: Path<String>,
     req: HttpRequest,
     args: Form<PostTagsArgs>,
     conn: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
-    let area_id = id.into_inner();
+    let area_url_alias = url_alias.into_inner();
 
     warn!(
         deprecated_api = true,
-        user_id = token.user_id,
-        area_id,
+        token.user_id,
+        area_url_alias,
         tag_name = args.name,
         tag_value = args.value,
         "User attempted to update area tag",
     );
 
-    let area: Option<Area> = Area::select_by_id(&area_id, &conn)?;
+    let area: Option<Area> = Area::select_by_url_alias(&area_url_alias, &conn)?;
 
     match area {
         Some(area) => {
             if args.value.len() > 0 {
-                conn.execute(
-                    area::INSERT_TAG,
-                    named_params! {
-                        ":area_id": area.id,
-                        ":tag_name": format!("$.{}", args.name),
-                        ":tag_value": args.value,
-                    },
-                )?;
+                area.insert_tag(&args.name, &args.value, &conn)?;
             } else {
-                conn.execute(
-                    area::DELETE_TAG,
-                    named_params! {
-                        ":area_id": area.id,
-                        ":tag_name": format!("$.{}", args.name),
-                    },
-                )?;
+                area.delete_tag(&args.name, &conn)?;
             }
 
             Ok(HttpResponse::Created())
         }
         None => Err(ApiError::new(
             404,
-            &format!("There is no area with id {area_id}"),
+            &format!("There is no area with url_alias = {area_url_alias}"),
         )),
     }
 }
 
-#[delete("{id}")]
-async fn delete_by_id(
-    id: Path<String>,
+#[delete("{url_alias}")]
+async fn delete_by_url_alias(
+    url_alias: Path<String>,
     req: HttpRequest,
     conn: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
-    let id = id.into_inner();
+    let url_alias = url_alias.into_inner();
 
-    warn!(
-        user_id = token.user_id,
-        area_id = id,
-        "User attempted to delete an area",
-    );
+    warn!(token.user_id, url_alias, "User attempted to delete an area",);
 
-    let area: Option<Area> = Area::select_by_id(&id, &conn)?;
+    let area: Option<Area> = Area::select_by_url_alias(&url_alias, &conn)?;
 
     match area {
-        Some(_area) => {
-            conn.execute(area::MARK_AS_DELETED, named_params! { ":id": id })?;
-
+        Some(area) => {
+            area.delete(&conn)?;
             Ok(HttpResponse::Ok())
         }
         None => Err(ApiError::new(
             404,
-            &format!("There is no area with id {id}"),
+            &format!("There is no area with url_alias = {url_alias}"),
         )),
     }
 }
@@ -363,6 +331,7 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
+    use rusqlite::named_params;
     use tracing::info;
 
     #[actix_web::test]
@@ -408,12 +377,12 @@ mod tests {
         info!(response_status = ?res.status());
         assert!(res.status().is_success());
 
-        let area = Area::select_by_id("test-area", &Connection::open(db_path)?)?.unwrap();
+        let area = Area::select_by_url_alias("test-area", &Connection::open(db_path)?)?.unwrap();
 
-        assert!(area.tags["string"].is_string());
-        assert!(area.tags["int"].is_u64());
-        assert!(area.tags["float"].is_f64());
-        assert!(area.tags["bool"].is_boolean());
+        assert!(area.tags.as_ref().unwrap()["string"].is_string());
+        assert!(area.tags.as_ref().unwrap()["int"].is_u64());
+        assert!(area.tags.as_ref().unwrap()["float"].is_f64());
+        assert!(area.tags.as_ref().unwrap()["bool"].is_boolean());
 
         Ok(())
     }
@@ -440,7 +409,7 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute(area::INSERT, named_params! { ":id": "test" })?;
+        Area::insert_or_replace("test", None, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -461,18 +430,9 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute(
-            "INSERT INTO area (id, updated_at) VALUES ('test1', '2023-05-05')",
-            [],
-        )?;
-        conn.execute(
-            "INSERT INTO area (id, updated_at) VALUES ('test2', '2023-05-06')",
-            [],
-        )?;
-        conn.execute(
-            "INSERT INTO area (id, updated_at) VALUES ('test3', '2023-05-07')",
-            [],
-        )?;
+        Area::insert_or_replace("test1", None, &conn)?;
+        Area::insert_or_replace("test2", None, &conn)?;
+        Area::insert_or_replace("test3", None, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -490,23 +450,20 @@ mod tests {
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
-        let area_id = "test";
-        conn.execute(area::INSERT, named_params! { ":id": area_id })?;
-
+        let conn = db::setup_connection()?;
+        let area_url_alias = "test";
+        Area::insert_or_replace(&area_url_alias, None, &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
-                .service(super::get_by_id),
+                .service(super::get_by_url_alias),
         )
         .await;
-
-        let req = TestRequest::get().uri(&format!("/{area_id}")).to_request();
+        let req = TestRequest::get()
+            .uri(&format!("/{area_url_alias}"))
+            .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.id, area_id);
-
+        assert_eq!(res.id, area_url_alias);
         Ok(())
     }
 
@@ -521,8 +478,8 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_id = "test";
-        conn.execute(area::INSERT, named_params![":id": area_id])?;
+        let area_url = "test";
+        Area::insert_or_replace(&area_url, None, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -531,7 +488,7 @@ mod tests {
         )
         .await;
         let req = TestRequest::patch()
-            .uri(&format!("/{area_id}/tags"))
+            .uri(&format!("/{area_url}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
@@ -552,13 +509,13 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_id = "test";
-        conn.execute(area::INSERT, named_params![":id": area_id])?;
+        let area_url = "test";
+        Area::insert_or_replace(&area_url, None, &conn)?;
 
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
-                .service(super::patch_by_id),
+                .service(super::patch_by_url_alias),
         )
         .await;
 
@@ -576,7 +533,7 @@ mod tests {
         let args: Value = serde_json::from_str(args)?;
 
         let req = TestRequest::patch()
-            .uri(&format!("/{area_id}"))
+            .uri(&format!("/{area_url}"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(args)
             .to_request();
@@ -584,12 +541,12 @@ mod tests {
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
-        let area = Area::select_by_id(&area_id, &Connection::open(db_path)?)?.unwrap();
+        let area = Area::select_by_url_alias(&area_url, &Connection::open(db_path)?)?.unwrap();
 
-        assert!(area.tags["string"].is_string());
-        assert!(area.tags["unsigned"].is_u64());
-        assert!(area.tags["float"].is_f64());
-        assert!(area.tags["bool"].is_boolean());
+        assert!(area.tags.as_ref().unwrap()["string"].is_string());
+        assert!(area.tags.as_ref().unwrap()["unsigned"].is_u64());
+        assert!(area.tags.as_ref().unwrap()["float"].is_f64());
+        assert!(area.tags.as_ref().unwrap()["bool"].is_boolean());
 
         Ok(())
     }
@@ -605,8 +562,8 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_id = "test";
-        conn.execute(area::INSERT, named_params![":id": area_id])?;
+        let area_url = "test";
+        Area::insert_or_replace(&area_url, None, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -616,7 +573,7 @@ mod tests {
         .await;
 
         let req = TestRequest::post()
-            .uri(&format!("/{area_id}/tags"))
+            .uri(&format!("/{area_url}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),
@@ -641,27 +598,28 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_id = "test";
-        conn.execute(area::INSERT, named_params! { ":id": area_id })?;
+        let area_url_alias = "test";
+        Area::insert_or_replace(&area_url_alias, None, &conn)?;
 
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
-                .service(super::delete_by_id),
+                .service(super::delete_by_url_alias),
         )
         .await;
         let req = TestRequest::delete()
-            .uri(&format!("/{area_id}"))
+            .uri(&format!("/{area_url_alias}"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
-        let area: Option<Area> = Area::select_by_id(&area_id, &Connection::open(db_path)?)?;
+        let area: Option<Area> =
+            Area::select_by_url_alias(&area_url_alias, &Connection::open(db_path)?)?;
 
         assert!(area.is_some());
 
-        assert!(area.unwrap().deleted_at.len() > 0);
+        assert!(area.unwrap().deleted_at != None);
 
         Ok(())
     }

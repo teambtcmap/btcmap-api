@@ -16,7 +16,7 @@ strip = "symbols"
 actix-web = { version = "4.4.0", default-features = false, features = ["macros", "compress-brotli"] }
 
 # https://github.com/rusqlite/rusqlite/releases
-rusqlite = { version = "0.29.0", default-features = false, features = ["bundled"] }
+rusqlite = { version = "0.29.0", default-features = false, features = ["bundled", "time"] }
 
 # https://github.com/seanmonstar/reqwest/releases
 reqwest = { version = "0.11.21", default-features = false, features = ["rustls-tls", "json", "blocking"] }
