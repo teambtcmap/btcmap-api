@@ -1,5 +1,5 @@
 use crate::model::element;
-use crate::model::event;
+use crate::model::event::Event;
 use crate::model::user;
 use crate::model::Element;
 use crate::model::OverpassElement;
@@ -109,14 +109,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
             insert_user_if_not_exists(user_id, &tx).await;
 
-            tx.execute(
-                event::INSERT,
-                named_params! {
-                    ":user_id": user_id,
-                    ":element_id": element.id,
-                    ":type": "delete",
-                },
-            )?;
+            Event::insert(user_id.try_into().unwrap(), &element.id, "delete", &tx)?;
 
             let message = format!("User {user_display_name} removed https://www.openstreetmap.org/{element_type}/{osm_id}");
             info!(
@@ -132,6 +125,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 element::MARK_AS_DELETED,
                 named_params! { ":id": element.id },
             )?;
+            sleep(Duration::from_millis(10)).await;
         }
     }
 
@@ -158,13 +152,11 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     }
 
                     if fresh_element.changeset != element.osm_json.changeset {
-                        tx.execute(
-                            event::INSERT,
-                            named_params! {
-                                ":user_id": user_id,
-                                ":element_id": btcmap_id,
-                                ":type": "update",
-                            },
+                        Event::insert(
+                            user_id.unwrap().try_into().unwrap(),
+                            &btcmap_id,
+                            "update",
+                            &tx,
                         )?;
                     } else {
                         warn!("Changeset ID is identical, skipped user event generation");
@@ -180,6 +172,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         message,
                     );
 
+                    info!("Updating osm_json");
                     tx.execute(
                         element::UPDATE_OSM_JSON,
                         named_params! {
@@ -187,6 +180,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                             ":osm_json": serde_json::to_string(&fresh_element)?,
                         },
                     )?;
+                    sleep(Duration::from_millis(10)).await;
 
                     let new_android_icon = fresh_element.generate_android_icon();
                     let old_android_icon = element.get_btcmap_tag_value_str("icon:android");
@@ -206,6 +200,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 }
 
                 if element.deleted_at.len() > 0 {
+                    info!("Updating deleted_at");
                     tx.execute(
                         element::UPDATE_DELETED_AT,
                         named_params! {
@@ -213,6 +208,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                             ":deleted_at": "",
                         },
                     )?;
+                    sleep(Duration::from_millis(10)).await;
                 }
             }
             None => {
@@ -222,16 +218,14 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     insert_user_if_not_exists(user_id, &tx).await;
                 }
 
-                tx.execute(
-                    event::INSERT,
-                    named_params! {
-                        ":user_id": user_id,
-                        ":element_id": btcmap_id,
-                        ":type": "create",
-                    },
-                )?;
-
                 Element::insert(&fresh_element, &tx)?;
+
+                Event::insert(
+                    user_id.unwrap().try_into().unwrap(),
+                    &btcmap_id,
+                    "create",
+                    &tx,
+                )?;
 
                 let element = tx.query_row(
                     element::SELECT_BY_ID,

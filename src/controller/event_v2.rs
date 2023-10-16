@@ -183,17 +183,9 @@ mod tests {
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let conn = db::setup_connection()?;
 
-        conn.execute(
-            event::INSERT,
-            named_params! {
-                ":user_id": "0",
-                ":element_id": "",
-                ":type": "",
-            },
-        )?;
+        Event::insert(0, "", "", &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -262,26 +254,15 @@ mod tests {
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let conn = db::setup_connection()?;
         let event_id = 1;
-        conn.execute(
-            event::INSERT,
-            named_params! {
-                ":user_id": "0",
-                ":element_id": "",
-                ":type": "",
-            },
-        )?;
-
+        Event::insert(0, "", "", &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(super::get_by_id),
         )
         .await;
-
         let req = TestRequest::get().uri(&format!("/{event_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, event_id);
@@ -293,29 +274,18 @@ mod tests {
     async fn patch_tags() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
-
         let admin_token = "test";
         conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-
-        conn.execute(
-            event::INSERT,
-            named_params! {
-                ":user_id": "0",
-                ":element_id": "",
-                ":type": "",
-            },
-        )?;
-
+        Event::insert(0, "", "", &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(super::patch_tags),
         )
         .await;
-
         let req = TestRequest::patch()
             .uri(&format!("/1/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
@@ -323,7 +293,6 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-
         Ok(())
     }
 }

@@ -41,7 +41,7 @@ impl Element {
             },
         )?;
 
-        sleep(Duration::from_millis(1));
+        sleep(Duration::from_millis(10));
 
         Ok(())
     }

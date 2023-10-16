@@ -1,3 +1,8 @@
+use std::thread::sleep;
+use std::time::Duration;
+
+use rusqlite::named_params;
+use rusqlite::Connection;
 use rusqlite::Result;
 use rusqlite::Row;
 use serde_json::Map;
@@ -14,17 +19,39 @@ pub struct Event {
     pub deleted_at: String,
 }
 
-pub static INSERT: &str = r#"
-    INSERT INTO event (
-        user_id,
-        element_id, 
-        type
-    ) VALUES (
-        :user_id,
-        :element_id,
-        :type
-    )
-"#;
+impl Event {
+    pub fn insert(
+        user_id: i32,
+        element_id: &str,
+        r#type: &str,
+        conn: &Connection,
+    ) -> crate::Result<()> {
+        let query = r#"
+            INSERT INTO event (
+                user_id,
+                element_id, 
+                type
+            ) VALUES (
+                :user_id,
+                :element_id,
+                :type
+            )
+        "#;
+
+        conn.execute(
+            query,
+            named_params! {
+                ":user_id": user_id,
+                ":element_id": element_id,
+                ":type": r#type,
+            },
+        )?;
+
+        sleep(Duration::from_millis(10));
+
+        Ok(())
+    }
+}
 
 pub static SELECT_ALL: &str = r#"
     SELECT
@@ -98,5 +125,19 @@ const fn full_mapper() -> fn(&Row) -> Result<Event> {
             updated_at: row.get(6)?,
             deleted_at: row.get(7)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{command::db, Result};
+
+    use super::Event;
+
+    #[test]
+    fn insert() -> Result<()> {
+        let conn = db::setup_connection()?;
+        Event::insert(1, "node:1", "create", &conn)?;
+        Ok(())
     }
 }
