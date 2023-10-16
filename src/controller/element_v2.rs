@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::model::element;
 use crate::model::Element;
 use crate::model::OverpassElement;
@@ -18,7 +20,6 @@ use rusqlite::named_params;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Map;
 use serde_json::Value;
 use tracing::warn;
 
@@ -32,7 +33,7 @@ pub struct GetArgs {
 pub struct GetItem {
     pub id: String,
     pub osm_json: OverpassElement,
-    pub tags: Map<String, Value>,
+    pub tags: HashMap<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -97,7 +98,7 @@ pub async fn get_by_id(
 
 #[patch("{id}/tags")]
 async fn patch_tags(
-    args: Json<Map<String, Value>>,
+    args: Json<HashMap<String, Value>>,
     conn: Data<Connection>,
     id: Path<String>,
     req: HttpRequest,
@@ -126,19 +127,13 @@ async fn patch_tags(
         }
     };
 
-    let mut old_tags = element.tags.clone();
+    let mut merged_tags = element.tags.clone();
 
-    let mut merged_tags = Map::new();
-    merged_tags.append(&mut old_tags);
-    merged_tags.append(&mut args.clone());
+    for (k, v) in args.0 {
+        merged_tags.insert(k, v);
+    }
 
-    conn.execute(
-        element::UPDATE_TAGS,
-        named_params! {
-            ":element_id": element_id,
-            ":tags": serde_json::to_string(&merged_tags).unwrap(),
-        },
-    )?;
+    Element::set_tags(&element_id, &merged_tags, &conn)?;
 
     Ok(HttpResponse::Ok())
 }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -6,7 +7,6 @@ use rusqlite::OptionalExtension;
 
 use rusqlite::Connection;
 use rusqlite::Row;
-use serde_json::Map;
 use serde_json::Value;
 
 use super::OverpassElement;
@@ -16,7 +16,7 @@ use crate::Result;
 pub struct Element {
     pub id: String,
     pub osm_json: OverpassElement,
-    pub tags: Map<String, Value>,
+    pub tags: HashMap<String, Value>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: String,
@@ -116,6 +116,24 @@ impl Element {
             .optional()?)
     }
 
+    pub fn set_tags(id: &str, tags: &HashMap<String, Value>, conn: &Connection) -> Result<()> {
+        let query = r#"
+            UPDATE element
+            SET tags = json(:tags)
+            WHERE id = :id
+        "#;
+
+        conn.execute(
+            query,
+            named_params! {
+                ":id": id,
+                ":tags": serde_json::to_string(tags)?,
+            },
+        )?;
+
+        Ok(())
+    }
+
     pub fn get_btcmap_tag_value_str(&self, name: &str) -> &str {
         self.tags
             .get(name)
@@ -149,27 +167,9 @@ impl Element {
     }
 }
 
-pub static UPDATE_TAGS: &str = r#"
-    UPDATE element
-    SET tags = :tags
-    WHERE id = :element_id
-"#;
-
-pub static UPDATE_DELETED_AT: &str = r#"
-    UPDATE element
-    SET deleted_at = :deleted_at
-    WHERE id = :id
-"#;
-
 pub static UPDATE_OSM_JSON: &str = r#"
     UPDATE element
     SET osm_json = :osm_json
-    WHERE id = :id
-"#;
-
-pub static MARK_AS_DELETED: &str = r#"
-    UPDATE element
-    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ')
     WHERE id = :id
 "#;
 
@@ -185,13 +185,25 @@ pub static DELETE_TAG: &str = r#"
     WHERE id = :element_id
 "#;
 
+pub static UPDATE_DELETED_AT: &str = r#"
+    UPDATE element
+    SET deleted_at = :deleted_at
+    WHERE id = :id
+"#;
+
+pub static MARK_AS_DELETED: &str = r#"
+    UPDATE element
+    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ')
+    WHERE id = :id
+"#;
+
 const fn full_mapper() -> fn(&Row) -> rusqlite::Result<Element> {
     |row: &Row| -> rusqlite::Result<Element> {
         let osm_json: String = row.get(1)?;
         let osm_json: OverpassElement = serde_json::from_str(&osm_json).unwrap();
 
         let tags: String = row.get(2)?;
-        let tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
+        let tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(Element {
             id: row.get(0)?,
@@ -206,6 +218,10 @@ const fn full_mapper() -> fn(&Row) -> rusqlite::Result<Element> {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
+    use serde_json::Value;
+
     use crate::{command::db, model::OverpassElement, Result};
 
     use super::Element;
@@ -284,6 +300,24 @@ mod test {
                 .unwrap()
                 .id
         );
+        Ok(())
+    }
+
+    #[test]
+    fn set_tags() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let element = OverpassElement {
+            id: 1,
+            ..OverpassElement::mock()
+        };
+        Element::insert(&element, &conn)?;
+        let mut tags: HashMap<String, Value> = HashMap::new();
+        let tag_name = "foo";
+        let tag_value = Value::String("bar".into());
+        tags.insert(tag_name.into(), tag_value.clone().into());
+        Element::set_tags(&element.btcmap_id(), &tags, &conn)?;
+        let element = Element::select_by_id(&element.btcmap_id(), &conn)?.unwrap();
+        assert_eq!(&tag_value, &element.tags[tag_name],);
         Ok(())
     }
 }
