@@ -70,6 +70,34 @@ impl Element {
             .collect::<Result<Vec<Element>, _>>()?)
     }
 
+    pub fn select_updated_since(
+        updated_since: &str,
+        limit: Option<i32>,
+        conn: &Connection,
+    ) -> Result<Vec<Element>> {
+        let query = r#"
+            SELECT
+                id,
+                osm_json,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM element
+            WHERE updated_at > :updated_since
+            ORDER BY updated_at, id
+            LIMIT :limit
+        "#;
+
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(std::i32::MAX) },
+                full_mapper(),
+            )?
+            .collect::<Result<Vec<Element>, _>>()?)
+    }
+
     pub fn select_by_id(id: &str, conn: &Connection) -> Result<Option<Element>> {
         let query = r#"
             SELECT
@@ -120,22 +148,6 @@ impl Element {
         Ok(())
     }
 }
-
-pub static SELECT_UPDATED_SINCE: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM element
-    WHERE updated_at > :updated_since
-    ORDER BY updated_at
-    LIMIT :limit
-"#;
-
-pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> rusqlite::Result<Element> = full_mapper();
 
 pub static UPDATE_TAGS: &str = r#"
     UPDATE element
@@ -231,6 +243,30 @@ mod test {
         )?;
         let elements = Element::select_all(None, &conn)?;
         assert_eq!(3, elements.len());
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since() -> Result<()> {
+        let conn = db::setup_connection()?;
+        Element::insert(
+            &OverpassElement {
+                id: 1,
+                ..OverpassElement::mock()
+            },
+            &conn,
+        )?;
+        Element::set_updated_at("node:1", "2023-10-01", &conn)?;
+        Element::insert(
+            &OverpassElement {
+                id: 2,
+                ..OverpassElement::mock()
+            },
+            &conn,
+        )?;
+        Element::set_updated_at("node:2", "2023-10-02", &conn)?;
+        let elements = Element::select_updated_since("2023-10-01", None, &conn)?;
+        assert_eq!(1, elements.len());
         Ok(())
     }
 

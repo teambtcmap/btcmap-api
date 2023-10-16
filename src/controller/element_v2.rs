@@ -69,17 +69,10 @@ pub async fn get(
     conn: Data<Connection>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => conn
-            .prepare(element::SELECT_UPDATED_SINCE)?
-            .query_map(
-                named_params! {
-                    ":updated_since": updated_since,
-                    ":limit": args.limit.unwrap_or(std::i32::MAX),
-                },
-                element::SELECT_UPDATED_SINCE_MAPPER,
-            )?
-            .map(|it| it.map(|it| it.into()))
-            .collect::<Result<_, _>>()?,
+        Some(updated_since) => Element::select_updated_since(&updated_since, args.limit, &conn)?
+            .into_iter()
+            .map(|it| it.into())
+            .collect(),
         None => Element::select_all(args.limit, &conn)?
             .into_iter()
             .map(|it| it.into())
