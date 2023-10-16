@@ -194,7 +194,7 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: Option<String> = row.get(1)?;
         let tags: Option<HashMap<String, Value>> =
-            tags.map(|it| serde_json::from_str(&it).unwrap_or_default());
+            tags.map(|it| serde_json::from_str(&it).unwrap());
 
         Ok(Area {
             id: row.get(0)?,
@@ -210,7 +210,7 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
 mod test {
     use std::collections::HashMap;
 
-    use serde_json::Value;
+    use serde_json::{Value, json};
 
     use crate::{command::db, Result};
 
@@ -281,6 +281,20 @@ mod test {
         area.insert_tag(tag_name, tag_value, &conn)?;
         let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
         assert_eq!(tag_value, area.tag(tag_name).as_str().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    fn insert_tag_json() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let alias = "test";
+        let tag_name = "foo";
+        let tag_value = json!({"key": "value"});
+        Area::insert_or_replace(alias, None, &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        area.insert_tag_json(tag_name, &tag_value, &conn)?;
+        let area = Area::select_by_url_alias(alias, &conn)?.unwrap();
+        assert_eq!(&tag_value, area.tag(tag_name));
         Ok(())
     }
 
