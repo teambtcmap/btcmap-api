@@ -132,6 +132,12 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        "fix-tags" => {
+            if let Err(e) = command::fix_tags::run(&db) {
+                error!(?e, "Failed to fix tags");
+                return ExitCode::FAILURE;
+            }
+        }
         first_arg => {
             error!(command = first_arg, "Unknown command");
             return ExitCode::FAILURE;

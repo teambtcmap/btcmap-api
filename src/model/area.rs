@@ -134,6 +134,28 @@ impl Area {
         Ok(())
     }
 
+    pub fn insert_tag_json(
+        &self,
+        tag_name: &str,
+        tag_value: &Value,
+        conn: &Connection,
+    ) -> crate::Result<()> {
+        let tag_name = format!("$.{tag_name}");
+
+        let query = r#"
+            UPDATE area
+            SET tags = json_set(tags, :tag_name, json(:tag_value))
+            WHERE rowid = :id
+        "#;
+
+        conn.execute(
+            query,
+            named_params! { ":id": self.id, ":tag_name": tag_name, ":tag_value": serde_json::to_string(tag_value)? },
+        )?;
+
+        Ok(())
+    }
+
     pub fn delete_tag(&self, tag: &str, conn: &Connection) -> crate::Result<()> {
         let tag = format!("$.{tag}");
 
