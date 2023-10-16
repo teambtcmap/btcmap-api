@@ -89,6 +89,22 @@ impl OverpassElement {
 
         let mut icon_id: &str = "question_mark";
 
+        if shop != "" {
+            icon_id = "storefront";
+        }
+
+        if office != "" {
+            icon_id = "business"
+        }
+
+        if healthcare != "" {
+            icon_id = "medical_services"
+        }
+
+        if playground != "" {
+            icon_id = "attractions"
+        }
+
         if landuse == "retail" {
             icon_id = "storefront"
         }
@@ -119,10 +135,6 @@ impl OverpassElement {
 
         if building == "industrial" {
             icon_id = "factory"
-        }
-
-        if office != "" {
-            icon_id = "business"
         }
 
         if office == "yes" {
@@ -327,10 +339,6 @@ impl OverpassElement {
 
         if tourism == "caravan_site" {
             icon_id = "airport_shuttle";
-        }
-
-        if shop != "" {
-            icon_id = "storefront";
         }
 
         if shop == "general" {
@@ -1111,10 +1119,6 @@ impl OverpassElement {
 
         if leisure == "sports_hall" {
             icon_id = "fitness_center"
-        }
-
-        if healthcare != "" {
-            icon_id = "medical_services"
         }
 
         if healthcare == "dentist" {
