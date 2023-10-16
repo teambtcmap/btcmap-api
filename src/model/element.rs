@@ -1,6 +1,8 @@
-#[cfg(test)]
+use std::thread::sleep;
+use std::time::Duration;
+
 use rusqlite::named_params;
-#[cfg(test)]
+
 use rusqlite::Connection;
 use rusqlite::Row;
 use serde_json::Map;
@@ -8,7 +10,6 @@ use serde_json::Value;
 
 use super::OverpassElement;
 
-#[cfg(test)]
 use crate::Result;
 
 pub struct Element {
@@ -21,35 +22,26 @@ pub struct Element {
 }
 
 impl Element {
-    #[cfg(test)]
-    pub fn insert(&self, conn: &Connection) -> Result<()> {
+    pub fn insert(overpass_json: &OverpassElement, conn: &Connection) -> Result<()> {
+        let query = r#"
+            INSERT INTO element (
+                id,
+                osm_json
+            ) VALUES (
+                :id,
+                :osm_json
+            )
+        "#;
+
         conn.execute(
-            r#"
-                INSERT INTO element (
-                    id,
-                    osm_json,
-                    tags,
-                    created_at,
-                    updated_at,
-                    deleted_at
-                ) VALUES (
-                    :id,
-                    :osm_json,
-                    :tags,
-                    :created_at,
-                    :updated_at,
-                    :deleted_at
-                )
-                "#,
+            query,
             named_params! {
-                ":id": self.id,
-                ":osm_json": serde_json::to_string(&self.osm_json)?,
-                ":tags": serde_json::to_string(&self.tags)?,
-                ":created_at": self.created_at,
-                ":updated_at": self.updated_at,
-                ":deleted_at": self.deleted_at,
+                ":id": overpass_json.btcmap_id(),
+                ":osm_json": serde_json::to_string(overpass_json)?,
             },
         )?;
+
+        sleep(Duration::from_millis(1));
 
         Ok(())
     }
@@ -70,30 +62,22 @@ impl Element {
     }
 
     #[cfg(test)]
-    pub fn mock() -> Element {
-        use time::{format_description::well_known::Iso8601, OffsetDateTime};
+    pub fn set_updated_at(id: &str, updated_at: &str, conn: &Connection) -> Result<()> {
+        let query = r#"
+            UPDATE element SET updated_at = :updated_at WHERE id = :id
+        "#;
 
-        let overpass_element = OverpassElement::mock();
-        Element {
-            id: overpass_element.btcmap_id(),
-            osm_json: overpass_element,
-            tags: Map::new(),
-            created_at: "".into(),
-            updated_at: OffsetDateTime::now_utc().format(&Iso8601::DEFAULT).unwrap(),
-            deleted_at: "".into(),
-        }
+        conn.execute(
+            query,
+            named_params! {
+                ":id": id,
+                ":updated_at": updated_at,
+            },
+        )?;
+
+        Ok(())
     }
 }
-
-pub static INSERT: &str = r#"
-    INSERT INTO element (
-        id,
-        osm_json
-    ) VALUES (
-        :id,
-        :osm_json
-    )
-"#;
 
 pub static SELECT_ALL: &str = r#"
     SELECT
@@ -207,5 +191,19 @@ const fn full_mapper() -> fn(&Row) -> rusqlite::Result<Element> {
             updated_at: row.get(4)?,
             deleted_at: row.get(5)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{command::db, model::OverpassElement, Result};
+
+    use super::Element;
+
+    #[test]
+    fn insert() -> Result<()> {
+        let conn = db::setup_connection()?;
+        Element::insert(&OverpassElement::mock(), &conn)?;
+        Ok(())
     }
 }

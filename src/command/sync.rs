@@ -231,13 +231,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     },
                 )?;
 
-                tx.execute(
-                    element::INSERT,
-                    named_params! {
-                        ":id": &btcmap_id,
-                        ":osm_json": serde_json::to_string(&fresh_element)?,
-                    },
-                )?;
+                Element::insert(&fresh_element, &tx)?;
 
                 let element = tx.query_row(
                     element::SELECT_BY_ID,

@@ -251,8 +251,8 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element = Element::mock();
-        element.insert(&conn)?;
+        let element = OverpassElement::mock();
+        Element::insert(&element, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -278,39 +278,21 @@ mod test {
             id: 1,
             ..OverpassElement::mock()
         };
-        let element_1 = Element {
-            id: element_1.btcmap_id(),
-            osm_json: element_1,
-            updated_at: "2023-05-05".into(),
-            ..Element::mock()
-        };
-        element_1.insert(&conn)?;
+        Element::insert(&element_1, &conn)?;
 
         let element_2 = OverpassElement {
             r#type: "node".into(),
             id: 2,
             ..OverpassElement::mock()
         };
-        let element_2 = Element {
-            id: element_2.btcmap_id(),
-            osm_json: element_2,
-            updated_at: "2023-05-06".into(),
-            ..Element::mock()
-        };
-        element_2.insert(&conn)?;
+        Element::insert(&element_2, &conn)?;
 
         let element_3 = OverpassElement {
             r#type: "node".into(),
             id: 3,
             ..OverpassElement::mock()
         };
-        let element_3 = Element {
-            id: element_3.btcmap_id(),
-            osm_json: element_3,
-            updated_at: "2023-05-07".into(),
-            ..Element::mock()
-        };
-        element_3.insert(&conn)?;
+        Element::insert(&element_3, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -331,19 +313,21 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element_1 = Element {
-            id: "node:1".into(),
-            updated_at: "2022-01-05".into(),
-            ..Element::mock()
+        let element_1 = OverpassElement {
+            r#type: "node".into(),
+            id: 1,
+            ..OverpassElement::mock()
         };
-        element_1.insert(&conn)?;
+        Element::insert(&element_1, &conn)?;
+        Element::set_updated_at(&element_1.btcmap_id(), "2022-01-05", &conn)?;
 
-        let element_2 = Element {
-            id: "node:2".into(),
-            updated_at: "2022-02-05".into(),
-            ..Element::mock()
+        let element_2 = OverpassElement {
+            r#type: "node".into(),
+            id: 2,
+            ..OverpassElement::mock()
         };
-        element_2.insert(&conn)?;
+        Element::insert(&element_2, &conn)?;
+        Element::set_updated_at(&element_2.btcmap_id(), "2022-02-05", &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -366,8 +350,8 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element = Element::mock();
-        element.insert(&conn)?;
+        let element = OverpassElement::mock();
+        Element::insert(&element, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -377,10 +361,10 @@ mod test {
         .await;
 
         let req = TestRequest::get()
-            .uri(&format!("/{}", element.id))
+            .uri(&format!("/{}", element.btcmap_id()))
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.id, element.id);
+        assert_eq!(res.id, element.btcmap_id());
 
         Ok(())
     }
@@ -396,8 +380,8 @@ mod test {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let element = Element::mock();
-        element.insert(&conn)?;
+        let element = OverpassElement::mock();
+        Element::insert(&element, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -407,7 +391,7 @@ mod test {
         .await;
 
         let req = TestRequest::patch()
-            .uri(&format!("/{}/tags", element.id))
+            .uri(&format!("/{}/tags", element.btcmap_id()))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
@@ -428,8 +412,8 @@ mod test {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let element = Element::mock();
-        element.insert(&conn)?;
+        let element = OverpassElement::mock();
+        Element::insert(&element, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -439,7 +423,7 @@ mod test {
         .await;
 
         let req = TestRequest::post()
-            .uri(&format!("/{}/tags", element.id))
+            .uri(&format!("/{}/tags", element.btcmap_id()))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),

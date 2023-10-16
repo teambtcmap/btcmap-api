@@ -1460,29 +1460,23 @@ mod test {
         let mut tags = HashMap::new();
         tags.insert("golf".into(), "clubhouse".into());
         let element = OverpassElement {
+            r#type: "node".into(),
+            id: 1,
             tags: Some(tags),
             ..OverpassElement::mock()
         };
-        let element = Element {
-            id: "node:1".into(),
-            osm_json: element,
-            ..Element::mock()
-        };
-        element.insert(&conn)?;
+        Element::insert(&element, &conn)?;
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
 
         let mut tags = HashMap::new();
         tags.insert("building".into(), "industrial".into());
         let element = OverpassElement {
+            r#type: "node".into(),
+            id: 2,
             tags: Some(tags),
             ..OverpassElement::mock()
         };
-        let element = Element {
-            id: "node:2".into(),
-            osm_json: element,
-            ..Element::mock()
-        };
-        element.insert(&conn)?;
+        Element::insert(&element, &conn)?;
 
         super::run(&conn).await?;
 

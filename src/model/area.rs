@@ -210,7 +210,7 @@ const fn full_mapper() -> fn(&Row) -> Result<Area> {
 mod test {
     use std::collections::HashMap;
 
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
 
     use crate::{command::db, Result};
 
