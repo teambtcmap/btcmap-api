@@ -2,6 +2,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use rusqlite::named_params;
+use rusqlite::OptionalExtension;
 
 use rusqlite::Connection;
 use rusqlite::Row;
@@ -69,6 +70,24 @@ impl Element {
             .collect::<Result<Vec<Element>, _>>()?)
     }
 
+    pub fn select_by_id(id: &str, conn: &Connection) -> Result<Option<Element>> {
+        let query = r#"
+            SELECT
+                id,
+                osm_json,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM element 
+            WHERE id = :id
+        "#;
+
+        Ok(conn
+            .query_row(query, named_params! { ":id": id }, full_mapper())
+            .optional()?)
+    }
+
     pub fn get_btcmap_tag_value_str(&self, name: &str) -> &str {
         self.tags
             .get(name)
@@ -101,20 +120,6 @@ impl Element {
         Ok(())
     }
 }
-
-pub static SELECT_BY_ID: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM element 
-    WHERE id = :id
-"#;
-
-pub static SELECT_BY_ID_MAPPER: fn(&Row) -> rusqlite::Result<Element> = full_mapper();
 
 pub static SELECT_UPDATED_SINCE: &str = r#"
     SELECT
@@ -226,6 +231,23 @@ mod test {
         )?;
         let elements = Element::select_all(None, &conn)?;
         assert_eq!(3, elements.len());
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let element = OverpassElement {
+            id: 1,
+            ..OverpassElement::mock()
+        };
+        Element::insert(&element, &conn)?;
+        assert_eq!(
+            element.btcmap_id(),
+            Element::select_by_id(&element.btcmap_id(), &conn)?
+                .unwrap()
+                .id
+        );
         Ok(())
     }
 }

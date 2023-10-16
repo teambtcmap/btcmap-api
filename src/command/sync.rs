@@ -219,12 +219,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     &tx,
                 )?;
 
-                let element = tx.query_row(
-                    element::SELECT_BY_ID,
-                    &[(":id", &btcmap_id)],
-                    element::SELECT_BY_ID_MAPPER,
-                )?;
-
+                let element = Element::select_by_id(&btcmap_id, &tx)?.unwrap();
                 let category = element.generate_category();
                 let android_icon = element.generate_android_icon();
 

@@ -16,7 +16,6 @@ use actix_web::HttpResponse;
 use actix_web::Responder;
 use rusqlite::named_params;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
@@ -52,6 +51,12 @@ impl Into<GetItem> for Element {
     }
 }
 
+impl Into<Json<GetItem>> for Element {
+    fn into(self) -> Json<GetItem> {
+        Json(self.into())
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct PostTagsArgs {
     name: String,
@@ -83,30 +88,28 @@ pub async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(
+    id: Path<String>,
+    conn: Data<Connection>,
+) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    db.query_row(
-        element::SELECT_BY_ID,
-        &[(":id", &id)],
-        element::SELECT_BY_ID_MAPPER,
-    )
-    .optional()?
-    .map(|it| Json(it.into()))
-    .ok_or(ApiError::new(
-        404,
-        &format!("Element with id {id} doesn't exist"),
-    ))
+    Element::select_by_id(&id, &conn)?
+        .map(|it| it.into())
+        .ok_or(ApiError::new(
+            404,
+            &format!("Element with id {id} doesn't exist"),
+        ))
 }
 
 #[patch("{id}/tags")]
 async fn patch_tags(
     args: Json<Map<String, Value>>,
-    db: Data<Connection>,
+    conn: Data<Connection>,
     id: Path<String>,
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&db, &req)?;
+    let token = get_admin_token(&conn, &req)?;
     let element_id = id.into_inner();
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
@@ -118,13 +121,7 @@ async fn patch_tags(
         "User attempted to update element tags",
     );
 
-    let element: Option<Element> = db
-        .query_row(
-            element::SELECT_BY_ID,
-            named_params! { ":id": element_id },
-            element::SELECT_BY_ID_MAPPER,
-        )
-        .optional()?;
+    let element = Element::select_by_id(&element_id, &conn)?;
 
     let element = match element {
         Some(v) => v,
@@ -142,7 +139,7 @@ async fn patch_tags(
     merged_tags.append(&mut old_tags);
     merged_tags.append(&mut args.clone());
 
-    db.execute(
+    conn.execute(
         element::UPDATE_TAGS,
         named_params! {
             ":element_id": element_id,
@@ -158,9 +155,9 @@ async fn post_tags(
     id: Path<String>,
     req: HttpRequest,
     args: Form<PostTagsArgs>,
-    db: Data<Connection>,
+    conn: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&db, &req)?;
+    let token = get_admin_token(&conn, &req)?;
     let element_id = id.into_inner();
 
     warn!(
@@ -172,18 +169,12 @@ async fn post_tags(
         "User attempted to update element tag",
     );
 
-    let element: Option<Element> = db
-        .query_row(
-            element::SELECT_BY_ID,
-            named_params! { ":id": element_id },
-            element::SELECT_BY_ID_MAPPER,
-        )
-        .optional()?;
+    let element = Element::select_by_id(&element_id, &conn)?;
 
     match element {
         Some(element) => {
             if args.value.len() > 0 {
-                db.execute(
+                conn.execute(
                     element::INSERT_TAG,
                     named_params! {
                         ":element_id": element.id,
@@ -192,7 +183,7 @@ async fn post_tags(
                     },
                 )?;
             } else {
-                db.execute(
+                conn.execute(
                     element::DELETE_TAG,
                     named_params! {
                         ":element_id": element.id,
