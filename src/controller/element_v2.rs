@@ -61,10 +61,10 @@ struct PostTagsArgs {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    db: Data<Connection>,
+    conn: Data<Connection>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => db
+        Some(updated_since) => conn
             .prepare(element::SELECT_UPDATED_SINCE)?
             .query_map(
                 named_params! {
@@ -75,14 +75,10 @@ pub async fn get(
             )?
             .map(|it| it.map(|it| it.into()))
             .collect::<Result<_, _>>()?,
-        None => db
-            .prepare(element::SELECT_ALL)?
-            .query_map(
-                named_params! { ":limit": args.limit.unwrap_or(std::i32::MAX) },
-                element::SELECT_ALL_MAPPER,
-            )?
-            .map(|it| it.map(|it| it.into()))
-            .collect::<Result<_, _>>()?,
+        None => Element::select_all(args.limit, &conn)?
+            .into_iter()
+            .map(|it| it.into())
+            .collect(),
     }))
 }
 

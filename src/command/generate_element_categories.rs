@@ -7,14 +7,12 @@ use rusqlite::named_params;
 use serde_json::Value;
 use tracing::info;
 
-pub async fn run(db: &Connection) -> Result<()> {
+pub async fn run(conn: &Connection) -> Result<()> {
     info!("Generating element categories");
 
-    let elements: Vec<Element> = db
-        .prepare(element::SELECT_NOT_DELETED)?
-        .query_map([], element::SELECT_NOT_DELETED_MAPPER)?
-        .collect::<Result<Vec<Element>, _>>()?
+    let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
+        .filter(|it| it.deleted_at == "")
         .collect();
 
     info!(elements = elements.len(), "Loaded elements from database");
@@ -29,7 +27,7 @@ pub async fn run(db: &Connection) -> Result<()> {
         if new_category != old_category {
             info!(element.id, old_category, new_category, "Updating category",);
 
-            db.execute(
+            conn.execute(
                 element::INSERT_TAG,
                 named_params! {
                     ":element_id": element.id,
@@ -56,7 +54,7 @@ pub async fn run(db: &Connection) -> Result<()> {
         if category_plural.len() > 0 {
             info!(element.id, category_plural, "Removing category:plural",);
 
-            db.execute(
+            conn.execute(
                 "update element set tags = json_remove(tags, '$.category:plural') where id = :element_id;",
                 named_params! { ":element_id": element.id },
             )?;
@@ -124,7 +122,7 @@ mod test {
     use rusqlite::Connection;
 
     use crate::command::db;
-    use crate::model::{element, OverpassElement};
+    use crate::model::OverpassElement;
 
     use crate::model::element::Element;
     use crate::Result;
@@ -157,12 +155,7 @@ mod test {
 
         super::run(&conn).await?;
 
-        let elements: Vec<Element> = conn
-            .prepare(element::SELECT_NOT_DELETED)?
-            .query_map([], element::SELECT_NOT_DELETED_MAPPER)?
-            .collect::<Result<Vec<Element>, _>>()?
-            .into_iter()
-            .collect();
+        let elements = Element::select_all(None, &conn)?;
 
         assert_eq!("atm", elements[0].get_btcmap_tag_value_str("category"));
         assert_eq!("cafe", elements[1].get_btcmap_tag_value_str("category"));

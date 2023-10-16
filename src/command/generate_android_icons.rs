@@ -9,11 +9,9 @@ use tracing::info;
 pub async fn run(conn: &Connection) -> Result<()> {
     info!("Generating Android icons");
 
-    let elements: Vec<Element> = conn
-        .prepare(element::SELECT_NOT_DELETED)?
-        .query_map([], element::SELECT_NOT_DELETED_MAPPER)?
-        .collect::<Result<Vec<Element>, _>>()?
+    let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
+        .filter(|it| it.deleted_at == "")
         .collect();
 
     info!(elements = elements.len(), "Loaded elements from database");
@@ -1449,10 +1447,7 @@ mod test {
 
     use crate::{
         command::db,
-        model::{
-            element::{self, Element},
-            OverpassElement,
-        },
+        model::{element::Element, OverpassElement},
         Result,
     };
 
@@ -1484,12 +1479,7 @@ mod test {
 
         super::run(&conn).await?;
 
-        let elements: Vec<Element> = conn
-            .prepare(element::SELECT_NOT_DELETED)?
-            .query_map([], element::SELECT_NOT_DELETED_MAPPER)?
-            .collect::<Result<Vec<Element>, _>>()?
-            .into_iter()
-            .collect();
+        let elements = Element::select_all(None, &conn)?;
 
         assert_eq!(
             "golf_course",

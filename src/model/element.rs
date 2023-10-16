@@ -46,6 +46,29 @@ impl Element {
         Ok(())
     }
 
+    pub fn select_all(limit: Option<i32>, conn: &Connection) -> Result<Vec<Element>> {
+        let query = r#"
+            SELECT
+                id,
+                osm_json,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM element
+            ORDER BY updated_at, id
+            LIMIT :limit
+        "#;
+
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! { ":limit": limit.unwrap_or(std::i32::MAX) },
+                full_mapper(),
+            )?
+            .collect::<Result<Vec<Element>, _>>()?)
+    }
+
     pub fn get_btcmap_tag_value_str(&self, name: &str) -> &str {
         self.tags
             .get(name)
@@ -78,36 +101,6 @@ impl Element {
         Ok(())
     }
 }
-
-pub static SELECT_ALL: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM element
-    ORDER BY updated_at, id
-    LIMIT :limit
-"#;
-
-pub static SELECT_ALL_MAPPER: fn(&Row) -> rusqlite::Result<Element> = full_mapper();
-
-pub static SELECT_NOT_DELETED: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM element
-    WHERE deleted_at = ''
-    ORDER BY updated_at
-"#;
-
-pub static SELECT_NOT_DELETED_MAPPER: fn(&Row) -> rusqlite::Result<Element> = full_mapper();
 
 pub static SELECT_BY_ID: &str = r#"
     SELECT
@@ -204,6 +197,35 @@ mod test {
     fn insert() -> Result<()> {
         let conn = db::setup_connection()?;
         Element::insert(&OverpassElement::mock(), &conn)?;
+        Ok(())
+    }
+
+    #[test]
+    fn select_all() -> Result<()> {
+        let conn = db::setup_connection()?;
+        Element::insert(
+            &OverpassElement {
+                id: 1,
+                ..OverpassElement::mock()
+            },
+            &conn,
+        )?;
+        Element::insert(
+            &OverpassElement {
+                id: 2,
+                ..OverpassElement::mock()
+            },
+            &conn,
+        )?;
+        Element::insert(
+            &OverpassElement {
+                id: 3,
+                ..OverpassElement::mock()
+            },
+            &conn,
+        )?;
+        let elements = Element::select_all(None, &conn)?;
+        assert_eq!(3, elements.len());
         Ok(())
     }
 }

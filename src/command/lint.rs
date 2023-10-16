@@ -1,28 +1,20 @@
 use std::collections::HashMap;
 use std::env;
 
-use crate::model::element;
 use crate::model::Element;
 use crate::Connection;
 use crate::Result;
-use rusqlite::named_params;
 use time::macros::format_description;
 use time::Date;
 use tracing::error;
 use tracing::info;
 
-pub async fn run(db: Connection) -> Result<()> {
+pub async fn run(conn: Connection) -> Result<()> {
     info!("Started linting");
 
-    let elements: Vec<Element> = db
-        .prepare(element::SELECT_ALL)?
-        .query_map(
-            named_params! { ":limit": std::i32::MAX },
-            element::SELECT_ALL_MAPPER,
-        )?
-        .collect::<Result<Vec<Element>, _>>()?
+    let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
-        .filter(|it| it.deleted_at.len() == 0)
+        .filter(|it| it.deleted_at == "")
         .collect();
 
     info!(

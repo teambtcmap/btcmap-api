@@ -46,16 +46,8 @@ pub async fn run(db: Connection) -> Result<()> {
 
 async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connection) -> Result<()> {
     let tx: Transaction = db.transaction()?;
-    let elements: Vec<Element> = tx
-        .prepare(element::SELECT_ALL)
-        .unwrap()
-        .query_map(
-            named_params! { ":limit": std::i32::MAX },
-            element::SELECT_ALL_MAPPER,
-        )
-        .unwrap()
-        .map(|row| row.unwrap())
-        .collect();
+
+    let elements = Element::select_all(None, &tx)?;
 
     info!(db_path = ?tx.path().unwrap(), elements = elements.len(), "Loaded all elements from database");
 
