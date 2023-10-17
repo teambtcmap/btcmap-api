@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::model::element;
 use crate::model::Element;
 use crate::model::OverpassElement;
 use crate::service::auth::get_admin_token;
@@ -16,7 +15,6 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use rusqlite::named_params;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
@@ -164,13 +162,7 @@ async fn post_tags(
             if args.value.len() > 0 {
                 Element::insert_tag(&element.id, &args.name, &args.value, &conn)?;
             } else {
-                conn.execute(
-                    element::DELETE_TAG,
-                    named_params! {
-                        ":element_id": element.id,
-                        ":tag_name": format!("$.{}", args.name),
-                    },
-                )?;
+                Element::delete_tag(&element.id, &args.name, &conn)?;
             }
 
             Ok(HttpResponse::Created())

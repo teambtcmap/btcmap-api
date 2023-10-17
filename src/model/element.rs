@@ -178,6 +178,20 @@ impl Element {
         Ok(())
     }
 
+    pub fn delete_tag(id: &str, tag: &str, conn: &Connection) -> Result<()> {
+        let tag = format!("$.{tag}");
+
+        let query = r#"
+            UPDATE element
+            SET tags = json_remove(tags, :tag)
+            WHERE id = :id
+        "#;
+
+        conn.execute(query, named_params! { ":id": id, ":tag": tag })?;
+
+        Ok(())
+    }
+
     pub fn get_btcmap_tag_value_str(&self, name: &str) -> &str {
         self.tags
             .get(name)
@@ -210,12 +224,6 @@ impl Element {
         Ok(())
     }
 }
-
-pub static DELETE_TAG: &str = r#"
-    UPDATE element
-    SET tags = json_remove(tags, :tag_name)
-    WHERE id = :element_id
-"#;
 
 pub static UPDATE_DELETED_AT: &str = r#"
     UPDATE element
@@ -380,6 +388,18 @@ mod test {
         Element::insert_tag("node:1", tag_name, tag_value, &conn)?;
         let element = Element::select_by_id("node:1", &conn)?.unwrap();
         assert_eq!(tag_value, element.tags[tag_name].as_str().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    fn delete_tag() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let tag_name = "foo";
+        Element::insert(&OverpassElement::mock(), &conn)?;
+        Element::insert_tag("node:1", tag_name, "bar", &conn)?;
+        Element::delete_tag("node:1", tag_name, &conn)?;
+        let element = Element::select_by_id("node:1", &conn)?.unwrap();
+        assert!(!element.tags.contains_key(tag_name));
         Ok(())
     }
 }
