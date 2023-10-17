@@ -84,6 +84,7 @@ impl OverpassElement {
         let rental = self.get_tag_value("rental");
         let attraction = self.get_tag_value("attraction");
         let golf = self.get_tag_value("golf");
+        let shelter_type = self.get_tag_value("shelter_type");
 
         let mut icon_id: &str = "question_mark";
 
@@ -99,8 +100,24 @@ impl OverpassElement {
             icon_id = "medical_services"
         }
 
+        if craft != "" {
+            icon_id = "construction"
+        }
+
         if playground != "" {
             icon_id = "attractions"
+        }
+
+        if industrial != "" {
+            icon_id = "factory"
+        }
+
+        if attraction != "" {
+            icon_id = "attractions"
+        }
+
+        if shelter_type != "" {
+            icon_id = "roofing"
         }
 
         if landuse == "retail" {
@@ -1027,6 +1044,18 @@ impl OverpassElement {
             icon_id = "car_rental"
         }
 
+        if amenity == "student_accommodation" {
+            icon_id = "home"
+        }
+
+        if amenity == "surf_school" {
+            icon_id = "surfing"
+        }
+
+        if amenity == "karaoke_box" {
+            icon_id = "mic"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -1119,6 +1148,18 @@ impl OverpassElement {
             icon_id = "fitness_center"
         }
 
+        if leisure == "bird_hide" {
+            icon_id = "raven"
+        }
+
+        if leisure == "sauna" {
+            icon_id = "sauna"
+        }
+
+        if leisure == "dog_park" {
+            icon_id = "pets"
+        }
+
         if healthcare == "dentist" {
             icon_id = "medical_services"
         }
@@ -1175,8 +1216,8 @@ impl OverpassElement {
             icon_id = "directions_walk"
         }
 
-        if craft == "yes" {
-            icon_id = "construction"
+        if sport == "billiards" {
+            icon_id = "golf_course"
         }
 
         if craft == "blacksmith" {
