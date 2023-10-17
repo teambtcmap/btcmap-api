@@ -134,6 +134,28 @@ impl Element {
         Ok(())
     }
 
+    pub fn set_overpass_json(
+        id: &str,
+        overpass_json: &OverpassElement,
+        conn: &Connection,
+    ) -> Result<()> {
+        let query = r#"
+            UPDATE element
+            SET osm_json = json(:overpass_json)
+            WHERE id = :id
+        "#;
+
+        conn.execute(
+            query,
+            named_params! {
+                ":id": id,
+                ":overpass_json": serde_json::to_string(overpass_json)?,
+            },
+        )?;
+
+        Ok(())
+    }
+
     pub fn get_btcmap_tag_value_str(&self, name: &str) -> &str {
         self.tags
             .get(name)
@@ -166,12 +188,6 @@ impl Element {
         Ok(())
     }
 }
-
-pub static UPDATE_OSM_JSON: &str = r#"
-    UPDATE element
-    SET osm_json = :osm_json
-    WHERE id = :id
-"#;
 
 pub static INSERT_TAG: &str = r#"
     UPDATE element
@@ -300,6 +316,24 @@ mod test {
                 .unwrap()
                 .id
         );
+        Ok(())
+    }
+
+    #[test]
+    fn set_overpass_json() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let element = OverpassElement {
+            id: 1,
+            ..OverpassElement::mock()
+        };
+        Element::insert(&element, &conn)?;
+        let element = OverpassElement {
+            id: 2,
+            ..OverpassElement::mock()
+        };
+        Element::set_overpass_json("node:1", &element, &conn)?;
+        let element = Element::select_by_id("node:1", &conn)?.unwrap();
+        assert_eq!(2, element.osm_json.id);
         Ok(())
     }
 

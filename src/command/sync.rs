@@ -165,13 +165,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     );
 
                     info!("Updating osm_json");
-                    tx.execute(
-                        element::UPDATE_OSM_JSON,
-                        named_params! {
-                            ":id": &btcmap_id,
-                            ":osm_json": serde_json::to_string(&fresh_element)?,
-                        },
-                    )?;
+                    Element::set_overpass_json(&btcmap_id, &fresh_element, &tx)?;
                     sleep(Duration::from_millis(10)).await;
 
                     let new_android_icon = fresh_element.generate_android_icon();
