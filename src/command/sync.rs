@@ -178,14 +178,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 }
 
                 if element.deleted_at.len() > 0 {
-                    info!("Updating deleted_at");
-                    tx.execute(
-                        element::UPDATE_DELETED_AT,
-                        named_params! {
-                            ":id": &btcmap_id,
-                            ":deleted_at": "",
-                        },
-                    )?;
+                    info!(btcmap_id, "Bitcoin tags were re-added");
+                    Element::set_deleted_at(&btcmap_id, "", &tx)?;
                     sleep(Duration::from_millis(10)).await;
                 }
             }

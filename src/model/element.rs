@@ -192,6 +192,21 @@ impl Element {
         Ok(())
     }
 
+    pub fn set_deleted_at(id: &str, deleted_at: &str, conn: &Connection) -> Result<()> {
+        let query = r#"
+            UPDATE element
+            SET deleted_at = :deleted_at
+            WHERE id = :id
+        "#;
+
+        conn.execute(
+            query,
+            named_params! { ":id": id, ":deleted_at": deleted_at },
+        )?;
+
+        Ok(())
+    }
+
     pub fn get_btcmap_tag_value_str(&self, name: &str) -> &str {
         self.tags
             .get(name)
@@ -224,12 +239,6 @@ impl Element {
         Ok(())
     }
 }
-
-pub static UPDATE_DELETED_AT: &str = r#"
-    UPDATE element
-    SET deleted_at = :deleted_at
-    WHERE id = :id
-"#;
 
 pub static MARK_AS_DELETED: &str = r#"
     UPDATE element
@@ -400,6 +409,25 @@ mod test {
         Element::delete_tag("node:1", tag_name, &conn)?;
         let element = Element::select_by_id("node:1", &conn)?.unwrap();
         assert!(!element.tags.contains_key(tag_name));
+        Ok(())
+    }
+
+    #[test]
+    fn set_deleted_at() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let element = OverpassElement {
+            id: 1,
+            ..OverpassElement::mock()
+        };
+        Element::insert(&element, &conn)?;
+        let deleted_at = "2023-01-01";
+        Element::set_deleted_at(&element.btcmap_id(), &deleted_at, &conn)?;
+        assert_eq!(
+            deleted_at,
+            Element::select_by_id(&element.btcmap_id(), &conn)?
+                .unwrap()
+                .deleted_at
+        );
         Ok(())
     }
 }
