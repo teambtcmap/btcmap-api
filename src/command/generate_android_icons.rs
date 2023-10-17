@@ -1,9 +1,7 @@
-use crate::model::element;
 use crate::model::Element;
 use crate::model::OverpassElement;
 use crate::Connection;
 use crate::Result;
-use rusqlite::named_params;
 use tracing::info;
 
 pub async fn run(conn: &Connection) -> Result<()> {
@@ -25,15 +23,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
         if old_icon != new_icon {
             info!(element.id, old_icon, new_icon, "Updating icon");
-
-            conn.execute(
-                element::INSERT_TAG,
-                named_params! {
-                    ":element_id": element.id,
-                    ":tag_name": "$.icon:android",
-                    ":tag_value": new_icon,
-                },
-            )?;
+            Element::insert_tag(&element.id, "icon:android", &new_icon, &conn)?;
             tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
 

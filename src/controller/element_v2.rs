@@ -162,14 +162,7 @@ async fn post_tags(
     match element {
         Some(element) => {
             if args.value.len() > 0 {
-                conn.execute(
-                    element::INSERT_TAG,
-                    named_params! {
-                        ":element_id": element.id,
-                        ":tag_name": format!("$.{}", args.name),
-                        ":tag_value": args.value,
-                    },
-                )?;
+                Element::insert_tag(&element.id, &args.name, &args.value, &conn)?;
             } else {
                 conn.execute(
                     element::DELETE_TAG,

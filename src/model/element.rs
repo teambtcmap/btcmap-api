@@ -156,6 +156,28 @@ impl Element {
         Ok(())
     }
 
+    pub fn insert_tag(
+        id: &str,
+        tag_name: &str,
+        tag_value: &str,
+        conn: &Connection,
+    ) -> crate::Result<()> {
+        let tag_name = format!("$.{tag_name}");
+
+        let query = r#"
+            UPDATE element
+            SET tags = json_set(tags, :tag_name, :tag_value)
+            WHERE id = :id
+        "#;
+
+        conn.execute(
+            query,
+            named_params! { ":id": id, ":tag_name": tag_name, ":tag_value": tag_value },
+        )?;
+
+        Ok(())
+    }
+
     pub fn get_btcmap_tag_value_str(&self, name: &str) -> &str {
         self.tags
             .get(name)
@@ -188,12 +210,6 @@ impl Element {
         Ok(())
     }
 }
-
-pub static INSERT_TAG: &str = r#"
-    UPDATE element
-    SET tags = json_set(tags, :tag_name, :tag_value)
-    WHERE id = :element_id
-"#;
 
 pub static DELETE_TAG: &str = r#"
     UPDATE element
@@ -352,6 +368,18 @@ mod test {
         Element::set_tags(&element.btcmap_id(), &tags, &conn)?;
         let element = Element::select_by_id(&element.btcmap_id(), &conn)?.unwrap();
         assert_eq!(&tag_value, &element.tags[tag_name],);
+        Ok(())
+    }
+
+    #[test]
+    fn insert_tag() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let tag_name = "foo";
+        let tag_value = "bar";
+        Element::insert(&OverpassElement::mock(), &conn)?;
+        Element::insert_tag("node:1", tag_name, tag_value, &conn)?;
+        let element = Element::select_by_id("node:1", &conn)?.unwrap();
+        assert_eq!(tag_value, element.tags[tag_name].as_str().unwrap());
         Ok(())
     }
 }

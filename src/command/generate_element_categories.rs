@@ -1,4 +1,3 @@
-use crate::model::element;
 use crate::model::Element;
 use crate::model::OverpassElement;
 use crate::Connection;
@@ -26,15 +25,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
         if new_category != old_category {
             info!(element.id, old_category, new_category, "Updating category",);
-
-            conn.execute(
-                element::INSERT_TAG,
-                named_params! {
-                    ":element_id": element.id,
-                    ":tag_name": "$.category",
-                    ":tag_value": new_category,
-                },
-            )?;
+            Element::insert_tag(&element.id, "category", &new_category, &conn)?;
             tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
 

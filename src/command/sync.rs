@@ -173,15 +173,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
                     if new_android_icon != old_android_icon {
                         info!(old_android_icon, new_android_icon, "Updating Android icon");
-
-                        tx.execute(
-                            element::INSERT_TAG,
-                            named_params! {
-                                ":element_id": &element.id,
-                                ":tag_name": "$.icon:android",
-                                ":tag_value": &new_android_icon,
-                            },
-                        )?;
+                        Element::insert_tag(&element.id, "icon:android", &new_android_icon, &tx)?;
                     }
                 }
 
@@ -217,23 +209,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 let category = element.generate_category();
                 let android_icon = element.generate_android_icon();
 
-                tx.execute(
-                    element::INSERT_TAG,
-                    named_params! {
-                        ":element_id": &element.id,
-                        ":tag_name": "$.category",
-                        ":tag_value": &category,
-                    },
-                )?;
-
-                tx.execute(
-                    element::INSERT_TAG,
-                    named_params! {
-                        ":element_id": &element.id,
-                        ":tag_name": "$.icon:android",
-                        ":tag_value": &android_icon,
-                    },
-                )?;
+                Element::insert_tag(&element.id, "category", &category, &tx)?;
+                Element::insert_tag(&element.id, "icon:android", &android_icon, &tx)?;
 
                 info!(category, android_icon);
 
