@@ -240,12 +240,6 @@ impl Element {
     }
 }
 
-pub static MARK_AS_DELETED: &str = r#"
-    UPDATE element
-    SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ')
-    WHERE id = :id
-"#;
-
 const fn full_mapper() -> fn(&Row) -> rusqlite::Result<Element> {
     |row: &Row| -> rusqlite::Result<Element> {
         let osm_json: String = row.get(1)?;

@@ -1,4 +1,3 @@
-use crate::model::element;
 use crate::model::event::Event;
 use crate::model::user;
 use crate::model::Element;
@@ -14,6 +13,8 @@ use rusqlite::Transaction;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::time::SystemTime;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use tokio::time::sleep;
 use tokio::time::Duration;
 use tracing::error;
@@ -113,9 +114,10 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
             );
 
             info!(element.id, "Marking element as deleted");
-            tx.execute(
-                element::MARK_AS_DELETED,
-                named_params! { ":id": element.id },
+            Element::set_deleted_at(
+                &element.id,
+                &OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+                &tx,
             )?;
             sleep(Duration::from_millis(10)).await;
         }
