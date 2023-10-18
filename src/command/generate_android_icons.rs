@@ -75,6 +75,7 @@ impl OverpassElement {
         let attraction = self.get_tag_value("attraction");
         let golf = self.get_tag_value("golf");
         let shelter_type = self.get_tag_value("shelter_type");
+        let aeroway = self.get_tag_value("aeroway");
 
         let mut icon_id: &str = "question_mark";
 
@@ -108,6 +109,10 @@ impl OverpassElement {
 
         if shelter_type != "" {
             icon_id = "roofing"
+        }
+
+        if aeroway != "" {
+            icon_id = "paragliding"
         }
 
         if landuse == "retail" {
@@ -930,6 +935,10 @@ impl OverpassElement {
             icon_id = "pedal_bike"
         }
 
+        if amenity == "bicycle_repair_station" {
+            icon_id = "pedal_bike"
+        }
+
         if amenity == "townhall" {
             icon_id = "group"
         }
@@ -1044,6 +1053,14 @@ impl OverpassElement {
 
         if amenity == "karaoke_box" {
             icon_id = "mic"
+        }
+
+        if amenity == "hookah_lounge" {
+            icon_id = "smoking_rooms";
+        }
+
+        if amenity == "library" {
+            icon_id = "menu_book";
         }
 
         if leisure == "sports_centre" {
@@ -1208,6 +1225,10 @@ impl OverpassElement {
 
         if sport == "billiards" {
             icon_id = "golf_course"
+        }
+
+        if sport == "equestrian" {
+            icon_id = "bedroom_baby"
         }
 
         if craft == "blacksmith" {

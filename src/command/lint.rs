@@ -132,9 +132,8 @@ pub async fn run(conn: Connection) -> Result<()> {
             send_discord_message(message).await;
         }
 
-        if element.osm_json.up_to_date()
-            && (element.get_btcmap_tag_value_str("icon:android") == ""
-                || element.get_btcmap_tag_value_str("icon:android") == "question_mark")
+        if element.get_btcmap_tag_value_str("icon:android") == ""
+            || element.get_btcmap_tag_value_str("icon:android") == "question_mark"
         {
             let message = format!("{} Up-to-date element has no icon", url,);
             error!(message);
