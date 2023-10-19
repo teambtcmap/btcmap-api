@@ -59,7 +59,7 @@ impl Area {
             .prepare(query)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(std::i32::MAX) },
-                full_mapper(),
+                mapper(),
             )?
             .collect::<Result<Vec<Area>, _>>()?)
     }
@@ -86,7 +86,7 @@ impl Area {
             .prepare(query)?
             .query_map(
                 named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(std::i32::MAX) },
-                full_mapper(),
+                mapper(),
             )?
             .collect::<Result<Vec<Area>, _>>()?)
     }
@@ -103,11 +103,7 @@ impl Area {
             WHERE json_extract(tags, '$.url_alias') = :url_alias
         "#;
 
-        let res = conn.query_row(
-            query,
-            named_params! { ":url_alias": url_alias },
-            full_mapper(),
-        );
+        let res = conn.query_row(query, named_params! { ":url_alias": url_alias }, mapper());
 
         Ok(res.optional()?)
     }
@@ -190,15 +186,13 @@ impl Area {
     }
 }
 
-const fn full_mapper() -> fn(&Row) -> Result<Area> {
+const fn mapper() -> fn(&Row) -> Result<Area> {
     |row: &Row| -> Result<Area> {
         let tags: Option<String> = row.get(1)?;
-        let tags: Option<HashMap<String, Value>> =
-            tags.map(|it| serde_json::from_str(&it).unwrap());
 
         Ok(Area {
             id: row.get(0)?,
-            tags: tags,
+            tags: tags.map(|it| serde_json::from_str(&it).unwrap()),
             created_at: row.get(2)?,
             updated_at: row.get(3)?,
             deleted_at: row.get(4)?,

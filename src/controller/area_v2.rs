@@ -31,7 +31,6 @@ struct PostArgs {
 
 #[derive(Serialize, Deserialize)]
 struct PostJsonArgs {
-    id: String,
     tags: HashMap<String, Value>,
 }
 
@@ -87,28 +86,36 @@ async fn post_json(
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
 
-    warn!(
-        user_id = token.user_id,
-        area_url = args.id,
-        "User attempted to create an area",
-    );
+    if !args.tags.contains_key("url_alias") {
+        Err(ApiError::new(500, format!("url_alias is missing")))?
+    }
 
-    if let Some(_) = Area::select_by_url_alias(&args.id, &conn)? {
+    let url_alias = &args.tags.get("url_alias").unwrap();
+
+    if !url_alias.is_string() {
+        Err(ApiError::new(500, format!("url_alias should be a string")))?
+    }
+
+    let url_alias = url_alias.as_str().unwrap();
+
+    warn!(token.user_id, url_alias, "User attempted to create an area",);
+
+    if let Some(_) = Area::select_by_url_alias(url_alias, &conn)? {
         Err(ApiError::new(
             303,
-            format!("Area with url = {} already exists", args.id),
+            format!("Area with url_alias = {} already exists", url_alias),
         ))?
     }
 
-    if let Err(_) = Area::insert_or_replace(&args.id, Some(&args.tags), &conn) {
+    if let Err(_) = Area::insert_or_replace(url_alias, Some(&args.tags), &conn) {
         Err(ApiError::new(
             500,
-            format!("Failed to insert area with url = {}", args.id),
+            format!("Failed to insert area with url_alias = {}", url_alias),
         ))?
     }
 
     Ok(Json(json!({
-        "message": format!("Area with url = {} has been created", args.id),
+        "message": format!("Area with url_alias = {} has been created", url_alias),
     })))
 }
 
@@ -355,8 +362,8 @@ mod tests {
 
         let args = r#"
         {
-            "id": "test-area",
             "tags": {
+                "url_alias": "test-area",
                 "string": "bar",
                 "int": 5,
                 "float": 12.34,
