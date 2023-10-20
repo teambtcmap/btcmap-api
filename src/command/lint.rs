@@ -6,18 +6,19 @@ use crate::Connection;
 use crate::Result;
 use time::macros::format_description;
 use time::Date;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 
 pub async fn run(conn: Connection) -> Result<()> {
-    info!("Started linting");
+    debug!("Started linting");
 
     let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
         .filter(|it| it.deleted_at == "")
         .collect();
 
-    info!(
+    debug!(
         elements = elements.len(),
         "Loaded all elements from database"
     );
@@ -135,13 +136,25 @@ pub async fn run(conn: Connection) -> Result<()> {
         if element.get_btcmap_tag_value_str("icon:android") == ""
             || element.get_btcmap_tag_value_str("icon:android") == "question_mark"
         {
-            let message = format!("{} Up-to-date element has no icon", url,);
+            let message = format!("{} Icon is missing", url,);
+            error!(message);
+            send_discord_message(message).await;
+        }
+
+        if element.osm_json.verification_date().is_none() {
+            let message = format!("{} Not verified", url,);
+            error!(message);
+            send_discord_message(message).await;
+        }
+
+        if element.osm_json.verification_date().is_some() && !element.osm_json.up_to_date() {
+            let message = format!("{} Out of date", url,);
             error!(message);
             send_discord_message(message).await;
         }
     }
 
-    info!("Finished linting");
+    debug!("Finished linting");
 
     Ok(())
 }
