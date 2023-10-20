@@ -54,8 +54,8 @@ pub struct GetItem {
 impl Into<GetItem> for Area {
     fn into(self) -> GetItem {
         GetItem {
-            id: self.tag("url_alias").as_str().unwrap_or_default().into(),
-            tags: self.tags.unwrap_or_default(),
+            id: self.tags["url_alias"].as_str().unwrap().into(),
+            tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
             deleted_at: self
@@ -69,7 +69,7 @@ impl Into<GetItem> for Area {
 
 #[derive(Serialize, Deserialize)]
 struct PatchArgs {
-    tags: Value,
+    tags: HashMap<String, Value>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -107,7 +107,7 @@ async fn post_json(
         ))?
     }
 
-    if let Err(_) = Area::insert_or_replace(url_alias, Some(&args.tags), &conn) {
+    if let Err(_) = Area::insert(&args.tags, &conn) {
         Err(ApiError::new(
             500,
             format!("Failed to insert area with url_alias = {}", url_alias),
@@ -122,11 +122,11 @@ async fn post_json(
 #[get("")]
 async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => Area::select_updated_since(&conn, updated_since, args.limit)?
+        Some(updated_since) => Area::select_updated_since(updated_since, args.limit, &conn)?
             .into_iter()
             .map(|it| it.into())
             .collect(),
-        None => Area::select_all(&conn, args.limit)?
+        None => Area::select_all(args.limit, &conn)?
             .into_iter()
             .map(|it| it.into())
             .collect(),
@@ -158,13 +158,13 @@ async fn patch_by_url_alias(
 
     warn!(
         token.user_id,
-        area_url_alias, "User attempted to update an area",
+        area_url_alias, "User attempted to merge new tags",
     );
 
-    let area: Option<Area> = Area::select_by_url_alias(&area_url_alias, &conn)?;
-
-    let area = match area {
-        Some(v) => v,
+    match Area::select_by_url_alias(&area_url_alias, &conn)? {
+        Some(area) => {
+            Area::merge_tags(area.id, &args.tags, &conn)?;
+        }
         None => {
             return Err(ApiError::new(
                 404,
@@ -172,43 +172,6 @@ async fn patch_by_url_alias(
             ));
         }
     };
-
-    let new_tags = match args.tags.clone() {
-        Value::Object(v) => v,
-        _ => {
-            return Err(ApiError::new(
-                400,
-                &format!("The field tags should be an object"),
-            ));
-        }
-    };
-
-    let mut merged_tags = area.tags.clone().unwrap_or_default();
-
-    for (new_key, new_value) in &new_tags {
-        if merged_tags.contains_key(new_key) {
-            warn!(
-                token.user_id,
-                area_url_alias,
-                tag = new_key,
-                old_value = serde_json::to_string(&merged_tags[new_key]).unwrap(),
-                new_value = serde_json::to_string(new_value).unwrap(),
-                "Admin user updated an existing tag",
-            );
-        } else {
-            warn!(
-                token.user_id,
-                area_url_alias,
-                tag_name = new_key,
-                tag_value = serde_json::to_string(new_value).unwrap(),
-                "Admin user added new tag",
-            );
-        }
-
-        merged_tags.insert(new_key.clone(), new_value.clone());
-    }
-
-    Area::insert_or_replace(&area_url_alias, Some(&merged_tags), &conn)?;
 
     Ok(HttpResponse::Ok())
 }
@@ -221,46 +184,22 @@ async fn patch_tags(
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
-    let area_url_alias = url_alias.into_inner();
 
-    let area: Option<Area> = Area::select_by_url_alias(&area_url_alias, &conn)?;
+    warn!(
+        token.user_id,
+        url_alias = url_alias.as_str(),
+        "User attempted to merge new tags",
+    );
 
-    let area = match area {
-        Some(v) => v,
+    match Area::select_by_url_alias(&url_alias, &conn)? {
+        Some(area) => Area::merge_tags(area.id, &args, &conn)?,
         None => {
             return Err(ApiError::new(
                 404,
-                &format!("There is no area with url = {area_url_alias}"),
+                &format!("There is no area with url_alias = {url_alias}"),
             ));
         }
     };
-
-    let mut merged_tags = area.tags.clone().unwrap_or_default();
-
-    for (new_key, new_value) in &args.0 {
-        if merged_tags.contains_key(new_key) {
-            warn!(
-                token.user_id,
-                area_url_alias,
-                tag = new_key,
-                old_value = serde_json::to_string(&merged_tags[new_key]).unwrap(),
-                new_value = serde_json::to_string(new_value).unwrap(),
-                "Admin user updated an existing tag",
-            );
-        } else {
-            warn!(
-                token.user_id,
-                area_url_alias,
-                tag_name = new_key,
-                tag_value = serde_json::to_string(new_value).unwrap(),
-                "Admin user added new tag",
-            );
-        }
-
-        merged_tags.insert(new_key.clone(), new_value.clone());
-    }
-
-    Area::insert_or_replace(&area_url_alias, Some(&merged_tags), &conn)?;
 
     Ok(HttpResponse::Ok())
 }
@@ -289,9 +228,9 @@ async fn post_tags(
     match area {
         Some(area) => {
             if args.value.len() > 0 {
-                area.insert_tag(&args.name, &args.value, &conn)?;
+                Area::insert_tag_as_str(area.id, &args.name, &args.value, &conn)?;
             } else {
-                area.delete_tag(&args.name, &conn)?;
+                Area::delete_tag(area.id, &args.name, &conn)?;
             }
 
             Ok(HttpResponse::Created())
@@ -318,7 +257,7 @@ async fn delete_by_url_alias(
 
     match area {
         Some(area) => {
-            area.delete(&conn)?;
+            Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
             Ok(HttpResponse::Ok())
         }
         None => Err(ApiError::new(
@@ -386,10 +325,10 @@ mod tests {
 
         let area = Area::select_by_url_alias("test-area", &Connection::open(db_path)?)?.unwrap();
 
-        assert!(area.tags.as_ref().unwrap()["string"].is_string());
-        assert!(area.tags.as_ref().unwrap()["int"].is_u64());
-        assert!(area.tags.as_ref().unwrap()["float"].is_f64());
-        assert!(area.tags.as_ref().unwrap()["bool"].is_boolean());
+        assert!(area.tags["string"].is_string());
+        assert!(area.tags["int"].is_u64());
+        assert!(area.tags["float"].is_f64());
+        assert!(area.tags["bool"].is_boolean());
 
         Ok(())
     }
@@ -413,10 +352,11 @@ mod tests {
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let conn = db::setup_connection()?;
 
-        Area::insert_or_replace("test", None, &conn)?;
+        let mut tags = HashMap::new();
+        tags.insert("url_alias".into(), "test".into());
+        Area::insert(&tags, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -434,12 +374,13 @@ mod tests {
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let conn = db::setup_connection()?;
 
-        Area::insert_or_replace("test1", None, &conn)?;
-        Area::insert_or_replace("test2", None, &conn)?;
-        Area::insert_or_replace("test3", None, &conn)?;
+        let mut tags = HashMap::new();
+        tags.insert("url_alias".into(), "test".into());
+        Area::insert(&tags, &conn)?;
+        Area::insert(&tags, &conn)?;
+        Area::insert(&tags, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -459,7 +400,9 @@ mod tests {
     async fn get_by_id() -> Result<()> {
         let conn = db::setup_connection()?;
         let area_url_alias = "test";
-        Area::insert_or_replace(&area_url_alias, None, &conn)?;
+        let mut tags = HashMap::new();
+        tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
+        Area::insert(&tags, &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -485,8 +428,10 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_url = "test";
-        Area::insert_or_replace(&area_url, None, &conn)?;
+        let url_alias = "test";
+        let mut tags = HashMap::new();
+        tags.insert("url_alias".into(), Value::String(url_alias.into()));
+        Area::insert(&tags, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -495,7 +440,7 @@ mod tests {
         )
         .await;
         let req = TestRequest::patch()
-            .uri(&format!("/{area_url}/tags"))
+            .uri(&format!("/{url_alias}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
@@ -516,8 +461,10 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_url = "test";
-        Area::insert_or_replace(&area_url, None, &conn)?;
+        let url_alias = "test";
+        let mut tags = HashMap::new();
+        tags.insert("url_alias".into(), Value::String(url_alias.into()));
+        Area::insert(&tags, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -540,7 +487,7 @@ mod tests {
         let args: Value = serde_json::from_str(args)?;
 
         let req = TestRequest::patch()
-            .uri(&format!("/{area_url}"))
+            .uri(&format!("/{url_alias}"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(args)
             .to_request();
@@ -548,12 +495,12 @@ mod tests {
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
-        let area = Area::select_by_url_alias(&area_url, &Connection::open(db_path)?)?.unwrap();
+        let area = Area::select_by_url_alias(&url_alias, &Connection::open(db_path)?)?.unwrap();
 
-        assert!(area.tags.as_ref().unwrap()["string"].is_string());
-        assert!(area.tags.as_ref().unwrap()["unsigned"].is_u64());
-        assert!(area.tags.as_ref().unwrap()["float"].is_f64());
-        assert!(area.tags.as_ref().unwrap()["bool"].is_boolean());
+        assert!(area.tags["string"].is_string());
+        assert!(area.tags["unsigned"].is_u64());
+        assert!(area.tags["float"].is_f64());
+        assert!(area.tags["bool"].is_boolean());
 
         Ok(())
     }
@@ -569,8 +516,10 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_url = "test";
-        Area::insert_or_replace(&area_url, None, &conn)?;
+        let url_alias = "test";
+        let mut tags = HashMap::new();
+        tags.insert("url_alias".into(), Value::String(url_alias.into()));
+        Area::insert(&tags, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -580,7 +529,7 @@ mod tests {
         .await;
 
         let req = TestRequest::post()
-            .uri(&format!("/{area_url}/tags"))
+            .uri(&format!("/{url_alias}/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),
@@ -605,8 +554,10 @@ mod tests {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let area_url_alias = "test";
-        Area::insert_or_replace(&area_url_alias, None, &conn)?;
+        let url_alias = "test";
+        let mut tags = HashMap::new();
+        tags.insert("url_alias".into(), Value::String(url_alias.into()));
+        Area::insert(&tags, &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -615,14 +566,14 @@ mod tests {
         )
         .await;
         let req = TestRequest::delete()
-            .uri(&format!("/{area_url_alias}"))
+            .uri(&format!("/{url_alias}"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
         let area: Option<Area> =
-            Area::select_by_url_alias(&area_url_alias, &Connection::open(db_path)?)?;
+            Area::select_by_url_alias(&url_alias, &Connection::open(db_path)?)?;
 
         assert!(area.is_some());
 

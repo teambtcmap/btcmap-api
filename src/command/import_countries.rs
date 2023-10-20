@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{model::Area, Error, Result};
 
@@ -45,8 +45,16 @@ pub fn run(path: &str, conn: &mut Connection) -> Result<()> {
             let reader = BufReader::new(file);
             let json: CountryJson = serde_json::from_reader(reader)?;
 
-            Area::insert_or_replace(&json.id, Some(&json.tags), &tx)?;
-            debug!(id = &json.id, "Inserted or replaced area");
+            match Area::select_by_url_alias(&json.id, &tx)? {
+                Some(area) => {
+                    Area::merge_tags(area.id, &json.tags, &tx)?;
+                    info!(json.id, "Merged tags into an existing area");
+                }
+                None => {
+                    Area::insert(&json.tags, &tx)?;
+                    info!(json.id, "Inserted area");
+                }
+            }
         }
     }
 

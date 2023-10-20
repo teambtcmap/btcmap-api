@@ -40,7 +40,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     let elements = overpass::query_bitcoin_merchants().await?;
 
-    let areas: Vec<Area> = Area::select_all(&db, None)?
+    let areas: Vec<Area> = Area::select_all(None, &db)?
         .into_iter()
         .filter(|it| it.deleted_at == None)
         .collect();
@@ -53,7 +53,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
     for area in areas {
         info!(area.id, "Generating report");
         let mut area_elements: Vec<&OverpassElement> = vec![];
-        let geo_json = area.tag("geo_json");
+        let geo_json = area.tags.get("geo_json").unwrap_or(&Value::Null);
 
         if geo_json.is_object() {
             let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json)?.parse();
@@ -116,7 +116,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
         info!(area.id, elements = area_elements.len(), "Processing area");
         let report_tags = generate_report_tags(&area_elements)?;
-        insert_report(area.tag("url_alias").as_str().unwrap(), report_tags, &tx).await?;
+        insert_report(area.tags["url_alias"].as_str().unwrap(), report_tags, &tx).await?;
     }
 
     tx.commit()?;
