@@ -15,7 +15,7 @@ pub async fn run(conn: Connection) -> Result<()> {
 
     let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
-        .filter(|it| it.deleted_at == "")
+        .filter(|it| it.deleted_at.is_none())
         .collect();
 
     debug!(
@@ -141,13 +141,15 @@ pub async fn run(conn: Connection) -> Result<()> {
             send_discord_message(message).await;
         }
 
-        if element.osm_json.verification_date().is_none() {
+        if element.overpass_json.verification_date().is_none() {
             let message = format!("{} Not verified", url,);
             error!(message);
             send_discord_message(message).await;
         }
 
-        if element.osm_json.verification_date().is_some() && !element.osm_json.up_to_date() {
+        if element.overpass_json.verification_date().is_some()
+            && !element.overpass_json.up_to_date()
+        {
             let message = format!("{} Out of date", url,);
             error!(message);
             send_discord_message(message).await;

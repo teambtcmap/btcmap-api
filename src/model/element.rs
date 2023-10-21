@@ -8,29 +8,31 @@ use rusqlite::OptionalExtension;
 use rusqlite::Connection;
 use rusqlite::Row;
 use serde_json::Value;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
-use super::OverpassElement;
+use super::OverpassElementJson;
 
 use crate::Result;
 
 pub struct Element {
     pub id: String,
-    pub osm_json: OverpassElement,
+    pub overpass_json: OverpassElementJson,
     pub tags: HashMap<String, Value>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: String,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+    pub deleted_at: Option<OffsetDateTime>,
 }
 
 impl Element {
-    pub fn insert(overpass_json: &OverpassElement, conn: &Connection) -> Result<()> {
+    pub fn insert(overpass_json: &OverpassElementJson, conn: &Connection) -> Result<()> {
         let query = r#"
             INSERT INTO element (
                 id,
-                osm_json
+                overpass_json
             ) VALUES (
                 :id,
-                :osm_json
+                :overpass_json
             )
         "#;
 
@@ -38,7 +40,7 @@ impl Element {
             query,
             named_params! {
                 ":id": overpass_json.btcmap_id(),
-                ":osm_json": serde_json::to_string(overpass_json)?,
+                ":overpass_json": serde_json::to_string(overpass_json)?,
             },
         )?;
 
@@ -51,7 +53,7 @@ impl Element {
         let query = r#"
             SELECT
                 id,
-                osm_json,
+                overpass_json,
                 tags,
                 created_at,
                 updated_at,
@@ -78,7 +80,7 @@ impl Element {
         let query = r#"
             SELECT
                 id,
-                osm_json,
+                overpass_json,
                 tags,
                 created_at,
                 updated_at,
@@ -102,7 +104,7 @@ impl Element {
         let query = r#"
             SELECT
                 id,
-                osm_json,
+                overpass_json,
                 tags,
                 created_at,
                 updated_at,
@@ -136,12 +138,12 @@ impl Element {
 
     pub fn set_overpass_json(
         id: &str,
-        overpass_json: &OverpassElement,
+        overpass_json: &OverpassElementJson,
         conn: &Connection,
     ) -> Result<()> {
         let query = r#"
             UPDATE element
-            SET osm_json = json(:overpass_json)
+            SET overpass_json = json(:overpass_json)
             WHERE id = :id
         "#;
 
@@ -192,17 +194,36 @@ impl Element {
         Ok(())
     }
 
-    pub fn set_deleted_at(id: &str, deleted_at: &str, conn: &Connection) -> Result<()> {
-        let query = r#"
-            UPDATE element
-            SET deleted_at = :deleted_at
-            WHERE id = :id
-        "#;
+    pub fn set_deleted_at(
+        id: &str,
+        deleted_at: Option<OffsetDateTime>,
+        conn: &Connection,
+    ) -> Result<()> {
+        let deleted_at = deleted_at.map(|it| it.format(&Rfc3339).unwrap());
 
-        conn.execute(
-            query,
-            named_params! { ":id": id, ":deleted_at": deleted_at },
-        )?;
+        match deleted_at {
+            Some(deleted_at) => {
+                let query = r#"
+                    UPDATE element
+                    SET deleted_at = :deleted_at
+                    WHERE id = :id
+                "#;
+
+                conn.execute(
+                    query,
+                    named_params! { ":id": id, ":deleted_at": deleted_at },
+                )?;
+            }
+            None => {
+                let query = r#"
+                    UPDATE element
+                    SET deleted_at = NULL
+                    WHERE id = :id
+                "#;
+
+                conn.execute(query, named_params! { ":id": id })?;
+            }
+        };
 
         Ok(())
     }
@@ -215,11 +236,11 @@ impl Element {
     }
 
     pub fn get_osm_tag_value(&self, name: &str) -> &str {
-        self.osm_json.get_tag_value(name)
+        self.overpass_json.get_tag_value(name)
     }
 
     pub fn generate_android_icon(&self) -> String {
-        self.osm_json.generate_android_icon()
+        self.overpass_json.generate_android_icon()
     }
 
     #[cfg(test)]
@@ -243,14 +264,14 @@ impl Element {
 const fn full_mapper() -> fn(&Row) -> rusqlite::Result<Element> {
     |row: &Row| -> rusqlite::Result<Element> {
         let osm_json: String = row.get(1)?;
-        let osm_json: OverpassElement = serde_json::from_str(&osm_json).unwrap();
+        let osm_json: OverpassElementJson = serde_json::from_str(&osm_json).unwrap();
 
         let tags: String = row.get(2)?;
         let tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(Element {
             id: row.get(0)?,
-            osm_json,
+            overpass_json: osm_json,
             tags,
             created_at: row.get(3)?,
             updated_at: row.get(4)?,
@@ -264,15 +285,16 @@ mod test {
     use std::collections::HashMap;
 
     use serde_json::Value;
+    use time::OffsetDateTime;
 
-    use crate::{command::db, model::OverpassElement, Result};
+    use crate::{command::db, model::OverpassElementJson, Result};
 
     use super::Element;
 
     #[test]
     fn insert() -> Result<()> {
         let conn = db::setup_connection()?;
-        Element::insert(&OverpassElement::mock(), &conn)?;
+        Element::insert(&OverpassElementJson::mock(), &conn)?;
         Ok(())
     }
 
@@ -280,23 +302,23 @@ mod test {
     fn select_all() -> Result<()> {
         let conn = db::setup_connection()?;
         Element::insert(
-            &OverpassElement {
+            &OverpassElementJson {
                 id: 1,
-                ..OverpassElement::mock()
+                ..OverpassElementJson::mock()
             },
             &conn,
         )?;
         Element::insert(
-            &OverpassElement {
+            &OverpassElementJson {
                 id: 2,
-                ..OverpassElement::mock()
+                ..OverpassElementJson::mock()
             },
             &conn,
         )?;
         Element::insert(
-            &OverpassElement {
+            &OverpassElementJson {
                 id: 3,
-                ..OverpassElement::mock()
+                ..OverpassElementJson::mock()
             },
             &conn,
         )?;
@@ -309,22 +331,22 @@ mod test {
     fn select_updated_since() -> Result<()> {
         let conn = db::setup_connection()?;
         Element::insert(
-            &OverpassElement {
+            &OverpassElementJson {
                 id: 1,
-                ..OverpassElement::mock()
+                ..OverpassElementJson::mock()
             },
             &conn,
         )?;
-        Element::set_updated_at("node:1", "2023-10-01", &conn)?;
+        Element::set_updated_at("node:1", "2023-10-01T00:00:00Z", &conn)?;
         Element::insert(
-            &OverpassElement {
+            &OverpassElementJson {
                 id: 2,
-                ..OverpassElement::mock()
+                ..OverpassElementJson::mock()
             },
             &conn,
         )?;
-        Element::set_updated_at("node:2", "2023-10-02", &conn)?;
-        let elements = Element::select_updated_since("2023-10-01", None, &conn)?;
+        Element::set_updated_at("node:2", "2023-10-02T00:00:00Z", &conn)?;
+        let elements = Element::select_updated_since("2023-10-01T00:00:00Z", None, &conn)?;
         assert_eq!(1, elements.len());
         Ok(())
     }
@@ -332,9 +354,9 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = db::setup_connection()?;
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             id: 1,
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
         assert_eq!(
@@ -349,27 +371,27 @@ mod test {
     #[test]
     fn set_overpass_json() -> Result<()> {
         let conn = db::setup_connection()?;
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             id: 1,
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             id: 2,
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::set_overpass_json("node:1", &element, &conn)?;
         let element = Element::select_by_id("node:1", &conn)?.unwrap();
-        assert_eq!(2, element.osm_json.id);
+        assert_eq!(2, element.overpass_json.id);
         Ok(())
     }
 
     #[test]
     fn set_tags() -> Result<()> {
         let conn = db::setup_connection()?;
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             id: 1,
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
         let mut tags: HashMap<String, Value> = HashMap::new();
@@ -387,7 +409,7 @@ mod test {
         let conn = db::setup_connection()?;
         let tag_name = "foo";
         let tag_value = "bar";
-        Element::insert(&OverpassElement::mock(), &conn)?;
+        Element::insert(&OverpassElementJson::mock(), &conn)?;
         Element::insert_tag("node:1", tag_name, tag_value, &conn)?;
         let element = Element::select_by_id("node:1", &conn)?.unwrap();
         assert_eq!(tag_value, element.tags[tag_name].as_str().unwrap());
@@ -398,7 +420,7 @@ mod test {
     fn delete_tag() -> Result<()> {
         let conn = db::setup_connection()?;
         let tag_name = "foo";
-        Element::insert(&OverpassElement::mock(), &conn)?;
+        Element::insert(&OverpassElementJson::mock(), &conn)?;
         Element::insert_tag("node:1", tag_name, "bar", &conn)?;
         Element::delete_tag("node:1", tag_name, &conn)?;
         let element = Element::select_by_id("node:1", &conn)?.unwrap();
@@ -409,18 +431,19 @@ mod test {
     #[test]
     fn set_deleted_at() -> Result<()> {
         let conn = db::setup_connection()?;
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             id: 1,
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
-        let deleted_at = "2023-01-01";
-        Element::set_deleted_at(&element.btcmap_id(), &deleted_at, &conn)?;
+        let deleted_at = OffsetDateTime::now_utc();
+        Element::set_deleted_at(&element.btcmap_id(), Some(deleted_at), &conn)?;
         assert_eq!(
             deleted_at,
             Element::select_by_id(&element.btcmap_id(), &conn)?
                 .unwrap()
                 .deleted_at
+                .unwrap()
         );
         Ok(())
     }

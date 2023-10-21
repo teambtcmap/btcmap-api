@@ -1,4 +1,4 @@
-use crate::{model::OverpassElement, Error, Result};
+use crate::{model::OverpassElementJson, Error, Result};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -15,7 +15,7 @@ struct Response {
     version: f64,
     generator: String,
     osm3s: Osm3s,
-    elements: Vec<OverpassElement>,
+    elements: Vec<OverpassElementJson>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -23,7 +23,7 @@ struct Osm3s {
     timestamp_osm_base: String,
 }
 
-pub async fn query_bitcoin_merchants() -> Result<Vec<OverpassElement>> {
+pub async fn query_bitcoin_merchants() -> Result<Vec<OverpassElementJson>> {
     info!("Querying OSM API, it could take a while...");
 
     let response = reqwest::Client::new()

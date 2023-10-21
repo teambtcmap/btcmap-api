@@ -1,7 +1,7 @@
 use crate::model::event::Event;
 use crate::model::user;
 use crate::model::Element;
-use crate::model::OverpassElement;
+use crate::model::OverpassElementJson;
 use crate::model::User;
 use crate::service::overpass::query_bitcoin_merchants;
 use crate::Error;
@@ -13,7 +13,6 @@ use rusqlite::Transaction;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::time::SystemTime;
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tokio::time::sleep;
 use tokio::time::Duration;
@@ -45,7 +44,10 @@ pub async fn run(db: Connection) -> Result<()> {
     Ok(())
 }
 
-async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connection) -> Result<()> {
+async fn process_elements(
+    fresh_elements: Vec<OverpassElementJson>,
+    mut db: Connection,
+) -> Result<()> {
     let tx: Transaction = db.transaction()?;
 
     let elements = Element::select_all(None, &tx)?;
@@ -59,13 +61,13 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
     // First, let's check if any of the cached elements no longer accept bitcoins
     for element in &elements {
-        if !fresh_element_ids.contains(&element.id) && element.deleted_at.len() == 0 {
+        if !fresh_element_ids.contains(&element.id) && element.deleted_at.is_none() {
             warn!(
                 element.id,
                 "Cached element was deleted from Overpass or no longer accepts Bitcoin",
             );
-            let osm_id = element.osm_json.id;
-            let element_type = &element.osm_json.r#type;
+            let osm_id = element.overpass_json.id;
+            let element_type = &element.overpass_json.r#type;
             let name = element.get_osm_tag_value("name");
 
             let fresh_element = fetch_element(element_type, osm_id).await;
@@ -114,11 +116,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
             );
 
             info!(element.id, "Marking element as deleted");
-            Element::set_deleted_at(
-                &element.id,
-                &OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
-                &tx,
-            )?;
+            Element::set_deleted_at(&element.id, Some(OffsetDateTime::now_utc()), &tx)?;
             sleep(Duration::from_millis(10)).await;
         }
     }
@@ -133,10 +131,10 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
-                if fresh_element != element.osm_json {
+                if fresh_element != element.overpass_json {
                     info!(
                         btcmap_id,
-                        old_json = serde_json::to_string(&element.osm_json)?,
+                        old_json = serde_json::to_string(&element.overpass_json)?,
                         new_json = serde_json::to_string(&fresh_element)?,
                         "Element JSON was updated",
                     );
@@ -145,7 +143,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         insert_user_if_not_exists(user_id, &tx).await;
                     }
 
-                    if fresh_element.changeset != element.osm_json.changeset {
+                    if fresh_element.changeset != element.overpass_json.changeset {
                         Event::insert(
                             user_id.unwrap().try_into().unwrap(),
                             &btcmap_id,
@@ -179,9 +177,9 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     }
                 }
 
-                if element.deleted_at.len() > 0 {
+                if element.deleted_at.is_some() {
                     info!(btcmap_id, "Bitcoin tags were re-added");
-                    Element::set_deleted_at(&btcmap_id, "", &tx)?;
+                    Element::set_deleted_at(&btcmap_id, None, &tx)?;
                     sleep(Duration::from_millis(10)).await;
                 }
             }

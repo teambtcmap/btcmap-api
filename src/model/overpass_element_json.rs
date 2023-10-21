@@ -6,7 +6,7 @@ use serde_json::Value;
 use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
 
 #[derive(Serialize, Deserialize, PartialEq)]
-pub struct OverpassElement {
+pub struct OverpassElementJson {
     pub r#type: String,
     pub id: i64,
     pub lat: Option<f64>, // for nodes only
@@ -31,7 +31,7 @@ pub struct Bounds {
     pub maxlat: f64,
 }
 
-impl OverpassElement {
+impl OverpassElementJson {
     pub fn btcmap_id(&self) -> String {
         format!("{}:{}", self.r#type, self.id)
     }
@@ -89,8 +89,8 @@ impl OverpassElement {
     }
 
     #[cfg(test)]
-    pub fn mock() -> OverpassElement {
-        OverpassElement {
+    pub fn mock() -> OverpassElementJson {
+        OverpassElementJson {
             r#type: "node".into(),
             id: 1,
             lat: Some(0.0),
@@ -113,15 +113,15 @@ impl OverpassElement {
 mod test {
     use std::collections::HashMap;
 
-    use super::OverpassElement;
+    use super::OverpassElementJson;
 
     #[test]
     fn get_tag_value() {
         let mut tags = HashMap::new();
         tags.insert("foo".into(), "bar".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("bar", element.get_tag_value("foo"));
         assert_eq!("", element.get_tag_value("missing"));

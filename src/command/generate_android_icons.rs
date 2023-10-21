@@ -1,5 +1,5 @@
 use crate::model::Element;
-use crate::model::OverpassElement;
+use crate::model::OverpassElementJson;
 use crate::Connection;
 use crate::Result;
 use tracing::info;
@@ -9,7 +9,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
     let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
-        .filter(|it| it.deleted_at == "")
+        .filter(|it| it.deleted_at.is_none())
         .collect();
 
     info!(elements = elements.len(), "Loaded elements from database");
@@ -46,7 +46,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-impl OverpassElement {
+impl OverpassElementJson {
     pub fn generate_android_icon(&self) -> String {
         let amenity = self.get_tag_value("amenity");
         let cuisine = self.get_tag_value("cuisine");
@@ -1499,7 +1499,7 @@ mod test {
 
     use crate::{
         command::db,
-        model::{element::Element, OverpassElement},
+        model::{element::Element, OverpassElementJson},
         Result,
     };
 
@@ -1510,22 +1510,22 @@ mod test {
 
         let mut tags = HashMap::new();
         tags.insert("golf".into(), "clubhouse".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             r#type: "node".into(),
             id: 1,
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
 
         let mut tags = HashMap::new();
         tags.insert("building".into(), "industrial".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             r#type: "node".into(),
             id: 2,
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
 
@@ -1549,17 +1549,17 @@ mod test {
     fn generate_android_icon() {
         let mut tags = HashMap::new();
         tags.insert("golf".into(), "clubhouse".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("golf_course", &element.generate_android_icon());
 
         let mut tags = HashMap::new();
         tags.insert("building".into(), "industrial".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("factory", &element.generate_android_icon());
     }

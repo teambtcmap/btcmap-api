@@ -1,5 +1,5 @@
 use crate::model::Element;
-use crate::model::OverpassElement;
+use crate::model::OverpassElementJson;
 use crate::Connection;
 use crate::Result;
 use rusqlite::named_params;
@@ -11,7 +11,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
     let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
-        .filter(|it| it.deleted_at == "")
+        .filter(|it| it.deleted_at.is_none())
         .collect();
 
     info!(elements = elements.len(), "Loaded elements from database");
@@ -67,11 +67,11 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
 impl Element {
     pub fn generate_category(&self) -> String {
-        self.osm_json.generate_category()
+        self.overpass_json.generate_category()
     }
 }
 
-impl OverpassElement {
+impl OverpassElementJson {
     pub fn generate_category(&self) -> String {
         let amenity = self.get_tag_value("amenity");
         let tourism = self.get_tag_value("tourism");
@@ -113,7 +113,7 @@ mod test {
     use rusqlite::Connection;
 
     use crate::command::db;
-    use crate::model::OverpassElement;
+    use crate::model::OverpassElementJson;
 
     use crate::model::element::Element;
     use crate::Result;
@@ -125,22 +125,22 @@ mod test {
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "atm".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             r#type: "node".into(),
             id: 1,
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "cafe".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             r#type: "node".into(),
             id: 2,
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
 
@@ -158,57 +158,57 @@ mod test {
     fn generate_category() {
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "atm".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("atm", &element.generate_category());
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "cafe".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("cafe", &element.generate_category());
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "restaurant".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("restaurant", &element.generate_category());
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "bar".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("bar", &element.generate_category());
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "pub".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("pub", &element.generate_category());
 
         let mut tags = HashMap::new();
         tags.insert("tourism".into(), "hotel".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("hotel", &element.generate_category());
 
         let mut tags = HashMap::new();
         tags.insert("foo".into(), "bar".into());
-        let element = OverpassElement {
+        let element = OverpassElementJson {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElementJson::mock()
         };
         assert_eq!("other", &element.generate_category());
     }
