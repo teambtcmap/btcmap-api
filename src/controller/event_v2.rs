@@ -1,4 +1,5 @@
-use crate::model::event;
+use std::collections::HashMap;
+
 use crate::model::Event;
 use crate::service::auth::get_admin_token;
 use crate::ApiError;
@@ -11,13 +12,12 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use rusqlite::named_params;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Map;
 use serde_json::Value;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use tracing::warn;
 
 #[derive(Deserialize)]
@@ -28,13 +28,15 @@ pub struct GetArgs {
 
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
-    pub id: i64,
-    pub user_id: i64,
+    pub id: i32,
+    pub user_id: i32,
     pub element_id: String,
     pub r#type: String,
-    pub tags: Map<String, Value>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub tags: HashMap<String, Value>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
     pub deleted_at: String,
 }
 
@@ -48,103 +50,71 @@ impl Into<GetItem> for Event {
             tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            deleted_at: self
+                .deleted_at
+                .map(|it| it.format(&Rfc3339).unwrap())
+                .unwrap_or_default()
+                .into(),
         }
     }
 }
 
+impl Into<Json<GetItem>> for Event {
+    fn into(self) -> Json<GetItem> {
+        Json(self.into())
+    }
+}
+
 #[get("")]
-async fn get(args: Query<GetArgs>, db: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
+async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => db
-            .prepare(event::SELECT_UPDATED_SINCE)?
-            .query_map(
-                named_params! {
-                    ":updated_since": updated_since,
-                    ":limit": args.limit.unwrap_or(std::i32::MAX),
-                },
-                event::SELECT_UPDATED_SINCE_MAPPER,
-            )?
-            .map(|it| it.map(|it| it.into()))
-            .collect::<Result<_, _>>()?,
-        None => db
-            .prepare(event::SELECT_ALL)?
-            .query_map(
-                named_params! { ":limit": args.limit.unwrap_or(std::i32::MAX) },
-                event::SELECT_ALL_MAPPER,
-            )?
-            .map(|it| it.map(|it| it.into()))
-            .collect::<Result<_, _>>()?,
+        Some(updated_since) => Event::select_updated_since(updated_since, args.limit, &conn)?
+            .into_iter()
+            .map(|it| it.into())
+            .collect(),
+        None => Event::select_all(args.limit, &conn)?
+            .into_iter()
+            .map(|it| it.into())
+            .collect(),
     }))
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<String>, db: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
-    db.query_row(
-        event::SELECT_BY_ID,
-        &[(":id", &id)],
-        event::SELECT_BY_ID_MAPPER,
-    )
-    .optional()?
-    .map(|it| Json(it.into()))
-    .ok_or(ApiError::new(
-        404,
-        &format!("Event with id {id} doesn't exist"),
-    ))
+    Event::select_by_id(id, &conn)?
+        .map(|it| it.into())
+        .ok_or(ApiError::new(
+            404,
+            &format!("Event with id = {id} doesn't exist"),
+        ))
 }
 
 #[patch("{id}/tags")]
 async fn patch_tags(
-    args: Json<Map<String, Value>>,
-    db: Data<Connection>,
-    id: Path<String>,
+    args: Json<HashMap<String, Value>>,
+    conn: Data<Connection>,
+    id: Path<i32>,
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&db, &req)?;
-    let event_id = id.into_inner();
-
+    let id = id.into_inner();
+    let token = get_admin_token(&conn, &req)?;
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
 
     warn!(
-        user_id = token.user_id,
-        event_id,
+        token.user_id,
+        id,
         tags = keys.join(", "),
-        "User attempted to update event tags",
+        "User attempted to merge new tags",
     );
 
-    let event: Option<Event> = db
-        .query_row(
-            event::SELECT_BY_ID,
-            named_params! { ":id": event_id },
-            event::SELECT_BY_ID_MAPPER,
-        )
-        .optional()?;
+    Event::select_by_id(id, &conn)?.ok_or(ApiError::new(
+        404,
+        &format!("There is no event with id = {id}"),
+    ))?;
 
-    let event = match event {
-        Some(v) => v,
-        None => {
-            return Err(ApiError::new(
-                404,
-                &format!("There is no event with id {event_id}"),
-            ));
-        }
-    };
-
-    let mut old_tags = event.tags.clone();
-
-    let mut merged_tags = Map::new();
-    merged_tags.append(&mut old_tags);
-    merged_tags.append(&mut args.clone());
-
-    db.execute(
-        event::UPDATE_TAGS,
-        named_params! {
-            ":event_id": event_id,
-            ":tags": serde_json::to_string(&merged_tags).unwrap(),
-        },
-    )?;
+    Event::merge_tags(id, &args, &conn)?;
 
     Ok(HttpResponse::Ok())
 }
@@ -204,9 +174,9 @@ mod tests {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-05')", [])?;
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-06')", [])?;
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-07')", [])?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-05T00:00:00Z')", [])?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-06T00:00:00Z')", [])?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-07T00:00:00Z')", [])?;
 
         let app = test::init_service(
             App::new()
@@ -228,11 +198,11 @@ mod tests {
         db::migrate(&mut conn)?;
 
         conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-01-05')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-01-05T00:00:00Z')",
             [],
         )?;
         conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-02-05')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-02-05T00:00:00Z')",
             [],
         )?;
 

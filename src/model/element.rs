@@ -67,7 +67,7 @@ impl Element {
             .prepare(query)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(std::i32::MAX) },
-                full_mapper(),
+                mapper(),
             )?
             .collect::<Result<Vec<Element>, _>>()?)
     }
@@ -95,7 +95,7 @@ impl Element {
             .prepare(query)?
             .query_map(
                 named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(std::i32::MAX) },
-                full_mapper(),
+                mapper(),
             )?
             .collect::<Result<Vec<Element>, _>>()?)
     }
@@ -114,7 +114,7 @@ impl Element {
         "#;
 
         Ok(conn
-            .query_row(query, named_params! { ":id": id }, full_mapper())
+            .query_row(query, named_params! { ":id": id }, mapper())
             .optional()?)
     }
 
@@ -261,7 +261,7 @@ impl Element {
     }
 }
 
-const fn full_mapper() -> fn(&Row) -> rusqlite::Result<Element> {
+const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
     |row: &Row| -> rusqlite::Result<Element> {
         let osm_json: String = row.get(1)?;
         let osm_json: OverpassElementJson = serde_json::from_str(&osm_json).unwrap();
