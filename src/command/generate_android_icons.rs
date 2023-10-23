@@ -24,7 +24,6 @@ pub async fn run(conn: &Connection) -> Result<()> {
         if old_icon != new_icon {
             info!(element.id, old_icon, new_icon, "Updating icon");
             Element::insert_tag(&element.id, "icon:android", &new_icon, &conn)?;
-            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
 
         if new_icon == "question_mark" {
@@ -1517,7 +1516,6 @@ mod test {
             ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
-        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
 
         let mut tags = HashMap::new();
         tags.insert("building".into(), "industrial".into());

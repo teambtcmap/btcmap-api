@@ -14,8 +14,6 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::time::SystemTime;
 use time::OffsetDateTime;
-use tokio::time::sleep;
-use tokio::time::Duration;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -117,7 +115,6 @@ async fn process_elements(
 
             info!(element.id, "Marking element as deleted");
             Element::set_deleted_at(&element.id, Some(OffsetDateTime::now_utc()), &tx)?;
-            sleep(Duration::from_millis(10)).await;
         }
     }
 
@@ -166,7 +163,6 @@ async fn process_elements(
 
                     info!("Updating osm_json");
                     Element::set_overpass_json(&btcmap_id, &fresh_element, &tx)?;
-                    sleep(Duration::from_millis(10)).await;
 
                     let new_android_icon = fresh_element.generate_android_icon();
                     let old_android_icon = element.get_btcmap_tag_value_str("icon:android");
@@ -180,7 +176,6 @@ async fn process_elements(
                 if element.deleted_at.is_some() {
                     info!(btcmap_id, "Bitcoin tags were re-added");
                     Element::set_deleted_at(&btcmap_id, None, &tx)?;
-                    sleep(Duration::from_millis(10)).await;
                 }
             }
             None => {
@@ -227,8 +222,6 @@ async fn process_elements(
 }
 
 async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
-    sleep(Duration::from_millis(1000)).await;
-
     let url = format!(
         "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
     );

@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::thread::sleep;
-use std::time::Duration;
 
 use rusqlite::named_params;
 use rusqlite::Connection;
@@ -49,8 +47,6 @@ impl Event {
                 ":type": r#type,
             },
         )?;
-
-        sleep(Duration::from_millis(10));
 
         Ok(())
     }

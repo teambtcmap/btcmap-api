@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::thread::sleep;
-use std::time::Duration;
 
 use rusqlite::named_params;
 use rusqlite::OptionalExtension;
@@ -43,8 +41,6 @@ impl Element {
                 ":overpass_json": serde_json::to_string(overpass_json)?,
             },
         )?;
-
-        sleep(Duration::from_millis(10));
 
         Ok(())
     }

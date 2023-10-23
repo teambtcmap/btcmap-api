@@ -26,7 +26,6 @@ pub async fn run(conn: &Connection) -> Result<()> {
         if new_category != old_category {
             info!(element.id, old_category, new_category, "Updating category",);
             Element::insert_tag(&element.id, "category", &new_category, &conn)?;
-            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
 
         if new_category == "other" {
@@ -49,7 +48,6 @@ pub async fn run(conn: &Connection) -> Result<()> {
                 "update element set tags = json_remove(tags, '$.category:plural') where id = :element_id;",
                 named_params! { ":element_id": element.id },
             )?;
-            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
     }
 
@@ -132,7 +130,6 @@ mod test {
             ..OverpassElementJson::mock()
         };
         Element::insert(&element, &conn)?;
-        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "cafe".into());

@@ -70,6 +70,7 @@ pub async fn run(db: Connection) -> Result<()> {
             )?;
         }
 
+        // OSM admins suggested this timeout
         sleep(Duration::from_millis(5000)).await;
     }
 
