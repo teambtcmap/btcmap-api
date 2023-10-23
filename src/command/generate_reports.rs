@@ -127,6 +127,11 @@ pub async fn run(mut db: Connection) -> Result<()> {
 fn generate_report_tags(elements: &[&OverpassElementJson]) -> Result<Value> {
     info!("Generating report tags");
 
+    let atms: Vec<_> = elements
+        .iter()
+        .filter(|it| it.get_tag_value("amenity") == "atm")
+        .collect();
+
     let onchain_elements: Vec<_> = elements
         .iter()
         .filter(|it| it.get_tag_value("payment:onchain") == "yes")
@@ -168,6 +173,7 @@ fn generate_report_tags(elements: &[&OverpassElementJson]) -> Result<Value> {
 
     let mut tags: HashMap<String, Value> = HashMap::new();
     tags.insert("total_elements".into(), elements.len().into());
+    tags.insert("total_atms".into(), atms.len().into());
     tags.insert(
         "total_elements_onchain".into(),
         onchain_elements.len().into(),
