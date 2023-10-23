@@ -1,4 +1,4 @@
-use crate::model::report;
+use crate::model::report::Report;
 use crate::model::Area;
 use crate::model::OverpassElementJson;
 use crate::service::overpass;
@@ -9,31 +9,21 @@ use geo::MultiPolygon;
 use geo::Polygon;
 use geojson::GeoJson;
 use geojson::Geometry;
-use rusqlite::named_params;
 use rusqlite::Connection;
 use serde_json::Value;
 use std::collections::HashMap;
 use time::format_description::well_known::Iso8601;
 use time::OffsetDateTime;
-use tokio::time::sleep;
 use tracing::error;
 use tracing::info;
-use tracing::warn;
 
 pub async fn run(mut db: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
 
-    let existing_report = db.query_row(
-        report::SELECT_BY_AREA_ID_AND_DATE,
-        named_params![
-            ":area_url_alias": "",
-            ":date": today.to_string()
-        ],
-        report::SELECT_BY_AREA_ID_AND_DATE_MAPPER,
-    );
+    let existing_report = Report::select_by_area_url_alias_and_date("", &today, &db)?;
 
-    if existing_report.is_ok() {
+    if existing_report.is_some() {
         info!("Found existing report, aborting");
         return Ok(());
     }
@@ -48,7 +38,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
     let tx = db.transaction()?;
 
     let report_tags = generate_report_tags(&elements.iter().collect::<Vec<_>>())?;
-    insert_report("", report_tags, &tx).await?;
+    insert_report("", &report_tags, &tx).await?;
 
     for area in areas {
         info!(area.id, "Generating report");
@@ -116,7 +106,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
         info!(area.id, elements = area_elements.len(), "Processing area");
         let report_tags = generate_report_tags(&area_elements)?;
-        insert_report(area.tags["url_alias"].as_str().unwrap(), report_tags, &tx).await?;
+        insert_report(area.tags["url_alias"].as_str().unwrap(), &report_tags, &tx).await?;
     }
 
     tx.commit()?;
@@ -124,7 +114,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
     Ok(())
 }
 
-fn generate_report_tags(elements: &[&OverpassElementJson]) -> Result<Value> {
+fn generate_report_tags(elements: &[&OverpassElementJson]) -> Result<HashMap<String, Value>> {
     info!("Generating report tags");
 
     let atms: Vec<_> = elements
@@ -229,45 +219,17 @@ fn generate_report_tags(elements: &[&OverpassElementJson]) -> Result<Value> {
         }
     }
 
-    let tags: Value = serde_json::to_value(tags)?;
-
     Ok(tags)
 }
 
-async fn insert_report(area_url_alias: &str, tags: Value, db: &Connection) -> Result<()> {
-    let date = OffsetDateTime::now_utc().date().to_string();
-    info!(area_url_alias, date, ?tags, "Inserting new report");
-
-    for attempt in 1..10 {
-        let res = db.execute(
-            report::INSERT,
-            named_params! {
-                ":area_url_alias" : area_url_alias.to_string(),
-                ":date" : date,
-                ":tags" : serde_json::to_string(&tags)?,
-            },
-        );
-
-        match &res {
-            Ok(_) => {
-                break;
-            }
-            Err(e) => {
-                if e.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) {
-                    warn!(
-                        area_url_alias,
-                        ?date,
-                        attempt,
-                        "Failed to insert report due to constraint violation",
-                    );
-                    sleep(tokio::time::Duration::from_millis(10)).await
-                } else {
-                    res?;
-                }
-            }
-        }
-    }
-
+async fn insert_report(
+    area_url_alias: &str,
+    tags: &HashMap<String, Value>,
+    conn: &Connection,
+) -> Result<()> {
+    let date = OffsetDateTime::now_utc().date();
+    info!(area_url_alias, ?date, ?tags, "Inserting new report");
+    Report::insert(area_url_alias, &date, &tags, conn)?;
     info!(area_url_alias, ?date, "Inserted new report");
     Ok(())
 }
@@ -287,7 +249,7 @@ mod test {
         db::migrate(&mut conn)?;
 
         for i in 1..100 {
-            super::insert_report(&i.to_string(), Value::Null, &conn).await?;
+            super::insert_report(&i.to_string(), &HashMap::new(), &conn).await?;
         }
 
         Ok(())
