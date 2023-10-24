@@ -3,9 +3,11 @@ use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
 
+use super::OsmUserJson;
+
 pub struct User {
-    pub id: i64,
-    pub osm_json: Value,
+    pub id: i32,
+    pub osm_json: OsmUserJson,
     pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
@@ -82,7 +84,7 @@ pub static UPDATE_OSM_JSON: &str = r#"
 const fn full_mapper() -> fn(&Row) -> Result<User> {
     |row: &Row| -> Result<User> {
         let osm_json: String = row.get(1)?;
-        let osm_json: Value = serde_json::from_str(&osm_json).unwrap_or_default();
+        let osm_json: OsmUserJson = serde_json::from_str(&osm_json).unwrap();
 
         let tags: String = row.get(2)?;
         let tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();

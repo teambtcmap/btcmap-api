@@ -1,4 +1,5 @@
 use crate::model::user;
+use crate::model::OsmUserJson;
 use crate::model::User;
 use crate::service::auth::get_admin_token;
 use crate::ApiError;
@@ -28,8 +29,8 @@ pub struct GetArgs {
 
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
-    pub id: i64,
-    pub osm_json: Value,
+    pub id: i32,
+    pub osm_json: OsmUserJson,
     pub tags: Map<String, Value>,
     pub created_at: String,
     pub updated_at: String,
@@ -186,7 +187,7 @@ mod tests {
             user::INSERT,
             named_params! {
                 ":id": 1,
-                ":osm_json": "{}",
+                ":osm_json": serde_json::to_string(&OsmUserJson::mock())?,
             },
         )?;
 
@@ -210,12 +211,12 @@ mod tests {
         db::migrate(&mut conn)?;
 
         conn.execute(
-            "INSERT INTO user (id, osm_json, updated_at) VALUES (1, '{}', '2022-01-05')",
-            [],
+            "INSERT INTO user (id, osm_json, updated_at) VALUES (1, ?, '2022-01-05')",
+            [serde_json::to_string(&OsmUserJson::mock())?],
         )?;
         conn.execute(
-            "INSERT INTO user (id, osm_json, updated_at) VALUES (2, '{}', '2022-02-05')",
-            [],
+            "INSERT INTO user (id, osm_json, updated_at) VALUES (2, ?, '2022-02-05')",
+            [serde_json::to_string(&OsmUserJson::mock())?],
         )?;
 
         let app = test::init_service(
@@ -244,7 +245,7 @@ mod tests {
             user::INSERT,
             named_params! {
                 ":id": user_id,
-                ":osm_json": "{}",
+                ":osm_json": serde_json::to_string(&OsmUserJson::mock())?,
             },
         )?;
 
@@ -277,7 +278,7 @@ mod tests {
             user::INSERT,
             named_params! {
                 ":id": user_id,
-                ":osm_json": "{}",
+                ":osm_json": serde_json::to_string(&OsmUserJson::mock())?,
             },
         )?;
 
