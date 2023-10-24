@@ -6,11 +6,14 @@ use crate::model::User;
 use crate::service::overpass::query_bitcoin_merchants;
 use crate::Error;
 use crate::Result;
+use reqwest::StatusCode;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
+use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
 use time::OffsetDateTime;
@@ -68,18 +71,20 @@ async fn process_elements(
             let element_type = &element.overpass_json.r#type;
             let name = element.get_osm_tag_value("name");
 
-            let fresh_element = fetch_element(element_type, osm_id).await;
-            let deleted_from_osm = !fresh_element
-                .clone()
-                .map(|it| it["visible"].as_bool().unwrap_or(true))
-                .unwrap_or(true);
-            info!(deleted_from_osm);
+            let fresh_element = match fetch_element(element_type, osm_id).await? {
+                Some(fresh_element) => fresh_element,
+                None => Err(Error::Other(format!(
+                    "Failed to fetch element {element_type}:{osm_id} from OSM"
+                )))?,
+            };
 
-            if !deleted_from_osm {
-                let fresh_element = fresh_element.clone().unwrap();
-                let bitcoin_tag_value = fresh_element["tags"]["currency:XBT"]
-                    .as_str()
-                    .unwrap_or("no");
+            let default_bitcoin_tag_value = "no".to_string();
+
+            if fresh_element.visible.unwrap_or(true) {
+                let bitcoin_tag_value = fresh_element
+                    .tags
+                    .get("currency:XBT")
+                    .unwrap_or(&default_bitcoin_tag_value);
                 info!(bitcoin_tag_value);
 
                 if bitcoin_tag_value == "yes" {
@@ -91,24 +96,18 @@ async fn process_elements(
                 }
             }
 
-            let user_id = fresh_element
-                .clone()
-                .map(|it| it["uid"].as_i64().unwrap_or(0))
-                .unwrap_or(0);
-            let user_display_name = fresh_element
-                .clone()
-                .map(|it| it["user"].as_str().unwrap_or("").to_string())
-                .unwrap_or("".to_string());
+            insert_user_if_not_exists(fresh_element.uid, &tx).await;
 
-            insert_user_if_not_exists(user_id, &tx).await;
+            Event::insert(fresh_element.uid, &element.id, "delete", &tx)?;
 
-            Event::insert(user_id.try_into().unwrap(), &element.id, "delete", &tx)?;
-
-            let message = format!("User {user_display_name} removed https://www.openstreetmap.org/{element_type}/{osm_id}");
+            let message = format!(
+                "User {} removed https://www.openstreetmap.org/{element_type}/{osm_id}",
+                fresh_element.user
+            );
             info!(
                 element_name = name,
                 element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
-                user_name = user_display_name,
+                user_name = fresh_element.user,
                 discord_message = message,
                 message,
             );
@@ -124,7 +123,7 @@ async fn process_elements(
         let btcmap_id = fresh_element.btcmap_id();
         let name = fresh_element.get_tag_value("name");
         let user_id = fresh_element.uid;
-        let user_display_name = &fresh_element.user.clone().unwrap_or("".into());
+        let user_display_name = &fresh_element.user.clone().unwrap_or_default();
 
         match elements.iter().find(|it| it.id == btcmap_id) {
             Some(element) => {
@@ -221,44 +220,43 @@ async fn process_elements(
     Ok(())
 }
 
-async fn fetch_element(element_type: &str, element_id: i64) -> Option<Value> {
+#[derive(Deserialize)]
+struct OsmResponseJson {
+    elements: Vec<OsmElementJson>,
+}
+
+#[derive(Deserialize)]
+struct OsmElementJson {
+    //r#type: String,
+    //id: i64,
+    visible: Option<bool>,
+    tags: HashMap<String, String>,
+    user: String,
+    uid: i32,
+}
+
+async fn fetch_element(element_type: &str, element_id: i64) -> Result<Option<OsmElementJson>> {
     let url = format!(
         "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
     );
     info!(url, "Querying OSM");
-    let res = reqwest::get(&url).await;
 
-    if let Err(_) = res {
-        error!("Failed to fetch element {element_type}:{element_id}");
-        return None;
+    let res = reqwest::get(&url).await?;
+
+    if res.status() == StatusCode::NOT_FOUND {
+        return Ok(None);
     }
 
-    let body = res.unwrap().text().await;
+    let mut res: OsmResponseJson = res.json().await?;
 
-    if let Err(_) = body {
-        error!("Failed to fetch element {element_type}:{element_id}");
-        return None;
+    if res.elements.len() == 1 {
+        return Ok(Some(res.elements.pop().unwrap()));
+    } else {
+        return Ok(None);
     }
-
-    let body: serde_json::Result<Value> = serde_json::from_str(&body.unwrap());
-
-    if let Err(_) = body {
-        error!("Failed to fetch element {element_type}:{element_id}");
-        return None;
-    }
-
-    let body = body.unwrap();
-    let elements: Option<&Vec<Value>> = body["elements"].as_array();
-
-    if elements.is_none() || elements.unwrap().len() == 0 {
-        error!("Failed to fetch element {element_type}:{element_id}");
-        return None;
-    }
-
-    Some(elements.unwrap()[0].clone())
 }
 
-pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) {
+pub async fn insert_user_if_not_exists(user_id: i32, conn: &Connection) {
     if user_id == 0 {
         return;
     }

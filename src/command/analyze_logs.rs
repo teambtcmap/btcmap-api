@@ -38,8 +38,8 @@ pub async fn run() -> Result<()> {
         }
     }
 
-    let period_start = entries.first().unwrap().timestamp.clone();
-    let period_end = entries.last().unwrap().timestamp.clone();
+    let period_start = entries.first().unwrap().timestamp;
+    let period_end = entries.last().unwrap().timestamp;
     let period_duration = period_end - period_start;
     let log_entries_per_second = format!(
         "{:.2}",
