@@ -53,3 +53,6 @@ geo = { version = "0.26.0", default-features = false }
 
 # https://github.com/rust-lang/futures-rs/releases
 futures-util = { version = "0.3.28", default-features = false }
+
+# https://github.com/hyperium/http/releases
+http = { version = "0.2.9", default-features = false }

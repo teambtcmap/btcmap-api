@@ -8,6 +8,7 @@ pub enum Error {
     CLI(String),
     IO(std::io::Error),
     DB(rusqlite::Error),
+    Http(http::Error),
     Reqwest(reqwest::Error),
     Serde(serde_json::Error),
     Api(ApiError),
@@ -20,6 +21,7 @@ impl Display for Error {
             Error::CLI(err) => write!(f, "{}", err),
             Error::IO(err) => err.fmt(f),
             Error::DB(err) => err.fmt(f),
+            Error::Http(err) => err.fmt(f),
             Error::Reqwest(err) => err.fmt(f),
             Error::Serde(err) => err.fmt(f),
             Error::Api(err) => err.fmt(f),
@@ -37,6 +39,12 @@ impl From<std::io::Error> for Error {
 impl From<rusqlite::Error> for Error {
     fn from(error: rusqlite::Error) -> Self {
         Error::DB(error)
+    }
+}
+
+impl From<http::Error> for Error {
+    fn from(error: http::Error) -> Self {
+        Error::Http(error)
     }
 }
 

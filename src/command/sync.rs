@@ -3,6 +3,7 @@ use crate::model::Element;
 use crate::model::OsmUserJson;
 use crate::model::OverpassElementJson;
 use crate::model::User;
+use crate::service::osm;
 use crate::service::overpass::query_bitcoin_merchants;
 use crate::Error;
 use crate::Result;
@@ -10,7 +11,6 @@ use reqwest::StatusCode;
 use rusqlite::Connection;
 use rusqlite::Transaction;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
 use time::OffsetDateTime;
@@ -68,7 +68,7 @@ async fn process_elements(
             let element_type = &element.overpass_json.r#type;
             let name = element.get_osm_tag_value("name");
 
-            let fresh_element = match fetch_element(element_type, osm_id).await? {
+            let fresh_element = match osm::get_element(element_type, osm_id).await? {
                 Some(fresh_element) => fresh_element,
                 None => Err(Error::Other(format!(
                     "Failed to fetch element {element_type}:{osm_id} from OSM"
@@ -76,10 +76,7 @@ async fn process_elements(
             };
 
             if fresh_element.visible.unwrap_or(true) {
-                let bitcoin_tag_value = fresh_element.get_tag_value("currency:XBT", "no");
-                info!(bitcoin_tag_value);
-
-                if bitcoin_tag_value == "yes" {
+                if fresh_element.tag("currency:XBT", "no") == "yes" {
                     let message = format!(
                         "Overpass lied about element {element_type}:{osm_id} being deleted"
                     );
@@ -210,51 +207,6 @@ async fn process_elements(
 
     tx.commit()?;
     Ok(())
-}
-
-#[derive(Deserialize)]
-struct OsmResponseJson {
-    elements: Vec<OsmElementJson>,
-}
-
-#[derive(Deserialize)]
-struct OsmElementJson {
-    //r#type: String,
-    //id: i64,
-    visible: Option<bool>,
-    tags: Option<HashMap<String, String>>,
-    user: String,
-    uid: i32,
-}
-
-impl OsmElementJson {
-    pub fn get_tag_value(&self, name: &str, default: &str) -> String {
-        match &self.tags {
-            Some(tags) => tags.get(name).map(|it| it.into()).unwrap_or(default.into()),
-            None => default.into(),
-        }
-    }
-}
-
-async fn fetch_element(element_type: &str, element_id: i64) -> Result<Option<OsmElementJson>> {
-    let url = format!(
-        "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
-    );
-    info!(url, "Querying OSM");
-
-    let res = reqwest::get(&url).await?;
-
-    if res.status() == StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-
-    let mut res: OsmResponseJson = res.json().await?;
-
-    if res.elements.len() == 1 {
-        return Ok(Some(res.elements.pop().unwrap()));
-    } else {
-        return Ok(None);
-    }
 }
 
 #[derive(Deserialize)]
