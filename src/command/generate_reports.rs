@@ -1,7 +1,7 @@
 use crate::model::report::Report;
 use crate::model::Area;
-use crate::model::OverpassElementJson;
 use crate::service::overpass;
+use crate::service::overpass::OverpassElement;
 use crate::Result;
 use geo::Contains;
 use geo::LineString;
@@ -42,7 +42,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
     for area in areas {
         info!(area.id, "Generating report");
-        let mut area_elements: Vec<&OverpassElementJson> = vec![];
+        let mut area_elements: Vec<&OverpassElement> = vec![];
         let geo_json = area.tags.get("geo_json").unwrap_or(&Value::Null);
 
         if geo_json.is_object() {
@@ -114,7 +114,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
     Ok(())
 }
 
-fn generate_report_tags(elements: &[&OverpassElementJson]) -> Result<HashMap<String, Value>> {
+fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String, Value>> {
     info!("Generating report tags");
 
     let atms: Vec<_> = elements
@@ -297,7 +297,7 @@ mod test {
           }
         });
 
-        let element_1: OverpassElementJson = serde_json::from_value(element_1)?;
+        let element_1: OverpassElement = serde_json::from_value(element_1)?;
 
         let element_2 = json!({
           "type": "node",
@@ -328,7 +328,7 @@ mod test {
           }
         });
 
-        let mut element_2: OverpassElementJson = serde_json::from_value(element_2)?;
+        let mut element_2: OverpassElement = serde_json::from_value(element_2)?;
 
         let today = OffsetDateTime::now_utc().date();
         let today_plus_year = today.checked_add(Duration::days(356)).unwrap();

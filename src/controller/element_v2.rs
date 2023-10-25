@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::model::Element;
-use crate::model::OverpassElementJson;
 use crate::service::auth::get_admin_token;
+use crate::service::overpass::OverpassElement;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -32,7 +32,7 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: String,
-    pub osm_json: OverpassElementJson,
+    pub osm_json: OverpassElement,
     pub tags: HashMap<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -219,7 +219,7 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element = OverpassElementJson::mock();
+        let element = OverpassElement::mock();
         Element::insert(&element, &conn)?;
 
         let app = test::init_service(
@@ -241,24 +241,24 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element_1 = OverpassElementJson {
+        let element_1 = OverpassElement {
             r#type: "node".into(),
             id: 1,
-            ..OverpassElementJson::mock()
+            ..OverpassElement::mock()
         };
         Element::insert(&element_1, &conn)?;
 
-        let element_2 = OverpassElementJson {
+        let element_2 = OverpassElement {
             r#type: "node".into(),
             id: 2,
-            ..OverpassElementJson::mock()
+            ..OverpassElement::mock()
         };
         Element::insert(&element_2, &conn)?;
 
-        let element_3 = OverpassElementJson {
+        let element_3 = OverpassElement {
             r#type: "node".into(),
             id: 3,
-            ..OverpassElementJson::mock()
+            ..OverpassElement::mock()
         };
         Element::insert(&element_3, &conn)?;
 
@@ -281,18 +281,18 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element_1 = OverpassElementJson {
+        let element_1 = OverpassElement {
             r#type: "node".into(),
             id: 1,
-            ..OverpassElementJson::mock()
+            ..OverpassElement::mock()
         };
         Element::insert(&element_1, &conn)?;
         Element::set_updated_at(&element_1.btcmap_id(), "2022-01-05T00:00:00Z", &conn)?;
 
-        let element_2 = OverpassElementJson {
+        let element_2 = OverpassElement {
             r#type: "node".into(),
             id: 2,
-            ..OverpassElementJson::mock()
+            ..OverpassElement::mock()
         };
         Element::insert(&element_2, &conn)?;
         Element::set_updated_at(&element_2.btcmap_id(), "2022-02-05T00:00:00Z", &conn)?;
@@ -318,7 +318,7 @@ mod test {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let element = OverpassElementJson::mock();
+        let element = OverpassElement::mock();
         Element::insert(&element, &conn)?;
 
         let app = test::init_service(
@@ -348,7 +348,7 @@ mod test {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let element = OverpassElementJson::mock();
+        let element = OverpassElement::mock();
         Element::insert(&element, &conn)?;
 
         let app = test::init_service(
@@ -380,7 +380,7 @@ mod test {
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
-        let element = OverpassElementJson::mock();
+        let element = OverpassElement::mock();
         Element::insert(&element, &conn)?;
 
         let app = test::init_service(

@@ -1,16 +1,13 @@
 use crate::model::event::Event;
 use crate::model::Element;
-use crate::model::OsmUserJson;
-use crate::model::OverpassElementJson;
 use crate::model::User;
 use crate::service::osm;
 use crate::service::overpass::query_bitcoin_merchants;
+use crate::service::overpass::OverpassElement;
 use crate::Error;
 use crate::Result;
-use reqwest::StatusCode;
 use rusqlite::Connection;
 use rusqlite::Transaction;
-use serde::Deserialize;
 use std::collections::HashSet;
 use std::time::SystemTime;
 use time::OffsetDateTime;
@@ -42,10 +39,7 @@ pub async fn run(db: Connection) -> Result<()> {
     Ok(())
 }
 
-async fn process_elements(
-    fresh_elements: Vec<OverpassElementJson>,
-    mut db: Connection,
-) -> Result<()> {
+async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connection) -> Result<()> {
     let tx: Transaction = db.transaction()?;
 
     let elements = Element::select_all(None, &tx)?;
@@ -209,11 +203,6 @@ async fn process_elements(
     Ok(())
 }
 
-#[derive(Deserialize)]
-struct OsmUserResponseJson {
-    user: OsmUserJson,
-}
-
 pub async fn insert_user_if_not_exists(user_id: i32, conn: &Connection) -> Result<()> {
     let db_user = User::select_by_id(user_id, conn)?;
 
@@ -222,17 +211,14 @@ pub async fn insert_user_if_not_exists(user_id: i32, conn: &Connection) -> Resul
         return Ok(());
     }
 
-    let url = format!("https://api.openstreetmap.org/api/0.6/user/{user_id}.json");
-    info!(url, "Querying OSM");
-    let res = reqwest::get(&url).await?;
+    let user = osm::get_user(user_id).await?;
 
-    if res.status() == StatusCode::NOT_FOUND {
-        return Ok(());
+    match user {
+        Some(user) => User::insert(user_id, &user, &conn)?,
+        None => Err(Error::Other(format!(
+            "User with id = {user_id} doesn't exist on OSM"
+        )))?,
     }
-
-    let res: OsmUserResponseJson = res.json().await?;
-
-    User::insert(user_id, &res.user, &conn)?;
 
     Ok(())
 }

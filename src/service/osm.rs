@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use reqwest::{Response, StatusCode};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use tracing::info;
 
 use crate::{Error, Result};
@@ -48,6 +49,103 @@ async fn _get_element(res: Response) -> Result<Option<OsmElement>> {
         } else {
             None
         });
+    } else {
+        match res.status() {
+            StatusCode::NOT_FOUND => return Ok(None),
+            _ => Err(Error::Other(format!(
+                "Unexpected response status: {}",
+                res.status()
+            )))?,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct OsmUserResponse {
+    user: OsmUser,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OsmUser {
+    pub id: i32,
+    pub display_name: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub account_created: OffsetDateTime,
+    pub description: String,
+    pub contributor_terms: ContributorTerms,
+    pub img: Option<Img>,
+    pub roles: Vec<String>,
+    pub changesets: Changesets,
+    pub traces: Traces,
+    pub blocks: Blocks,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ContributorTerms {
+    pub agreed: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Img {
+    pub href: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Changesets {
+    pub count: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Traces {
+    pub count: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Blocks {
+    received: BlocksReceived,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BlocksReceived {
+    count: i32,
+    active: i32,
+}
+
+impl OsmUser {
+    #[cfg(test)]
+    pub fn mock() -> OsmUser {
+        OsmUser {
+            id: 1,
+            display_name: "".into(),
+            account_created: OffsetDateTime::now_utc(),
+            description: "".into(),
+            contributor_terms: ContributorTerms { agreed: true },
+            img: None,
+            roles: vec![],
+            changesets: Changesets { count: 0 },
+            traces: Traces { count: 0 },
+            blocks: Blocks {
+                received: BlocksReceived {
+                    count: 0,
+                    active: 0,
+                },
+            },
+        }
+    }
+}
+
+pub async fn get_user(id: i32) -> Result<Option<OsmUser>> {
+    let url = format!("https://api.openstreetmap.org/api/0.6/user/{id}.json");
+    info!(url, "Querying OSM");
+    let res = reqwest::get(&url).await?;
+    info!(request_url = url, response_status = ?res.status(), "Got response from OSM");
+    _get_user(res).await
+}
+
+async fn _get_user(res: Response) -> Result<Option<OsmUser>> {
+    if res.status().is_success() {
+        let res: OsmUserResponse = res.json().await?;
+        return Ok(Some(res.user));
     } else {
         match res.status() {
             StatusCode::NOT_FOUND => return Ok(None),
@@ -129,6 +227,66 @@ mod test {
     #[actix_web::test]
     async fn get_element_unexpected_res_code() -> Result<()> {
         let res = super::_get_element(Builder::new().status(304).body("")?.into()).await;
+        assert!(res.is_err());
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn get_user() -> Result<()> {
+        let res_json = r#"
+        {
+            "version": "0.6",
+            "generator": "OpenStreetMap server",
+            "copyright": "OpenStreetMap and contributors",
+            "attribution": "http://www.openstreetmap.org/copyright",
+            "license": "http://opendatacommons.org/licenses/odbl/1-0/",
+            "user": {
+              "id": 1,
+              "display_name": "Steve",
+              "account_created": "2005-09-13T15:32:57Z",
+              "description": "",
+              "contributor_terms": {
+                "agreed": true
+              },
+              "roles": [],
+              "changesets": {
+                "count": 1139
+              },
+              "traces": {
+                "count": 23
+              },
+              "blocks": {
+                "received": {
+                  "count": 0,
+                  "active": 0
+                }
+              }
+            }
+          }
+        "#;
+
+        let res = super::_get_user(Builder::new().status(200).body(res_json)?.into()).await;
+        assert!(res.is_ok());
+        let user = res.unwrap();
+        assert!(user.is_some());
+        let user = user.unwrap();
+        assert_eq!(1, user.id);
+        assert_eq!(23, user.traces.count);
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn get_user_404() -> Result<()> {
+        let res = super::_get_user(Builder::new().status(404).body("")?.into()).await;
+        assert!(res.is_ok());
+        let user = res.unwrap();
+        assert!(user.is_none());
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn get_user_unexpected_res_code() -> Result<()> {
+        let res = super::_get_user(Builder::new().status(304).body("")?.into()).await;
         assert!(res.is_err());
         Ok(())
     }

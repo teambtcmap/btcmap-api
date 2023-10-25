@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::model::OsmUserJson;
 use crate::model::User;
 use crate::service::auth::get_admin_token;
+use crate::service::osm::OsmUser;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -30,7 +30,7 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: i32,
-    pub osm_json: OsmUserJson,
+    pub osm_json: OsmUser,
     pub tags: HashMap<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -153,7 +153,7 @@ mod tests {
     async fn get_one_row() -> Result<()> {
         let conn = db::setup_connection()?;
 
-        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        User::insert(1, &OsmUser::mock(), &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -175,11 +175,11 @@ mod tests {
 
         conn.execute(
             "INSERT INTO user (rowid, osm_json, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
-            [serde_json::to_string(&OsmUserJson::mock())?],
+            [serde_json::to_string(&OsmUser::mock())?],
         )?;
         conn.execute(
             "INSERT INTO user (rowid, osm_json, updated_at) VALUES (2, json(?), '2022-02-05T00:00:00Z')",
-            [serde_json::to_string(&OsmUserJson::mock())?],
+            [serde_json::to_string(&OsmUser::mock())?],
         )?;
 
         let app = test::init_service(
@@ -204,7 +204,7 @@ mod tests {
         db::migrate(&mut conn)?;
 
         let user_id = 1;
-        User::insert(user_id, &OsmUserJson::mock(), &conn)?;
+        User::insert(user_id, &OsmUser::mock(), &conn)?;
 
         let app = test::init_service(
             App::new()
@@ -231,7 +231,7 @@ mod tests {
         )?;
 
         let user_id = 1;
-        User::insert(user_id, &OsmUserJson::mock(), &conn)?;
+        User::insert(user_id, &OsmUser::mock(), &conn)?;
 
         let app = test::init_service(
             App::new()

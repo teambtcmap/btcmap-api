@@ -4,13 +4,11 @@ use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::Value;
 use time::OffsetDateTime;
 
-use super::OsmUserJson;
-
-use crate::Result;
+use crate::{service::osm::OsmUser, Result};
 
 pub struct User {
     pub id: i32,
-    pub osm_json: OsmUserJson,
+    pub osm_json: OsmUser,
     pub tags: HashMap<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
@@ -18,7 +16,7 @@ pub struct User {
 }
 
 impl User {
-    pub fn insert(id: i32, osm_json: &OsmUserJson, conn: &Connection) -> Result<()> {
+    pub fn insert(id: i32, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
         let query = r#"
             INSERT INTO user (
                 rowid,
@@ -128,7 +126,7 @@ impl User {
         Ok(())
     }
 
-    pub fn set_osm_json(id: i32, osm_json: &OsmUserJson, conn: &Connection) -> Result<()> {
+    pub fn set_osm_json(id: i32, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
         let query = r#"
             UPDATE user
             SET osm_json = json(:osm_json)
@@ -150,7 +148,7 @@ impl User {
 const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
     |row: &Row| -> rusqlite::Result<User> {
         let osm_json: String = row.get(1)?;
-        let osm_json: OsmUserJson = serde_json::from_str(&osm_json).unwrap();
+        let osm_json: OsmUser = serde_json::from_str(&osm_json).unwrap();
 
         let tags: String = row.get(2)?;
         let tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
@@ -170,16 +168,12 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
 mod test {
     use std::collections::HashMap;
 
-    use crate::{
-        command::db,
-        model::{OsmUserJson, User},
-        Result,
-    };
+    use crate::{command::db, model::User, service::osm::OsmUser, Result};
 
     #[test]
     fn insert() -> Result<()> {
         let conn = db::setup_connection()?;
-        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        User::insert(1, &OsmUser::mock(), &conn)?;
         let users = User::select_all(None, &conn)?;
         assert_eq!(1, users.len());
         Ok(())
@@ -188,9 +182,9 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = db::setup_connection()?;
-        User::insert(1, &OsmUserJson::mock(), &conn)?;
-        User::insert(2, &OsmUserJson::mock(), &conn)?;
-        User::insert(3, &OsmUserJson::mock(), &conn)?;
+        User::insert(1, &OsmUser::mock(), &conn)?;
+        User::insert(2, &OsmUser::mock(), &conn)?;
+        User::insert(3, &OsmUser::mock(), &conn)?;
         let reports = User::select_all(None, &conn)?;
         assert_eq!(3, reports.len());
         Ok(())
@@ -201,15 +195,15 @@ mod test {
         let conn = db::setup_connection()?;
         conn.execute(
             "INSERT INTO user (rowid, osm_json, updated_at) VALUES (1, json(?), '2020-01-01T00:00:00Z')",
-            [serde_json::to_string(&OsmUserJson::mock())?],
+            [serde_json::to_string(&OsmUser::mock())?],
         )?;
         conn.execute(
             "INSERT INTO user (rowid, osm_json, updated_at) VALUES (2, json(?), '2020-01-02T00:00:00Z')",
-            [serde_json::to_string(&OsmUserJson::mock())?],
+            [serde_json::to_string(&OsmUser::mock())?],
         )?;
         conn.execute(
             "INSERT INTO user (rowid, osm_json, updated_at) VALUES (3, json(?), '2020-01-03T00:00:00Z')",
-            [serde_json::to_string(&OsmUserJson::mock())?],
+            [serde_json::to_string(&OsmUser::mock())?],
         )?;
         assert_eq!(
             2,
@@ -221,7 +215,7 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = db::setup_connection()?;
-        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        User::insert(1, &OsmUser::mock(), &conn)?;
         assert!(User::select_by_id(1, &conn)?.is_some());
         Ok(())
     }
@@ -235,7 +229,7 @@ mod test {
         let tag_2_value = "test";
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
-        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        User::insert(1, &OsmUser::mock(), &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();
         assert!(user.tags.is_empty());
         User::merge_tags(1, &tags, &conn)?;
@@ -251,14 +245,14 @@ mod test {
     #[test]
     fn set_osm_json() -> Result<()> {
         let conn = db::setup_connection()?;
-        let user = OsmUserJson {
+        let user = OsmUser {
             id: 1,
-            ..OsmUserJson::mock()
+            ..OsmUser::mock()
         };
         User::insert(user.id, &user, &conn)?;
-        let user = OsmUserJson {
+        let user = OsmUser {
             id: 2,
-            ..OsmUserJson::mock()
+            ..OsmUser::mock()
         };
         User::set_osm_json(1, &user, &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();

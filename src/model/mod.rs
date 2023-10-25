@@ -15,9 +15,3 @@ pub use user::User;
 
 pub mod token;
 pub use token::Token;
-
-pub mod overpass_element_json;
-pub use overpass_element_json::OverpassElementJson;
-
-pub mod osm_user_json;
-pub use osm_user_json::OsmUserJson;
