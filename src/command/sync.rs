@@ -1,18 +1,15 @@
 use crate::model::event::Event;
-use crate::model::user;
 use crate::model::Element;
+use crate::model::OsmUserJson;
 use crate::model::OverpassElementJson;
 use crate::model::User;
 use crate::service::overpass::query_bitcoin_merchants;
 use crate::Error;
 use crate::Result;
 use reqwest::StatusCode;
-use rusqlite::named_params;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
 use serde::Deserialize;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
@@ -78,13 +75,8 @@ async fn process_elements(
                 )))?,
             };
 
-            let default_bitcoin_tag_value = "no".to_string();
-
             if fresh_element.visible.unwrap_or(true) {
-                let bitcoin_tag_value = fresh_element
-                    .tags
-                    .get("currency:XBT")
-                    .unwrap_or(&default_bitcoin_tag_value);
+                let bitcoin_tag_value = fresh_element.get_tag_value("currency:XBT", "no");
                 info!(bitcoin_tag_value);
 
                 if bitcoin_tag_value == "yes" {
@@ -96,7 +88,7 @@ async fn process_elements(
                 }
             }
 
-            insert_user_if_not_exists(fresh_element.uid, &tx).await;
+            insert_user_if_not_exists(fresh_element.uid, &tx).await?;
 
             Event::insert(fresh_element.uid, &element.id, "delete", &tx)?;
 
@@ -136,7 +128,7 @@ async fn process_elements(
                     );
 
                     if let Some(user_id) = user_id {
-                        insert_user_if_not_exists(user_id, &tx).await;
+                        insert_user_if_not_exists(user_id, &tx).await?;
                     }
 
                     if fresh_element.changeset != element.overpass_json.changeset {
@@ -181,7 +173,7 @@ async fn process_elements(
                 info!(btcmap_id, "Element does not exist, inserting");
 
                 if let Some(user_id) = user_id {
-                    insert_user_if_not_exists(user_id, &tx).await;
+                    insert_user_if_not_exists(user_id, &tx).await?;
                 }
 
                 Element::insert(&fresh_element, &tx)?;
@@ -230,9 +222,18 @@ struct OsmElementJson {
     //r#type: String,
     //id: i64,
     visible: Option<bool>,
-    tags: HashMap<String, String>,
+    tags: Option<HashMap<String, String>>,
     user: String,
     uid: i32,
+}
+
+impl OsmElementJson {
+    pub fn get_tag_value(&self, name: &str, default: &str) -> String {
+        match &self.tags {
+            Some(tags) => tags.get(name).map(|it| it.into()).unwrap_or(default.into()),
+            None => default.into(),
+        }
+    }
 }
 
 async fn fetch_element(element_type: &str, element_id: i64) -> Result<Option<OsmElementJson>> {
@@ -256,62 +257,30 @@ async fn fetch_element(element_type: &str, element_id: i64) -> Result<Option<Osm
     }
 }
 
-pub async fn insert_user_if_not_exists(user_id: i32, conn: &Connection) {
-    if user_id == 0 {
-        return;
-    }
+#[derive(Deserialize)]
+struct OsmUserResponseJson {
+    user: OsmUserJson,
+}
 
-    let db_user: Option<User> = conn
-        .query_row(
-            user::SELECT_BY_ID,
-            &[(":id", &user_id)],
-            user::SELECT_BY_ID_MAPPER,
-        )
-        .optional()
-        .unwrap();
+pub async fn insert_user_if_not_exists(user_id: i32, conn: &Connection) -> Result<()> {
+    let db_user = User::select_by_id(user_id, conn)?;
 
     if db_user.is_some() {
         info!(user_id, "User already exists");
-        return;
+        return Ok(());
     }
 
     let url = format!("https://api.openstreetmap.org/api/0.6/user/{user_id}.json");
     info!(url, "Querying OSM");
-    let res = reqwest::get(&url).await;
+    let res = reqwest::get(&url).await?;
 
-    if let Err(_) = res {
-        error!(user_id, "Failed to fetch user");
-        return;
+    if res.status() == StatusCode::NOT_FOUND {
+        return Ok(());
     }
 
-    let body = res.unwrap().text().await;
+    let res: OsmUserResponseJson = res.json().await?;
 
-    if let Err(_) = body {
-        error!(user_id, "Failed to fetch user");
-        return;
-    }
+    User::insert(user_id, &res.user, &conn)?;
 
-    let body: serde_json::Result<Value> = serde_json::from_str(&body.unwrap());
-
-    if let Err(_) = body {
-        error!(user_id, "Failed to fetch user");
-        return;
-    }
-
-    let body = body.unwrap();
-    let user: Option<&Value> = body.get("user");
-
-    if user.is_none() {
-        error!(user_id, "Failed to fetch user");
-        return;
-    }
-
-    conn.execute(
-        user::INSERT,
-        named_params! {
-            ":id": user_id,
-            ":osm_json": serde_json::to_string(user.unwrap()).unwrap()
-        },
-    )
-    .unwrap();
+    Ok(())
 }

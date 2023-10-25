@@ -1,26 +1,18 @@
-use crate::model::user;
 use crate::model::User;
 use crate::Connection;
 use crate::Error;
 use crate::Result;
 use reqwest::StatusCode;
-use rusqlite::named_params;
 use serde_json::Value;
 use tokio::time::sleep;
 use tokio::time::Duration;
 use tracing::error;
 use tracing::info;
 
-pub async fn run(db: Connection) -> Result<()> {
+pub async fn run(conn: Connection) -> Result<()> {
     info!("Syncing users");
 
-    let users: Vec<User> = db
-        .prepare(user::SELECT_ALL)?
-        .query_map(
-            named_params! { ":limit": std::i32::MAX },
-            user::SELECT_ALL_MAPPER,
-        )?
-        .collect::<Result<_, _>>()?;
+    let users = User::select_all(None, &conn)?;
 
     info!(users = users.len(), "Loaded all users from database");
 
@@ -60,13 +52,10 @@ pub async fn run(db: Connection) -> Result<()> {
 
         if fresh_user_str != db_user_str {
             info!("Change detected");
-
-            db.execute(
-                user::UPDATE_OSM_JSON,
-                named_params! {
-                    ":id": cached_user.id,
-                    ":osm_json": fresh_user_str,
-                },
+            User::set_osm_json(
+                cached_user.id,
+                &serde_json::from_value(fresh_user.clone())?,
+                &conn,
             )?;
         }
 

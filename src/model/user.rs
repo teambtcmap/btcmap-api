@@ -1,93 +1,159 @@
-use rusqlite::Result;
-use rusqlite::Row;
-use serde_json::Map;
+use std::collections::HashMap;
+
+use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::Value;
+use time::OffsetDateTime;
 
 use super::OsmUserJson;
+
+use crate::Result;
 
 pub struct User {
     pub id: i32,
     pub osm_json: OsmUserJson,
-    pub tags: Map<String, Value>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: String,
+    pub tags: HashMap<String, Value>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+    pub deleted_at: Option<OffsetDateTime>,
 }
 
-pub static INSERT: &str = r#"
-    INSERT INTO user (
-        id,
-        osm_json
-    ) VALUES (
-        :id,
-        :osm_json
-    )
-"#;
+impl User {
+    pub fn insert(id: i32, osm_json: &OsmUserJson, conn: &Connection) -> Result<()> {
+        let query = r#"
+            INSERT INTO user (
+                rowid,
+                osm_json
+            ) VALUES (
+                :id,
+                :osm_json
+            )
+        "#;
 
-pub static SELECT_ALL: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM user
-    ORDER BY updated_at
-    LIMIT :limit
-"#;
+        conn.execute(
+            query,
+            named_params! {
+                ":id": id,
+                ":osm_json": serde_json::to_string(osm_json)?,
+            },
+        )?;
 
-pub static SELECT_ALL_MAPPER: fn(&Row) -> Result<User> = full_mapper();
+        Ok(())
+    }
 
-pub static SELECT_BY_ID: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM user
-    WHERE id = :id
-"#;
+    pub fn select_all(limit: Option<i32>, conn: &Connection) -> Result<Vec<User>> {
+        let query = r#"
+            SELECT
+                rowid,
+                osm_json,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM user
+            ORDER BY updated_at, rowid
+            LIMIT :limit
+        "#;
 
-pub static SELECT_BY_ID_MAPPER: fn(&Row) -> Result<User> = full_mapper();
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! { ":limit": limit.unwrap_or(std::i32::MAX) },
+                mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
 
-pub static SELECT_UPDATED_SINCE: &str = r#"
-    SELECT
-        id,
-        osm_json,
-        tags,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM user
-    WHERE updated_at > :updated_since
-    ORDER BY updated_at
-    LIMIT :limit
-"#;
+    pub fn select_updated_since(
+        updated_since: &str,
+        limit: Option<i32>,
+        conn: &Connection,
+    ) -> Result<Vec<User>> {
+        let query = r#"
+            SELECT
+                rowid,
+                osm_json,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM user
+            WHERE updated_at > :updated_since
+            ORDER BY updated_at, rowid
+            LIMIT :limit
+        "#;
 
-pub static SELECT_UPDATED_SINCE_MAPPER: fn(&Row) -> Result<User> = full_mapper();
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(std::i32::MAX) },
+                mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
 
-pub static UPDATE_TAGS: &str = r#"
-    UPDATE user
-    SET tags = :tags
-    WHERE id = :user_id
-"#;
+    pub fn select_by_id(id: i32, conn: &Connection) -> Result<Option<User>> {
+        let query = r#"
+            SELECT
+                rowid,
+                osm_json,
+                tags,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM user
+            WHERE rowid = :id
+        "#;
 
-pub static UPDATE_OSM_JSON: &str = r#"
-    UPDATE user
-    SET osm_json = :osm_json
-    WHERE id = :id
-"#;
+        Ok(conn
+            .query_row(query, named_params! { ":id": id }, mapper())
+            .optional()?)
+    }
 
-const fn full_mapper() -> fn(&Row) -> Result<User> {
-    |row: &Row| -> Result<User> {
+    pub fn merge_tags(
+        id: i32,
+        tags: &HashMap<String, Value>,
+        conn: &Connection,
+    ) -> crate::Result<()> {
+        let query = r#"
+            UPDATE user
+            SET tags = json_patch(tags, :tags)
+            WHERE rowid = :id
+        "#;
+
+        conn.execute(
+            query,
+            named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
+        )?;
+
+        Ok(())
+    }
+
+    pub fn set_osm_json(id: i32, osm_json: &OsmUserJson, conn: &Connection) -> Result<()> {
+        let query = r#"
+            UPDATE user
+            SET osm_json = json(:osm_json)
+            WHERE rowid = :id
+        "#;
+
+        conn.execute(
+            query,
+            named_params! {
+                ":id": id,
+                ":osm_json": serde_json::to_string(osm_json)?,
+            },
+        )?;
+
+        Ok(())
+    }
+}
+
+const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
+    |row: &Row| -> rusqlite::Result<User> {
         let osm_json: String = row.get(1)?;
         let osm_json: OsmUserJson = serde_json::from_str(&osm_json).unwrap();
 
         let tags: String = row.get(2)?;
-        let tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
+        let tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(User {
             id: row.get(0)?,
@@ -97,5 +163,106 @@ const fn full_mapper() -> fn(&Row) -> Result<User> {
             updated_at: row.get(4)?,
             deleted_at: row.get(5)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+
+    use crate::{
+        command::db,
+        model::{OsmUserJson, User},
+        Result,
+    };
+
+    #[test]
+    fn insert() -> Result<()> {
+        let conn = db::setup_connection()?;
+        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        let users = User::select_all(None, &conn)?;
+        assert_eq!(1, users.len());
+        Ok(())
+    }
+
+    #[test]
+    fn select_all() -> Result<()> {
+        let conn = db::setup_connection()?;
+        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        User::insert(2, &OsmUserJson::mock(), &conn)?;
+        User::insert(3, &OsmUserJson::mock(), &conn)?;
+        let reports = User::select_all(None, &conn)?;
+        assert_eq!(3, reports.len());
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since() -> Result<()> {
+        let conn = db::setup_connection()?;
+        conn.execute(
+            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (1, json(?), '2020-01-01T00:00:00Z')",
+            [serde_json::to_string(&OsmUserJson::mock())?],
+        )?;
+        conn.execute(
+            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (2, json(?), '2020-01-02T00:00:00Z')",
+            [serde_json::to_string(&OsmUserJson::mock())?],
+        )?;
+        conn.execute(
+            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (3, json(?), '2020-01-03T00:00:00Z')",
+            [serde_json::to_string(&OsmUserJson::mock())?],
+        )?;
+        assert_eq!(
+            2,
+            User::select_updated_since("2020-01-01T00:00:00Z", None, &conn)?.len()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id() -> Result<()> {
+        let conn = db::setup_connection()?;
+        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        assert!(User::select_by_id(1, &conn)?.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn merge_tags() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let tag_1_name = "foo";
+        let tag_1_value = "bar";
+        let tag_2_name = "qwerty";
+        let tag_2_value = "test";
+        let mut tags = HashMap::new();
+        tags.insert(tag_1_name.into(), tag_1_value.into());
+        User::insert(1, &OsmUserJson::mock(), &conn)?;
+        let user = User::select_by_id(1, &conn)?.unwrap();
+        assert!(user.tags.is_empty());
+        User::merge_tags(1, &tags, &conn)?;
+        let user = User::select_by_id(1, &conn)?.unwrap();
+        assert_eq!(1, user.tags.len());
+        tags.insert(tag_2_name.into(), tag_2_value.into());
+        User::merge_tags(1, &tags, &conn)?;
+        let user = User::select_by_id(1, &conn)?.unwrap();
+        assert_eq!(2, user.tags.len());
+        Ok(())
+    }
+
+    #[test]
+    fn set_osm_json() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let user = OsmUserJson {
+            id: 1,
+            ..OsmUserJson::mock()
+        };
+        User::insert(user.id, &user, &conn)?;
+        let user = OsmUserJson {
+            id: 2,
+            ..OsmUserJson::mock()
+        };
+        User::set_osm_json(1, &user, &conn)?;
+        let user = User::select_by_id(1, &conn)?.unwrap();
+        assert_eq!(2, user.osm_json.id);
+        Ok(())
     }
 }
