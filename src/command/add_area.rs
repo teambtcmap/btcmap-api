@@ -7,7 +7,7 @@ use crate::{model::Area, Error, Result};
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 
-pub async fn run(conn: &mut Connection) -> Result<()> {
+pub async fn run(conn: &Connection) -> Result<()> {
     println!("Adding area");
     let mut tags = HashMap::new();
 
@@ -99,8 +99,8 @@ pub async fn run(conn: &mut Connection) -> Result<()> {
         Some(_) => Err(Error::Other(
             "Area with this url_alias already exists".into(),
         ))?,
-        None => Area::insert(&tags, &conn)?,
-    }
+        None => Area::insert(&tags, conn)?,
+    };
 
     Ok(())
 }

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use rusqlite::Connection;
 use serde_json::Value;
 use tracing::warn;
@@ -16,8 +14,8 @@ pub fn run(conn: &Connection) -> Result<()> {
             if geo_json.is_string() {
                 warn!(area.id, "Found improperly formatted geo_json tag");
                 let unescaped = geo_json.as_str().unwrap().replace("\\\"", "\"");
-                let geo_json: HashMap<String, Value> = serde_json::from_str(&unescaped)?;
-                Area::insert_tag_as_json_obj(area.id, "geo_json", &geo_json, &conn)?;
+                let geo_json: Value = serde_json::from_str(&unescaped)?;
+                Area::set_tag(area.id, "geo_json", &geo_json, &conn)?;
                 warn!(area.id, "Fixed geo_json tag");
             }
         }

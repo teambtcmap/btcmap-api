@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, num::TryFromIntError};
 
 use actix_web::{http::header::ContentType, HttpResponse, ResponseError};
 use reqwest::StatusCode;
@@ -12,6 +12,7 @@ pub enum Error {
     Reqwest(reqwest::Error),
     Serde(serde_json::Error),
     Api(ApiError),
+    DbTableRowNotFound,
     Other(String),
 }
 
@@ -25,6 +26,7 @@ impl Display for Error {
             Error::Reqwest(err) => err.fmt(f),
             Error::Serde(err) => err.fmt(f),
             Error::Api(err) => err.fmt(f),
+            Error::DbTableRowNotFound => write!(f, "DbTableRowNotFound"),
             Error::Other(err) => write!(f, "{}", err),
         }
     }
@@ -63,6 +65,12 @@ impl From<serde_json::Error> for Error {
 impl From<Error> for std::io::Error {
     fn from(error: Error) -> Self {
         std::io::Error::new(std::io::ErrorKind::Other, format!("{error}"))
+    }
+}
+
+impl From<TryFromIntError> for Error {
+    fn from(_: TryFromIntError) -> Self {
+        Error::Other("Integer casting failed".into())
     }
 }
 

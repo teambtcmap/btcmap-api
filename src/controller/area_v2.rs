@@ -163,7 +163,7 @@ async fn patch_by_url_alias(
 
     match Area::select_by_url_alias(&area_url_alias, &conn)? {
         Some(area) => {
-            Area::merge_tags(area.id, &args.tags, &conn)?;
+            Area::patch_tags(area.id, &args.tags, &conn)?;
         }
         None => {
             return Err(ApiError::new(
@@ -192,7 +192,7 @@ async fn patch_tags(
     );
 
     match Area::select_by_url_alias(&url_alias, &conn)? {
-        Some(area) => Area::merge_tags(area.id, &args, &conn)?,
+        Some(area) => Area::patch_tags(area.id, &args, &conn)?,
         None => {
             return Err(ApiError::new(
                 404,
@@ -228,9 +228,9 @@ async fn post_tags(
     match area {
         Some(area) => {
             if args.value.len() > 0 {
-                Area::insert_tag_as_str(area.id, &args.name, &args.value, &conn)?;
+                Area::set_tag(area.id, &args.name, &args.value.clone().into(), &conn)?;
             } else {
-                Area::delete_tag(area.id, &args.name, &conn)?;
+                Area::remove_tag(area.id, &args.name, &conn)?;
             }
 
             Ok(HttpResponse::Created())

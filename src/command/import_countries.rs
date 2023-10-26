@@ -47,8 +47,8 @@ pub fn run(path: &str, conn: &mut Connection) -> Result<()> {
 
             match Area::select_by_url_alias(&json.id, &tx)? {
                 Some(area) => {
-                    Area::merge_tags(area.id, &json.tags, &tx)?;
-                    info!(json.id, "Merged tags into an existing area");
+                    Area::patch_tags(area.id, &json.tags, &tx)?;
+                    info!(json.id, "Patched tags for an existing area");
                 }
                 None => {
                     Area::insert(&json.tags, &tx)?;
