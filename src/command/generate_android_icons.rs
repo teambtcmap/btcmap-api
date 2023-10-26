@@ -1230,6 +1230,10 @@ impl OverpassElement {
             icon_id = "paragliding"
         }
 
+        if sport == "fitness" {
+            icon_id = "fitness_center"
+        }
+
         if sport == "free_flying" {
             icon_id = "paragliding"
         }
