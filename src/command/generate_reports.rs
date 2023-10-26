@@ -2,6 +2,7 @@ use crate::model::report::Report;
 use crate::model::Area;
 use crate::service::overpass;
 use crate::service::overpass::OverpassElement;
+use crate::Error;
 use crate::Result;
 use geo::Contains;
 use geo::LineString;
@@ -21,12 +22,22 @@ pub async fn run(mut db: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
 
-    let existing_report = Report::select_by_area_url_alias_and_date("", &today, &db)?;
+    let existing_reports = Report::select_updated_since(&today.to_string(), None, &db)?;
 
-    if existing_report.is_some() {
-        info!("Found existing report, aborting");
+    if !existing_reports.is_empty() {
+        info!("Found existing reports, aborting");
         return Ok(());
     }
+
+    let earth = Area::select_by_url_alias("earth", &db)?;
+
+    if earth.is_none() {
+        Err(Error::Other(
+            "Can't find an area with url_alias = earth".into(),
+        ))?
+    }
+
+    let earth = earth.unwrap();
 
     let elements = overpass::query_bitcoin_merchants().await?;
 
@@ -38,7 +49,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
     let tx = db.transaction()?;
 
     let report_tags = generate_report_tags(&elements.iter().collect::<Vec<_>>())?;
-    insert_report("", &report_tags, &tx).await?;
+    insert_report(earth.id, &report_tags, &tx).await?;
 
     for area in areas {
         info!(area.id, "Generating report");
@@ -106,7 +117,7 @@ pub async fn run(mut db: Connection) -> Result<()> {
 
         info!(area.id, elements = area_elements.len(), "Processing area");
         let report_tags = generate_report_tags(&area_elements)?;
-        insert_report(area.tags["url_alias"].as_str().unwrap(), &report_tags, &tx).await?;
+        insert_report(area.id, &report_tags, &tx).await?;
     }
 
     tx.commit()?;
@@ -223,14 +234,14 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String,
 }
 
 async fn insert_report(
-    area_url_alias: &str,
+    area_id: i32,
     tags: &HashMap<String, Value>,
     conn: &Connection,
 ) -> Result<()> {
     let date = OffsetDateTime::now_utc().date();
-    info!(area_url_alias, ?date, ?tags, "Inserting new report");
-    Report::insert(area_url_alias, &date, &tags, conn)?;
-    info!(area_url_alias, ?date, "Inserted new report");
+    info!(area_id, ?date, ?tags, "Inserting new report");
+    Report::insert(area_id, &date, &tags, conn)?;
+    info!(area_id, ?date, "Inserted new report");
     Ok(())
 }
 
@@ -249,7 +260,7 @@ mod test {
         db::migrate(&mut conn)?;
 
         for i in 1..100 {
-            super::insert_report(&i.to_string(), &HashMap::new(), &conn).await?;
+            super::insert_report(i, &HashMap::new(), &conn).await?;
         }
 
         Ok(())

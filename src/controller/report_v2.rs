@@ -17,7 +17,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use time::format_description::well_known::Rfc3339;
-use time::Date;
 use time::OffsetDateTime;
 use tracing::warn;
 
@@ -31,7 +30,7 @@ pub struct GetArgs {
 pub struct GetItem {
     pub id: i32,
     pub area_id: String,
-    pub date: Date,
+    pub date: String,
     pub tags: HashMap<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -42,10 +41,16 @@ pub struct GetItem {
 
 impl Into<GetItem> for Report {
     fn into(self) -> GetItem {
+        let area_id = if self.area_url_alias == "earth" {
+            "".into()
+        } else {
+            self.area_url_alias
+        };
+
         GetItem {
             id: self.id,
-            area_id: self.area_url_alias,
-            date: self.date,
+            area_id,
+            date: self.date.to_string(),
             tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -129,7 +134,7 @@ async fn patch_tags(
 mod tests {
     use super::*;
     use crate::command::db;
-    use crate::model::token;
+    use crate::model::{token, Area};
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -160,12 +165,10 @@ mod tests {
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
         let conn = db::setup_connection()?;
-        Report::insert(
-            "",
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &conn,
-        )?;
+        let mut area_tags = HashMap::new();
+        area_tags.insert("url_alias".into(), "test".into());
+        Area::insert(&area_tags, &conn)?;
+        Report::insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new(), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -182,57 +185,54 @@ mod tests {
     async fn get_with_limit() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
-
+        let mut area_tags = HashMap::new();
+        area_tags.insert("url_alias".into(), "test".into());
+        Area::insert(&area_tags, &conn)?;
         conn.execute(
             "INSERT INTO report (
-                area_url_alias,
+                area_id,
                 date,
                 updated_at
             ) VALUES (
-                'test1',
+                1,
                 '2023-05-06',
                 '2023-05-06T00:00:00Z'
             )",
             [],
         )?;
-
         conn.execute(
             "INSERT INTO report (
-                area_url_alias,
+                area_id,
                 date,
                 updated_at
             ) VALUES (
-                'test1',
+                1,
                 '2023-05-07',
                 '2023-05-07T00:00:00Z'
             )",
             [],
         )?;
-
         conn.execute(
             "INSERT INTO report (
-                area_url_alias,
+                area_id,
                 date,
                 updated_at
             ) VALUES (
-                'test1',
+                1,
                 '2023-05-08',
                 '2023-05-08T00:00:00Z'
             )",
             [],
         )?;
-
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get().uri("/?limit=2").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 2);
-
         Ok(())
     }
 
@@ -240,29 +240,28 @@ mod tests {
     async fn get_updated_since() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
-
+        let mut area_tags = HashMap::new();
+        area_tags.insert("url_alias".into(), "test".into());
+        Area::insert(&area_tags, &conn)?;
         conn.execute(
-            "INSERT INTO report (area_url_alias, date, updated_at) VALUES ('', '2022-01-05', '2022-01-05T00:00:00Z')",
+            "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-01-05', '2022-01-05T00:00:00Z')",
             [],
         )?;
         conn.execute(
-            "INSERT INTO report (area_url_alias, date, updated_at) VALUES ('', '2022-02-05', '2022-02-05T00:00:00Z')",
+            "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-02-05', '2022-02-05T00:00:00Z')",
             [],
         )?;
-
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get()
             .uri("/?updated_since=2022-01-10")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
-
         Ok(())
     }
 
@@ -270,25 +269,24 @@ mod tests {
     async fn patch_tags() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
-
+        let mut area_tags = HashMap::new();
+        area_tags.insert("url_alias".into(), "test".into());
+        Area::insert(&area_tags, &conn)?;
         let admin_token = "test";
         conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-
         conn.execute(
-            "INSERT INTO report (area_url_alias, date, updated_at) VALUES ('', '2020-01-01', '2022-01-05T00:00:00Z')",
+            "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2020-01-01', '2022-01-05T00:00:00Z')",
             [],
         )?;
-
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(super::patch_tags),
         )
         .await;
-
         let req = TestRequest::patch()
             .uri(&format!("/1/tags"))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
@@ -296,7 +294,6 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-
         Ok(())
     }
 }
