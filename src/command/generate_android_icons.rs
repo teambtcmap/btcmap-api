@@ -1066,6 +1066,14 @@ impl OverpassElement {
             icon_id = "menu_book";
         }
 
+        if amenity == "social_facility" {
+            icon_id = "group"
+        }
+
+        if amenity == "photo_booth" {
+            icon_id = "photo_camera"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -1168,6 +1176,10 @@ impl OverpassElement {
 
         if leisure == "dog_park" {
             icon_id = "pets"
+        }
+
+        if leisure == "fitness_station" {
+            icon_id = "fitness_center"
         }
 
         if healthcare == "dentist" {
