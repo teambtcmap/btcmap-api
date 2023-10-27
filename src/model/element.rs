@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use rusqlite::named_params;
 use rusqlite::OptionalExtension;
+use rusqlite::Transaction;
+use rusqlite::TransactionBehavior;
 
 use rusqlite::Connection;
 use rusqlite::Row;
@@ -10,6 +12,7 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 use crate::service::overpass::OverpassElement;
+use crate::Error;
 use crate::Result;
 
 pub struct Element {
@@ -22,7 +25,8 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn insert(overpass_json: &OverpassElement, conn: &Connection) -> Result<()> {
+    pub fn insert(overpass_json: &OverpassElement, conn: &Connection) -> Result<Element> {
+        let tx = Transaction::new_unchecked(conn, TransactionBehavior::Deferred)?;
         let query = r#"
             INSERT INTO element (
                 id,
@@ -32,7 +36,6 @@ impl Element {
                 :overpass_json
             )
         "#;
-
         conn.execute(
             query,
             named_params! {
@@ -40,8 +43,10 @@ impl Element {
                 ":overpass_json": serde_json::to_string(overpass_json)?,
             },
         )?;
-
-        Ok(())
+        let element = Element::select_by_id(&overpass_json.btcmap_id(), &tx)?
+            .ok_or(Error::DbTableRowNotFound)?;
+        tx.commit()?;
+        Ok(element)
     }
 
     pub fn select_all(limit: Option<i32>, conn: &Connection) -> Result<Vec<Element>> {

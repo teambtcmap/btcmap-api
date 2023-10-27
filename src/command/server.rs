@@ -129,6 +129,7 @@ pub async fn run() -> Result<()> {
                     )
                     .service(scope("tiles").service(controller::tile::get)),
             )
+            .service(scope("v3").service(scope("elements").service(controller::element_v3::get)))
     })
     .bind(("127.0.0.1", 8000))?
     .run()

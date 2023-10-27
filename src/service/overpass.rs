@@ -28,7 +28,7 @@ struct Osm3s {
     timestamp_osm_base: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct OverpassElement {
     pub r#type: String,
     pub id: i64,
@@ -46,7 +46,7 @@ pub struct OverpassElement {
     pub members: Option<Value>,  // for relations only
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct Bounds {
     pub minlon: f64,
     pub maxlon: f64,
