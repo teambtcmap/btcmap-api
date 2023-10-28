@@ -922,6 +922,10 @@ impl OverpassElement {
             icon_id = "delete"
         }
 
+        if amenity == "waste_disposal" {
+            icon_id = "delete"
+        }
+
         if amenity == "payment_centre" {
             icon_id = "currency_exchange"
         }
