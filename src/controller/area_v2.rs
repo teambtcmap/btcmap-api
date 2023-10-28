@@ -36,7 +36,8 @@ struct PostJsonArgs {
 
 #[derive(Deserialize)]
 pub struct GetArgs {
-    updated_since: Option<String>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_since: Option<OffsetDateTime>,
     limit: Option<i32>,
 }
 
@@ -163,7 +164,7 @@ async fn patch_by_url_alias(
 
     match Area::select_by_url_alias(&area_url_alias, &conn)? {
         Some(area) => {
-            Area::patch_tags(area.id, &args.tags, &conn)?;
+            area.patch_tags(&args.tags, &conn)?;
         }
         None => {
             return Err(ApiError::new(
@@ -192,7 +193,7 @@ async fn patch_tags(
     );
 
     match Area::select_by_url_alias(&url_alias, &conn)? {
-        Some(area) => Area::patch_tags(area.id, &args, &conn)?,
+        Some(area) => area.patch_tags(&args, &conn)?,
         None => {
             return Err(ApiError::new(
                 404,
@@ -228,9 +229,11 @@ async fn post_tags(
     match area {
         Some(area) => {
             if args.value.len() > 0 {
-                Area::set_tag(area.id, &args.name, &args.value.clone().into(), &conn)?;
+                let mut patch_set = HashMap::new();
+                patch_set.insert(args.name.clone(), Value::String(args.value.clone()));
+                area.patch_tags(&patch_set, &conn)?;
             } else {
-                Area::remove_tag(area.id, &args.name, &conn)?;
+                area.remove_tag(&args.name, &conn)?;
             }
 
             Ok(HttpResponse::Created())
@@ -257,7 +260,7 @@ async fn delete_by_url_alias(
 
     match area {
         Some(area) => {
-            Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
+            area.set_deleted_at(Some(OffsetDateTime::now_utc()), &conn)?;
             Ok(HttpResponse::Ok())
         }
         None => Err(ApiError::new(
@@ -272,6 +275,7 @@ mod tests {
     use super::*;
     use crate::command::db;
     use crate::model::token;
+    use crate::test::mock_conn;
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -352,7 +356,7 @@ mod tests {
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
 
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), "test".into());
@@ -374,7 +378,7 @@ mod tests {
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
 
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), "test".into());
@@ -398,7 +402,7 @@ mod tests {
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let area_url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));

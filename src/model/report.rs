@@ -172,13 +172,13 @@ mod test {
 
     use time::OffsetDateTime;
 
-    use crate::{command::db, model::Area, Result};
+    use crate::{model::Area, test::mock_conn, Result};
 
     use super::Report;
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(&area_tags, &conn)?;
@@ -190,7 +190,7 @@ mod test {
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(&area_tags, &conn)?;
@@ -204,7 +204,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(&area_tags, &conn)?;
@@ -229,7 +229,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(&area_tags, &conn)?;
@@ -240,7 +240,7 @@ mod test {
 
     #[test]
     fn merge_tags() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(&area_tags, &conn)?;

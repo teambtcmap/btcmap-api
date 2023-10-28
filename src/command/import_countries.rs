@@ -47,7 +47,7 @@ pub fn run(path: &str, conn: &mut Connection) -> Result<()> {
 
             match Area::select_by_url_alias(&json.id, &tx)? {
                 Some(area) => {
-                    Area::patch_tags(area.id, &json.tags, &tx)?;
+                    area.patch_tags(&json.tags, &tx)?;
                     info!(json.id, "Patched tags for an existing area");
                 }
                 None => {

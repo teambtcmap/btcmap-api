@@ -290,20 +290,20 @@ mod test {
     use serde_json::Value;
     use time::{macros::datetime, OffsetDateTime};
 
-    use crate::{command::db, service::overpass::OverpassElement, Result};
+    use crate::{service::overpass::OverpassElement, test::mock_conn, Result};
 
     use super::Element;
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Element::insert(&OverpassElement::mock(1), &conn)?;
         Ok(())
     }
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Element::insert(&OverpassElement::mock(1), &conn)?;
         Element::insert(&OverpassElement::mock(2), &conn)?;
         Element::insert(&OverpassElement::mock(3), &conn)?;
@@ -314,7 +314,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Element::insert(&OverpassElement::mock(1), &conn)?
             .set_updated_at(&datetime!(2023-10-01 00:00 UTC), &conn)?;
         Element::insert(&OverpassElement::mock(2), &conn)?
@@ -326,7 +326,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(element, Element::select_by_id(&element.id, &conn)?.unwrap());
         Ok(())
@@ -334,7 +334,7 @@ mod test {
 
     #[test]
     fn set_overpass_json() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Element::insert(&OverpassElement::mock(1), &conn)?;
         let new_overpass_json = OverpassElement::mock(2);
         Element::set_overpass_json("node:1", &new_overpass_json, &conn)?;
@@ -345,7 +345,7 @@ mod test {
 
     #[test]
     fn set_tags() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let mut tags: HashMap<String, Value> = HashMap::new();
         let tag_name = "foo";
@@ -359,7 +359,7 @@ mod test {
 
     #[test]
     fn insert_tag() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let tag_name = "foo";
         let tag_value = "bar";
         Element::insert(&OverpassElement::mock(1), &conn)?;
@@ -371,7 +371,7 @@ mod test {
 
     #[test]
     fn delete_tag() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let tag_name = "foo";
         Element::insert(&OverpassElement::mock(1), &conn)?;
         Element::insert_tag("node:1", tag_name, "bar", &conn)?;
@@ -383,7 +383,7 @@ mod test {
 
     #[test]
     fn set_deleted_at() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let deleted_at = OffsetDateTime::now_utc();
         Element::set_deleted_at(&element.id, Some(deleted_at), &conn)?;

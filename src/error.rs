@@ -74,6 +74,12 @@ impl From<TryFromIntError> for Error {
     }
 }
 
+impl From<time::error::Format> for Error {
+    fn from(_: time::error::Format) -> Self {
+        Error::Other("Time formatting error".into())
+    }
+}
+
 #[derive(Debug)]
 pub struct ApiError {
     pub http_code: StatusCode,

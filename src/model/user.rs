@@ -168,11 +168,11 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
 mod test {
     use std::collections::HashMap;
 
-    use crate::{command::db, model::User, service::osm::OsmUser, Result};
+    use crate::{model::User, service::osm::OsmUser, test::mock_conn, Result};
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         User::insert(1, &OsmUser::mock(), &conn)?;
         let users = User::select_all(None, &conn)?;
         assert_eq!(1, users.len());
@@ -181,7 +181,7 @@ mod test {
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         User::insert(1, &OsmUser::mock(), &conn)?;
         User::insert(2, &OsmUser::mock(), &conn)?;
         User::insert(3, &OsmUser::mock(), &conn)?;
@@ -192,7 +192,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         conn.execute(
             "INSERT INTO user (rowid, osm_json, updated_at) VALUES (1, json(?), '2020-01-01T00:00:00Z')",
             [serde_json::to_string(&OsmUser::mock())?],
@@ -214,7 +214,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         User::insert(1, &OsmUser::mock(), &conn)?;
         assert!(User::select_by_id(1, &conn)?.is_some());
         Ok(())
@@ -222,7 +222,7 @@ mod test {
 
     #[test]
     fn merge_tags() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
@@ -244,7 +244,7 @@ mod test {
 
     #[test]
     fn set_osm_json() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let user = OsmUser {
             id: 1,
             ..OsmUser::mock()

@@ -124,6 +124,7 @@ mod tests {
     use super::*;
     use crate::command::db;
     use crate::model::token;
+    use crate::test::mock_conn;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -153,7 +154,7 @@ mod tests {
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
 
         Event::insert(0, "", "", &conn)?;
 
@@ -224,7 +225,7 @@ mod tests {
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let event_id = 1;
         Event::insert(0, "", "", &conn)?;
         let app = test::init_service(

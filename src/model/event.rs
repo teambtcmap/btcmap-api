@@ -163,20 +163,20 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Event> {
 mod test {
     use std::collections::HashMap;
 
-    use crate::{command::db, Result};
+    use crate::{test::mock_conn, Result};
 
     use super::Event;
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Event::insert(1, "node:1", "create", &conn)?;
         Ok(())
     }
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Event::insert(1, "node:1", "type1", &conn)?;
         Event::insert(2, "node:2", "type2", &conn)?;
         Event::insert(3, "node:3", "type3", &conn)?;
@@ -186,7 +186,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         conn.execute(
             "INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2020-01-01T00:00:00Z')",
             [],
@@ -208,7 +208,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Event::insert(1, "node:1", "test", &conn)?;
         assert!(Event::select_by_id(1, &conn)?.is_some());
         Ok(())
@@ -216,7 +216,7 @@ mod test {
 
     #[test]
     fn merge_tags() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";

@@ -11,6 +11,8 @@ mod discord;
 mod error;
 mod model;
 mod service;
+#[cfg(test)]
+mod test;
 use rusqlite::Connection;
 use std::env;
 use std::process::ExitCode;

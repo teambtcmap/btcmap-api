@@ -87,7 +87,7 @@ pub async fn get(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::command::db;
+    use crate::test::mock_conn;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -96,7 +96,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_empty_array() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -111,7 +111,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_not_empty_array() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
@@ -128,7 +128,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?;
         let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?;
         let element_3 = Element::insert(&OverpassElement::mock(3), &conn)?;
@@ -149,7 +149,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_updated_since() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?
             .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &conn)?;
         let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?

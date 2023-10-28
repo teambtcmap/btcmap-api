@@ -187,6 +187,7 @@ mod test {
     use super::*;
     use crate::command::db;
     use crate::model::token;
+    use crate::test::mock_conn;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -217,7 +218,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
@@ -234,7 +235,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Element::insert(&OverpassElement::mock(1), &conn)?;
         Element::insert(&OverpassElement::mock(2), &conn)?;
         Element::insert(&OverpassElement::mock(3), &conn)?;
@@ -253,7 +254,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_updated_since() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         Element::insert(&OverpassElement::mock(1), &conn)?
             .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &conn)?;
         Element::insert(&OverpassElement::mock(2), &conn)?
@@ -274,7 +275,7 @@ mod test {
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
@@ -292,7 +293,7 @@ mod test {
 
     #[actix_web::test]
     async fn patch_tags() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let admin_token = "test";
         conn.execute(
             token::INSERT,
@@ -317,7 +318,7 @@ mod test {
 
     #[actix_web::test]
     async fn post_tags() -> Result<()> {
-        let conn = db::setup_connection()?;
+        let conn = mock_conn();
         let admin_token = "test";
         conn.execute(
             token::INSERT,

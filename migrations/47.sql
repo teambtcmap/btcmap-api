@@ -1,0 +1,1 @@
+CREATE INDEX idx_area_updated_at ON area(updated_at);
