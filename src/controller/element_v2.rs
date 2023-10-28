@@ -29,7 +29,7 @@ pub struct GetArgs {
     limit: Option<i32>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct GetItem {
     pub id: String,
     pub osm_json: OverpassElement,
@@ -194,6 +194,7 @@ mod test {
     use reqwest::StatusCode;
     use rusqlite::named_params;
     use serde_json::json;
+    use time::macros::datetime;
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
@@ -216,182 +217,121 @@ mod test {
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
-        let element = OverpassElement::mock();
-        Element::insert(&element, &conn)?;
-
+        let conn = db::setup_connection()?;
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get().uri("/").to_request();
-        let res: Value = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.as_array().unwrap().len(), 1);
-
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], element.into());
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
-        let element_1 = OverpassElement {
-            r#type: "node".into(),
-            id: 1,
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element_1, &conn)?;
-
-        let element_2 = OverpassElement {
-            r#type: "node".into(),
-            id: 2,
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element_2, &conn)?;
-
-        let element_3 = OverpassElement {
-            r#type: "node".into(),
-            id: 3,
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element_3, &conn)?;
-
+        let conn = db::setup_connection()?;
+        Element::insert(&OverpassElement::mock(1), &conn)?;
+        Element::insert(&OverpassElement::mock(2), &conn)?;
+        Element::insert(&OverpassElement::mock(3), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get().uri("/?limit=2").to_request();
-        let res: Value = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.as_array().unwrap().len(), 2);
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 2);
 
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_updated_since() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
-        let element_1 = OverpassElement {
-            r#type: "node".into(),
-            id: 1,
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element_1, &conn)?;
-        Element::set_updated_at(&element_1.btcmap_id(), "2022-01-05T00:00:00Z", &conn)?;
-
-        let element_2 = OverpassElement {
-            r#type: "node".into(),
-            id: 2,
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element_2, &conn)?;
-        Element::set_updated_at(&element_2.btcmap_id(), "2022-02-05T00:00:00Z", &conn)?;
-
+        let conn = db::setup_connection()?;
+        Element::insert(&OverpassElement::mock(1), &conn)?
+            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &conn)?;
+        Element::insert(&OverpassElement::mock(2), &conn)?
+            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get()
             .uri("/?updated_since=2022-01-10")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
-
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_by_id() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
-        let element = OverpassElement::mock();
-        Element::insert(&element, &conn)?;
-
+        let conn = db::setup_connection()?;
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(super::get_by_id),
         )
         .await;
-
         let req = TestRequest::get()
-            .uri(&format!("/{}", element.btcmap_id()))
+            .uri(&format!("/{}", element.id))
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.id, element.btcmap_id());
-
+        assert_eq!(res.id, element.id);
         Ok(())
     }
 
     #[actix_web::test]
     async fn patch_tags() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let conn = db::setup_connection()?;
         let admin_token = "test";
         conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-
-        let element = OverpassElement::mock();
-        Element::insert(&element, &conn)?;
-
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(super::patch_tags),
         )
         .await;
-
         let req = TestRequest::patch()
-            .uri(&format!("/{}/tags", element.btcmap_id()))
+            .uri(&format!("/{}/tags", element.id))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-
         Ok(())
     }
 
     #[actix_web::test]
     async fn post_tags() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let conn = db::setup_connection()?;
         let admin_token = "test";
         conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-
-        let element = OverpassElement::mock();
-        Element::insert(&element, &conn)?;
-
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(super::post_tags),
         )
         .await;
-
         let req = TestRequest::post()
-            .uri(&format!("/{}/tags", element.btcmap_id()))
+            .uri(&format!("/{}/tags", element.id))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),
@@ -400,7 +340,6 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::CREATED);
-
         Ok(())
     }
 }

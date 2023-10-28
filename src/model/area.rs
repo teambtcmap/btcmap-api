@@ -4,8 +4,6 @@ use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Row;
-use rusqlite::Transaction;
-use rusqlite::TransactionBehavior;
 use serde_json::Value;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -23,14 +21,12 @@ pub struct Area {
 
 impl Area {
     pub fn insert(tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
-        let tx = Transaction::new_unchecked(conn, TransactionBehavior::Deferred)?;
         conn.execute(
             "INSERT INTO area (tags) VALUES (json(:tags))",
             named_params! { ":tags": &serde_json::to_string(tags)? },
         )?;
-        let area = Area::select_by_id(tx.last_insert_rowid().try_into()?, &tx)?
+        let area = Area::select_by_id(conn.last_insert_rowid().try_into()?, &conn)?
             .ok_or(Error::DbTableRowNotFound)?;
-        tx.commit()?;
         Ok(area)
     }
 
@@ -118,7 +114,6 @@ impl Area {
         tags: &HashMap<String, Value>,
         conn: &Connection,
     ) -> crate::Result<Area> {
-        let tx = Transaction::new_unchecked(conn, TransactionBehavior::Deferred)?;
         let query = r#"
             UPDATE area
             SET tags = json_patch(tags, :tags)
@@ -128,13 +123,11 @@ impl Area {
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        let area = Area::select_by_id(id, &tx)?.ok_or(Error::DbTableRowNotFound)?;
-        tx.commit()?;
+        let area = Area::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?;
         Ok(area)
     }
 
     pub fn set_tag(id: i32, name: &str, value: &Value, conn: &Connection) -> crate::Result<Area> {
-        let tx = Transaction::new_unchecked(conn, TransactionBehavior::Deferred)?;
         let query = r#"
             UPDATE area
             SET tags = json_set(tags, :name, json(:value))
@@ -144,13 +137,11 @@ impl Area {
             query,
             named_params! { ":id": id, ":name": format!("$.{name}"), ":value": serde_json::to_string(value)? },
         )?;
-        let area = Area::select_by_id(id, &tx)?.ok_or(Error::DbTableRowNotFound)?;
-        tx.commit()?;
+        let area = Area::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?;
         Ok(area)
     }
 
     pub fn remove_tag(id: i32, tag: &str, conn: &Connection) -> crate::Result<Area> {
-        let tx = Transaction::new_unchecked(conn, TransactionBehavior::Deferred)?;
         let query = r#"
             UPDATE area
             SET tags = json_remove(tags, :tag)
@@ -160,8 +151,7 @@ impl Area {
             query,
             named_params! { ":id": id, ":tag": format!("$.{tag}") },
         )?;
-        let area = Area::select_by_id(id, &tx)?.ok_or(Error::DbTableRowNotFound)?;
-        tx.commit()?;
+        let area = Area::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?;
         Ok(area)
     }
 

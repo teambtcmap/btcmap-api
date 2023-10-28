@@ -1525,23 +1525,23 @@ mod test {
 
         let mut tags = HashMap::new();
         tags.insert("golf".into(), "clubhouse".into());
-        let element = OverpassElement {
-            r#type: "node".into(),
-            id: 1,
-            tags: Some(tags),
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element, &conn)?;
+        Element::insert(
+            &OverpassElement {
+                tags: Some(tags),
+                ..OverpassElement::mock(1)
+            },
+            &conn,
+        )?;
 
         let mut tags = HashMap::new();
         tags.insert("building".into(), "industrial".into());
-        let element = OverpassElement {
-            r#type: "node".into(),
-            id: 2,
-            tags: Some(tags),
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element, &conn)?;
+        Element::insert(
+            &OverpassElement {
+                tags: Some(tags),
+                ..OverpassElement::mock(2)
+            },
+            &conn,
+        )?;
 
         super::run(&conn).await?;
 
@@ -1565,7 +1565,7 @@ mod test {
         tags.insert("golf".into(), "clubhouse".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("golf_course", &element.generate_android_icon());
 
@@ -1573,7 +1573,7 @@ mod test {
         tags.insert("building".into(), "industrial".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("factory", &element.generate_android_icon());
     }

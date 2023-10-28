@@ -92,6 +92,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
+    use time::macros::datetime;
 
     #[actix_web::test]
     async fn get_empty_array() -> Result<()> {
@@ -111,7 +112,7 @@ mod test {
     #[actix_web::test]
     async fn get_not_empty_array() -> Result<()> {
         let conn = db::setup_connection()?;
-        let element = Element::insert(&OverpassElement::mock(), &conn)?;
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -128,30 +129,9 @@ mod test {
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
         let conn = db::setup_connection()?;
-        let element_1 = Element::insert(
-            &OverpassElement {
-                r#type: "node".into(),
-                id: 1,
-                ..OverpassElement::mock()
-            },
-            &conn,
-        )?;
-        let element_2 = Element::insert(
-            &OverpassElement {
-                r#type: "node".into(),
-                id: 2,
-                ..OverpassElement::mock()
-            },
-            &conn,
-        )?;
-        Element::insert(
-            &OverpassElement {
-                r#type: "node".into(),
-                id: 3,
-                ..OverpassElement::mock()
-            },
-            &conn,
-        )?;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?;
+        let element_3 = Element::insert(&OverpassElement::mock(3), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -163,6 +143,30 @@ mod test {
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], element_1.into());
         assert_eq!(res[1], element_2.into());
+        assert!(!res.contains(&element_3.into()));
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn get_updated_since() -> Result<()> {
+        let conn = db::setup_connection()?;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?
+            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?
+            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &conn)?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(conn))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?updated_since=2022-01-10")
+            .to_request();
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], element_2.into());
+        assert!(!res.contains(&element_1.into()));
         Ok(())
     }
 }

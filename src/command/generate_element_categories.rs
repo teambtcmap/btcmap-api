@@ -123,23 +123,23 @@ mod test {
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "atm".into());
-        let element = OverpassElement {
-            r#type: "node".into(),
-            id: 1,
-            tags: Some(tags),
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element, &conn)?;
+        Element::insert(
+            &OverpassElement {
+                tags: Some(tags),
+                ..OverpassElement::mock(1)
+            },
+            &conn,
+        )?;
 
         let mut tags = HashMap::new();
         tags.insert("amenity".into(), "cafe".into());
-        let element = OverpassElement {
-            r#type: "node".into(),
-            id: 2,
-            tags: Some(tags),
-            ..OverpassElement::mock()
-        };
-        Element::insert(&element, &conn)?;
+        Element::insert(
+            &OverpassElement {
+                tags: Some(tags),
+                ..OverpassElement::mock(2)
+            },
+            &conn,
+        )?;
 
         super::run(&conn).await?;
 
@@ -157,7 +157,7 @@ mod test {
         tags.insert("amenity".into(), "atm".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("atm", &element.generate_category());
 
@@ -165,7 +165,7 @@ mod test {
         tags.insert("amenity".into(), "cafe".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("cafe", &element.generate_category());
 
@@ -173,7 +173,7 @@ mod test {
         tags.insert("amenity".into(), "restaurant".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("restaurant", &element.generate_category());
 
@@ -181,7 +181,7 @@ mod test {
         tags.insert("amenity".into(), "bar".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("bar", &element.generate_category());
 
@@ -189,7 +189,7 @@ mod test {
         tags.insert("amenity".into(), "pub".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("pub", &element.generate_category());
 
@@ -197,7 +197,7 @@ mod test {
         tags.insert("tourism".into(), "hotel".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("hotel", &element.generate_category());
 
@@ -205,7 +205,7 @@ mod test {
         tags.insert("foo".into(), "bar".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("other", &element.generate_category());
     }

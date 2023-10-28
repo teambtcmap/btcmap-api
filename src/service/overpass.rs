@@ -28,7 +28,7 @@ struct Osm3s {
     timestamp_osm_base: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct OverpassElement {
     pub r#type: String,
     pub id: i64,
@@ -46,7 +46,7 @@ pub struct OverpassElement {
     pub members: Option<Value>,  // for relations only
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Bounds {
     pub minlon: f64,
     pub maxlon: f64,
@@ -112,10 +112,10 @@ impl OverpassElement {
     }
 
     #[cfg(test)]
-    pub fn mock() -> OverpassElement {
+    pub fn mock(id: i64) -> OverpassElement {
         OverpassElement {
             r#type: "node".into(),
-            id: 1,
+            id,
             lat: Some(0.0),
             lon: Some(0.0),
             timestamp: Some("".into()),
@@ -173,7 +173,7 @@ mod test {
         tags.insert("foo".into(), "bar".into());
         let element = OverpassElement {
             tags: Some(tags),
-            ..OverpassElement::mock()
+            ..OverpassElement::mock(1)
         };
         assert_eq!("bar", element.get_tag_value("foo"));
         assert_eq!("", element.get_tag_value("missing"));
