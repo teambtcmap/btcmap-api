@@ -36,6 +36,7 @@ struct PostJsonArgs {
 
 #[derive(Deserialize)]
 pub struct GetArgs {
+    #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     updated_since: Option<OffsetDateTime>,
     limit: Option<i32>,
@@ -339,9 +340,7 @@ mod tests {
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let conn = mock_conn();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -349,8 +348,8 @@ mod tests {
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
-        let res: Value = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.as_array().unwrap().len(), 0);
+        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
         Ok(())
     }
 
