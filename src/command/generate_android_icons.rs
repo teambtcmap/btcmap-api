@@ -18,12 +18,12 @@ pub async fn run(conn: &Connection) -> Result<()> {
     let mut unknown = 0;
 
     for element in elements {
-        let old_icon = element.get_btcmap_tag_value_str("icon:android");
-        let new_icon = element.generate_android_icon();
+        let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
+        let new_icon = element.overpass_data.generate_android_icon();
 
         if old_icon != new_icon {
             info!(element.id, old_icon, new_icon, "Updating icon");
-            Element::insert_tag(&element.id, "icon:android", &new_icon, &conn)?;
+            element.insert_tag("icon:android", &new_icon, &conn)?;
         }
 
         if new_icon == "question_mark" {
@@ -47,34 +47,34 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
 impl OverpassElement {
     pub fn generate_android_icon(&self) -> String {
-        let amenity = self.get_tag_value("amenity");
-        let cuisine = self.get_tag_value("cuisine");
-        let tourism = self.get_tag_value("tourism");
-        let shop = self.get_tag_value("shop");
-        let office = self.get_tag_value("office");
-        let leisure = self.get_tag_value("leisure");
-        let healthcare = self.get_tag_value("healthcare");
-        let healthcare_speciality = self.get_tag_value("healthcare:speciality");
-        let building = self.get_tag_value("building");
-        let sport = self.get_tag_value("sport");
-        let craft = self.get_tag_value("craft");
-        let company = self.get_tag_value("company");
-        let telecom = self.get_tag_value("telecom");
-        let school = self.get_tag_value("school");
-        let place = self.get_tag_value("place");
-        let landuse = self.get_tag_value("landuse");
-        let club = self.get_tag_value("club");
-        let playground = self.get_tag_value("playground");
-        let industrial = self.get_tag_value("industrial");
-        let historic = self.get_tag_value("historic");
-        let public_transport = self.get_tag_value("public_transport");
-        let man_made = self.get_tag_value("man_made");
-        let waterway = self.get_tag_value("waterway");
-        let rental = self.get_tag_value("rental");
-        let attraction = self.get_tag_value("attraction");
-        let golf = self.get_tag_value("golf");
-        let shelter_type = self.get_tag_value("shelter_type");
-        let aeroway = self.get_tag_value("aeroway");
+        let amenity = self.tag("amenity");
+        let cuisine = self.tag("cuisine");
+        let tourism = self.tag("tourism");
+        let shop = self.tag("shop");
+        let office = self.tag("office");
+        let leisure = self.tag("leisure");
+        let healthcare = self.tag("healthcare");
+        let healthcare_speciality = self.tag("healthcare:speciality");
+        let building = self.tag("building");
+        let sport = self.tag("sport");
+        let craft = self.tag("craft");
+        let company = self.tag("company");
+        let telecom = self.tag("telecom");
+        let school = self.tag("school");
+        let place = self.tag("place");
+        let landuse = self.tag("landuse");
+        let club = self.tag("club");
+        let playground = self.tag("playground");
+        let industrial = self.tag("industrial");
+        let historic = self.tag("historic");
+        let public_transport = self.tag("public_transport");
+        let man_made = self.tag("man_made");
+        let waterway = self.tag("waterway");
+        let rental = self.tag("rental");
+        let attraction = self.tag("attraction");
+        let golf = self.tag("golf");
+        let shelter_type = self.tag("shelter_type");
+        let aeroway = self.tag("aeroway");
 
         let mut icon_id: &str = "question_mark";
 
@@ -1553,11 +1553,11 @@ mod test {
 
         assert_eq!(
             "golf_course",
-            elements[0].get_btcmap_tag_value_str("icon:android")
+            elements[0].tag("icon:android").as_str().unwrap()
         );
         assert_eq!(
             "factory",
-            elements[1].get_btcmap_tag_value_str("icon:android")
+            elements[1].tag("icon:android").as_str().unwrap()
         );
 
         Ok(())

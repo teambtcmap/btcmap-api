@@ -53,14 +53,16 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
     // First, let's check if any of the cached elements no longer accept bitcoins
     for element in &elements {
-        if !fresh_element_ids.contains(&element.id) && element.deleted_at.is_none() {
+        if !fresh_element_ids.contains(&element.overpass_data.btcmap_id())
+            && element.deleted_at.is_none()
+        {
             warn!(
                 element.id,
                 "Cached element was deleted from Overpass or no longer accepts Bitcoin",
             );
-            let osm_id = element.overpass_json.id;
-            let element_type = &element.overpass_json.r#type;
-            let name = element.get_osm_tag_value("name");
+            let osm_id = element.overpass_data.id;
+            let element_type = &element.overpass_data.r#type;
+            let name = element.overpass_data.tag("name");
 
             let fresh_element = match osm::get_element(element_type, osm_id).await? {
                 Some(fresh_element) => fresh_element,
@@ -81,7 +83,12 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
             insert_user_if_not_exists(fresh_element.uid, &tx).await?;
 
-            Event::insert(fresh_element.uid, &element.id, "delete", &tx)?;
+            Event::insert(
+                fresh_element.uid,
+                &element.overpass_data.btcmap_id(),
+                "delete",
+                &tx,
+            )?;
 
             let message = format!(
                 "User {} removed https://www.openstreetmap.org/{element_type}/{osm_id}",
@@ -96,7 +103,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
             );
 
             info!(element.id, "Marking element as deleted");
-            Element::set_deleted_at(&element.id, Some(OffsetDateTime::now_utc()), &tx)?;
+            element.set_deleted_at(Some(OffsetDateTime::now_utc()), &tx)?;
         }
     }
 
@@ -104,16 +111,19 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
         let element_type = &fresh_element.r#type;
         let osm_id = fresh_element.id;
         let btcmap_id = fresh_element.btcmap_id();
-        let name = fresh_element.get_tag_value("name");
+        let name = fresh_element.tag("name");
         let user_id = fresh_element.uid;
         let user_display_name = &fresh_element.user.clone().unwrap_or_default();
 
-        match elements.iter().find(|it| it.id == btcmap_id) {
+        match elements
+            .iter()
+            .find(|it| it.overpass_data.btcmap_id() == btcmap_id)
+        {
             Some(element) => {
-                if fresh_element != element.overpass_json {
+                if fresh_element != element.overpass_data {
                     info!(
                         btcmap_id,
-                        old_json = serde_json::to_string(&element.overpass_json)?,
+                        old_json = serde_json::to_string(&element.overpass_data)?,
                         new_json = serde_json::to_string(&fresh_element)?,
                         "Element JSON was updated",
                     );
@@ -122,7 +132,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         insert_user_if_not_exists(user_id, &tx).await?;
                     }
 
-                    if fresh_element.changeset != element.overpass_json.changeset {
+                    if fresh_element.changeset != element.overpass_data.changeset {
                         Event::insert(
                             user_id.unwrap().try_into().unwrap(),
                             &btcmap_id,
@@ -144,20 +154,20 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     );
 
                     info!("Updating osm_json");
-                    Element::set_overpass_json(&btcmap_id, &fresh_element, &tx)?;
+                    element.set_overpass_data(&fresh_element, &tx)?;
 
                     let new_android_icon = fresh_element.generate_android_icon();
-                    let old_android_icon = element.get_btcmap_tag_value_str("icon:android");
+                    let old_android_icon = element.tag("icon:android").as_str().unwrap_or_default();
 
                     if new_android_icon != old_android_icon {
                         info!(old_android_icon, new_android_icon, "Updating Android icon");
-                        Element::insert_tag(&element.id, "icon:android", &new_android_icon, &tx)?;
+                        element.insert_tag("icon:android", &new_android_icon, &tx)?;
                     }
                 }
 
                 if element.deleted_at.is_some() {
                     info!(btcmap_id, "Bitcoin tags were re-added");
-                    Element::set_deleted_at(&btcmap_id, None, &tx)?;
+                    element.set_deleted_at(None, &tx)?;
                 }
             }
             None => {
@@ -167,7 +177,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     insert_user_if_not_exists(user_id, &tx).await?;
                 }
 
-                Element::insert(&fresh_element, &tx)?;
+                let element = Element::insert(&fresh_element, &tx)?;
 
                 Event::insert(
                     user_id.unwrap().try_into().unwrap(),
@@ -176,12 +186,11 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     &tx,
                 )?;
 
-                let element = Element::select_by_id(&btcmap_id, &tx)?.unwrap();
-                let category = element.generate_category();
-                let android_icon = element.generate_android_icon();
+                let category = element.overpass_data.generate_category();
+                let android_icon = element.overpass_data.generate_android_icon();
 
-                Element::insert_tag(&element.id, "category", &category, &tx)?;
-                Element::insert_tag(&element.id, "icon:android", &android_icon, &tx)?;
+                element.insert_tag("category", &category, &tx)?;
+                element.insert_tag("icon:android", &android_icon, &tx)?;
 
                 info!(category, android_icon);
 

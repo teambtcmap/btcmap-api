@@ -26,9 +26,12 @@ pub async fn run(conn: Connection) -> Result<()> {
     let date_format = format_description!("[year]-[month]-[day]");
 
     for element in elements {
-        let url = format!("https://openstreetmap.org/{}", element.id.replace(":", "/"));
+        let url = format!(
+            "https://openstreetmap.org/{}/{}",
+            element.overpass_data.r#type, element.overpass_data.id,
+        );
 
-        let survey_date = element.get_osm_tag_value("survey:date");
+        let survey_date = element.overpass_data.tag("survey:date");
 
         if survey_date.len() > 0 {
             let parsed_date = Date::parse(survey_date, &date_format);
@@ -43,7 +46,7 @@ pub async fn run(conn: Connection) -> Result<()> {
             }
         }
 
-        let check_date = element.get_osm_tag_value("check_date");
+        let check_date = element.overpass_data.tag("check_date");
 
         if check_date.len() > 0 {
             let parsed_date = Date::parse(check_date, &date_format);
@@ -58,7 +61,7 @@ pub async fn run(conn: Connection) -> Result<()> {
             }
         }
 
-        let check_date_currency_xbt = element.get_osm_tag_value("check_date:currency:XBT");
+        let check_date_currency_xbt = element.overpass_data.tag("check_date:currency:XBT");
 
         if check_date_currency_xbt.len() > 0 {
             let parsed_date = Date::parse(check_date_currency_xbt, &date_format);
@@ -73,29 +76,29 @@ pub async fn run(conn: Connection) -> Result<()> {
             }
         }
 
-        let payment_lighting = element.get_osm_tag_value("payment:lighting");
+        let payment_lighting = element.overpass_data.tag("payment:lighting");
 
         if payment_lighting.len() > 0 {
             error!(element.id, "Spelling issue: payment:lighting");
         }
 
         let payment_lightning_contacless =
-            element.get_osm_tag_value("payment:lightning_contacless");
+            element.overpass_data.tag("payment:lightning_contacless");
 
         if payment_lightning_contacless.len() > 0 {
             error!(element.id, "Spelling issue: payment:lightning_contacless");
         }
 
         let payment_lighting_contactless =
-            element.get_osm_tag_value("payment:lighting_contactless");
+            element.overpass_data.tag("payment:lighting_contactless");
 
         if payment_lighting_contactless.len() > 0 {
             error!(element.id, "Spelling issue: payment:lighting_contactless");
         }
 
-        let currency_xbt = element.get_osm_tag_value("currency:XBT");
+        let currency_xbt = element.overpass_data.tag("currency:XBT");
 
-        let payment_bitcoin = element.get_osm_tag_value("payment:bitcoin");
+        let payment_bitcoin = element.overpass_data.tag("payment:bitcoin");
 
         if currency_xbt == "yes" && payment_bitcoin == "yes" {
             let message = format!(
@@ -133,24 +136,24 @@ pub async fn run(conn: Connection) -> Result<()> {
             send_discord_message(message).await;
         }
 
-        if element.get_btcmap_tag_value_str("icon:android") == ""
-            || element.get_btcmap_tag_value_str("icon:android") == "question_mark"
+        if element.tag("icon:android").as_str().unwrap_or_default() == ""
+            || element.tag("icon:android").as_str().unwrap_or_default() == "question_mark"
         {
-            let message = format!("{} Icon is missing", url,);
+            let message = format!("{} Icon is missing", url);
             error!(message);
             send_discord_message(message).await;
         }
 
-        if element.overpass_json.verification_date().is_none() {
-            let message = format!("{} Not verified", url,);
+        if element.overpass_data.verification_date().is_none() {
+            let message = format!("{} Not verified", url);
             error!(message);
             send_discord_message(message).await;
         }
 
-        if element.overpass_json.verification_date().is_some()
-            && !element.overpass_json.up_to_date()
+        if element.overpass_data.verification_date().is_some()
+            && !element.overpass_data.up_to_date()
         {
-            let message = format!("{} Out of date", url,);
+            let message = format!("{} Out of date", url);
             error!(message);
             send_discord_message(message).await;
         }

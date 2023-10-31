@@ -25,8 +25,10 @@ use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
-    updated_since: Option<String>,
-    limit: Option<i32>,
+    #[serde(default)]
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_since: Option<OffsetDateTime>,
+    limit: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -44,8 +46,8 @@ pub struct GetItem {
 impl Into<GetItem> for Element {
     fn into(self) -> GetItem {
         GetItem {
-            id: self.id,
-            osm_json: self.overpass_json,
+            id: self.overpass_data.btcmap_id(),
+            osm_json: self.overpass_data,
             tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -139,7 +141,7 @@ async fn patch_tags(
         merged_tags.insert(k, v);
     }
 
-    Element::set_tags(&element_id, &merged_tags, &conn)?;
+    element.set_tags(&element_id, &merged_tags, &conn)?;
 
     Ok(HttpResponse::Ok())
 }

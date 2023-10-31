@@ -104,7 +104,7 @@ impl OverpassElement {
         }
     }
 
-    pub fn get_tag_value(&self, name: &str) -> &str {
+    pub fn tag(&self, name: &str) -> &str {
         match &self.tags {
             Some(tags) => tags.get(name).map(|it| it.as_str()).unwrap_or(""),
             None => "",

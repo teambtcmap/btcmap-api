@@ -20,12 +20,12 @@ pub async fn run(conn: &Connection) -> Result<()> {
     let mut unknown = 0;
 
     for element in elements {
-        let old_category = element.get_btcmap_tag_value_str("category");
-        let new_category = element.generate_category();
+        let old_category = element.tag("category").as_str().unwrap_or_default();
+        let new_category = element.overpass_data.generate_category();
 
         if new_category != old_category {
             info!(element.id, old_category, new_category, "Updating category",);
-            Element::insert_tag(&element.id, "category", &new_category, &conn)?;
+            element.insert_tag("category", &new_category, &conn)?;
         }
 
         if new_category == "other" {
@@ -63,16 +63,10 @@ pub async fn run(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-impl Element {
-    pub fn generate_category(&self) -> String {
-        self.overpass_json.generate_category()
-    }
-}
-
 impl OverpassElement {
     pub fn generate_category(&self) -> String {
-        let amenity = self.get_tag_value("amenity");
-        let tourism = self.get_tag_value("tourism");
+        let amenity = self.tag("amenity");
+        let tourism = self.tag("tourism");
 
         let mut category = "other";
 
@@ -145,8 +139,8 @@ mod test {
 
         let elements = Element::select_all(None, &conn)?;
 
-        assert_eq!("atm", elements[0].get_btcmap_tag_value_str("category"));
-        assert_eq!("cafe", elements[1].get_btcmap_tag_value_str("category"));
+        assert_eq!("atm", elements[0].tag("category").as_str().unwrap());
+        assert_eq!("cafe", elements[1].tag("category").as_str().unwrap());
 
         Ok(())
     }

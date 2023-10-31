@@ -130,27 +130,27 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String,
 
     let atms: Vec<_> = elements
         .iter()
-        .filter(|it| it.get_tag_value("amenity") == "atm")
+        .filter(|it| it.tag("amenity") == "atm")
         .collect();
 
     let onchain_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.get_tag_value("payment:onchain") == "yes")
+        .filter(|it| it.tag("payment:onchain") == "yes")
         .collect();
 
     let lightning_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.get_tag_value("payment:lightning") == "yes")
+        .filter(|it| it.tag("payment:lightning") == "yes")
         .collect();
 
     let lightning_contactless_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.get_tag_value("payment:lightning_contactless") == "yes")
+        .filter(|it| it.tag("payment:lightning_contactless") == "yes")
         .collect();
 
     let legacy_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.get_tag_value("payment:bitcoin") == "yes")
+        .filter(|it| it.tag("payment:bitcoin") == "yes")
         .collect();
 
     let up_to_date_elements: Vec<_> = elements.iter().filter(|it| it.up_to_date()).collect();
