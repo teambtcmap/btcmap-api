@@ -18,7 +18,7 @@ INSERT INTO element(
     deleted_at
 )
 SELECT
-    osm_json,
+    overpass_json,
     tags,
     created_at,
     updated_at,

@@ -57,7 +57,7 @@ pub async fn run() -> Result<()> {
             .service(
                 scope("elements")
                     .service(controller::element_v2::get)
-                    .service(controller::element_v2::get_by_id)
+                    .service(controller::element_v2::get_by_osm_type_and_id)
                     .service(controller::element_v2::patch_tags)
                     .service(controller::element_v2::post_tags),
             )
@@ -95,7 +95,7 @@ pub async fn run() -> Result<()> {
                     .service(
                         scope("elements")
                             .service(controller::element_v2::get)
-                            .service(controller::element_v2::get_by_id)
+                            .service(controller::element_v2::get_by_osm_type_and_id)
                             .service(controller::element_v2::patch_tags)
                             .service(controller::element_v2::post_tags),
                     )

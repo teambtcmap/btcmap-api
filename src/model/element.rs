@@ -25,11 +25,11 @@ pub struct Element {
 }
 
 const TABLE: &str = "element";
-const ALL_COLUMNS: &str = &format!("{COL_ROWID}, {COL_OVERPASS_DATA}, {COL_TAGS}, {COL_CREATED_AT}, {COL_UPDATED_AT}, {COL_DELETED_AT}");
-const COL_ROWID: &str = "rowid";
+const ALL_COLUMNS: &str = "rowid, overpass_data, tags, created_at, updated_at, deleted_at";
+const COL_ROWID: &str = "overpass_data";
 const COL_OVERPASS_DATA: &str = "overpass_data";
 const COL_TAGS: &str = "tags";
-const COL_CREATED_AT: &str = "created_at";
+const _COL_CREATED_AT: &str = "created_at";
 const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
@@ -38,7 +38,7 @@ impl Element {
         let query = format!(
             r#"
                 INSERT INTO {TABLE} ({COL_OVERPASS_DATA}) 
-                VALUES (:overpass_data)
+                VALUES (json(:overpass_data))
             "#
         );
         debug!(query);
@@ -50,7 +50,7 @@ impl Element {
             .ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
+    pub fn select_all(limit: Option<i32>, conn: &Connection) -> Result<Vec<Element>> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS} 
@@ -63,7 +63,7 @@ impl Element {
         Ok(conn
             .prepare(&query)?
             .query_map(
-                named_params! { ":limit": limit.unwrap_or(i64::MAX) },
+                named_params! { ":limit": limit.unwrap_or(i32::MAX) },
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
@@ -71,7 +71,7 @@ impl Element {
 
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
-        limit: Option<i64>,
+        limit: Option<i32>,
         conn: &Connection,
     ) -> Result<Vec<Element>> {
         let query = format!(
@@ -89,7 +89,7 @@ impl Element {
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
-                    ":limit": limit.unwrap_or(i64::MAX)
+                    ":limit": limit.unwrap_or(i32::MAX)
                 },
                 mapper(),
             )?
@@ -110,16 +110,52 @@ impl Element {
             .optional()?)
     }
 
-    // pub fn set_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Element> {
-    //     conn.execute(
-    //         "UPDATE element SET tags = json(:tags) WHERE rowid = :id",
-    //         named_params! {
-    //             ":id": self.id,
-    //             ":tags": serde_json::to_string(tags)?,
-    //         },
-    //     )?;
-    //     Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
-    // }
+    pub fn select_by_osm_type_and_id(
+        r#type: &str,
+        id: i64,
+        conn: &Connection,
+    ) -> Result<Option<Element>> {
+        let query = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE json_extract({COL_OVERPASS_DATA}, '$.type') = :type
+                AND json_extract({COL_OVERPASS_DATA}, '$.id') = :id
+            "#
+        );
+        debug!(query);
+        Ok(conn
+            .query_row(
+                &query,
+                named_params! {
+                    ":type": r#type,
+                    ":id": id,
+                },
+                mapper(),
+            )
+            .optional()?)
+    }
+
+    pub fn patch_tags(
+        &self,
+        tags: &HashMap<String, Value>,
+        conn: &Connection,
+    ) -> crate::Result<Element> {
+        let query = format!(
+            r#"
+                UPDATE {TABLE} SET {COL_TAGS} = json_patch({COL_TAGS}, :tags) WHERE {COL_ROWID} = :id
+            "#
+        );
+        debug!(query);
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": self.id,
+                ":tags": &serde_json::to_string(tags)?,
+            },
+        )?;
+        Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+    }
 
     pub fn set_overpass_data(
         &self,
@@ -253,11 +289,11 @@ impl Element {
 const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
     |row: &Row| -> rusqlite::Result<Element> {
         let overpass_data: String = row.get(1)?;
+        let overpass_data: OverpassElement = serde_json::from_str(&overpass_data).unwrap();
         let tags: String = row.get(2)?;
-
         Ok(Element {
             id: row.get(0)?,
-            overpass_data: serde_json::from_str(&overpass_data).unwrap(),
+            overpass_data: overpass_data,
             tags: serde_json::from_str(&tags).unwrap(),
             created_at: row.get(3)?,
             updated_at: row.get(4)?,
@@ -277,7 +313,7 @@ mod test {
     #[test]
     fn insert() -> Result<()> {
         let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(1), &conn)?;
+        Element::insert(&OverpassElement::mock(3), &conn)?;
         Ok(())
     }
 
@@ -322,20 +358,6 @@ mod test {
         assert_eq!(override_overpass_json, element.overpass_data);
         Ok(())
     }
-
-    // #[test]
-    // fn set_tags() -> Result<()> {
-    //     let conn = mock_conn();
-    //     let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-    //     let mut tags: HashMap<String, Value> = HashMap::new();
-    //     let tag_name = "foo";
-    //     let tag_value = Value::String("bar".into());
-    //     tags.insert(tag_name.into(), tag_value.clone().into());
-    //     Element::set_tags(&element.id, &tags, &conn)?;
-    //     let element = Element::select_by_id(&element.id, &conn)?.unwrap();
-    //     assert_eq!(&tag_value, &element.tags[tag_name],);
-    //     Ok(())
-    // }
 
     #[test]
     fn insert_tag() -> Result<()> {

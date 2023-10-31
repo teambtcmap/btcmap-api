@@ -69,9 +69,9 @@ impl OverpassElement {
     }
 
     pub fn verification_date(&self) -> Option<OffsetDateTime> {
-        let survey_date = self.get_tag_value("survey:date");
-        let check_date = self.get_tag_value("check_date");
-        let bitcoin_check_date = self.get_tag_value("check_date:currency:XBT");
+        let survey_date = self.tag("survey:date");
+        let check_date = self.tag("check_date");
+        let bitcoin_check_date = self.tag("check_date:currency:XBT");
 
         let mut most_recent_date = "";
 
@@ -175,7 +175,7 @@ mod test {
             tags: Some(tags),
             ..OverpassElement::mock(1)
         };
-        assert_eq!("bar", element.get_tag_value("foo"));
-        assert_eq!("", element.get_tag_value("missing"));
+        assert_eq!("bar", element.tag("foo"));
+        assert_eq!("", element.tag("missing"));
     }
 }

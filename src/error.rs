@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, num::TryFromIntError};
+use std::{collections::HashMap, fmt::Display, num::{TryFromIntError, ParseIntError}};
 
 use actix_web::{http::header::ContentType, HttpResponse, ResponseError};
 use reqwest::StatusCode;
@@ -124,6 +124,12 @@ impl From<rusqlite::Error> for ApiError {
 
 impl From<crate::Error> for ApiError {
     fn from(error: crate::Error) -> Self {
+        ApiError::new(500, &error.to_string())
+    }
+}
+
+impl From<ParseIntError> for ApiError {
+    fn from(error: ParseIntError) -> Self {
         ApiError::new(500, &error.to_string())
     }
 }

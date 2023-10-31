@@ -15,7 +15,9 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
-    updated_since: Option<String>,
+    #[serde(default)]
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_since: Option<OffsetDateTime>,
     limit: Option<i32>,
 }
 
@@ -38,21 +40,20 @@ pub struct GetItem {
 
 impl Into<GetItem> for Element {
     fn into(self) -> GetItem {
-        let osm_data = if self.deleted_at.is_none() {
-            Some(self.overpass_json)
+        let id = self.overpass_data.btcmap_id();
+        let overpass_data = if self.deleted_at.is_none() {
+            Some(self.overpass_data)
         } else {
             None
         };
-
         let tags = if self.deleted_at.is_none() {
             Some(self.tags)
         } else {
             None
         };
-
         GetItem {
-            id: self.id,
-            osm_data,
+            id: id,
+            osm_data: overpass_data,
             tags,
             created_at: self.created_at,
             updated_at: self.updated_at,

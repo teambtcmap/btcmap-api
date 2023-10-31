@@ -28,7 +28,7 @@ pub struct GetArgs {
     #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     updated_since: Option<OffsetDateTime>,
-    limit: Option<i64>,
+    limit: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -90,13 +90,14 @@ pub async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(
+pub async fn get_by_osm_type_and_id(
     id: Path<String>,
     conn: Data<Connection>,
 ) -> Result<Json<GetItem>, ApiError> {
-    let id = id.into_inner();
-
-    Element::select_by_id(&id, &conn)?
+    let id_parts: Vec<&str> = id.split(":").collect();
+    let r#type = id_parts[0];
+    let id = id_parts[1].parse::<i64>()?;
+    Element::select_by_osm_type_and_id(r#type, id, &conn)?
         .map(|it| it.into())
         .ok_or(ApiError::new(
             404,
@@ -112,37 +113,22 @@ async fn patch_tags(
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
-    let element_id = id.into_inner();
-
-    let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
-
+    let id_parts: Vec<&str> = id.split(":").collect();
+    let r#type = id_parts[0];
+    let id = id_parts[1].parse::<i64>()?;
     warn!(
-        user_id = token.user_id,
-        element_id,
-        tags = keys.join(", "),
-        "User attempted to update element tags",
+        token.user_id,
+        r#type, id, "User attempted to merge new tags",
     );
-
-    let element = Element::select_by_id(&element_id, &conn)?;
-
-    let element = match element {
-        Some(v) => v,
+    match Element::select_by_osm_type_and_id(r#type, id, &conn)? {
+        Some(element) => element.patch_tags(&args, &conn)?,
         None => {
             return Err(ApiError::new(
                 404,
-                &format!("There is no element with id {element_id}"),
+                &format!("There is no element with type = {type} and id = {id}"),
             ));
         }
     };
-
-    let mut merged_tags = element.tags.clone();
-
-    for (k, v) in args.0 {
-        merged_tags.insert(k, v);
-    }
-
-    element.set_tags(&element_id, &merged_tags, &conn)?;
-
     Ok(HttpResponse::Ok())
 }
 
@@ -154,32 +140,30 @@ async fn post_tags(
     conn: Data<Connection>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
-    let element_id = id.into_inner();
-
+    let id_parts: Vec<&str> = id.split(":").collect();
+    let r#type = id_parts[0];
+    let id = id_parts[1].parse::<i64>()?;
     warn!(
         deprecated_api = true,
         user_id = token.user_id,
-        element_id,
+        id,
         tag_name = args.name,
         tag_value = args.value,
         "User attempted to update element tag",
     );
-
-    let element = Element::select_by_id(&element_id, &conn)?;
-
+    let element = Element::select_by_osm_type_and_id(r#type, id, &conn)?;
     match element {
         Some(element) => {
             if args.value.len() > 0 {
-                Element::insert_tag(&element.id, &args.name, &args.value, &conn)?;
+                element.insert_tag(&args.name, &args.value, &conn)?;
             } else {
-                Element::delete_tag(&element.id, &args.name, &conn)?;
+                element.delete_tag(&args.name, &conn)?;
             }
-
             Ok(HttpResponse::Created())
         }
         None => Err(ApiError::new(
             404,
-            &format!("There is no element with id {element_id}"),
+            &format!("There is no element with id {type}:{id}"),
         )),
     }
 }
@@ -276,20 +260,20 @@ mod test {
     }
 
     #[actix_web::test]
-    async fn get_by_id() -> Result<()> {
+    async fn get_by_osm_type_and_id() -> Result<()> {
         let conn = mock_conn();
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
-                .service(super::get_by_id),
+                .service(super::get_by_osm_type_and_id),
         )
         .await;
         let req = TestRequest::get()
             .uri(&format!("/{}", element.id))
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.id, element.id);
+        assert_eq!(res, element.into());
         Ok(())
     }
 
