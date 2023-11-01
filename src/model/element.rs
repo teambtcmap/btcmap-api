@@ -26,7 +26,7 @@ pub struct Element {
 
 const TABLE: &str = "element";
 const ALL_COLUMNS: &str = "rowid, overpass_data, tags, created_at, updated_at, deleted_at";
-const COL_ROWID: &str = "overpass_data";
+const COL_ROWID: &str = "rowid";
 const COL_OVERPASS_DATA: &str = "overpass_data";
 const COL_TAGS: &str = "tags";
 const _COL_CREATED_AT: &str = "created_at";
@@ -165,7 +165,7 @@ impl Element {
         let query = format!(
             r#"
                 UPDATE {TABLE}
-                SET {COL_OVERPASS_DATA} = json(:overpass_json)
+                SET {COL_OVERPASS_DATA} = json(:overpass_data)
                 WHERE {COL_ROWID} = :id
             "#
         );
@@ -180,27 +180,13 @@ impl Element {
         Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub fn insert_tag(&self, name: &str, value: &str, conn: &Connection) -> Result<Element> {
-        let query = format!(
-            r#"
-                UPDATE {TABLE}
-                SET {COL_TAGS} = json_set(tags, :name, :value)
-                WHERE id = :id
-            "#
-        );
-        debug!(query);
-        conn.execute(
-            &query,
-            named_params! {
-                ":id": self.id,
-                ":name": format!("$.{name}"),
-                ":value": value,
-            },
-        )?;
-        Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+    pub fn set_tag(&self, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
+        let mut patch_set = HashMap::new();
+        patch_set.insert(name.into(), value.clone());
+        self.patch_tags(&patch_set, conn)
     }
 
-    pub fn delete_tag(&self, name: &str, conn: &Connection) -> Result<Element> {
+    pub fn remove_tag(&self, name: &str, conn: &Connection) -> Result<Element> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -304,6 +290,9 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
+    use serde_json::json;
     use time::{macros::datetime, OffsetDateTime};
 
     use crate::{service::overpass::OverpassElement, test::mock_conn, Result};
@@ -313,18 +302,26 @@ mod test {
     #[test]
     fn insert() -> Result<()> {
         let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(3), &conn)?;
+        let overpass_data = OverpassElement::mock(1);
+        let element = Element::insert(&overpass_data, &conn)?;
+        assert_eq!(overpass_data, element.overpass_data);
+        let element = Element::select_by_id(1, &conn)?;
+        assert!(element.is_some());
+        assert_eq!(overpass_data, element.unwrap().overpass_data);
         Ok(())
     }
 
     #[test]
     fn select_all() -> Result<()> {
         let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(1), &conn)?;
-        Element::insert(&OverpassElement::mock(2), &conn)?;
-        Element::insert(&OverpassElement::mock(3), &conn)?;
-        let elements = Element::select_all(None, &conn)?;
-        assert_eq!(3, elements.len());
+        assert_eq!(
+            vec![
+                Element::insert(&OverpassElement::mock(1), &conn)?,
+                Element::insert(&OverpassElement::mock(2), &conn)?,
+                Element::insert(&OverpassElement::mock(3), &conn)?
+            ],
+            Element::select_all(None, &conn)?
+        );
         Ok(())
     }
 
@@ -333,11 +330,12 @@ mod test {
         let conn = mock_conn();
         Element::insert(&OverpassElement::mock(1), &conn)?
             .set_updated_at(&datetime!(2023-10-01 00:00 UTC), &conn)?;
-        Element::insert(&OverpassElement::mock(2), &conn)?
+        let expected_element = Element::insert(&OverpassElement::mock(2), &conn)?
             .set_updated_at(&datetime!(2023-10-02 00:00 UTC), &conn)?;
-        let elements =
-            Element::select_updated_since(&datetime!(2023-10-01 00:00 UTC), None, &conn)?;
-        assert_eq!(1, elements.len());
+        assert_eq!(
+            vec![expected_element],
+            Element::select_updated_since(&datetime!(2023-10-01 00:00 UTC), None, &conn)?
+        );
         Ok(())
     }
 
@@ -350,34 +348,90 @@ mod test {
     }
 
     #[test]
-    fn set_overpass_json() -> Result<()> {
+    fn select_by_osm_type_and_id() -> Result<()> {
         let conn = mock_conn();
-        let override_overpass_json = OverpassElement::mock(2);
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?
-            .set_overpass_data(&override_overpass_json, &conn)?;
-        assert_eq!(override_overpass_json, element.overpass_data);
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        assert_eq!(
+            element,
+            Element::select_by_osm_type_and_id(
+                &element.overpass_data.r#type,
+                element.overpass_data.id,
+                &conn,
+            )?
+            .unwrap()
+        );
         Ok(())
     }
 
     #[test]
-    fn insert_tag() -> Result<()> {
+    fn patch_tags() -> Result<()> {
         let conn = mock_conn();
-        let tag_name = "foo";
-        let tag_value = "bar";
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?
-            .insert_tag(tag_name, tag_value, &conn)?;
-        assert_eq!(tag_value, element.tags[tag_name].as_str().unwrap());
+        let tag_1_name = "tag_1_name";
+        let tag_1_value_1 = json!("tag_1_value_1");
+        let tag_1_value_2 = json!("tag_1_value_2");
+        let tag_2_name = "tag_2_name";
+        let tag_2_value = json!("tag_2_value");
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let mut tags = HashMap::new();
+        tags.insert(tag_1_name.into(), tag_1_value_1.clone());
+        let element = element.patch_tags(&tags, &conn)?;
+        assert_eq!(&tag_1_value_1, element.tag(tag_1_name));
+        tags.insert(tag_1_name.into(), tag_1_value_2.clone());
+        let element = element.patch_tags(&tags, &conn)?;
+        assert_eq!(&tag_1_value_2, element.tag(tag_1_name));
+        tags.clear();
+        tags.insert(tag_2_name.into(), tag_2_value.clone());
+        let element = element.patch_tags(&tags, &conn)?;
+        assert!(element.tags.contains_key(tag_1_name));
+        assert_eq!(&tag_2_value, element.tag(tag_2_name));
         Ok(())
     }
 
     #[test]
-    fn delete_tag() -> Result<()> {
+    fn set_overpass_data() -> Result<()> {
+        let conn = mock_conn();
+        let orig_data = OverpassElement::mock(1);
+        let override_data = OverpassElement::mock(2);
+        let element =
+            Element::insert(&orig_data, &conn)?.set_overpass_data(&override_data, &conn)?;
+        assert_eq!(override_data, element.overpass_data);
+        Ok(())
+    }
+
+    #[test]
+    fn set_tag() -> Result<()> {
+        let conn = mock_conn();
+        let tag_name = "foo";
+        let tag_value = json!("bar");
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?
+            .set_tag(tag_name, &tag_value, &conn)?;
+        assert_eq!(tag_value, element.tags[tag_name]);
+        Ok(())
+    }
+
+    #[test]
+    fn remove_tag() -> Result<()> {
         let conn = mock_conn();
         let tag_name = "foo";
         let element = Element::insert(&OverpassElement::mock(1), &conn)?
-            .insert_tag(tag_name, "bar", &conn)?
-            .delete_tag(tag_name, &conn)?;
+            .set_tag(tag_name, &"bar".into(), &conn)?
+            .remove_tag(tag_name, &conn)?;
         assert!(!element.tags.contains_key(tag_name));
+        Ok(())
+    }
+
+    #[test]
+    fn set_updated_at() -> Result<()> {
+        let conn = mock_conn();
+        let updated_at = OffsetDateTime::now_utc();
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?
+            .set_updated_at(&updated_at, &conn)?;
+        assert_eq!(
+            updated_at,
+            Element::select_by_id(element.id, &conn)?
+                .unwrap()
+                .updated_at
+        );
         Ok(())
     }
 

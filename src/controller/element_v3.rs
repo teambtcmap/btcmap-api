@@ -162,7 +162,7 @@ mod test {
         )
         .await;
         let req = TestRequest::get()
-            .uri("/?updated_since=2022-01-10")
+            .uri("/?updated_since=2022-01-10T00:00:00Z")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);

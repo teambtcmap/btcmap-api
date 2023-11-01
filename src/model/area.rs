@@ -211,30 +211,30 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = mock_conn();
-        let area_1 = Area::insert(&HashMap::new(), &conn)?;
-        let area_2 = Area::insert(&HashMap::new(), &conn)?;
-        let area_3 = Area::insert(&HashMap::new(), &conn)?;
-        let res = Area::select_all(None, &conn)?;
-        assert_eq!(3, res.len());
-        assert_eq!(area_1, res[0]);
-        assert_eq!(area_2, res[1]);
-        assert_eq!(area_3, res[2]);
+        assert_eq!(
+            vec![
+                Area::insert(&HashMap::new(), &conn)?,
+                Area::insert(&HashMap::new(), &conn)?,
+                Area::insert(&HashMap::new(), &conn)?
+            ],
+            Area::select_all(None, &conn)?
+        );
         Ok(())
     }
 
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
-        let _area_1 = Area::insert(&mock_tags(), &conn)?
+        Area::insert(&mock_tags(), &conn)?
             .set_updated_at(&datetime!(2020-01-01 00:00 UTC), &conn)?;
-        let area_2 = Area::insert(&mock_tags(), &conn)?
+        let expected_area_1 = Area::insert(&mock_tags(), &conn)?
             .set_updated_at(&datetime!(2020-01-02 00:00 UTC), &conn)?;
-        let area_3 = Area::insert(&mock_tags(), &conn)?
+        let expected_area_2 = Area::insert(&mock_tags(), &conn)?
             .set_updated_at(&datetime!(2020-01-03 00:00 UTC), &conn)?;
-        let res = Area::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &conn)?;
-        assert_eq!(2, res.len());
-        assert_eq!(area_2, res[0]);
-        assert_eq!(area_3, res[1]);
+        assert_eq!(
+            vec![expected_area_1, expected_area_2],
+            Area::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &conn)?
+        );
         Ok(())
     }
 

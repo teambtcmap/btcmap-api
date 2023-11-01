@@ -155,9 +155,9 @@ async fn post_tags(
     match element {
         Some(element) => {
             if args.value.len() > 0 {
-                element.insert_tag(&args.name, &args.value, &conn)?;
+                element.set_tag(&args.name, &args.value.clone().into(), &conn)?;
             } else {
-                element.delete_tag(&args.name, &conn)?;
+                element.remove_tag(&args.name, &conn)?;
             }
             Ok(HttpResponse::Created())
         }
@@ -252,7 +252,7 @@ mod test {
         )
         .await;
         let req = TestRequest::get()
-            .uri("/?updated_since=2022-01-10")
+            .uri("/?updated_since=2022-01-10T00:00:00Z")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
@@ -270,7 +270,7 @@ mod test {
         )
         .await;
         let req = TestRequest::get()
-            .uri(&format!("/{}", element.id))
+            .uri(&format!("/{}", element.overpass_data.btcmap_id()))
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, element.into());
@@ -293,7 +293,7 @@ mod test {
         )
         .await;
         let req = TestRequest::patch()
-            .uri(&format!("/{}/tags", element.id))
+            .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
@@ -318,7 +318,7 @@ mod test {
         )
         .await;
         let req = TestRequest::post()
-            .uri(&format!("/{}/tags", element.id))
+            .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
             .append_header(("Authorization", format!("Bearer {admin_token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),

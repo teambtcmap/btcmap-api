@@ -23,7 +23,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
         if old_icon != new_icon {
             info!(element.id, old_icon, new_icon, "Updating icon");
-            element.insert_tag("icon:android", &new_icon, &conn)?;
+            element.set_tag("icon:android", &new_icon.clone().into(), &conn)?;
         }
 
         if new_icon == "question_mark" {
@@ -1516,58 +1516,49 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
-    use crate::{model::element::Element, service::overpass::OverpassElement, Result, test::mock_conn};
+    use crate::{
+        model::element::Element,
+        service::overpass::OverpassElement,
+        test::{mock_conn, mock_osm_tags},
+        Result,
+    };
 
     #[actix_web::test]
     async fn run() -> Result<()> {
         let conn = mock_conn();
-        let mut tags = HashMap::new();
-        tags.insert("golf".into(), "clubhouse".into());
         Element::insert(
             &OverpassElement {
-                tags: Some(tags),
+                tags: Some(mock_osm_tags(&["golf", "clubhouse"])),
                 ..OverpassElement::mock(1)
             },
             &conn,
         )?;
-        // let mut tags = HashMap::new();
-        // tags.insert("building".into(), "industrial".into());
-        // Element::insert(
-        //     &OverpassElement {
-        //         tags: Some(tags),
-        //         ..OverpassElement::mock(2)
-        //     },
-        //     &conn,
-        // )?;
-        // super::run(&conn).await?;
-        // let elements = Element::select_all(None, &conn)?;
-        // assert_eq!(
-        //     "golf_course",
-        //     elements[0].tag("icon:android").as_str().unwrap()
-        // );
-        // assert_eq!(
-        //     "factory",
-        //     elements[1].tag("icon:android").as_str().unwrap()
-        // );
+        Element::insert(
+            &OverpassElement {
+                tags: Some(mock_osm_tags(&["building", "industrial"])),
+                ..OverpassElement::mock(2)
+            },
+            &conn,
+        )?;
+        super::run(&conn).await?;
+        let elements = Element::select_all(None, &conn)?;
+        assert_eq!(
+            "golf_course",
+            elements[0].tag("icon:android").as_str().unwrap()
+        );
+        assert_eq!("factory", elements[1].tag("icon:android").as_str().unwrap());
         Ok(())
     }
 
     #[test]
     fn generate_android_icon() {
-        let mut tags = HashMap::new();
-        tags.insert("golf".into(), "clubhouse".into());
         let element = OverpassElement {
-            tags: Some(tags),
+            tags: Some(mock_osm_tags(&["golf", "clubhouse"])),
             ..OverpassElement::mock(1)
         };
         assert_eq!("golf_course", &element.generate_android_icon());
-
-        let mut tags = HashMap::new();
-        tags.insert("building".into(), "industrial".into());
         let element = OverpassElement {
-            tags: Some(tags),
+            tags: Some(mock_osm_tags(&["building", "industrial"])),
             ..OverpassElement::mock(1)
         };
         assert_eq!("factory", &element.generate_android_icon());

@@ -21,3 +21,11 @@ pub fn mock_tags() -> HashMap<String, Value> {
     tags.insert("object".into(), Value::Object(Map::new()));
     tags
 }
+
+pub fn mock_osm_tags(kv_pairs: &[&str]) -> HashMap<String, String> {
+    let mut res = HashMap::new();
+    for chunk in kv_pairs.chunks(2) {
+        res.insert(chunk[0].into(), chunk[1].into());
+    }
+    res
+}

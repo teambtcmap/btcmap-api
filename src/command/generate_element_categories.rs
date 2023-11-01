@@ -25,7 +25,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
         if new_category != old_category {
             info!(element.id, old_category, new_category, "Updating category",);
-            element.insert_tag("category", &new_category, &conn)?;
+            element.set_tag("category", &new_category.clone().into(), &conn)?;
         }
 
         if new_category == "other" {
