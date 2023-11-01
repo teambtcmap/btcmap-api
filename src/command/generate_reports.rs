@@ -56,6 +56,10 @@ pub async fn run(mut db: Connection) -> Result<()> {
         let mut area_elements: Vec<&OverpassElement> = vec![];
         let geo_json = area.tags.get("geo_json").unwrap_or(&Value::Null);
 
+        if geo_json.is_null() {
+            continue;
+        }
+
         if geo_json.is_object() {
             let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json)?.parse();
 
