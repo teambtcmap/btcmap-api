@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Display, num::{TryFromIntError, ParseIntError}};
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    num::{ParseIntError, TryFromIntError},
+};
 
 use actix_web::{http::header::ContentType, HttpResponse, ResponseError};
 use reqwest::StatusCode;

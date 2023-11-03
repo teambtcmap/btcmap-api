@@ -38,7 +38,7 @@ pub struct OverpassElement {
     pub version: Option<i64>,
     pub changeset: Option<i64>,
     pub user: Option<String>,
-    pub uid: Option<i32>,
+    pub uid: Option<i64>,
     pub tags: Option<HashMap<String, String>>,
     pub bounds: Option<Bounds>,  // for ways and relations only
     pub nodes: Option<Value>,    // for ways only

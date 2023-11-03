@@ -29,7 +29,7 @@ pub struct GetArgs {
 
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
-    pub id: i32,
+    pub id: i64,
     pub osm_json: OsmUser,
     pub tags: HashMap<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
@@ -77,7 +77,7 @@ async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<Ge
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<i64>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
     User::select_by_id(id, &conn)?
@@ -92,7 +92,7 @@ pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<Get
 async fn patch_tags(
     args: Json<HashMap<String, Value>>,
     conn: Data<Connection>,
-    id: Path<i32>,
+    id: Path<i64>,
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;

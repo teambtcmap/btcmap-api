@@ -19,7 +19,7 @@ pub struct OsmElement {
     pub visible: Option<bool>,
     pub tags: Option<HashMap<String, String>>,
     pub user: String,
-    pub uid: i32,
+    pub uid: i64,
 }
 
 impl OsmElement {
@@ -67,7 +67,7 @@ struct OsmUserResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct OsmUser {
-    pub id: i32,
+    pub id: i64,
     pub display_name: String,
     #[serde(with = "time::serde::rfc3339")]
     pub account_created: OffsetDateTime,
@@ -134,7 +134,7 @@ impl OsmUser {
     }
 }
 
-pub async fn get_user(id: i32) -> Result<Option<OsmUser>> {
+pub async fn get_user(id: i64) -> Result<Option<OsmUser>> {
     let url = format!("https://api.openstreetmap.org/api/0.6/user/{id}.json");
     info!(url, "Querying OSM");
     let res = reqwest::get(&url).await?;

@@ -42,9 +42,9 @@ pub async fn run(db: Connection) -> Result<()> {
 async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connection) -> Result<()> {
     let tx: Transaction = db.transaction()?;
 
-    let elements = Element::select_all(None, &tx)?;
+    let cached_elements = Element::select_all(None, &tx)?;
 
-    info!(db_path = ?tx.path().unwrap(), elements = elements.len(), "Loaded all elements from database");
+    info!(db_path = ?tx.path().unwrap(), elements = cached_elements.len(), "Loaded all elements from database");
 
     let fresh_element_ids: HashSet<String> = fresh_elements
         .iter()
@@ -52,17 +52,17 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
         .collect();
 
     // First, let's check if any of the cached elements no longer accept bitcoins
-    for element in &elements {
-        if !fresh_element_ids.contains(&element.overpass_data.btcmap_id())
-            && element.deleted_at.is_none()
+    for cached_element in &cached_elements {
+        if !fresh_element_ids.contains(&cached_element.overpass_data.btcmap_id())
+            && cached_element.deleted_at.is_none()
         {
             warn!(
-                element.id,
+                cached_element.id,
                 "Cached element was deleted from Overpass or no longer accepts Bitcoin",
             );
-            let osm_id = element.overpass_data.id;
-            let element_type = &element.overpass_data.r#type;
-            let name = element.overpass_data.tag("name");
+            let osm_id = cached_element.overpass_data.id;
+            let element_type = &cached_element.overpass_data.r#type;
+            let name = cached_element.overpass_data.tag("name");
 
             let fresh_element = match osm::get_element(element_type, osm_id).await? {
                 Some(fresh_element) => fresh_element,
@@ -83,12 +83,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
             insert_user_if_not_exists(fresh_element.uid, &tx).await?;
 
-            Event::insert(
-                fresh_element.uid,
-                &element.overpass_data.btcmap_id(),
-                "delete",
-                &tx,
-            )?;
+            Event::insert(fresh_element.uid, cached_element.id, "delete", &tx)?;
 
             let message = format!(
                 "User {} removed https://www.openstreetmap.org/{element_type}/{osm_id}",
@@ -102,8 +97,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 message,
             );
 
-            info!(element.id, "Marking element as deleted");
-            element.set_deleted_at(Some(OffsetDateTime::now_utc()), &tx)?;
+            info!(cached_element.id, "Marking element as deleted");
+            cached_element.set_deleted_at(Some(OffsetDateTime::now_utc()), &tx)?;
         }
     }
 
@@ -115,15 +110,15 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
         let user_id = fresh_element.uid;
         let user_display_name = &fresh_element.user.clone().unwrap_or_default();
 
-        match elements
+        match cached_elements
             .iter()
             .find(|it| it.overpass_data.btcmap_id() == btcmap_id)
         {
-            Some(element) => {
-                if fresh_element != element.overpass_data {
+            Some(cached_element) => {
+                if fresh_element != cached_element.overpass_data {
                     info!(
                         btcmap_id,
-                        old_json = serde_json::to_string(&element.overpass_data)?,
+                        old_json = serde_json::to_string(&cached_element.overpass_data)?,
                         new_json = serde_json::to_string(&fresh_element)?,
                         "Element JSON was updated",
                     );
@@ -132,10 +127,10 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         insert_user_if_not_exists(user_id, &tx).await?;
                     }
 
-                    if fresh_element.changeset != element.overpass_data.changeset {
+                    if fresh_element.changeset != cached_element.overpass_data.changeset {
                         Event::insert(
                             user_id.unwrap().try_into().unwrap(),
-                            &btcmap_id,
+                            cached_element.id,
                             "update",
                             &tx,
                         )?;
@@ -154,20 +149,27 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     );
 
                     info!("Updating osm_json");
-                    element.set_overpass_data(&fresh_element, &tx)?;
+                    cached_element.set_overpass_data(&fresh_element, &tx)?;
 
                     let new_android_icon = fresh_element.generate_android_icon();
-                    let old_android_icon = element.tag("icon:android").as_str().unwrap_or_default();
+                    let old_android_icon = cached_element
+                        .tag("icon:android")
+                        .as_str()
+                        .unwrap_or_default();
 
                     if new_android_icon != old_android_icon {
                         info!(old_android_icon, new_android_icon, "Updating Android icon");
-                        element.set_tag("icon:android", &new_android_icon.clone().into(), &tx)?;
+                        cached_element.set_tag(
+                            "icon:android",
+                            &new_android_icon.clone().into(),
+                            &tx,
+                        )?;
                     }
                 }
 
-                if element.deleted_at.is_some() {
+                if cached_element.deleted_at.is_some() {
                     info!(btcmap_id, "Bitcoin tags were re-added");
-                    element.set_deleted_at(None, &tx)?;
+                    cached_element.set_deleted_at(None, &tx)?;
                 }
             }
             None => {
@@ -181,7 +183,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
                 Event::insert(
                     user_id.unwrap().try_into().unwrap(),
-                    &btcmap_id,
+                    element.id,
                     "create",
                     &tx,
                 )?;
@@ -212,7 +214,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
     Ok(())
 }
 
-pub async fn insert_user_if_not_exists(user_id: i32, conn: &Connection) -> Result<()> {
+pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()> {
     let db_user = User::select_by_id(user_id, conn)?;
 
     if db_user.is_some() {

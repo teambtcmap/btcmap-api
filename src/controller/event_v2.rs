@@ -22,14 +22,16 @@ use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
-    updated_since: Option<String>,
-    limit: Option<i32>,
+    #[serde(default)]
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_since: Option<OffsetDateTime>,
+    limit: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
-    pub id: i32,
-    pub user_id: i32,
+    pub id: i64,
+    pub user_id: i64,
     pub element_id: String,
     pub r#type: String,
     pub tags: HashMap<String, Value>,
@@ -45,7 +47,7 @@ impl Into<GetItem> for Event {
         GetItem {
             id: self.id,
             user_id: self.user_id,
-            element_id: self.element_id,
+            element_id: format!("{}:{}", self.element_osm_type, self.element_osm_id),
             r#type: self.r#type,
             tags: self.tags,
             created_at: self.created_at,
@@ -80,7 +82,7 @@ async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<Ge
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<i64>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
 
     Event::select_by_id(id, &conn)?
@@ -95,7 +97,7 @@ pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<Get
 async fn patch_tags(
     args: Json<HashMap<String, Value>>,
     conn: Data<Connection>,
-    id: Path<i32>,
+    id: Path<i64>,
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
     let id = id.into_inner();
@@ -109,12 +111,12 @@ async fn patch_tags(
         "User attempted to merge new tags",
     );
 
-    Event::select_by_id(id, &conn)?.ok_or(ApiError::new(
-        404,
-        &format!("There is no event with id = {id}"),
-    ))?;
-
-    Event::merge_tags(id, &args, &conn)?;
+    Event::select_by_id(id, &conn)?
+        .ok_or(ApiError::new(
+            404,
+            &format!("There is no event with id = {id}"),
+        ))?
+        .patch_tags(&args, &conn)?;
 
     Ok(HttpResponse::Ok())
 }
@@ -122,8 +124,8 @@ async fn patch_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::db;
-    use crate::model::token;
+    use crate::model::{token, Element};
+    use crate::service::overpass::OverpassElement;
     use crate::test::mock_conn;
     use crate::Result;
     use actix_web::test::TestRequest;
@@ -135,29 +137,24 @@ mod tests {
 
     #[actix_web::test]
     async fn get_empty_table() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let conn = mock_conn();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
-
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_one_row() -> Result<()> {
         let conn = mock_conn();
-
-        Event::insert(0, "", "", &conn)?;
-
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        Event::insert(1, element.id, "", &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -172,38 +169,33 @@ mod tests {
 
     #[actix_web::test]
     async fn get_with_limit() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-05T00:00:00Z')", [])?;
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-06T00:00:00Z')", [])?;
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 'node:1', 'test', '2023-05-07T00:00:00Z')", [])?;
-
+        let conn = mock_conn();
+        Element::insert(&OverpassElement::mock(1), &conn)?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-05T00:00:00Z')", [])?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-06T00:00:00Z')", [])?;
+        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-07T00:00:00Z')", [])?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get().uri("/?limit=2").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 2);
-
         Ok(())
     }
 
     #[actix_web::test]
     async fn get_updated_since() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let conn = mock_conn();
+        Element::insert(&OverpassElement::mock(1), &conn)?;
         conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-01-05T00:00:00Z')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 0, '2022-01-05T00:00:00Z')",
             [],
         )?;
         conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES ('', '', 0, '2022-02-05T00:00:00Z')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 0, '2022-02-05T00:00:00Z')",
             [],
         )?;
 
@@ -215,7 +207,7 @@ mod tests {
         .await;
 
         let req = TestRequest::get()
-            .uri("/?updated_since=2022-01-10")
+            .uri("/?updated_since=2022-01-10T00:00:00Z")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
@@ -227,7 +219,8 @@ mod tests {
     async fn get_by_id() -> Result<()> {
         let conn = mock_conn();
         let event_id = 1;
-        Event::insert(0, "", "", &conn)?;
+        Element::insert(&OverpassElement::mock(1), &conn)?;
+        Event::insert(1, 1, "", &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -243,14 +236,14 @@ mod tests {
 
     #[actix_web::test]
     async fn patch_tags() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let conn = mock_conn();
         let admin_token = "test";
         conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-        Event::insert(0, "", "", &conn)?;
+        Element::insert(&OverpassElement::mock(1), &conn)?;
+        Event::insert(1, 1, "", &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))

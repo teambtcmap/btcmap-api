@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 use crate::{service::osm::OsmUser, Result};
 
 pub struct User {
-    pub id: i32,
+    pub id: i64,
     pub osm_json: OsmUser,
     pub tags: HashMap<String, Value>,
     pub created_at: OffsetDateTime,
@@ -16,7 +16,7 @@ pub struct User {
 }
 
 impl User {
-    pub fn insert(id: i32, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
+    pub fn insert(id: i64, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
         let query = r#"
             INSERT INTO user (
                 rowid,
@@ -89,7 +89,7 @@ impl User {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub fn select_by_id(id: i32, conn: &Connection) -> Result<Option<User>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<User>> {
         let query = r#"
             SELECT
                 rowid,
@@ -108,7 +108,7 @@ impl User {
     }
 
     pub fn merge_tags(
-        id: i32,
+        id: i64,
         tags: &HashMap<String, Value>,
         conn: &Connection,
     ) -> crate::Result<()> {
@@ -126,7 +126,7 @@ impl User {
         Ok(())
     }
 
-    pub fn set_osm_json(id: i32, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
+    pub fn set_osm_json(id: i64, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
         let query = r#"
             UPDATE user
             SET osm_json = json(:osm_json)
