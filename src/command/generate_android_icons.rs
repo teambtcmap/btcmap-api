@@ -150,6 +150,10 @@ impl OverpassElement {
             icon_id = "factory"
         }
 
+        if building == "stadium" {
+            icon_id = "stadium"
+        }
+
         if office == "yes" {
             icon_id = "business"
         }
