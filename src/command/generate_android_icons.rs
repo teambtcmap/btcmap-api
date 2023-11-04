@@ -1190,6 +1190,10 @@ impl OverpassElement {
             icon_id = "fitness_center"
         }
 
+        if leisure == "ice_rink" {
+            icon_id = "sports_hockey"
+        }
+
         if healthcare == "dentist" {
             icon_id = "medical_services"
         }
