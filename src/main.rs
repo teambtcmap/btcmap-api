@@ -24,7 +24,7 @@ use tracing_subscriber::EnvFilter;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 async fn main() -> ExitCode {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
