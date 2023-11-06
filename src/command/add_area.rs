@@ -3,11 +3,10 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
-use crate::{model::Area, Error, Result};
-use rusqlite::Connection;
+use crate::{repo::AreaRepo, Error, Result};
 use serde_json::{Map, Value};
 
-pub async fn run(conn: &Connection) -> Result<()> {
+pub async fn run(repo: &AreaRepo) -> Result<()> {
     println!("Adding area");
     let mut tags = HashMap::new();
 
@@ -95,11 +94,11 @@ pub async fn run(conn: &Connection) -> Result<()> {
         )),
     );
 
-    match Area::select_by_url_alias(url_alias, &conn)? {
+    match repo.select_by_url_alias(url_alias).await? {
         Some(_) => Err(Error::Other(
             "Area with this url_alias already exists".into(),
         ))?,
-        None => Area::insert(&tags, conn)?,
+        None => repo.insert(&tags).await?,
     };
 
     Ok(())

@@ -12,6 +12,8 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
+use r2d2::PooledConnection;
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
@@ -76,7 +78,10 @@ struct PostTagsArgs {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
+async fn get(
+    args: Query<GetArgs>,
+    conn: Data<PooledConnection<SqliteConnectionManager>>,
+) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
         Some(updated_since) => Report::select_updated_since(updated_since, args.limit, &conn)?
             .into_iter()
@@ -104,7 +109,7 @@ pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<Get
 #[patch("{id}/tags")]
 async fn patch_tags(
     args: Json<HashMap<String, Value>>,
-    conn: Data<Connection>,
+    conn: Data<PooledConnection<SqliteConnectionManager>>,
     id: Path<i32>,
     req: HttpRequest,
 ) -> Result<impl Responder, ApiError> {
@@ -133,9 +138,9 @@ async fn patch_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::db;
-    use crate::model::{token, Area};
-    use crate::test::mock_conn;
+    use crate::model::token;
+    use crate::repo::AreaRepo;
+    use crate::test::mock_conn_pool;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -143,32 +148,32 @@ mod tests {
     use reqwest::StatusCode;
     use rusqlite::named_params;
     use serde_json::{json, Value};
+    use std::sync::Arc;
 
-    #[actix_web::test]
+    #[test]
     async fn get_empty_table() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let pool = Arc::new(mock_conn_pool());
+        let conn = pool.get()?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
-
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_one_row() -> Result<()> {
-        let conn = mock_conn();
+        let pool = Arc::new(mock_conn_pool());
+        let area_repo = AreaRepo::new(pool.clone());
+        let conn = pool.get()?;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(&area_tags, &conn)?;
+        area_repo.insert(&area_tags).await?;
         Report::insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new(), &conn)?;
         let app = test::init_service(
             App::new()
@@ -182,47 +187,48 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_with_limit() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let pool = Arc::new(mock_conn_pool());
+        let area_repo = AreaRepo::new(pool.clone());
+        let conn = pool.get()?;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(&area_tags, &conn)?;
+        area_repo.insert(&area_tags).await?;
         conn.execute(
             "INSERT INTO report (
-                area_id,
-                date,
-                updated_at
-            ) VALUES (
-                1,
-                '2023-05-06',
-                '2023-05-06T00:00:00Z'
-            )",
+                    area_id,
+                    date,
+                    updated_at
+                ) VALUES (
+                    1,
+                    '2023-05-06',
+                    '2023-05-06T00:00:00Z'
+                )",
             [],
         )?;
         conn.execute(
             "INSERT INTO report (
-                area_id,
-                date,
-                updated_at
-            ) VALUES (
-                1,
-                '2023-05-07',
-                '2023-05-07T00:00:00Z'
-            )",
+                    area_id,
+                    date,
+                    updated_at
+                ) VALUES (
+                    1,
+                    '2023-05-07',
+                    '2023-05-07T00:00:00Z'
+                )",
             [],
         )?;
         conn.execute(
             "INSERT INTO report (
-                area_id,
-                date,
-                updated_at
-            ) VALUES (
-                1,
-                '2023-05-08',
-                '2023-05-08T00:00:00Z'
-            )",
+                    area_id,
+                    date,
+                    updated_at
+                ) VALUES (
+                    1,
+                    '2023-05-08',
+                    '2023-05-08T00:00:00Z'
+                )",
             [],
         )?;
         let app = test::init_service(
@@ -237,21 +243,22 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_updated_since() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let pool = Arc::new(mock_conn_pool());
+        let area_repo = AreaRepo::new(pool.clone());
+        let conn = pool.get()?;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(&area_tags, &conn)?;
+        area_repo.insert(&area_tags).await?;
         conn.execute(
-            "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-01-05', '2022-01-05T00:00:00Z')",
-            [],
-        )?;
+                "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-01-05', '2022-01-05T00:00:00Z')",
+                [],
+            )?;
         conn.execute(
-            "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-02-05', '2022-02-05T00:00:00Z')",
-            [],
-        )?;
+                "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-02-05', '2022-02-05T00:00:00Z')",
+                [],
+            )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -268,20 +275,21 @@ mod tests {
 
     #[actix_web::test]
     async fn patch_tags() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let pool = Arc::new(mock_conn_pool());
+        let area_repo = AreaRepo::new(pool.clone());
+        let conn = pool.get()?;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(&area_tags, &conn)?;
+        area_repo.insert(&area_tags).await?;
         let admin_token = "test";
         conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         conn.execute(
-            "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2020-01-01', '2022-01-05T00:00:00Z')",
-            [],
-        )?;
+                "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2020-01-01', '2022-01-05T00:00:00Z')",
+                [],
+            )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))

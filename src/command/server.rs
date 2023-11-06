@@ -1,5 +1,6 @@
-use crate::command;
+use super::db;
 use crate::controller;
+use crate::repo::AreaRepo;
 use crate::Result;
 use actix_web::dev::Service;
 use actix_web::web;
@@ -10,11 +11,15 @@ use actix_web::{
     App, HttpServer,
 };
 use futures_util::future::FutureExt;
+use std::sync::Arc;
 use time::OffsetDateTime;
 use tracing::info;
 
 pub async fn run() -> Result<()> {
     HttpServer::new(move || {
+        let pool = Arc::new(db::pool().unwrap());
+        let area_repo = AreaRepo::new(pool.clone());
+
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -52,7 +57,9 @@ pub async fn run() -> Result<()> {
             })
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
-            .app_data(Data::new(command::db::open_connection().unwrap()))
+            .app_data(Data::new(db::open_connection().unwrap()))
+            .app_data(Data::new(pool.get().unwrap()))
+            .app_data(Data::new(area_repo))
             .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")

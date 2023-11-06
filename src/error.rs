@@ -6,6 +6,7 @@ use std::{
 
 use actix_web::{http::header::ContentType, HttpResponse, ResponseError};
 use reqwest::StatusCode;
+use tokio::task::JoinError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -81,6 +82,18 @@ impl From<TryFromIntError> for Error {
 impl From<time::error::Format> for Error {
     fn from(_: time::error::Format) -> Self {
         Error::Other("Time formatting error".into())
+    }
+}
+
+impl From<r2d2::Error> for Error {
+    fn from(_: r2d2::Error) -> Self {
+        Error::Other("Thread pool error".into())
+    }
+}
+
+impl From<JoinError> for Error {
+    fn from(_: JoinError) -> Self {
+        Error::Other("Join error".into())
     }
 }
 

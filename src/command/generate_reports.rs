@@ -2,7 +2,6 @@ use crate::model::report::Report;
 use crate::model::Area;
 use crate::service::overpass;
 use crate::service::overpass::OverpassElement;
-use crate::Error;
 use crate::Result;
 use geo::Contains;
 use geo::LineString;
@@ -18,41 +17,33 @@ use time::OffsetDateTime;
 use tracing::error;
 use tracing::info;
 
-pub async fn run(mut db: Connection) -> Result<()> {
+pub async fn run(mut conn: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
 
-    let existing_reports = Report::select_updated_since(&today.to_string(), None, &db)?;
+    let existing_reports = Report::select_updated_since(&today.to_string(), None, &conn)?;
 
     if !existing_reports.is_empty() {
         info!("Found existing reports, aborting");
         return Ok(());
     }
 
-    let earth = Area::select_by_url_alias("earth", &db)?;
-
-    if earth.is_none() {
-        Err(Error::Other(
-            "Can't find an area with url_alias = earth".into(),
-        ))?
-    }
-
-    let earth = earth.unwrap();
-
     let elements = overpass::query_bitcoin_merchants().await?;
 
-    let areas: Vec<Area> = Area::select_all(None, &db)?
-        .into_iter()
-        .filter(|it| it.deleted_at == None)
-        .collect();
+    let areas: Vec<Area> = vec![];
 
-    let tx = db.transaction()?;
-
-    let report_tags = generate_report_tags(&elements.iter().collect::<Vec<_>>())?;
-    insert_report(earth.id, &report_tags, &tx).await?;
+    let tx = conn.transaction()?;
 
     for area in areas {
         info!(area.id, "Generating report");
+
+        if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
+            info!(area.id, elements = elements.len(), "Processing area");
+            let report_tags = generate_report_tags(&elements.iter().collect::<Vec<_>>())?;
+            insert_report(area.id, &report_tags, &tx).await?;
+            continue;
+        }
+
         let mut area_elements: Vec<&OverpassElement> = vec![];
         let geo_json = area.tags.get("geo_json").unwrap_or(&Value::Null);
 
@@ -238,7 +229,7 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String,
 }
 
 async fn insert_report(
-    area_id: i32,
+    area_id: i64,
     tags: &HashMap<String, Value>,
     conn: &Connection,
 ) -> Result<()> {
