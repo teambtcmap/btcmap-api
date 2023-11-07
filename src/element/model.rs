@@ -1,18 +1,15 @@
-use std::collections::HashMap;
-
-use rusqlite::named_params;
-use rusqlite::OptionalExtension;
-
-use rusqlite::Connection;
-use rusqlite::Row;
+use crate::Result;
+use crate::{service::overpass::OverpassElement, Error};
+use deadpool_sqlite::Pool;
+use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::Value;
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
+use std::{collections::HashMap, sync::Arc};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::debug;
 
-use crate::service::overpass::OverpassElement;
-use crate::Error;
-use crate::Result;
+pub struct ElementRepo {
+    pool: Arc<Pool>,
+}
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Element {
@@ -22,6 +19,43 @@ pub struct Element {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
+}
+
+impl ElementRepo {
+    pub fn new(pool: &Arc<Pool>) -> Self {
+        Self { pool: pool.clone() }
+    }
+
+    #[cfg(test)]
+    pub async fn insert(&self, overpass_data: &OverpassElement) -> Result<Element> {
+        let overpass_data = overpass_data.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::insert(&overpass_data, conn))
+            .await?
+    }
+
+    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Element>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::select_all(limit, conn))
+            .await?
+    }
+
+    pub async fn select_updated_since(
+        &self,
+        updated_since: &OffsetDateTime,
+        limit: Option<i64>,
+    ) -> Result<Vec<Element>> {
+        let updated_since = updated_since.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::select_updated_since(&updated_since, limit, conn))
+            .await?
+    }
 }
 
 const TABLE: &str = "element";
@@ -50,7 +84,7 @@ impl Element {
             .ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub fn select_all(limit: Option<i32>, conn: &Connection) -> Result<Vec<Element>> {
+    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS} 
@@ -63,7 +97,7 @@ impl Element {
         Ok(conn
             .prepare(&query)?
             .query_map(
-                named_params! { ":limit": limit.unwrap_or(i32::MAX) },
+                named_params! { ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
@@ -71,7 +105,7 @@ impl Element {
 
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
-        limit: Option<i32>,
+        limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Element>> {
         let query = format!(
@@ -89,7 +123,7 @@ impl Element {
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
-                    ":limit": limit.unwrap_or(i32::MAX)
+                    ":limit": limit.unwrap_or(i64::MAX)
                 },
                 mapper(),
             )?

@@ -2,6 +2,7 @@ use super::db;
 use crate::area;
 use crate::area::AreaRepo;
 use crate::controller;
+use crate::element::ElementRepo;
 use crate::Result;
 use actix_web::dev::Service;
 use actix_web::web;
@@ -21,7 +22,8 @@ pub async fn run() -> Result<()> {
     let pool = Arc::new(db::pool()?);
 
     HttpServer::new(move || {
-        let area_repo = AreaRepo::new(pool.clone());
+        let area_repo = AreaRepo::new(&pool);
+        let element_repo = ElementRepo::new(&pool);
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -61,6 +63,7 @@ pub async fn run() -> Result<()> {
             .wrap(Compress::default())
             .app_data(Data::new(db::open_connection().unwrap()))
             .app_data(Data::new(area_repo))
+            .app_data(Data::new(element_repo))
             .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")

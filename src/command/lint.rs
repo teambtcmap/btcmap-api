@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 
-use crate::model::Element;
+use crate::element::Element;
 use crate::Connection;
 use crate::Result;
 use time::macros::format_description;

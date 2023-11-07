@@ -4,7 +4,6 @@ extern crate core;
 use command::add_area;
 use command::analyze_logs;
 use command::db;
-use command::db::pool;
 use command::fix_tags;
 use command::generate_android_icons;
 use command::generate_element_categories;
@@ -20,16 +19,15 @@ pub use error::Error;
 mod command;
 mod controller;
 mod discord;
+mod element;
 mod error;
 mod model;
 mod service;
 #[cfg(test)]
 mod test;
-use area::AreaRepo;
 use rusqlite::Connection;
 use std::env;
 use std::process::ExitCode;
-use std::sync::Arc;
 use tracing::error;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -136,22 +134,20 @@ async fn main() -> ExitCode {
             }
         }
         "add-area" => {
-            let repo = AreaRepo::new(Arc::new(pool().unwrap()));
-            if let Err(e) = add_area::run(&repo).await {
+            if let Err(e) = add_area::run(&db).await {
                 error!(?e, "Failed to add area");
                 return ExitCode::FAILURE;
             }
         }
         "import-countries" => {
-            let repo = AreaRepo::new(Arc::new(pool().unwrap()));
-            if let Err(e) = import_countries::run(args.get(2).unwrap_or(&"".into()), &repo).await {
+            if let Err(e) = import_countries::run(args.get(2).unwrap_or(&"".into()), &mut db).await
+            {
                 error!(?e, "Failed to import countries");
                 return ExitCode::FAILURE;
             }
         }
         "fix-tags" => {
-            let repo = AreaRepo::new(Arc::new(pool().unwrap()));
-            if let Err(e) = fix_tags::run(&repo).await {
+            if let Err(e) = fix_tags::run(&db).await {
                 error!(?e, "Failed to fix tags");
                 return ExitCode::FAILURE;
             }

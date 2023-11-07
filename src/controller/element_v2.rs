@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::model::Element;
+use crate::element::Element;
 use crate::service::auth::get_admin_token;
 use crate::service::overpass::OverpassElement;
 use crate::ApiError;
@@ -28,7 +28,7 @@ pub struct GetArgs {
     #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     updated_since: Option<OffsetDateTime>,
-    limit: Option<i32>,
+    limit: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]

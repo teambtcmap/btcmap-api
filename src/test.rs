@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use crate::{area::AreaRepo, command::db};
+use crate::{area::AreaRepo, command::db, element::ElementRepo};
 
 pub fn mock_conn() -> Connection {
     let mut conn = Connection::open_in_memory().unwrap();
@@ -30,7 +30,8 @@ pub fn mock_state() -> State {
     State {
         pool: pool.clone(),
         conn: conn,
-        area_repo: Arc::new(AreaRepo::new(pool.clone())),
+        area_repo: Arc::new(AreaRepo::new(&pool)),
+        element_repo: ElementRepo::new(&pool),
     }
 }
 
@@ -38,6 +39,7 @@ pub struct State {
     pub pool: Arc<Pool>,
     pub conn: Connection,
     pub area_repo: Arc<AreaRepo>,
+    pub element_repo: ElementRepo,
 }
 
 pub fn mock_tags() -> HashMap<String, Value> {

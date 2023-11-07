@@ -1,4 +1,4 @@
-use crate::model::Element;
+use crate::element::Element;
 use crate::service::overpass::OverpassElement;
 use crate::Connection;
 use crate::Result;
@@ -1525,7 +1525,7 @@ impl OverpassElement {
 #[cfg(test)]
 mod test {
     use crate::{
-        model::element::Element,
+        element::Element,
         service::overpass::OverpassElement,
         test::{mock_conn, mock_osm_tags},
         Result,

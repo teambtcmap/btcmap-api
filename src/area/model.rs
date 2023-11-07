@@ -19,6 +19,100 @@ pub struct Area {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
+impl AreaRepo {
+    pub fn new(pool: &Arc<Pool>) -> Self {
+        Self { pool: pool.clone() }
+    }
+
+    pub async fn insert(&self, tags: &HashMap<String, Value>) -> Result<Area> {
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::insert(&tags, conn))
+            .await?
+    }
+
+    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Area>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_all(limit, conn))
+            .await?
+    }
+
+    pub async fn select_updated_since(
+        &self,
+        updated_since: &OffsetDateTime,
+        limit: Option<i64>,
+    ) -> Result<Vec<Area>> {
+        let updated_since = updated_since.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_updated_since(&updated_since, limit, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_by_id(id, conn))
+            .await?
+    }
+
+    pub async fn select_by_url_alias(&self, url_alias: &str) -> Result<Option<Area>> {
+        let url_alias = url_alias.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_by_url_alias(&url_alias, conn))
+            .await?
+    }
+
+    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Area> {
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_patch_tags(id, &tags, conn))
+            .await?
+    }
+
+    pub async fn remove_tag(&self, id: i64, tag: &str) -> Result<Area> {
+        let tag = tag.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_remove_tag(id, &tag, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Area> {
+        let updated_at = updated_at.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_set_updated_at(id, &updated_at, conn))
+            .await?
+    }
+
+    pub async fn set_deleted_at(
+        &self,
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+    ) -> Result<Area> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_set_deleted_at(id, deleted_at, conn))
+            .await?
+    }
+}
+
 const TABLE: &str = "area";
 const ALL_COLUMNS: &str = "rowid, tags, created_at, updated_at, deleted_at";
 const COL_ROWID: &str = "rowid";
@@ -121,7 +215,7 @@ impl Area {
             .optional()?)
     }
 
-    pub fn __patch_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
+    pub fn patch_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
         Area::_patch_tags(self.id, tags, conn)
     }
 
@@ -253,100 +347,6 @@ impl Area {
                 deleted_at: row.get(4)?,
             })
         }
-    }
-}
-
-impl AreaRepo {
-    pub fn new(pool: Arc<Pool>) -> AreaRepo {
-        AreaRepo { pool }
-    }
-
-    pub async fn insert(&self, tags: &HashMap<String, Value>) -> Result<Area> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::insert(&tags, conn))
-            .await?
-    }
-
-    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Area>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_all(limit, conn))
-            .await?
-    }
-
-    pub async fn select_updated_since(
-        &self,
-        updated_since: &OffsetDateTime,
-        limit: Option<i64>,
-    ) -> Result<Vec<Area>> {
-        let updated_since = updated_since.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_updated_since(&updated_since, limit, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_by_id(id, conn))
-            .await?
-    }
-
-    pub async fn select_by_url_alias(&self, url_alias: &str) -> Result<Option<Area>> {
-        let url_alias = url_alias.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_by_url_alias(&url_alias, conn))
-            .await?
-    }
-
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Area> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_patch_tags(id, &tags, conn))
-            .await?
-    }
-
-    pub async fn remove_tag(&self, id: i64, tag: &str) -> Result<Area> {
-        let tag = tag.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_remove_tag(id, &tag, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Area> {
-        let updated_at = updated_at.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_set_updated_at(id, &updated_at, conn))
-            .await?
-    }
-
-    pub async fn set_deleted_at(
-        &self,
-        id: i64,
-        deleted_at: Option<OffsetDateTime>,
-    ) -> Result<Area> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_set_deleted_at(id, deleted_at, conn))
-            .await?
     }
 }
 

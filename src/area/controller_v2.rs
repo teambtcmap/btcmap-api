@@ -309,7 +309,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.conn))
-                .app_data(Data::new(AreaRepo::new(state.pool.clone())))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(scope("/").service(super::post_json)),
         )
         .await;
@@ -349,7 +349,7 @@ mod tests {
         let state = mock_state();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -367,7 +367,7 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -387,7 +387,7 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -406,7 +406,7 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::get_by_url_alias),
         )
         .await;
@@ -433,7 +433,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.conn))
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::patch_tags),
         )
         .await;
@@ -462,7 +462,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.conn))
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::patch_by_url_alias),
         )
         .await;
@@ -511,7 +511,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.conn))
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::post_tags),
         )
         .await;
@@ -543,7 +543,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.conn))
-                .app_data(Data::new(AreaRepo::new(state.pool)))
+                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::delete_by_url_alias),
         )
         .await;

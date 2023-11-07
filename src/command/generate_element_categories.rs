@@ -1,4 +1,4 @@
-use crate::model::Element;
+use crate::element::Element;
 use crate::service::overpass::OverpassElement;
 use crate::Connection;
 use crate::Result;
@@ -106,7 +106,7 @@ mod test {
 
     use crate::command::db;
 
-    use crate::model::element::Element;
+    use crate::element::Element;
     use crate::service::overpass::OverpassElement;
     use crate::Result;
 

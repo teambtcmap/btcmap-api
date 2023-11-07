@@ -124,7 +124,8 @@ async fn patch_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{token, Element};
+    use crate::element::Element;
+    use crate::model::token;
     use crate::service::overpass::OverpassElement;
     use crate::test::mock_conn;
     use crate::Result;

@@ -1,16 +1,15 @@
-use std::collections::HashMap;
-
-use crate::model::Element;
+use crate::element::Element;
+use crate::element::ElementRepo;
 use crate::service::overpass::OverpassElement;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Query;
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -18,7 +17,7 @@ pub struct GetArgs {
     #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     updated_since: Option<OffsetDateTime>,
-    limit: Option<i32>,
+    limit: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -71,14 +70,18 @@ impl Into<Json<GetItem>> for Element {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    conn: Data<Connection>,
+    repo: Data<ElementRepo>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => Element::select_updated_since(&updated_since, args.limit, &conn)?
+        Some(updated_since) => repo
+            .select_updated_since(&updated_since, args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
-        None => Element::select_all(args.limit, &conn)?
+        None => repo
+            .select_all(args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
@@ -88,19 +91,19 @@ pub async fn get(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test::mock_conn;
+    use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
     use time::macros::datetime;
 
-    #[actix_web::test]
+    #[test]
     async fn get_empty_array() -> Result<()> {
-        let conn = mock_conn();
+        let state = mock_state();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -110,54 +113,56 @@ mod test {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let conn = mock_conn();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let state = mock_state();
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.len(), 1);
-        assert_eq!(res[0], element.into());
+        assert_eq!(res, vec![element.into()]);
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_with_limit() -> Result<()> {
-        let conn = mock_conn();
-        let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?;
-        let element_3 = Element::insert(&OverpassElement::mock(3), &conn)?;
+        let state = mock_state();
+        let element_1 = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
+        let _element_3 = state.element_repo.insert(&OverpassElement::mock(3)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/?limit=2").to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0], element_1.into());
-        assert_eq!(res[1], element_2.into());
-        assert!(!res.contains(&element_3.into()));
+        assert_eq!(res, vec![element_1.into(), element_2.into()]);
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_updated_since() -> Result<()> {
-        let conn = mock_conn();
-        let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?
-            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &conn)?;
-        let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?
-            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &conn)?;
+        let state = mock_state();
+        let _element_1 = state
+            .element_repo
+            .insert(&OverpassElement::mock(1))
+            .await?
+            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        let element_2 = state
+            .element_repo
+            .insert(&OverpassElement::mock(2))
+            .await?
+            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -165,9 +170,7 @@ mod test {
             .uri("/?updated_since=2022-01-10T00:00:00Z")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.len(), 1);
-        assert_eq!(res[0], element_2.into());
-        assert!(!res.contains(&element_1.into()));
+        assert_eq!(res, vec![element_2.into()]);
         Ok(())
     }
 }
