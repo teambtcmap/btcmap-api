@@ -1,10 +1,8 @@
-use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
-
+use crate::{area::AreaRepo, Error, Result};
 use serde::Deserialize;
 use serde_json::Value;
+use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
 use tracing::info;
-
-use crate::{repo::AreaRepo, Error, Result};
 
 #[derive(Deserialize)]
 struct CountryJson {

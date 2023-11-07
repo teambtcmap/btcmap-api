@@ -1,5 +1,4 @@
-use crate::repo::AreaRepo;
-use crate::Result;
+use crate::{area::AreaRepo, Result};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;

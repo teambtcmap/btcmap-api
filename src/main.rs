@@ -25,7 +25,7 @@ mod model;
 mod service;
 #[cfg(test)]
 mod test;
-use repo::AreaRepo;
+use area::AreaRepo;
 use rusqlite::Connection;
 use std::env;
 use std::process::ExitCode;
@@ -35,7 +35,7 @@ use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-mod repo;
+mod area;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 

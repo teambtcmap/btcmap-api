@@ -1,6 +1,7 @@
 use super::db;
+use crate::area;
+use crate::area::AreaRepo;
 use crate::controller;
-use crate::repo::AreaRepo;
 use crate::Result;
 use actix_web::dev::Service;
 use actix_web::web;
@@ -82,13 +83,13 @@ pub async fn run() -> Result<()> {
             )
             .service(
                 scope("areas")
-                    .service(controller::area_v2::post_json)
-                    .service(controller::area_v2::get)
-                    .service(controller::area_v2::get_by_url_alias)
-                    .service(controller::area_v2::patch_tags)
-                    .service(controller::area_v2::patch_by_url_alias)
-                    .service(controller::area_v2::post_tags)
-                    .service(controller::area_v2::delete_by_url_alias),
+                    .service(area::controller_v2::post_json)
+                    .service(area::controller_v2::get)
+                    .service(area::controller_v2::get_by_url_alias)
+                    .service(area::controller_v2::patch_tags)
+                    .service(area::controller_v2::patch_by_url_alias)
+                    .service(area::controller_v2::post_tags)
+                    .service(area::controller_v2::delete_by_url_alias),
             )
             .service(
                 scope("reports")
@@ -120,13 +121,13 @@ pub async fn run() -> Result<()> {
                     )
                     .service(
                         scope("areas")
-                            .service(controller::area_v2::post_json)
-                            .service(controller::area_v2::get)
-                            .service(controller::area_v2::get_by_url_alias)
-                            .service(controller::area_v2::patch_tags)
-                            .service(controller::area_v2::patch_by_url_alias)
-                            .service(controller::area_v2::post_tags)
-                            .service(controller::area_v2::delete_by_url_alias),
+                            .service(area::controller_v2::post_json)
+                            .service(area::controller_v2::get)
+                            .service(area::controller_v2::get_by_url_alias)
+                            .service(area::controller_v2::patch_tags)
+                            .service(area::controller_v2::patch_by_url_alias)
+                            .service(area::controller_v2::post_tags)
+                            .service(area::controller_v2::delete_by_url_alias),
                     )
                     .service(
                         scope("reports")

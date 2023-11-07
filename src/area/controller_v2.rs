@@ -1,5 +1,5 @@
-use crate::model::Area;
-use crate::repo::area::AreaRepo;
+use crate::area::Area;
+use crate::area::AreaRepo;
 use crate::service::auth::get_admin_token;
 use crate::ApiError;
 use actix_web::delete;

@@ -3,7 +3,7 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
-use crate::{repo::AreaRepo, Error, Result};
+use crate::{area::AreaRepo, Error, Result};
 use serde_json::{Map, Value};
 
 pub async fn run(repo: &AreaRepo) -> Result<()> {

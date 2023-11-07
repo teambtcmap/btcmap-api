@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use crate::{command::db, repo::AreaRepo};
+use crate::{area::AreaRepo, command::db};
 
 pub fn mock_conn() -> Connection {
     let mut conn = Connection::open_in_memory().unwrap();

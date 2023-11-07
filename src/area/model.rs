@@ -1,10 +1,23 @@
-use crate::{model::Area, Error, Result};
+use crate::{Error, Result};
 use deadpool_sqlite::Pool;
-use rusqlite::{named_params, OptionalExtension, Row};
+use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::debug;
+
+pub struct AreaRepo {
+    pool: Arc<Pool>,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Area {
+    pub id: i64,
+    pub tags: HashMap<String, Value>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+    pub deleted_at: Option<OffsetDateTime>,
+}
 
 const TABLE: &str = "area";
 const ALL_COLUMNS: &str = "rowid, tags, created_at, updated_at, deleted_at";
@@ -14,16 +27,8 @@ const _COL_CREATED_AT: &str = "created_at";
 const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
-pub struct AreaRepo {
-    pool: Arc<Pool>,
-}
-
-impl AreaRepo {
-    pub fn new(pool: Arc<Pool>) -> AreaRepo {
-        AreaRepo { pool }
-    }
-
-    pub async fn insert(&self, tags: &HashMap<String, Value>) -> Result<Area> {
+impl Area {
+    pub fn insert(tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
         let query = format!(
             r#"
                 INSERT INTO {TABLE} ({COL_TAGS}) 
@@ -31,23 +36,14 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let tags = serde_json::to_string(tags)?;
-        let id = self
-            .pool
-            .get()
-            .await?
-            .interact(move |conn| -> Result<i64> {
-                conn.execute(&query, named_params! { ":tags": tags })?;
-                Ok(conn.last_insert_rowid())
-            })
-            .await??;
-        Ok(self
-            .select_by_id(id)
-            .await?
-            .ok_or(Error::DbTableRowNotFound)?)
+        conn.execute(
+            &query,
+            named_params! { ":tags": serde_json::to_string(tags)? },
+        )?;
+        Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Area>> {
+    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Area>> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
@@ -57,25 +53,19 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| {
-                Ok(conn
-                    .prepare(&query)?
-                    .query_map(
-                        named_params! { ":limit": limit.unwrap_or(i64::MAX) },
-                        mapper(),
-                    )?
-                    .collect::<Result<Vec<_>, _>>()?)
-            })
-            .await?
+        Ok(conn
+            .prepare(&query)?
+            .query_map(
+                named_params! { ":limit": limit.unwrap_or(i64::MAX) },
+                Self::mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub async fn select_updated_since(
-        &self,
+    pub fn select_updated_since(
         updated_since: &OffsetDateTime,
         limit: Option<i64>,
+        conn: &Connection,
     ) -> Result<Vec<Area>> {
         let query = format!(
             r#"
@@ -87,26 +77,19 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let updated_since = updated_since.format(&Rfc3339)?;
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| {
-                Ok(conn
-                    .prepare(&query)?
-                    .query_map(
-                        named_params! {
-                            ":updated_since": updated_since,
-                            ":limit": limit.unwrap_or(i64::MAX),
-                        },
-                        mapper(),
-                    )?
-                    .collect::<Result<Vec<_>, _>>()?)
-            })
-            .await?
+        Ok(conn
+            .prepare(&query)?
+            .query_map(
+                named_params! {
+                    ":updated_since": updated_since.format(&Rfc3339)?,
+                    ":limit": limit.unwrap_or(i64::MAX),
+                },
+                Self::mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Area>> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
@@ -115,18 +98,12 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| {
-                Ok(conn
-                    .query_row(&query, named_params! { ":id": id }, mapper())
-                    .optional()?)
-            })
-            .await?
+        Ok(conn
+            .query_row(&query, named_params! { ":id": id }, Self::mapper())
+            .optional()?)
     }
 
-    pub async fn select_by_url_alias(&self, url_alias: &str) -> Result<Option<Area>> {
+    pub fn select_by_url_alias(url_alias: &str, conn: &Connection) -> Result<Option<Area>> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
@@ -135,19 +112,20 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let url_alias = url_alias.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| {
-                Ok(conn
-                    .query_row(&query, named_params! { ":url_alias": url_alias }, mapper())
-                    .optional()?)
-            })
-            .await?
+        Ok(conn
+            .query_row(
+                &query,
+                named_params! { ":url_alias": url_alias },
+                Self::mapper(),
+            )
+            .optional()?)
     }
 
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Area> {
+    pub fn __patch_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
+        Area::_patch_tags(self.id, tags, conn)
+    }
+
+    pub fn _patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -156,28 +134,21 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let tags = serde_json::to_string(tags)?;
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| -> Result<()> {
-                conn.execute(
-                    &query,
-                    named_params! {
-                        ":id": id,
-                        ":tags": tags,
-                    },
-                )?;
-                Ok(())
-            })
-            .await??;
-        Ok(self
-            .select_by_id(id)
-            .await?
-            .ok_or(Error::DbTableRowNotFound)?)
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":tags": serde_json::to_string(tags)?,
+            },
+        )?;
+        Ok(Area::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub async fn remove_tag(&self, id: i64, tag: &str) -> Result<Area> {
+    pub fn __remove_tag(&self, tag: &str, conn: &Connection) -> Result<Area> {
+        Area::_remove_tag(self.id, tag, conn)
+    }
+
+    pub fn _remove_tag(id: i64, tag: &str, conn: &Connection) -> Result<Area> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -186,29 +157,27 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let tag = tag.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| -> Result<()> {
-                conn.execute(
-                    &query,
-                    named_params! {
-                        ":id": id,
-                        ":tag": format!("$.{tag}"),
-                    },
-                )?;
-                Ok(())
-            })
-            .await??;
-        Ok(self
-            .select_by_id(id)
-            .await?
-            .ok_or(Error::DbTableRowNotFound)?)
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":tag": format!("$.{tag}"),
+            },
+        )?;
+        Ok(Area::select_by_id(id, conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
     #[cfg(test)]
-    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Area> {
+    pub fn __set_updated_at(&self, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Area> {
+        Area::_set_updated_at(self.id, updated_at, conn)
+    }
+
+    #[cfg(test)]
+    pub fn _set_updated_at(
+        id: i64,
+        updated_at: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<Area> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -217,31 +186,28 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let updated_at = updated_at.format(&Rfc3339)?;
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| -> Result<()> {
-                conn.execute(
-                    &query,
-                    named_params! {
-                        ":id": id,
-                        ":updated_at": updated_at,
-                    },
-                )?;
-                Ok(())
-            })
-            .await??;
-        Ok(self
-            .select_by_id(id)
-            .await?
-            .ok_or(Error::DbTableRowNotFound)?)
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":updated_at": updated_at.format(&Rfc3339)?,
+            },
+        )?;
+        Ok(Area::select_by_id(id, conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub async fn set_deleted_at(
+    pub fn __set_deleted_at(
         &self,
+        deleted_at: Option<OffsetDateTime>,
+        conn: &Connection,
+    ) -> Result<Area> {
+        Area::_set_deleted_at(self.id, deleted_at, conn)
+    }
+
+    pub fn _set_deleted_at(
         id: i64,
         deleted_at: Option<OffsetDateTime>,
+        conn: &Connection,
     ) -> Result<Area> {
         match deleted_at {
             Some(deleted_at) => {
@@ -253,21 +219,13 @@ impl AreaRepo {
                     "#
                 );
                 debug!(query);
-                let deleted_at = deleted_at.format(&Rfc3339)?;
-                self.pool
-                    .get()
-                    .await?
-                    .interact(move |conn| -> Result<()> {
-                        conn.execute(
-                            &query,
-                            named_params! {
-                                ":id": id,
-                                ":deleted_at": deleted_at,
-                            },
-                        )?;
-                        Ok(())
-                    })
-                    .await??;
+                conn.execute(
+                    &query,
+                    named_params! {
+                        ":id": id,
+                        ":deleted_at": deleted_at.format(&Rfc3339)?,
+                    },
+                )?;
             }
             None => {
                 let query = format!(
@@ -278,34 +236,117 @@ impl AreaRepo {
                     "#
                 );
                 debug!(query);
-                self.pool
-                    .get()
-                    .await?
-                    .interact(move |conn| -> Result<()> {
-                        conn.execute(&query, named_params! { ":id": id })?;
-                        Ok(())
-                    })
-                    .await??;
+                conn.execute(&query, named_params! { ":id": id })?;
             }
         };
-        Ok(self
-            .select_by_id(id)
-            .await?
-            .ok_or(Error::DbTableRowNotFound)?)
+        Ok(Area::select_by_id(id, conn)?.ok_or(Error::DbTableRowNotFound)?)
+    }
+
+    const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
+        |row: &Row| -> rusqlite::Result<Area> {
+            let tags: String = row.get(1)?;
+            Ok(Area {
+                id: row.get(0)?,
+                tags: serde_json::from_str(&tags).unwrap(),
+                created_at: row.get(2)?,
+                updated_at: row.get(3)?,
+                deleted_at: row.get(4)?,
+            })
+        }
     }
 }
 
-const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
-    |row: &Row| -> rusqlite::Result<Area> {
-        let tags: String = row.get(1)?;
+impl AreaRepo {
+    pub fn new(pool: Arc<Pool>) -> AreaRepo {
+        AreaRepo { pool }
+    }
 
-        Ok(Area {
-            id: row.get(0)?,
-            tags: serde_json::from_str(&tags).unwrap(),
-            created_at: row.get(2)?,
-            updated_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-        })
+    pub async fn insert(&self, tags: &HashMap<String, Value>) -> Result<Area> {
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::insert(&tags, conn))
+            .await?
+    }
+
+    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Area>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_all(limit, conn))
+            .await?
+    }
+
+    pub async fn select_updated_since(
+        &self,
+        updated_since: &OffsetDateTime,
+        limit: Option<i64>,
+    ) -> Result<Vec<Area>> {
+        let updated_since = updated_since.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_updated_since(&updated_since, limit, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_by_id(id, conn))
+            .await?
+    }
+
+    pub async fn select_by_url_alias(&self, url_alias: &str) -> Result<Option<Area>> {
+        let url_alias = url_alias.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::select_by_url_alias(&url_alias, conn))
+            .await?
+    }
+
+    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Area> {
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_patch_tags(id, &tags, conn))
+            .await?
+    }
+
+    pub async fn remove_tag(&self, id: i64, tag: &str) -> Result<Area> {
+        let tag = tag.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_remove_tag(id, &tag, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Area> {
+        let updated_at = updated_at.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_set_updated_at(id, &updated_at, conn))
+            .await?
+    }
+
+    pub async fn set_deleted_at(
+        &self,
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+    ) -> Result<Area> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Area::_set_deleted_at(id, deleted_at, conn))
+            .await?
     }
 }
 
