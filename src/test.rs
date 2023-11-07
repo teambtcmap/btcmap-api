@@ -1,9 +1,13 @@
-use std::{collections::HashMap, sync::Arc};
-
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
+use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
 use serde_json::{Map, Value};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use crate::{command::db, repo::AreaRepo};
 
@@ -13,16 +17,27 @@ pub fn mock_conn() -> Connection {
     conn
 }
 
-pub fn mock_conn_pool() -> Pool<SqliteConnectionManager> {
-    let manager = SqliteConnectionManager::memory();
-    let pool = Pool::builder().build(manager).unwrap();
-    let mut conn = pool.get().unwrap();
+static MEM_DB_COUNTER: AtomicUsize = AtomicUsize::new(1);
+
+pub fn mock_state() -> State {
+    let uri = format!(
+        "file::testdb_{}:?mode=memory&cache=shared",
+        MEM_DB_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let mut conn = Connection::open(&uri).unwrap();
     db::migrate(&mut conn).unwrap();
-    pool
+    let pool = Arc::new(Config::new(uri).create_pool(Runtime::Tokio1).unwrap());
+    State {
+        pool: pool.clone(),
+        conn: conn,
+        area_repo: Arc::new(AreaRepo::new(pool.clone())),
+    }
 }
 
-pub fn mock_area_repo() -> AreaRepo {
-    AreaRepo::new(Arc::new(mock_conn_pool()))
+pub struct State {
+    pub pool: Arc<Pool>,
+    pub conn: Connection,
+    pub area_repo: Arc<AreaRepo>,
 }
 
 pub fn mock_tags() -> HashMap<String, Value> {

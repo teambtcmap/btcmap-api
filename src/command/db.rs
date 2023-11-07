@@ -1,10 +1,12 @@
 use crate::error::Error;
 use crate::Result;
+use deadpool_sqlite::Config;
+use deadpool_sqlite::Hook;
+use deadpool_sqlite::Pool;
+use deadpool_sqlite::Runtime;
 use directories::ProjectDirs;
 use include_dir::include_dir;
 use include_dir::Dir;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::Connection;
 use std::fmt;
 use std::fs::create_dir_all;
@@ -49,16 +51,16 @@ pub fn migrate(db: &mut Connection) -> Result<()> {
     execute_migrations(&get_migrations()?, db)
 }
 
-pub fn pool() -> Result<Pool<SqliteConnectionManager>> {
-    let manager = SqliteConnectionManager::file(get_file_path()?).with_init(|conn| {
-        conn.execute_batch(
-            r#"
-                PRAGMA journal_mode=WAL;
-                PRAGMA synchronous=NORMAL;
-            "#,
-        )
-    });
-    Ok(Pool::builder().max_size(4).build(manager)?)
+pub fn pool() -> Result<Pool> {
+    Ok(Config::new(get_file_path()?)
+        .builder(Runtime::Tokio1)?
+        .post_create(Hook::Fn(Box::new(|conn, _| {
+            let conn = conn.lock().unwrap();
+            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+            conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+            Ok(())
+        })))
+        .build()?)
 }
 
 pub fn open_connection() -> Result<Connection> {

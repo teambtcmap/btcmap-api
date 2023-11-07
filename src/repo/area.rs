@@ -1,14 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
-
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
+use crate::{model::Area, Error, Result};
+use deadpool_sqlite::Pool;
 use rusqlite::{named_params, OptionalExtension, Row};
 use serde_json::Value;
+use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tokio::task::spawn_blocking;
 use tracing::debug;
-
-use crate::{model::Area, Error, Result};
 
 const TABLE: &str = "area";
 const ALL_COLUMNS: &str = "rowid, tags, created_at, updated_at, deleted_at";
@@ -19,11 +15,11 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 pub struct AreaRepo {
-    pool: Arc<Pool<SqliteConnectionManager>>,
+    pool: Arc<Pool>,
 }
 
 impl AreaRepo {
-    pub fn new(pool: Arc<Pool<SqliteConnectionManager>>) -> AreaRepo {
+    pub fn new(pool: Arc<Pool>) -> AreaRepo {
         AreaRepo { pool }
     }
 
@@ -35,14 +31,16 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
         let tags = serde_json::to_string(tags)?;
-        let id = spawn_blocking(move || -> Result<i64> {
-            let conn = pool.clone().get()?;
-            conn.execute(&query, named_params! { ":tags": tags })?;
-            Ok(conn.last_insert_rowid())
-        })
-        .await??;
+        let id = self
+            .pool
+            .get()
+            .await?
+            .interact(move |conn| -> Result<i64> {
+                conn.execute(&query, named_params! { ":tags": tags })?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await??;
         Ok(self
             .select_by_id(id)
             .await?
@@ -59,19 +57,19 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
-        spawn_blocking(move || {
-            Ok(pool
-                .clone()
-                .get()?
-                .prepare(&query)?
-                .query_map(
-                    named_params! { ":limit": limit.unwrap_or(i64::MAX) },
-                    mapper(),
-                )?
-                .collect::<Result<Vec<_>, _>>()?)
-        })
-        .await?
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                Ok(conn
+                    .prepare(&query)?
+                    .query_map(
+                        named_params! { ":limit": limit.unwrap_or(i64::MAX) },
+                        mapper(),
+                    )?
+                    .collect::<Result<Vec<_>, _>>()?)
+            })
+            .await?
     }
 
     pub async fn select_updated_since(
@@ -89,22 +87,23 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
         let updated_since = updated_since.format(&Rfc3339)?;
-        spawn_blocking(move || {
-            Ok(pool
-                .get()?
-                .prepare(&query)?
-                .query_map(
-                    named_params! {
-                        ":updated_since": updated_since,
-                        ":limit": limit.unwrap_or(i64::MAX),
-                    },
-                    mapper(),
-                )?
-                .collect::<Result<Vec<_>, _>>()?)
-        })
-        .await?
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                Ok(conn
+                    .prepare(&query)?
+                    .query_map(
+                        named_params! {
+                            ":updated_since": updated_since,
+                            ":limit": limit.unwrap_or(i64::MAX),
+                        },
+                        mapper(),
+                    )?
+                    .collect::<Result<Vec<_>, _>>()?)
+            })
+            .await?
     }
 
     pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
@@ -116,14 +115,15 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
-        spawn_blocking(move || {
-            Ok(pool
-                .get()?
-                .query_row(&query, named_params! { ":id": id }, mapper())
-                .optional()?)
-        })
-        .await?
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                Ok(conn
+                    .query_row(&query, named_params! { ":id": id }, mapper())
+                    .optional()?)
+            })
+            .await?
     }
 
     pub async fn select_by_url_alias(&self, url_alias: &str) -> Result<Option<Area>> {
@@ -135,15 +135,16 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
         let url_alias = url_alias.to_string();
-        spawn_blocking(move || {
-            Ok(pool
-                .get()?
-                .query_row(&query, named_params! { ":url_alias": url_alias }, mapper())
-                .optional()?)
-        })
-        .await?
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                Ok(conn
+                    .query_row(&query, named_params! { ":url_alias": url_alias }, mapper())
+                    .optional()?)
+            })
+            .await?
     }
 
     pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Area> {
@@ -155,20 +156,21 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
         let tags = serde_json::to_string(tags)?;
-        spawn_blocking(move || -> Result<()> {
-            let conn = pool.get()?;
-            conn.execute(
-                &query,
-                named_params! {
-                    ":id": id,
-                    ":tags": tags,
-                },
-            )?;
-            Ok(())
-        })
-        .await??;
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| -> Result<()> {
+                conn.execute(
+                    &query,
+                    named_params! {
+                        ":id": id,
+                        ":tags": tags,
+                    },
+                )?;
+                Ok(())
+            })
+            .await??;
         Ok(self
             .select_by_id(id)
             .await?
@@ -184,19 +186,21 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
         let tag = tag.to_string();
-        spawn_blocking(move || -> Result<()> {
-            pool.get()?.execute(
-                &query,
-                named_params! {
-                    ":id": id,
-                    ":tag": format!("$.{tag}"),
-                },
-            )?;
-            Ok(())
-        })
-        .await??;
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| -> Result<()> {
+                conn.execute(
+                    &query,
+                    named_params! {
+                        ":id": id,
+                        ":tag": format!("$.{tag}"),
+                    },
+                )?;
+                Ok(())
+            })
+            .await??;
         Ok(self
             .select_by_id(id)
             .await?
@@ -213,19 +217,21 @@ impl AreaRepo {
             "#
         );
         debug!(query);
-        let pool = self.pool.clone();
         let updated_at = updated_at.format(&Rfc3339)?;
-        spawn_blocking(move || -> Result<()> {
-            pool.get()?.execute(
-                &query,
-                named_params! {
-                    ":id": id,
-                    ":updated_at": updated_at,
-                },
-            )?;
-            Ok(())
-        })
-        .await??;
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| -> Result<()> {
+                conn.execute(
+                    &query,
+                    named_params! {
+                        ":id": id,
+                        ":updated_at": updated_at,
+                    },
+                )?;
+                Ok(())
+            })
+            .await??;
         Ok(self
             .select_by_id(id)
             .await?
@@ -237,7 +243,6 @@ impl AreaRepo {
         id: i64,
         deleted_at: Option<OffsetDateTime>,
     ) -> Result<Area> {
-        let pool = self.pool.clone();
         match deleted_at {
             Some(deleted_at) => {
                 let query = format!(
@@ -249,17 +254,20 @@ impl AreaRepo {
                 );
                 debug!(query);
                 let deleted_at = deleted_at.format(&Rfc3339)?;
-                spawn_blocking(move || -> Result<()> {
-                    pool.get()?.execute(
-                        &query,
-                        named_params! {
-                            ":id": id,
-                            ":deleted_at": deleted_at,
-                        },
-                    )?;
-                    Ok(())
-                })
-                .await??;
+                self.pool
+                    .get()
+                    .await?
+                    .interact(move |conn| -> Result<()> {
+                        conn.execute(
+                            &query,
+                            named_params! {
+                                ":id": id,
+                                ":deleted_at": deleted_at,
+                            },
+                        )?;
+                        Ok(())
+                    })
+                    .await??;
             }
             None => {
                 let query = format!(
@@ -270,11 +278,14 @@ impl AreaRepo {
                     "#
                 );
                 debug!(query);
-                spawn_blocking(move || -> Result<()> {
-                    pool.get()?.execute(&query, named_params! { ":id": id })?;
-                    Ok(())
-                })
-                .await??;
+                self.pool
+                    .get()
+                    .await?
+                    .interact(move |conn| -> Result<()> {
+                        conn.execute(&query, named_params! { ":id": id })?;
+                        Ok(())
+                    })
+                    .await??;
             }
         };
         Ok(self
@@ -301,7 +312,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
 #[cfg(test)]
 mod test {
     use crate::{
-        test::{mock_area_repo, mock_tags},
+        test::{mock_state, mock_tags},
         Result,
     };
     use serde_json::{json, Value};
@@ -311,46 +322,51 @@ mod test {
 
     #[test]
     async fn insert() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let tags = mock_tags();
-        let res = repo.insert(&tags).await?;
+        let res = state.area_repo.insert(&tags).await?;
         assert_eq!(tags, res.tags);
-        assert_eq!(res, repo.select_by_id(res.id).await?.unwrap());
+        assert_eq!(res, state.area_repo.select_by_id(res.id).await?.unwrap());
         Ok(())
     }
 
     #[test]
     async fn select_all() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         assert_eq!(
             vec![
-                repo.insert(&HashMap::new()).await?,
-                repo.insert(&HashMap::new()).await?,
-                repo.insert(&HashMap::new()).await?,
+                state.area_repo.insert(&HashMap::new()).await?,
+                state.area_repo.insert(&HashMap::new()).await?,
+                state.area_repo.insert(&HashMap::new()).await?,
             ],
-            repo.select_all(None).await?,
+            state.area_repo.select_all(None).await?,
         );
         Ok(())
     }
 
     #[test]
     async fn select_updated_since() -> Result<()> {
-        let repo = mock_area_repo();
-        let _area_1 = repo.insert(&mock_tags()).await?;
-        let _area_1 = repo
+        let state = mock_state();
+        let _area_1 = state.area_repo.insert(&mock_tags()).await?;
+        let _area_1 = state
+            .area_repo
             .set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC))
             .await?;
-        let area_2 = repo.insert(&mock_tags()).await?;
-        let area_2 = repo
+        let area_2 = state.area_repo.insert(&mock_tags()).await?;
+        let area_2 = state
+            .area_repo
             .set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC))
             .await?;
-        let area_3 = repo.insert(&mock_tags()).await?;
-        let area_3 = repo
+        let area_3 = state.area_repo.insert(&mock_tags()).await?;
+        let area_3 = state
+            .area_repo
             .set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC))
             .await?;
         assert_eq!(
             vec![area_2, area_3],
-            repo.select_updated_since(&datetime!(2020-01-01 00:00 UTC), None)
+            state
+                .area_repo
+                .select_updated_since(&datetime!(2020-01-01 00:00 UTC), None)
                 .await?,
         );
         Ok(())
@@ -358,20 +374,21 @@ mod test {
 
     #[test]
     async fn select_by_id() -> Result<()> {
-        let repo = mock_area_repo();
-        let area = repo.insert(&HashMap::new()).await?;
-        assert_eq!(area, repo.select_by_id(area.id).await?.unwrap());
+        let state = mock_state();
+        let area = state.area_repo.insert(&HashMap::new()).await?;
+        assert_eq!(area, state.area_repo.select_by_id(area.id).await?.unwrap());
         Ok(())
     }
 
     #[test]
     async fn select_by_url_alias() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let url_alias = json!("url_alias_value");
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), url_alias.clone());
-        repo.insert(&tags).await?;
-        let area = repo
+        state.area_repo.insert(&tags).await?;
+        let area = state
+            .area_repo
             .select_by_url_alias(url_alias.as_str().unwrap())
             .await?;
         assert!(area.is_some());
@@ -382,17 +399,17 @@ mod test {
 
     #[test]
     async fn patch_tags() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let tag_1_name = "tag_1_name";
         let tag_1_value = json!("tag_1_value");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
-        let area = repo.insert(&tags).await?;
+        let area = state.area_repo.insert(&tags).await?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         tags.insert(tag_2_name.into(), tag_2_value.clone());
-        let area = repo.patch_tags(area.id, &tags).await?;
+        let area = state.area_repo.patch_tags(area.id, &tags).await?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         assert_eq!(tag_2_value, area.tags[tag_2_name]);
         Ok(())
@@ -400,27 +417,28 @@ mod test {
 
     #[test]
     async fn remove_tag() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let tag_name = "tag_name";
         let tag_value = json!("tag_value");
         let mut tags: HashMap<String, Value> = HashMap::new();
         tags.insert(tag_name.into(), tag_value.clone());
-        let area = repo.insert(&tags).await?;
+        let area = state.area_repo.insert(&tags).await?;
         assert_eq!(tag_value, area.tags[tag_name].as_str().unwrap());
-        let area = repo.remove_tag(area.id, tag_name).await?;
+        let area = state.area_repo.remove_tag(area.id, tag_name).await?;
         assert!(area.tags.get(tag_name).is_none());
         Ok(())
     }
 
     #[test]
     async fn set_deleted_at() -> Result<()> {
-        let repo = mock_area_repo();
-        let area = repo.insert(&HashMap::new()).await?;
-        let area = repo
+        let state = mock_state();
+        let area = state.area_repo.insert(&HashMap::new()).await?;
+        let area = state
+            .area_repo
             .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
             .await?;
         assert!(area.deleted_at.is_some());
-        let area = repo.set_deleted_at(area.id, None).await?;
+        let area = state.area_repo.set_deleted_at(area.id, None).await?;
         assert!(area.deleted_at.is_none());
         Ok(())
     }

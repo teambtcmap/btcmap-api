@@ -57,5 +57,4 @@ futures-util = { version = "0.3.28", default-features = false }
 # https://github.com/hyperium/http/releases
 http = { version = "0.2.9", default-features = false }
 
-r2d2 = { version = "0.8.10", default-features = false }
-r2d2_sqlite = { version = "0.22.0", default-features = false }
+deadpool-sqlite = { version = "0.6.0", default-features = false, features = ["rt_tokio_1"] }

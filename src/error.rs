@@ -5,6 +5,7 @@ use std::{
 };
 
 use actix_web::{http::header::ContentType, HttpResponse, ResponseError};
+use deadpool_sqlite::{BuildError, ConfigError, CreatePoolError, InteractError, PoolError};
 use reqwest::StatusCode;
 use tokio::task::JoinError;
 
@@ -85,15 +86,39 @@ impl From<time::error::Format> for Error {
     }
 }
 
-impl From<r2d2::Error> for Error {
-    fn from(_: r2d2::Error) -> Self {
-        Error::Other("Thread pool error".into())
-    }
-}
-
 impl From<JoinError> for Error {
     fn from(_: JoinError) -> Self {
         Error::Other("Join error".into())
+    }
+}
+
+impl From<InteractError> for Error {
+    fn from(_: InteractError) -> Self {
+        Error::Other("Interact error".into())
+    }
+}
+
+impl From<PoolError> for Error {
+    fn from(_: PoolError) -> Self {
+        Error::Other("Pool error".into())
+    }
+}
+
+impl From<CreatePoolError> for Error {
+    fn from(_: CreatePoolError) -> Self {
+        Error::Other("Create pool error".into())
+    }
+}
+
+impl From<ConfigError> for Error {
+    fn from(_: ConfigError) -> Self {
+        Error::Other("Pool config error".into())
+    }
+}
+
+impl From<BuildError> for Error {
+    fn from(_: BuildError) -> Self {
+        Error::Other("Pool building error".into())
     }
 }
 

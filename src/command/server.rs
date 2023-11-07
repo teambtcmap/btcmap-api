@@ -16,10 +16,11 @@ use time::OffsetDateTime;
 use tracing::info;
 
 pub async fn run() -> Result<()> {
-    HttpServer::new(move || {
-        let pool = Arc::new(db::pool().unwrap());
-        let area_repo = AreaRepo::new(pool.clone());
+    // All the worker threads are sharing a single connection pool
+    let pool = Arc::new(db::pool()?);
 
+    HttpServer::new(move || {
+        let area_repo = AreaRepo::new(pool.clone());
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -58,7 +59,6 @@ pub async fn run() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(db::open_connection().unwrap()))
-            .app_data(Data::new(pool.get().unwrap()))
             .app_data(Data::new(area_repo))
             .app_data(web::FormConfig::default().limit(262_144))
             .service(

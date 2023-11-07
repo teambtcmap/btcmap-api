@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::model::Area;
 use crate::repo::area::AreaRepo;
 use crate::service::auth::get_admin_token;
@@ -16,12 +14,12 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use r2d2::PooledConnection;
-use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use serde_json::Value;
+use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
@@ -92,7 +90,7 @@ struct PostTagsArgs {
 async fn post_json(
     req: HttpRequest,
     args: Json<PostJsonArgs>,
-    conn: Data<PooledConnection<SqliteConnectionManager>>,
+    conn: Data<Connection>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
@@ -167,7 +165,7 @@ async fn patch_by_url_alias(
     req: HttpRequest,
     args: Json<PatchArgs>,
     url_alias: Path<String>,
-    conn: Data<PooledConnection<SqliteConnectionManager>>,
+    conn: Data<Connection>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
@@ -196,7 +194,7 @@ async fn patch_tags(
     req: HttpRequest,
     args: Json<HashMap<String, Value>>,
     url_alias: Path<String>,
-    conn: Data<PooledConnection<SqliteConnectionManager>>,
+    conn: Data<Connection>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
@@ -225,7 +223,7 @@ async fn post_tags(
     req: HttpRequest,
     args: Form<PostTagsArgs>,
     url_alias: Path<String>,
-    conn: Data<PooledConnection<SqliteConnectionManager>>,
+    conn: Data<Connection>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
@@ -265,7 +263,7 @@ async fn post_tags(
 async fn delete_by_url_alias(
     req: HttpRequest,
     url_alias: Path<String>,
-    conn: Data<PooledConnection<SqliteConnectionManager>>,
+    conn: Data<Connection>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = get_admin_token(&conn, &req)?;
@@ -290,11 +288,9 @@ async fn delete_by_url_alias(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
     use crate::model::token;
-    use crate::test::{mock_area_repo, mock_conn_pool};
+    use crate::test::mock_state;
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -304,18 +300,16 @@ mod tests {
 
     #[test]
     async fn post_json() -> Result<()> {
-        let pool = Arc::new(mock_conn_pool());
-        let repo = AreaRepo::new(pool.clone());
-        let conn = pool.get()?;
+        let state = mock_state();
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
-                .app_data(Data::new(AreaRepo::new(pool.clone())))
+                .app_data(Data::new(state.conn))
+                .app_data(Data::new(AreaRepo::new(state.pool.clone())))
                 .service(scope("/").service(super::post_json)),
         )
         .await;
@@ -338,7 +332,11 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert!(res.status().is_success());
-        let area = repo.select_by_url_alias("test-area").await?.unwrap();
+        let area = state
+            .area_repo
+            .select_by_url_alias("test-area")
+            .await?
+            .unwrap();
         assert!(area.tags["string"].is_string());
         assert!(area.tags["int"].is_u64());
         assert!(area.tags["float"].is_f64());
@@ -348,10 +346,10 @@ mod tests {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(repo))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -363,13 +361,13 @@ mod tests {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), "test".into());
-        repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(repo))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -381,15 +379,15 @@ mod tests {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), "test".into());
-        repo.insert(&tags).await?;
-        repo.insert(&tags).await?;
-        repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(repo))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -401,14 +399,14 @@ mod tests {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let repo = mock_area_repo();
+        let state = mock_state();
         let area_url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
-        repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(repo))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(super::get_by_url_alias),
         )
         .await;
@@ -422,22 +420,20 @@ mod tests {
 
     #[test]
     async fn patch_tags() -> Result<()> {
-        let pool = Arc::new(mock_conn_pool());
-        let repo = AreaRepo::new(pool.clone());
-        let conn = pool.get()?;
+        let state = mock_state();
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
-                .app_data(Data::new(repo))
+                .app_data(Data::new(state.conn))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(super::patch_tags),
         )
         .await;
@@ -453,22 +449,20 @@ mod tests {
 
     #[test]
     async fn patch_by_id() -> Result<()> {
-        let pool = Arc::new(mock_conn_pool());
-        let repo = AreaRepo::new(pool.clone());
-        let conn = pool.get()?;
+        let state = mock_state();
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
-                .app_data(Data::new(AreaRepo::new(pool.clone())))
+                .app_data(Data::new(state.conn))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(super::patch_by_url_alias),
         )
         .await;
@@ -490,7 +484,11 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-        let area = repo.select_by_url_alias(&url_alias).await?.unwrap();
+        let area = state
+            .area_repo
+            .select_by_url_alias(&url_alias)
+            .await?
+            .unwrap();
         assert!(area.tags["string"].is_string());
         assert!(area.tags["unsigned"].is_u64());
         assert!(area.tags["float"].is_f64());
@@ -500,22 +498,20 @@ mod tests {
 
     #[test]
     async fn post_tags() -> Result<()> {
-        let pool = Arc::new(mock_conn_pool());
-        let repo = AreaRepo::new(pool.clone());
-        let conn = pool.get()?;
+        let state = mock_state();
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
-                .app_data(Data::new(repo))
+                .app_data(Data::new(state.conn))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(super::post_tags),
         )
         .await;
@@ -534,22 +530,20 @@ mod tests {
 
     #[actix_web::test]
     async fn delete() -> Result<()> {
-        let pool = Arc::new(mock_conn_pool());
-        let repo = AreaRepo::new(pool.clone());
-        let conn = pool.get()?;
+        let state = mock_state();
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        repo.insert(&tags).await?;
+        state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
-                .app_data(Data::new(AreaRepo::new(pool.clone())))
+                .app_data(Data::new(state.conn))
+                .app_data(Data::new(AreaRepo::new(state.pool)))
                 .service(super::delete_by_url_alias),
         )
         .await;
@@ -559,7 +553,7 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-        let area: Option<Area> = repo.select_by_url_alias(&url_alias).await?;
+        let area: Option<Area> = state.area_repo.select_by_url_alias(&url_alias).await?;
         assert!(area.is_some());
         assert!(area.unwrap().deleted_at != None);
         Ok(())
