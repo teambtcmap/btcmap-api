@@ -2,10 +2,11 @@ use super::db;
 use crate::area::AreaRepo;
 use crate::element::ElementRepo;
 use crate::event::model::EventRepo;
+use crate::report::model::ReportRepo;
 use crate::service::AuthService;
-use crate::Result;
 use crate::{area, element};
 use crate::{controller, event};
+use crate::{report, Result};
 use actix_web::dev::Service;
 use actix_web::web;
 use actix_web::web::scope;
@@ -28,6 +29,7 @@ pub async fn run() -> Result<()> {
         let area_repo = AreaRepo::new(&pool);
         let element_repo = ElementRepo::new(&pool);
         let event_repo = EventRepo::new(&pool);
+        let report_repo = ReportRepo::new(&pool);
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -70,6 +72,7 @@ pub async fn run() -> Result<()> {
             .app_data(Data::new(area_repo))
             .app_data(Data::new(element_repo))
             .app_data(Data::new(event_repo))
+            .app_data(Data::new(report_repo))
             .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")
@@ -102,9 +105,9 @@ pub async fn run() -> Result<()> {
             )
             .service(
                 scope("reports")
-                    .service(controller::report_v2::get)
-                    .service(controller::report_v2::get_by_id)
-                    .service(controller::report_v2::patch_tags),
+                    .service(report::controller_v2::get)
+                    .service(report::controller_v2::get_by_id)
+                    .service(report::controller_v2::patch_tags),
             )
             .service(scope("tiles").service(controller::tile::get))
             .service(
@@ -140,9 +143,9 @@ pub async fn run() -> Result<()> {
                     )
                     .service(
                         scope("reports")
-                            .service(controller::report_v2::get)
-                            .service(controller::report_v2::get_by_id)
-                            .service(controller::report_v2::patch_tags),
+                            .service(report::controller_v2::get)
+                            .service(report::controller_v2::get_by_id)
+                            .service(report::controller_v2::patch_tags),
                     )
                     .service(scope("tiles").service(controller::tile::get)),
             )

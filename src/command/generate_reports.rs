@@ -1,5 +1,5 @@
 use crate::area::Area;
-use crate::model::report::Report;
+use crate::report::Report;
 use crate::service::overpass;
 use crate::service::overpass::OverpassElement;
 use crate::Result;

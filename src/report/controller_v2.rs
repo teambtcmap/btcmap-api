@@ -1,4 +1,4 @@
-use crate::model::Report;
+use crate::report::model::ReportRepo;
 use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::get;
@@ -10,7 +10,6 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -19,15 +18,17 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
 
+use super::Report;
+
 #[derive(Deserialize)]
 pub struct GetArgs {
     updated_since: Option<String>,
-    limit: Option<i32>,
+    limit: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
-    pub id: i32,
+    pub id: i64,
     pub area_id: String,
     pub date: String,
     pub tags: HashMap<String, Value>,
@@ -75,13 +76,17 @@ struct PostTagsArgs {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
+async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => Report::select_updated_since(updated_since, args.limit, &conn)?
+        Some(updated_since) => repo
+            .select_updated_since(updated_since, args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
-        None => Report::select_all(args.limit, &conn)?
+        None => repo
+            .select_all(args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
@@ -89,10 +94,10 @@ async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<Ge
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<i64>, repo: Data<ReportRepo>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
-
-    Report::select_by_id(id, &conn)?
+    repo.select_by_id(id)
+        .await?
         .map(|it| it.into())
         .ok_or(ApiError::new(
             404,
@@ -103,10 +108,10 @@ pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<Get
 #[patch("{id}/tags")]
 async fn patch_tags(
     req: HttpRequest,
-    id: Path<i32>,
+    id: Path<i64>,
     args: Json<HashMap<String, Value>>,
-    conn: Data<Connection>,
     auth: Data<AuthService>,
+    repo: Data<ReportRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = auth.check(&req).await?;
     let report_id = id.into_inner();
@@ -120,12 +125,12 @@ async fn patch_tags(
         "User attempted to update report tags",
     );
 
-    Report::select_by_id(report_id, &conn)?.ok_or(ApiError::new(
+    repo.select_by_id(report_id).await?.ok_or(ApiError::new(
         404,
         &format!("Report with id = {report_id} doesn't exist"),
     ))?;
 
-    Report::merge_tags(report_id, &args, &conn)?;
+    repo.patch_tags(report_id, &args).await?;
 
     Ok(HttpResponse::Ok())
 }
@@ -148,8 +153,8 @@ mod tests {
         let state = mock_state();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
-                .service(scope("/").service(super::get)),
+                .app_data(Data::new(state.report_repo))
+                .service(scope("/").service(get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
@@ -172,8 +177,8 @@ mod tests {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
-                .service(scope("/").service(super::get)),
+                .app_data(Data::new(state.report_repo))
+                .service(scope("/").service(get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
@@ -226,8 +231,8 @@ mod tests {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
-                .service(scope("/").service(super::get)),
+                .app_data(Data::new(state.report_repo))
+                .service(scope("/").service(get)),
         )
         .await;
         let req = TestRequest::get().uri("/?limit=2").to_request();
@@ -252,8 +257,8 @@ mod tests {
                 )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
-                .service(scope("/").service(super::get)),
+                .app_data(Data::new(state.report_repo))
+                .service(scope("/").service(get)),
         )
         .await;
         let req = TestRequest::get()
@@ -264,7 +269,7 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state();
         let mut area_tags = HashMap::new();
@@ -281,8 +286,8 @@ mod tests {
                 )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
                 .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.report_repo))
                 .service(super::patch_tags),
         )
         .await;

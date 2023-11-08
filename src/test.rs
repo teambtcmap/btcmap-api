@@ -11,7 +11,7 @@ use std::{
 
 use crate::{
     area::AreaRepo, command::db, element::ElementRepo, event::model::EventRepo,
-    service::AuthService,
+    report::model::ReportRepo, service::AuthService,
 };
 
 pub fn mock_conn() -> Connection {
@@ -37,6 +37,7 @@ pub fn mock_state() -> State {
         area_repo: Arc::new(AreaRepo::new(&pool)),
         element_repo: ElementRepo::new(&pool),
         event_repo: EventRepo::new(&pool),
+        report_repo: ReportRepo::new(&pool),
     }
 }
 
@@ -47,6 +48,7 @@ pub struct State {
     pub area_repo: Arc<AreaRepo>,
     pub element_repo: ElementRepo,
     pub event_repo: EventRepo,
+    pub report_repo: ReportRepo,
 }
 
 pub fn mock_tags() -> HashMap<String, Value> {

@@ -23,6 +23,7 @@ mod element;
 mod error;
 mod event;
 mod model;
+mod report;
 mod service;
 #[cfg(test)]
 mod test;
