@@ -1,6 +1,6 @@
 use crate::area::Area;
 use crate::area::AreaRepo;
-use crate::service::AuthService;
+use crate::auth::AuthService;
 use crate::ApiError;
 use actix_web::delete;
 use actix_web::get;
@@ -288,9 +288,8 @@ async fn delete_by_url_alias(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::token;
     use crate::test::mock_state;
-    use crate::Result;
+    use crate::{auth, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -302,7 +301,7 @@ mod tests {
         let state = mock_state();
         let admin_token = "test";
         state.conn.execute(
-            token::INSERT,
+            auth::model::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let app = test::init_service(
@@ -422,7 +421,7 @@ mod tests {
         let state = mock_state();
         let admin_token = "test";
         state.conn.execute(
-            token::INSERT,
+            auth::model::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";
@@ -451,7 +450,7 @@ mod tests {
         let state = mock_state();
         let admin_token = "test";
         state.conn.execute(
-            token::INSERT,
+            auth::model::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";
@@ -500,7 +499,7 @@ mod tests {
         let state = mock_state();
         let admin_token = "test";
         state.conn.execute(
-            token::INSERT,
+            auth::model::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";
@@ -532,7 +531,7 @@ mod tests {
         let state = mock_state();
         let admin_token = "test";
         state.conn.execute(
-            token::INSERT,
+            auth::model::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         let url_alias = "test";

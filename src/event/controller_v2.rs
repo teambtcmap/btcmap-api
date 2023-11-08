@@ -1,5 +1,5 @@
+use crate::auth::AuthService;
 use crate::event::model::EventRepo;
-use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -125,10 +125,9 @@ async fn patch_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::token;
     use crate::service::overpass::OverpassElement;
     use crate::test::mock_state;
-    use crate::Result;
+    use crate::{auth, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
@@ -236,7 +235,7 @@ mod tests {
         let state = mock_state();
         let admin_token = "test";
         state.conn.execute(
-            token::INSERT,
+            auth::model::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;

@@ -33,9 +33,9 @@ pub static SELECT_BY_SECRET: &str = r#"
     WHERE secret = :secret
 "#;
 
-pub static SELECT_BY_SECRET_MAPPER: fn(&Row) -> Result<Token> = full_mapper();
+pub static SELECT_BY_SECRET_MAPPER: fn(&Row) -> Result<Token> = mapper();
 
-const fn full_mapper() -> fn(&Row) -> Result<Token> {
+const fn mapper() -> fn(&Row) -> Result<Token> {
     |row: &Row| -> Result<Token> {
         Ok(Token {
             id: row.get(0)?,

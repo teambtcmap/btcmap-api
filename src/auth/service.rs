@@ -1,10 +1,9 @@
-use std::sync::Arc;
-
-use crate::{model::token, ApiError};
+use super::{model, Token};
+use crate::ApiError;
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
 use rusqlite::{Connection, OptionalExtension};
-use token::Token;
+use std::sync::Arc;
 
 pub struct AuthService {
     pool: Arc<Pool>,
@@ -46,9 +45,9 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
 
     let token = db
         .query_row(
-            token::SELECT_BY_SECRET,
+            model::SELECT_BY_SECRET,
             &[(":secret", &secret)],
-            token::SELECT_BY_SECRET_MAPPER,
+            model::SELECT_BY_SECRET_MAPPER,
         )
         .optional()?;
 
@@ -83,7 +82,7 @@ mod tests {
         db::migrate(&mut conn)?;
 
         conn.execute(
-            token::INSERT,
+            model::INSERT,
             named_params! {
                 ":user_id": "1",
                 ":secret": "test",
@@ -110,7 +109,7 @@ mod tests {
         db::migrate(&mut conn)?;
 
         conn.execute(
-            token::INSERT,
+            model::INSERT,
             named_params! {
                 ":user_id": 1,
                 ":secret": "qwerty",

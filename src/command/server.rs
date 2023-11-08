@@ -1,9 +1,9 @@
 use super::db;
 use crate::area::AreaRepo;
+use crate::auth::AuthService;
 use crate::element::ElementRepo;
 use crate::event::model::EventRepo;
 use crate::report::model::ReportRepo;
-use crate::service::AuthService;
 use crate::{area, element};
 use crate::{controller, event};
 use crate::{report, Result};

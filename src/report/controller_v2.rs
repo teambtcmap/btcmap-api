@@ -1,5 +1,5 @@
+use crate::auth::AuthService;
 use crate::report::model::ReportRepo;
-use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -138,9 +138,8 @@ async fn patch_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::token;
     use crate::test::mock_state;
-    use crate::Result;
+    use crate::{auth, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
@@ -277,7 +276,7 @@ mod tests {
         state.area_repo.insert(&area_tags).await?;
         let admin_token = "test";
         state.conn.execute(
-            token::INSERT,
+            auth::model::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
         state.conn.execute(

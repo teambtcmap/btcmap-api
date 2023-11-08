@@ -1,3 +1,7 @@
+use crate::{
+    area::AreaRepo, auth::AuthService, command::db, element::ElementRepo, event::model::EventRepo,
+    report::model::ReportRepo,
+};
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
 use serde_json::{Map, Value};
@@ -7,11 +11,6 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-};
-
-use crate::{
-    area::AreaRepo, command::db, element::ElementRepo, event::model::EventRepo,
-    report::model::ReportRepo, service::AuthService,
 };
 
 pub fn mock_conn() -> Connection {
