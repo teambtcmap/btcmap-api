@@ -14,7 +14,6 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -140,11 +139,11 @@ async fn patch_tags(
 
 #[post("{id}/tags")]
 async fn post_tags(
-    id: Path<String>,
     req: HttpRequest,
+    id: Path<String>,
     args: Form<PostTagsArgs>,
-    conn: Data<Connection>,
     auth: Data<AuthService>,
+    repo: Data<ElementRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = auth.check(&req).await?;
     let id_parts: Vec<&str> = id.split(":").collect();
@@ -158,13 +157,14 @@ async fn post_tags(
         tag_value = args.value,
         "User attempted to update element tag",
     );
-    let element = Element::select_by_osm_type_and_id(r#type, id, &conn)?;
+    let element = repo.select_by_osm_type_and_id(r#type, id).await?;
     match element {
         Some(element) => {
             if args.value.len() > 0 {
-                element.set_tag(&args.name, &args.value.clone().into(), &conn)?;
+                repo.set_tag(element.id, &args.name, &args.value.clone().into())
+                    .await?;
             } else {
-                element.remove_tag(&args.name, &conn)?;
+                repo.remove_tag(element.id, &args.name).await?;
             }
             Ok(HttpResponse::Created())
         }
@@ -321,8 +321,8 @@ mod test {
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
                 .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.element_repo))
                 .service(super::post_tags),
         )
         .await;

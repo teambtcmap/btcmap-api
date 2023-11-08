@@ -78,6 +78,25 @@ impl ElementRepo {
             .interact(move |conn| Element::_patch_tags(id, &tags, conn))
             .await?
     }
+
+    pub async fn set_tag(&self, id: i64, name: &str, value: &Value) -> Result<Element> {
+        let name = name.to_string();
+        let value = value.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::_set_tag(id, &name, &value, conn))
+            .await?
+    }
+
+    pub async fn remove_tag(&self, id: i64, name: &str) -> Result<Element> {
+        let name = name.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::_remove_tag(id, &name, conn))
+            .await?
+    }
 }
 
 const TABLE: &str = "element";
@@ -192,6 +211,7 @@ impl Element {
             .optional()?)
     }
 
+    #[cfg(test)]
     pub fn patch_tags(
         &self,
         tags: &HashMap<String, Value>,
@@ -258,12 +278,21 @@ impl Element {
     }
 
     pub fn set_tag(&self, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
-        let mut patch_set = HashMap::new();
-        patch_set.insert(name.into(), value.clone());
-        self.patch_tags(&patch_set, conn)
+        Element::_set_tag(self.id, name, value, conn)
     }
 
+    pub fn _set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
+        let mut patch_set = HashMap::new();
+        patch_set.insert(name.into(), value.clone());
+        Element::_patch_tags(id, &patch_set, conn)
+    }
+
+    #[cfg(test)]
     pub fn remove_tag(&self, name: &str, conn: &Connection) -> Result<Element> {
+        Element::_remove_tag(self.id, name, conn)
+    }
+
+    pub fn _remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Element> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -275,11 +304,11 @@ impl Element {
         conn.execute(
             &query,
             named_params! {
-                ":id": self.id,
+                ":id": id,
                 ":name": format!("$.{name}"),
             },
         )?;
-        Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
     #[cfg(test)]

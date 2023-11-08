@@ -1,10 +1,10 @@
 use super::db;
-use crate::area;
 use crate::area::AreaRepo;
 use crate::controller;
 use crate::element::ElementRepo;
 use crate::service::AuthService;
 use crate::Result;
+use crate::{area, element};
 use actix_web::dev::Service;
 use actix_web::web;
 use actix_web::web::scope;
@@ -70,10 +70,10 @@ pub async fn run() -> Result<()> {
             .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")
-                    .service(controller::element_v2::get)
-                    .service(controller::element_v2::get_by_osm_type_and_id)
-                    .service(controller::element_v2::patch_tags)
-                    .service(controller::element_v2::post_tags),
+                    .service(element::controller_v2::get)
+                    .service(element::controller_v2::get_by_osm_type_and_id)
+                    .service(element::controller_v2::patch_tags)
+                    .service(element::controller_v2::post_tags),
             )
             .service(
                 scope("events")
@@ -108,10 +108,10 @@ pub async fn run() -> Result<()> {
                 scope("v2")
                     .service(
                         scope("elements")
-                            .service(controller::element_v2::get)
-                            .service(controller::element_v2::get_by_osm_type_and_id)
-                            .service(controller::element_v2::patch_tags)
-                            .service(controller::element_v2::post_tags),
+                            .service(element::controller_v2::get)
+                            .service(element::controller_v2::get_by_osm_type_and_id)
+                            .service(element::controller_v2::patch_tags)
+                            .service(element::controller_v2::post_tags),
                     )
                     .service(
                         scope("events")
@@ -143,7 +143,7 @@ pub async fn run() -> Result<()> {
                     )
                     .service(scope("tiles").service(controller::tile::get)),
             )
-            .service(scope("v3").service(scope("elements").service(controller::element_v3::get)))
+            .service(scope("v3").service(scope("elements").service(element::controller_v3::get)))
     })
     .bind(("127.0.0.1", 8000))?
     .run()
