@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use crate::element::Element;
 use crate::element::ElementRepo;
-use crate::service::auth::get_admin_token;
 use crate::service::overpass::OverpassElement;
+use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -20,6 +18,7 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
@@ -113,12 +112,13 @@ pub async fn get_by_osm_type_and_id(
 
 #[patch("{id}/tags")]
 async fn patch_tags(
-    args: Json<HashMap<String, Value>>,
-    conn: Data<Connection>,
-    id: Path<String>,
     req: HttpRequest,
+    id: Path<String>,
+    args: Json<HashMap<String, Value>>,
+    auth: Data<AuthService>,
+    repo: Data<ElementRepo>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
     let id_parts: Vec<&str> = id.split(":").collect();
     let r#type = id_parts[0];
     let id = id_parts[1].parse::<i64>()?;
@@ -126,8 +126,8 @@ async fn patch_tags(
         token.user_id,
         r#type, id, "User attempted to merge new tags",
     );
-    match Element::select_by_osm_type_and_id(r#type, id, &conn)? {
-        Some(element) => element.patch_tags(&args, &conn)?,
+    match repo.select_by_osm_type_and_id(r#type, id).await? {
+        Some(element) => repo.patch_tags(element.id, &args).await?,
         None => {
             return Err(ApiError::new(
                 404,
@@ -144,8 +144,9 @@ async fn post_tags(
     req: HttpRequest,
     args: Form<PostTagsArgs>,
     conn: Data<Connection>,
+    auth: Data<AuthService>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
     let id_parts: Vec<&str> = id.split(":").collect();
     let r#type = id_parts[0];
     let id = id_parts[1].parse::<i64>()?;
@@ -178,7 +179,7 @@ async fn post_tags(
 mod test {
     use super::*;
     use crate::model::token;
-    use crate::test::{mock_conn, mock_state};
+    use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -283,18 +284,19 @@ mod test {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn patch_tags() -> Result<()> {
-        let conn = mock_conn();
+        let state = mock_state();
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.element_repo))
                 .service(super::patch_tags),
         )
         .await;
@@ -308,18 +310,19 @@ mod test {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn post_tags() -> Result<()> {
-        let conn = mock_conn();
+        let state = mock_state();
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .service(super::post_tags),
         )
         .await;

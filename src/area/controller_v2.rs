@@ -1,6 +1,6 @@
 use crate::area::Area;
 use crate::area::AreaRepo;
-use crate::service::auth::get_admin_token;
+use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::delete;
 use actix_web::get;
@@ -14,7 +14,6 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -90,10 +89,10 @@ struct PostTagsArgs {
 async fn post_json(
     req: HttpRequest,
     args: Json<PostJsonArgs>,
-    conn: Data<Connection>,
+    auth: Data<AuthService>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
 
     if !args.tags.contains_key("url_alias") {
         Err(ApiError::new(500, format!("url_alias is missing")))?
@@ -165,10 +164,10 @@ async fn patch_by_url_alias(
     req: HttpRequest,
     args: Json<PatchArgs>,
     url_alias: Path<String>,
-    conn: Data<Connection>,
+    auth: Data<AuthService>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
     let area_url_alias = url_alias.into_inner();
 
     warn!(
@@ -194,10 +193,10 @@ async fn patch_tags(
     req: HttpRequest,
     args: Json<HashMap<String, Value>>,
     url_alias: Path<String>,
-    conn: Data<Connection>,
+    auth: Data<AuthService>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
 
     warn!(
         token.user_id,
@@ -223,10 +222,10 @@ async fn post_tags(
     req: HttpRequest,
     args: Form<PostTagsArgs>,
     url_alias: Path<String>,
-    conn: Data<Connection>,
+    auth: Data<AuthService>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
     let area_url_alias = url_alias.into_inner();
 
     warn!(
@@ -263,10 +262,10 @@ async fn post_tags(
 async fn delete_by_url_alias(
     req: HttpRequest,
     url_alias: Path<String>,
-    conn: Data<Connection>,
+    auth: Data<AuthService>,
     repo: Data<AreaRepo>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
     let url_alias = url_alias.into_inner();
 
     warn!(token.user_id, url_alias, "User attempted to delete an area",);
@@ -308,7 +307,7 @@ mod tests {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(scope("/").service(super::post_json)),
         )
@@ -432,7 +431,7 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::patch_tags),
         )
@@ -461,7 +460,7 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::patch_by_url_alias),
         )
@@ -510,7 +509,7 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::post_tags),
         )
@@ -528,7 +527,7 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn delete() -> Result<()> {
         let state = mock_state();
         let admin_token = "test";
@@ -542,7 +541,7 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::delete_by_url_alias),
         )

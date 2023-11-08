@@ -1,11 +1,34 @@
+use std::sync::Arc;
+
 use crate::{model::token, ApiError};
-use actix_web::HttpRequest;
+use actix_web::{http::header::HeaderMap, HttpRequest};
+use deadpool_sqlite::Pool;
 use rusqlite::{Connection, OptionalExtension};
 use token::Token;
 
-pub fn get_admin_token(db: &Connection, req: &HttpRequest) -> Result<Token, ApiError> {
-    let auth_header = req
-        .headers()
+pub struct AuthService {
+    pool: Arc<Pool>,
+}
+
+impl AuthService {
+    pub fn new(pool: &Arc<Pool>) -> Self {
+        Self { pool: pool.clone() }
+    }
+
+    pub async fn check(&self, req: &HttpRequest) -> Result<Token, ApiError> {
+        let headers = req.headers().clone();
+        self.pool
+            .get()
+            .await
+            .unwrap()
+            .interact(move |conn| get_admin_token(&conn, &headers))
+            .await
+            .unwrap()
+    }
+}
+
+pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, ApiError> {
+    let auth_header = headers
         .get("Authorization")
         .map(|it| it.to_str().unwrap_or(""))
         .unwrap_or("");
@@ -114,7 +137,7 @@ mod tests {
 
     #[get("")]
     async fn get(req: HttpRequest, db: Data<Connection>) -> Result<impl Responder, ApiError> {
-        get_admin_token(&db, &req)?;
+        get_admin_token(&db, &req.headers())?;
         Ok(Response::ok())
     }
 }

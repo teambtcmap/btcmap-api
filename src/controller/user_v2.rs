@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use crate::model::User;
-use crate::service::auth::get_admin_token;
 use crate::service::osm::OsmUser;
+use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -17,6 +15,7 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
@@ -90,12 +89,13 @@ pub async fn get_by_id(id: Path<i64>, conn: Data<Connection>) -> Result<Json<Get
 
 #[patch("{id}/tags")]
 async fn patch_tags(
+    req: HttpRequest,
+    id: Path<i64>,
     args: Json<HashMap<String, Value>>,
     conn: Data<Connection>,
-    id: Path<i64>,
-    req: HttpRequest,
+    auth: Data<AuthService>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
     let user_id = id.into_inner();
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
@@ -122,7 +122,7 @@ mod tests {
     use super::*;
     use crate::command::db;
     use crate::model::token;
-    use crate::test::mock_conn;
+    use crate::test::{mock_conn, mock_state};
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -220,23 +220,23 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn patch_tags() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        let state = mock_state();
 
         let admin_token = "test";
-        conn.execute(
+        state.conn.execute(
             token::INSERT,
             named_params! { ":user_id": 1, ":secret": admin_token },
         )?;
 
         let user_id = 1;
-        User::insert(user_id, &OsmUser::mock(), &conn)?;
+        User::insert(user_id, &OsmUser::mock(), &state.conn)?;
 
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .service(super::patch_tags),
         )
         .await;

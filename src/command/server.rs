@@ -3,6 +3,7 @@ use crate::area;
 use crate::area::AreaRepo;
 use crate::controller;
 use crate::element::ElementRepo;
+use crate::service::AuthService;
 use crate::Result;
 use actix_web::dev::Service;
 use actix_web::web;
@@ -22,6 +23,7 @@ pub async fn run() -> Result<()> {
     let pool = Arc::new(db::pool()?);
 
     HttpServer::new(move || {
+        let auth_service = AuthService::new(&pool);
         let area_repo = AreaRepo::new(&pool);
         let element_repo = ElementRepo::new(&pool);
         App::new()
@@ -62,6 +64,7 @@ pub async fn run() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(db::open_connection().unwrap()))
+            .app_data(Data::new(auth_service))
             .app_data(Data::new(area_repo))
             .app_data(Data::new(element_repo))
             .app_data(web::FormConfig::default().limit(262_144))

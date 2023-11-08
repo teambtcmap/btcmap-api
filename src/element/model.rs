@@ -69,6 +69,15 @@ impl ElementRepo {
             .interact(move |conn| Element::select_by_osm_type_and_id(&r#type, id, conn))
             .await?
     }
+
+    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Element> {
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::_patch_tags(id, &tags, conn))
+            .await?
+    }
 }
 
 const TABLE: &str = "element";
@@ -202,6 +211,27 @@ impl Element {
             },
         )?;
         Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+    }
+
+    pub fn _patch_tags(
+        id: i64,
+        tags: &HashMap<String, Value>,
+        conn: &Connection,
+    ) -> crate::Result<Element> {
+        let query = format!(
+            r#"
+                UPDATE {TABLE} SET {COL_TAGS} = json_patch({COL_TAGS}, :tags) WHERE {COL_ROWID} = :id
+            "#
+        );
+        debug!(query);
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":tags": &serde_json::to_string(tags)?,
+            },
+        )?;
+        Ok(Element::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
     pub fn set_overpass_data(

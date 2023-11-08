@@ -1,5 +1,5 @@
 use crate::model::Report;
-use crate::service::auth::get_admin_token;
+use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -102,12 +102,13 @@ pub async fn get_by_id(id: Path<i32>, conn: Data<Connection>) -> Result<Json<Get
 
 #[patch("{id}/tags")]
 async fn patch_tags(
+    req: HttpRequest,
+    id: Path<i32>,
     args: Json<HashMap<String, Value>>,
     conn: Data<Connection>,
-    id: Path<i32>,
-    req: HttpRequest,
+    auth: Data<AuthService>,
 ) -> Result<impl Responder, ApiError> {
-    let token = get_admin_token(&conn, &req)?;
+    let token = auth.check(&req).await?;
     let report_id = id.into_inner();
 
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
@@ -281,6 +282,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .service(super::patch_tags),
         )
         .await;
