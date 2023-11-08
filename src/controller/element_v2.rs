@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::element::Element;
+use crate::element::ElementRepo;
 use crate::service::auth::get_admin_token;
 use crate::service::overpass::OverpassElement;
 use crate::ApiError;
@@ -75,14 +76,18 @@ struct PostTagsArgs {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    conn: Data<Connection>,
+    repo: Data<ElementRepo>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => Element::select_updated_since(&updated_since, args.limit, &conn)?
+        Some(updated_since) => repo
+            .select_updated_since(&updated_since, args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
-        None => Element::select_all(args.limit, &conn)?
+        None => repo
+            .select_all(args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
@@ -171,9 +176,8 @@ async fn post_tags(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::command::db;
     use crate::model::token;
-    use crate::test::mock_conn;
+    use crate::test::{mock_conn, mock_state};
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -183,32 +187,28 @@ mod test {
     use serde_json::json;
     use time::macros::datetime;
 
-    #[actix_web::test]
+    #[test]
     async fn get_empty_table() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
+        let state = mock_state();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get().uri("/").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
-
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_one_row() -> Result<()> {
-        let conn = mock_conn();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let state = mock_state();
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -219,35 +219,40 @@ mod test {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_with_limit() -> Result<()> {
-        let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(1), &conn)?;
-        Element::insert(&OverpassElement::mock(2), &conn)?;
-        Element::insert(&OverpassElement::mock(3), &conn)?;
+        let state = mock_state();
+        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        state.element_repo.insert(&OverpassElement::mock(2)).await?;
+        state.element_repo.insert(&OverpassElement::mock(3)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/?limit=2").to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 2);
-
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_updated_since() -> Result<()> {
-        let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(1), &conn)?
-            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &conn)?;
-        Element::insert(&OverpassElement::mock(2), &conn)?
-            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &conn)?;
+        let state = mock_state();
+        state
+            .element_repo
+            .insert(&OverpassElement::mock(1))
+            .await?
+            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        state
+            .element_repo
+            .insert(&OverpassElement::mock(2))
+            .await?
+            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
