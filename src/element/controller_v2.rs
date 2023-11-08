@@ -1,7 +1,7 @@
 use crate::auth::AuthService;
 use crate::element::Element;
 use crate::element::ElementRepo;
-use crate::service::overpass::OverpassElement;
+use crate::osm::overpass::OverpassElement;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;

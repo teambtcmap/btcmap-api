@@ -1,5 +1,5 @@
 use crate::element::Element;
-use crate::service::overpass::OverpassElement;
+use crate::osm::overpass::OverpassElement;
 use crate::Connection;
 use crate::Result;
 use rusqlite::named_params;
@@ -107,7 +107,7 @@ mod test {
     use crate::command::db;
 
     use crate::element::Element;
-    use crate::service::overpass::OverpassElement;
+    use crate::osm::overpass::OverpassElement;
     use crate::Result;
 
     #[actix_web::test]

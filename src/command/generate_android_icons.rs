@@ -1,5 +1,5 @@
 use crate::element::Element;
-use crate::service::overpass::OverpassElement;
+use crate::osm::overpass::OverpassElement;
 use crate::Connection;
 use crate::Result;
 use tracing::info;
@@ -1526,7 +1526,7 @@ impl OverpassElement {
 mod test {
     use crate::{
         element::Element,
-        service::overpass::OverpassElement,
+        osm::overpass::OverpassElement,
         test::{mock_conn, mock_osm_tags},
         Result,
     };

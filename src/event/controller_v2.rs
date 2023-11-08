@@ -125,7 +125,7 @@ async fn patch_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::overpass::OverpassElement;
+    use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::{auth, Result};
     use actix_web::test::TestRequest;

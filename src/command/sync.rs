@@ -1,11 +1,11 @@
 use crate::element::Element;
 use crate::event::Event;
-use crate::model::User;
-use crate::service::osm;
-use crate::service::overpass::query_bitcoin_merchants;
-use crate::service::overpass::OverpassElement;
+use crate::osm::osm;
+use crate::osm::overpass::query_bitcoin_merchants;
+use crate::osm::overpass::OverpassElement;
 use crate::Error;
 use crate::Result;
+use crate::user::User;
 use rusqlite::Connection;
 use rusqlite::Transaction;
 use std::collections::HashSet;

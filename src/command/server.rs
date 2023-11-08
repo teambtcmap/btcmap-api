@@ -4,8 +4,9 @@ use crate::auth::AuthService;
 use crate::element::ElementRepo;
 use crate::event::model::EventRepo;
 use crate::report::model::ReportRepo;
-use crate::{area, element};
-use crate::{controller, event};
+use crate::user::UserRepo;
+use crate::{area, element, user};
+use crate::{event, tile};
 use crate::{report, Result};
 use actix_web::dev::Service;
 use actix_web::web;
@@ -30,6 +31,7 @@ pub async fn run() -> Result<()> {
         let element_repo = ElementRepo::new(&pool);
         let event_repo = EventRepo::new(&pool);
         let report_repo = ReportRepo::new(&pool);
+        let user_repo = UserRepo::new(&pool);
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -73,6 +75,7 @@ pub async fn run() -> Result<()> {
             .app_data(Data::new(element_repo))
             .app_data(Data::new(event_repo))
             .app_data(Data::new(report_repo))
+            .app_data(Data::new(user_repo))
             .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")
@@ -89,9 +92,9 @@ pub async fn run() -> Result<()> {
             )
             .service(
                 scope("users")
-                    .service(controller::user_v2::get)
-                    .service(controller::user_v2::get_by_id)
-                    .service(controller::user_v2::patch_tags),
+                    .service(user::controller_v2::get)
+                    .service(user::controller_v2::get_by_id)
+                    .service(user::controller_v2::patch_tags),
             )
             .service(
                 scope("areas")
@@ -109,7 +112,7 @@ pub async fn run() -> Result<()> {
                     .service(report::controller_v2::get_by_id)
                     .service(report::controller_v2::patch_tags),
             )
-            .service(scope("tiles").service(controller::tile::get))
+            .service(scope("tiles").service(tile::controller::get))
             .service(
                 scope("v2")
                     .service(
@@ -127,9 +130,9 @@ pub async fn run() -> Result<()> {
                     )
                     .service(
                         scope("users")
-                            .service(controller::user_v2::get)
-                            .service(controller::user_v2::get_by_id)
-                            .service(controller::user_v2::patch_tags),
+                            .service(user::controller_v2::get)
+                            .service(user::controller_v2::get_by_id)
+                            .service(user::controller_v2::patch_tags),
                     )
                     .service(
                         scope("areas")
@@ -147,7 +150,7 @@ pub async fn run() -> Result<()> {
                             .service(report::controller_v2::get_by_id)
                             .service(report::controller_v2::patch_tags),
                     )
-                    .service(scope("tiles").service(controller::tile::get)),
+                    .service(scope("tiles").service(tile::controller::get)),
             )
             .service(scope("v3").service(scope("elements").service(element::controller_v3::get)))
     })

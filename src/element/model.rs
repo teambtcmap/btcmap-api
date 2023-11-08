@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::{service::overpass::OverpassElement, Error};
+use crate::{osm::overpass::OverpassElement, Error};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::Value;
@@ -401,7 +401,7 @@ mod test {
     use serde_json::json;
     use time::{macros::datetime, OffsetDateTime};
 
-    use crate::{service::overpass::OverpassElement, test::mock_conn, Result};
+    use crate::{osm::overpass::OverpassElement, test::mock_conn, Result};
 
     use super::Element;
 

@@ -1,7 +1,7 @@
 use crate::area::Area;
 use crate::report::Report;
-use crate::service::overpass;
-use crate::service::overpass::OverpassElement;
+use crate::osm::overpass;
+use crate::osm::overpass::OverpassElement;
 use crate::Result;
 use geo::Contains;
 use geo::LineString;

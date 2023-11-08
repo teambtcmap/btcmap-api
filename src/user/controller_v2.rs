@@ -1,6 +1,6 @@
 use crate::auth::AuthService;
-use crate::model::User;
-use crate::service::osm::OsmUser;
+use crate::osm::osm::OsmUser;
+use crate::user::User;
 use crate::ApiError;
 use actix_web::get;
 use actix_web::patch;
@@ -23,7 +23,7 @@ use tracing::warn;
 #[derive(Deserialize)]
 pub struct GetArgs {
     updated_since: Option<String>,
-    limit: Option<i32>,
+    limit: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize)]

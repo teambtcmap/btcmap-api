@@ -1,4 +1,4 @@
-use crate::model::User;
+use crate::user::User;
 use crate::Connection;
 use crate::Error;
 use crate::Result;

@@ -1,6 +1,6 @@
 use crate::{
     area::AreaRepo, auth::AuthService, command::db, element::ElementRepo, event::model::EventRepo,
-    report::model::ReportRepo,
+    report::model::ReportRepo, user::UserRepo,
 };
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
@@ -37,6 +37,7 @@ pub fn mock_state() -> State {
         element_repo: ElementRepo::new(&pool),
         event_repo: EventRepo::new(&pool),
         report_repo: ReportRepo::new(&pool),
+        user_repo: UserRepo::new(&pool),
     }
 }
 
@@ -48,6 +49,7 @@ pub struct State {
     pub element_repo: ElementRepo,
     pub event_repo: EventRepo,
     pub report_repo: ReportRepo,
+    pub user_repo: UserRepo,
 }
 
 pub fn mock_tags() -> HashMap<String, Value> {

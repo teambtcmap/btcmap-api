@@ -1,10 +1,13 @@
-use std::collections::HashMap;
-
+use crate::{osm::osm::OsmUser, Result};
+use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::Value;
+use std::{collections::HashMap, sync::Arc};
 use time::OffsetDateTime;
 
-use crate::{service::osm::OsmUser, Result};
+pub struct UserRepo {
+    pool: Arc<Pool>,
+}
 
 pub struct User {
     pub id: i64,
@@ -13,6 +16,12 @@ pub struct User {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
+}
+
+impl UserRepo {
+    pub fn new(pool: &Arc<Pool>) -> Self {
+        Self { pool: pool.clone() }
+    }
 }
 
 impl User {
@@ -38,7 +47,7 @@ impl User {
         Ok(())
     }
 
-    pub fn select_all(limit: Option<i32>, conn: &Connection) -> Result<Vec<User>> {
+    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<User>> {
         let query = r#"
             SELECT
                 rowid,
@@ -55,7 +64,7 @@ impl User {
         Ok(conn
             .prepare(query)?
             .query_map(
-                named_params! { ":limit": limit.unwrap_or(std::i32::MAX) },
+                named_params! { ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
@@ -63,7 +72,7 @@ impl User {
 
     pub fn select_updated_since(
         updated_since: &str,
-        limit: Option<i32>,
+        limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<User>> {
         let query = r#"
@@ -83,7 +92,7 @@ impl User {
         Ok(conn
             .prepare(query)?
             .query_map(
-                named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(std::i32::MAX) },
+                named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
@@ -166,9 +175,8 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
 
 #[cfg(test)]
 mod test {
+    use crate::{osm::osm::OsmUser, test::mock_conn, user::User, Result};
     use std::collections::HashMap;
-
-    use crate::{model::User, service::osm::OsmUser, test::mock_conn, Result};
 
     #[test]
     fn insert() -> Result<()> {

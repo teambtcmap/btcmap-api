@@ -293,7 +293,7 @@ mod test {
     use serde_json::json;
     use time::{macros::datetime, OffsetDateTime};
 
-    use crate::{element::Element, service::overpass::OverpassElement, test::mock_conn, Result};
+    use crate::{element::Element, osm::overpass::OverpassElement, test::mock_conn, Result};
 
     use super::Event;
 
