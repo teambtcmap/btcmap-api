@@ -1,4 +1,4 @@
-use crate::model::Event;
+use crate::event::model::EventRepo;
 use crate::service::AuthService;
 use crate::ApiError;
 use actix_web::get;
@@ -10,7 +10,6 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -18,6 +17,8 @@ use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
+
+use super::Event;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -67,13 +68,17 @@ impl Into<Json<GetItem>> for Event {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<GetItem>>, ApiError> {
+async fn get(args: Query<GetArgs>, repo: Data<EventRepo>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
-        Some(updated_since) => Event::select_updated_since(updated_since, args.limit, &conn)?
+        Some(updated_since) => repo
+            .select_updated_since(updated_since, args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
-        None => Event::select_all(args.limit, &conn)?
+        None => repo
+            .select_all(args.limit)
+            .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
@@ -81,10 +86,10 @@ async fn get(args: Query<GetArgs>, conn: Data<Connection>) -> Result<Json<Vec<Ge
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, conn: Data<Connection>) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<i64>, repo: Data<EventRepo>) -> Result<Json<GetItem>, ApiError> {
     let id = id.into_inner();
-
-    Event::select_by_id(id, &conn)?
+    repo.select_by_id(id)
+        .await?
         .map(|it| it.into())
         .ok_or(ApiError::new(
             404,
@@ -97,37 +102,32 @@ async fn patch_tags(
     req: HttpRequest,
     id: Path<i64>,
     args: Json<HashMap<String, Value>>,
-    conn: Data<Connection>,
     auth: Data<AuthService>,
+    repo: Data<EventRepo>,
 ) -> Result<impl Responder, ApiError> {
     let id = id.into_inner();
     let token = auth.check(&req).await?;
     let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
-
     warn!(
         token.user_id,
         id,
         tags = keys.join(", "),
         "User attempted to merge new tags",
     );
-
-    Event::select_by_id(id, &conn)?
-        .ok_or(ApiError::new(
-            404,
-            &format!("There is no event with id = {id}"),
-        ))?
-        .patch_tags(&args, &conn)?;
-
+    let event = repo.select_by_id(id).await?.ok_or(ApiError::new(
+        404,
+        &format!("There is no event with id = {id}"),
+    ))?;
+    repo.patch_tags(event.id, &args).await?;
     Ok(HttpResponse::Ok())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::element::Element;
     use crate::model::token;
     use crate::service::overpass::OverpassElement;
-    use crate::test::{mock_conn, mock_state};
+    use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -136,12 +136,12 @@ mod tests {
     use rusqlite::named_params;
     use serde_json::{json, Value};
 
-    #[actix_web::test]
+    #[test]
     async fn get_empty_table() -> Result<()> {
-        let conn = mock_conn();
+        let state = mock_state();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.event_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -151,14 +151,14 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_one_row() -> Result<()> {
-        let conn = mock_conn();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        Event::insert(1, element.id, "", &conn)?;
+        let state = mock_state();
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        state.event_repo.insert(1, element.id, "").await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.event_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -168,16 +168,16 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_with_limit() -> Result<()> {
-        let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(1), &conn)?;
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-05T00:00:00Z')", [])?;
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-06T00:00:00Z')", [])?;
-        conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-07T00:00:00Z')", [])?;
+        let state = mock_state();
+        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        state.conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-05T00:00:00Z')", [])?;
+        state.conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-06T00:00:00Z')", [])?;
+        state.conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-07T00:00:00Z')", [])?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.event_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -187,51 +187,47 @@ mod tests {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_updated_since() -> Result<()> {
-        let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(1), &conn)?;
-        conn.execute(
+        let state = mock_state();
+        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        state.conn.execute(
             "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 0, '2022-01-05T00:00:00Z')",
             [],
         )?;
-        conn.execute(
+        state.conn.execute(
             "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 0, '2022-02-05T00:00:00Z')",
             [],
         )?;
-
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.event_repo))
                 .service(scope("/").service(super::get)),
         )
         .await;
-
         let req = TestRequest::get()
             .uri("/?updated_since=2022-01-10T00:00:00Z")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
-
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let state = mock_state();
         let event_id = 1;
-        Element::insert(&OverpassElement::mock(1), &conn)?;
-        Event::insert(1, 1, "", &conn)?;
+        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        state.event_repo.insert(1, 1, "").await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.event_repo))
                 .service(super::get_by_id),
         )
         .await;
         let req = TestRequest::get().uri(&format!("/{event_id}")).to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, event_id);
-
         Ok(())
     }
 
@@ -247,8 +243,8 @@ mod tests {
         Event::insert(1, 1, "", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
                 .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.event_repo))
                 .service(super::patch_tags),
         )
         .await;

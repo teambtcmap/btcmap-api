@@ -1,16 +1,20 @@
-use std::collections::HashMap;
-
+use crate::Error;
+use crate::Result;
+use deadpool_sqlite::Pool;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::debug;
 
-use crate::Error;
-use crate::Result;
+pub struct EventRepo {
+    pool: Arc<Pool>,
+}
 
 #[derive(PartialEq, Debug)]
 pub struct Event {
@@ -24,6 +28,60 @@ pub struct Event {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
+}
+
+impl EventRepo {
+    pub fn new(pool: &Arc<Pool>) -> Self {
+        Self { pool: pool.clone() }
+    }
+
+    #[cfg(test)]
+    pub async fn insert(&self, user_id: i64, element_id: i64, r#type: &str) -> Result<Event> {
+        let r#type = r#type.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Event::insert(user_id, element_id, &r#type, conn))
+            .await?
+    }
+
+    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Event>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Event::select_all(limit, conn))
+            .await?
+    }
+
+    pub async fn select_updated_since(
+        &self,
+        updated_since: &OffsetDateTime,
+        limit: Option<i64>,
+    ) -> Result<Vec<Event>> {
+        let updated_since = updated_since.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Event::select_updated_since(&updated_since, limit, conn))
+            .await?
+    }
+
+    pub async fn select_by_id(&self, id: i64) -> Result<Option<Event>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Event::select_by_id(id, conn))
+            .await?
+    }
+
+    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Event> {
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Event::_patch_tags(id, &tags, conn))
+            .await?
+    }
 }
 
 const TABLE: &str = "event";
@@ -159,7 +217,12 @@ impl Event {
             .optional()?)
     }
 
+    #[cfg(test)]
     pub fn patch_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
+        Event::_patch_tags(self.id, tags, conn)
+    }
+
+    pub fn _patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -171,11 +234,11 @@ impl Event {
         conn.execute(
             &query,
             named_params! {
-                ":id": self.id,
+                ":id": id,
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Ok(Event::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Event::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
     #[cfg(test)]

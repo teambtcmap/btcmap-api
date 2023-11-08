@@ -21,6 +21,7 @@ mod controller;
 mod discord;
 mod element;
 mod error;
+mod event;
 mod model;
 mod service;
 #[cfg(test)]

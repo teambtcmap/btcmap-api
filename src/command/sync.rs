@@ -1,5 +1,5 @@
 use crate::element::Element;
-use crate::model::event::Event;
+use crate::event::Event;
 use crate::model::User;
 use crate::service::osm;
 use crate::service::overpass::query_bitcoin_merchants;

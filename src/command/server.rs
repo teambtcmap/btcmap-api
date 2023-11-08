@@ -1,10 +1,11 @@
 use super::db;
 use crate::area::AreaRepo;
-use crate::controller;
 use crate::element::ElementRepo;
+use crate::event::model::EventRepo;
 use crate::service::AuthService;
 use crate::Result;
 use crate::{area, element};
+use crate::{controller, event};
 use actix_web::dev::Service;
 use actix_web::web;
 use actix_web::web::scope;
@@ -26,6 +27,7 @@ pub async fn run() -> Result<()> {
         let auth_service = AuthService::new(&pool);
         let area_repo = AreaRepo::new(&pool);
         let element_repo = ElementRepo::new(&pool);
+        let event_repo = EventRepo::new(&pool);
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -67,6 +69,7 @@ pub async fn run() -> Result<()> {
             .app_data(Data::new(auth_service))
             .app_data(Data::new(area_repo))
             .app_data(Data::new(element_repo))
+            .app_data(Data::new(event_repo))
             .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")
@@ -77,9 +80,9 @@ pub async fn run() -> Result<()> {
             )
             .service(
                 scope("events")
-                    .service(controller::event_v2::get)
-                    .service(controller::event_v2::get_by_id)
-                    .service(controller::event_v2::patch_tags),
+                    .service(event::controller_v2::get)
+                    .service(event::controller_v2::get_by_id)
+                    .service(event::controller_v2::patch_tags),
             )
             .service(
                 scope("users")
@@ -115,9 +118,9 @@ pub async fn run() -> Result<()> {
                     )
                     .service(
                         scope("events")
-                            .service(controller::event_v2::get)
-                            .service(controller::event_v2::get_by_id)
-                            .service(controller::event_v2::patch_tags),
+                            .service(event::controller_v2::get)
+                            .service(event::controller_v2::get_by_id)
+                            .service(event::controller_v2::patch_tags),
                     )
                     .service(
                         scope("users")

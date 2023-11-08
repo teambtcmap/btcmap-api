@@ -11,7 +11,7 @@ pub struct ElementRepo {
     pool: Arc<Pool>,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug)]
 pub struct Element {
     pub id: i64,
     pub overpass_data: OverpassElement,
