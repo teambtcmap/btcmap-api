@@ -97,12 +97,13 @@ pub async fn get(
 #[get("{id}")]
 pub async fn get_by_osm_type_and_id(
     id: Path<String>,
-    conn: Data<Connection>,
+    repo: Data<ElementRepo>,
 ) -> Result<Json<GetItem>, ApiError> {
     let id_parts: Vec<&str> = id.split(":").collect();
     let r#type = id_parts[0];
     let id = id_parts[1].parse::<i64>()?;
-    Element::select_by_osm_type_and_id(r#type, id, &conn)?
+    repo.select_by_osm_type_and_id(r#type, id)
+        .await?
         .map(|it| it.into())
         .ok_or(ApiError::new(
             404,
@@ -264,13 +265,13 @@ mod test {
         Ok(())
     }
 
-    #[actix_web::test]
+    #[test]
     async fn get_by_osm_type_and_id() -> Result<()> {
-        let conn = mock_conn();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let state = mock_state();
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.element_repo))
                 .service(super::get_by_osm_type_and_id),
         )
         .await;

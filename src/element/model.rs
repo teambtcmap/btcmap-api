@@ -56,6 +56,19 @@ impl ElementRepo {
             .interact(move |conn| Element::select_updated_since(&updated_since, limit, conn))
             .await?
     }
+
+    pub async fn select_by_osm_type_and_id(
+        &self,
+        r#type: &str,
+        id: i64,
+    ) -> Result<Option<Element>> {
+        let r#type = r#type.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::select_by_osm_type_and_id(&r#type, id, conn))
+            .await?
+    }
 }
 
 const TABLE: &str = "element";
