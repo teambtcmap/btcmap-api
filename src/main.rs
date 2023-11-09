@@ -18,15 +18,15 @@ pub use error::ApiError;
 pub use error::Error;
 mod auth;
 mod command;
-mod tile;
 mod discord;
 mod element;
 mod error;
 mod event;
-mod report;
 mod osm;
+mod report;
 #[cfg(test)]
 mod test;
+mod tile;
 mod user;
 use rusqlite::Connection;
 use std::env;

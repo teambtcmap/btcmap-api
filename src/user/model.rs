@@ -1,4 +1,4 @@
-use crate::{osm::osm::OsmUser, Result};
+use crate::{osm::osm::OsmUser, Error, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::Value;
@@ -21,6 +21,44 @@ pub struct User {
 impl UserRepo {
     pub fn new(pool: &Arc<Pool>) -> Self {
         Self { pool: pool.clone() }
+    }
+
+    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<User>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| User::select_all(limit, conn))
+            .await?
+    }
+
+    pub async fn select_updated_since(
+        &self,
+        updated_since: &str,
+        limit: Option<i64>,
+    ) -> Result<Vec<User>> {
+        let updated_since = updated_since.to_string();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| User::select_updated_since(&updated_since, limit, conn))
+            .await?
+    }
+
+    pub async fn select_by_id(&self, id: i64) -> Result<Option<User>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| User::select_by_id(id, conn))
+            .await?
+    }
+
+    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<User> {
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| User::patch_tags(id, &tags, conn))
+            .await?
     }
 }
 
@@ -116,23 +154,21 @@ impl User {
             .optional()?)
     }
 
-    pub fn merge_tags(
+    pub fn patch_tags(
         id: i64,
         tags: &HashMap<String, Value>,
         conn: &Connection,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<User> {
         let query = r#"
             UPDATE user
             SET tags = json_patch(tags, :tags)
             WHERE rowid = :id
         "#;
-
         conn.execute(
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-
-        Ok(())
+        Ok(User::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
     pub fn set_osm_json(id: i64, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
@@ -240,11 +276,11 @@ mod test {
         User::insert(1, &OsmUser::mock(), &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();
         assert!(user.tags.is_empty());
-        User::merge_tags(1, &tags, &conn)?;
+        User::patch_tags(1, &tags, &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();
         assert_eq!(1, user.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
-        User::merge_tags(1, &tags, &conn)?;
+        User::patch_tags(1, &tags, &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();
         assert_eq!(2, user.tags.len());
         Ok(())
