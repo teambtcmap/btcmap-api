@@ -124,13 +124,13 @@ async fn patch_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::Token;
     use crate::test::mock_state;
-    use crate::{auth, Result};
+    use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
     use reqwest::StatusCode;
-    use rusqlite::named_params;
     use serde_json::{json, Value};
 
     #[test]
@@ -209,11 +209,7 @@ mod tests {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let user_id = 1;
         User::insert(user_id, &OsmUser::mock(), &state.conn)?;
         let app = test::init_service(
@@ -225,7 +221,7 @@ mod tests {
         .await;
         let req = TestRequest::patch()
             .uri(&format!("/{user_id}/tags"))
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .append_header(("Authorization", format!("Bearer {token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
         let res = test::call_service(&app, req).await;

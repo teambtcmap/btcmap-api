@@ -1,9 +1,10 @@
-use super::{model, Token};
+use super::Token;
 use crate::ApiError;
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 use std::sync::Arc;
+use tracing::warn;
 
 pub struct AuthService {
     pool: Arc<Pool>,
@@ -31,31 +32,27 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
         .get("Authorization")
         .map(|it| it.to_str().unwrap_or(""))
         .unwrap_or("");
-
     if auth_header.len() == 0 {
         return Err(ApiError::new(401, "Authorization header is missing"));
     }
-
     let auth_header_parts: Vec<&str> = auth_header.split(" ").collect();
     if auth_header_parts.len() != 2 {
         return Err(ApiError::new(401, "Authorization header is invalid"));
     }
-
     let secret = auth_header_parts[1];
-
-    let token = db
-        .query_row(
-            model::SELECT_BY_SECRET,
-            &[(":secret", &secret)],
-            model::SELECT_BY_SECRET_MAPPER,
-        )
-        .optional()?;
-
+    let token = Token::select_by_secret(secret, db)?;
     match token {
         Some(token) => {
+            warn!(
+                admin_channel_message = format!(
+                    "Admin API was accessed by https://api.btcmap.org/v2/users/{}",
+                    token.user_id
+                )
+            );
             return Ok(token);
         }
         None => {
+            warn!(admin_channel_message = "Someone tried and failed to access admin API");
             return Err(ApiError::new(401, "Invalid token"));
         }
     }
@@ -63,8 +60,6 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
 
 #[cfg(test)]
 mod tests {
-    use rusqlite::{named_params, Connection};
-
     use super::*;
     use crate::command::db;
     use crate::Result;
@@ -75,21 +70,13 @@ mod tests {
         web::{scope, Data},
         App, Responder,
     };
+    use rusqlite::Connection;
 
     #[actix_web::test]
     async fn no_header() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
-
-        conn.execute(
-            model::INSERT,
-            named_params! {
-                ":user_id": "1",
-                ":secret": "test",
-            },
-        )
-        .unwrap();
-
+        Token::insert(1, "test", &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
@@ -99,7 +86,6 @@ mod tests {
         let req = TestRequest::get().uri("/").to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(401, res.status().as_u16());
-
         Ok(())
     }
 
@@ -107,30 +93,19 @@ mod tests {
     async fn valid_token() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
-
-        conn.execute(
-            model::INSERT,
-            named_params! {
-                ":user_id": 1,
-                ":secret": "qwerty",
-            },
-        )
-        .unwrap();
-
+        Token::insert(1, "test", &conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(conn))
                 .service(scope("/").service(get)),
         )
         .await;
-
         let req = TestRequest::get()
             .uri("/")
-            .append_header(("Authorization", "Bearer qwerty"))
+            .append_header(("Authorization", "Bearer test"))
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(200, res.status().as_u16());
-
         Ok(())
     }
 

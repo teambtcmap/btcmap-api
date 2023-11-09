@@ -1,5 +1,6 @@
-use rusqlite::Result;
-use rusqlite::Row;
+use crate::Result;
+use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use tracing::debug;
 
 pub struct Token {
     pub id: i64,
@@ -10,40 +11,61 @@ pub struct Token {
     pub deleted_at: String,
 }
 
-#[cfg(test)]
-pub static INSERT: &str = r#"
-    INSERT INTO token (
-        user_id,
-        secret
-    ) VALUES (
-        :user_id,
-        :secret
-    )
-"#;
+impl Token {
+    #[cfg(test)]
+    pub fn insert(user_id: i64, secret: &str, conn: &Connection) -> Result<Token> {
+        let query = format!(
+            r#"
+                INSERT INTO token (
+                    user_id,
+                    secret
+                ) VALUES (
+                    :user_id,
+                    :secret
+                )
+            "#
+        );
+        debug!(query);
+        conn.execute(
+            &query,
+            named_params! {
+                    ":user_id": user_id,
+                ":secret": secret,
+            },
+        )?;
+        Ok(Token::select_by_secret(secret, conn)?.ok_or(crate::Error::DbTableRowNotFound)?)
+    }
 
-pub static SELECT_BY_SECRET: &str = r#"
-    SELECT
-        id,
-        user_id,
-        secret,
-        created_at,
-        updated_at,
-        deleted_at
-    FROM token
-    WHERE secret = :secret
-"#;
+    pub fn select_by_secret(secret: &str, conn: &Connection) -> Result<Option<Token>> {
+        let query = format!(
+            r#"
+                SELECT
+                    id,
+                    user_id,
+                    secret,
+                    created_at,
+                    updated_at,
+                    deleted_at
+                FROM token
+                WHERE secret = :secret
+            "#
+        );
+        debug!(query);
+        Ok(conn
+            .query_row(&query, named_params! { ":secret": secret }, Self::mapper())
+            .optional()?)
+    }
 
-pub static SELECT_BY_SECRET_MAPPER: fn(&Row) -> Result<Token> = mapper();
-
-const fn mapper() -> fn(&Row) -> Result<Token> {
-    |row: &Row| -> Result<Token> {
-        Ok(Token {
-            id: row.get(0)?,
-            user_id: row.get(1)?,
-            secret: row.get(2)?,
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
-            deleted_at: row.get(5)?,
-        })
+    const fn mapper() -> fn(&Row) -> rusqlite::Result<Token> {
+        |row: &Row| -> rusqlite::Result<Token> {
+            Ok(Token {
+                id: row.get(0)?,
+                user_id: row.get(1)?,
+                secret: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+                deleted_at: row.get(5)?,
+            })
+        }
     }
 }

@@ -16,22 +16,11 @@ use actix_web::HttpResponse;
 use actix_web::Responder;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
-
-#[derive(Serialize, Deserialize)]
-struct PostArgs {
-    id: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct PostJsonArgs {
-    tags: HashMap<String, Value>,
-}
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -83,48 +72,6 @@ struct PatchArgs {
 struct PostTagsArgs {
     name: String,
     value: String,
-}
-
-#[post("")]
-async fn post_json(
-    req: HttpRequest,
-    args: Json<PostJsonArgs>,
-    auth: Data<AuthService>,
-    repo: Data<AreaRepo>,
-) -> Result<impl Responder, ApiError> {
-    let token = auth.check(&req).await?;
-
-    if !args.tags.contains_key("url_alias") {
-        Err(ApiError::new(500, format!("url_alias is missing")))?
-    }
-
-    let url_alias = &args.tags.get("url_alias").unwrap();
-
-    if !url_alias.is_string() {
-        Err(ApiError::new(500, format!("url_alias should be a string")))?
-    }
-
-    let url_alias = url_alias.as_str().unwrap();
-
-    warn!(token.user_id, url_alias, "User attempted to create an area",);
-
-    if let Some(_) = repo.select_by_url_alias(url_alias).await? {
-        Err(ApiError::new(
-            303,
-            format!("Area with url_alias = {} already exists", url_alias),
-        ))?
-    }
-
-    repo.insert(&args.tags).await.map_err(|_| {
-        ApiError::new(
-            500,
-            format!("Failed to insert area with url_alias = {}", url_alias),
-        )
-    })?;
-
-    Ok(Json(json!({
-        "message": format!("Area with url_alias = {} has been created", url_alias),
-    })))
 }
 
 #[get("")]
@@ -288,59 +235,14 @@ async fn delete_by_url_alias(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::Token;
     use crate::test::mock_state;
-    use crate::{auth, Result};
+    use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
-    use rusqlite::named_params;
-
-    #[test]
-    async fn post_json() -> Result<()> {
-        let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.auth))
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
-                .service(scope("/").service(super::post_json)),
-        )
-        .await;
-        let args = r#"
-        {
-            "tags": {
-                "url_alias": "test-area",
-                "string": "bar",
-                "int": 5,
-                "float": 12.34,
-                "bool": false
-            }
-        }
-        "#;
-        let args: Value = serde_json::from_str(args)?;
-        let req = TestRequest::post()
-            .uri("/")
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
-            .set_json(args)
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert!(res.status().is_success());
-        let area = state
-            .area_repo
-            .select_by_url_alias("test-area")
-            .await?
-            .unwrap();
-        assert!(area.tags["string"].is_string());
-        assert!(area.tags["int"].is_u64());
-        assert!(area.tags["float"].is_f64());
-        assert!(area.tags["bool"].is_boolean());
-        Ok(())
-    }
+    use serde_json::json;
 
     #[test]
     async fn get_empty_table() -> Result<()> {
@@ -419,11 +321,7 @@ mod tests {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -437,7 +335,7 @@ mod tests {
         .await;
         let req = TestRequest::patch()
             .uri(&format!("/{url_alias}/tags"))
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .append_header(("Authorization", format!("Bearer {token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
         let res = test::call_service(&app, req).await;
@@ -448,11 +346,7 @@ mod tests {
     #[test]
     async fn patch_by_id() -> Result<()> {
         let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -477,7 +371,7 @@ mod tests {
         let args: Value = serde_json::from_str(args)?;
         let req = TestRequest::patch()
             .uri(&format!("/{url_alias}"))
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .append_header(("Authorization", format!("Bearer {token}")))
             .set_json(args)
             .to_request();
         let res = test::call_service(&app, req).await;
@@ -497,11 +391,7 @@ mod tests {
     #[test]
     async fn post_tags() -> Result<()> {
         let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -515,7 +405,7 @@ mod tests {
         .await;
         let req = TestRequest::post()
             .uri(&format!("/{url_alias}/tags"))
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .append_header(("Authorization", format!("Bearer {token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),
                 value: "bar".into(),
@@ -529,11 +419,7 @@ mod tests {
     #[test]
     async fn delete() -> Result<()> {
         let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -547,7 +433,7 @@ mod tests {
         .await;
         let req = TestRequest::delete()
             .uri(&format!("/{url_alias}"))
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .append_header(("Authorization", format!("Bearer {token}")))
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);

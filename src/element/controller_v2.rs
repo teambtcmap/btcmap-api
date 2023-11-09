@@ -178,13 +178,13 @@ async fn post_tags(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::auth::Token;
     use crate::test::mock_state;
-    use crate::{auth, Result};
+    use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
     use reqwest::StatusCode;
-    use rusqlite::named_params;
     use serde_json::json;
     use time::macros::datetime;
 
@@ -286,11 +286,7 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
@@ -301,7 +297,7 @@ mod test {
         .await;
         let req = TestRequest::patch()
             .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .append_header(("Authorization", format!("Bearer {token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
         let res = test::call_service(&app, req).await;
@@ -312,11 +308,7 @@ mod test {
     #[test]
     async fn post_tags() -> Result<()> {
         let state = mock_state();
-        let admin_token = "test";
-        state.conn.execute(
-            auth::model::INSERT,
-            named_params! { ":user_id": 1, ":secret": admin_token },
-        )?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
@@ -327,7 +319,7 @@ mod test {
         .await;
         let req = TestRequest::post()
             .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
-            .append_header(("Authorization", format!("Bearer {admin_token}")))
+            .append_header(("Authorization", format!("Bearer {token}")))
             .set_form(PostTagsArgs {
                 name: "foo".into(),
                 value: "bar".into(),

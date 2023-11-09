@@ -3,7 +3,7 @@ use std::{collections::HashMap, env, fmt::Write};
 use tracing::{
     error,
     field::{Field, Visit},
-    info, warn,
+    info,
 };
 
 pub struct DiscordLayer;
@@ -24,7 +24,22 @@ where
                     message: &mut message,
                 };
                 event.record(&mut visitor);
-                tokio::runtime::Handle::current().spawn_blocking(|| send_discord_message(message));
+                if let Ok(url) = env::var("DISCORD_WEBHOOK_URL") {
+                    tokio::runtime::Handle::current()
+                        .spawn_blocking(move || send_discord_message(message, &url));
+                }
+            }
+
+            if field.name() == "admin_channel_message" {
+                let mut message = "".to_string();
+                let mut visitor = DiscordMessageVisitor {
+                    message: &mut message,
+                };
+                event.record(&mut visitor);
+                if let Ok(url) = env::var("DISCORD_ADMIN_CHANNEL_WEBHOOK_URL") {
+                    tokio::runtime::Handle::current()
+                        .spawn_blocking(move || send_discord_message(message, &url));
+                }
             }
         }
     }
@@ -41,31 +56,31 @@ impl<'a> Visit for DiscordMessageVisitor<'a> {
         if field.name() == "discord_message" {
             write!(self.message, "{}", value).unwrap();
         }
+
+        if field.name() == "admin_channel_message" {
+            write!(self.message, "{}", value).unwrap();
+        }
     }
 }
 
-fn send_discord_message(message: String) {
-    if let Ok(discord_webhook_url) = env::var("DISCORD_WEBHOOK_URL") {
-        let mut args = HashMap::new();
-        args.insert("username", "btcmap.org".to_string());
-        args.insert("content", message);
+fn send_discord_message(message: String, webhook_url: &str) {
+    let mut args = HashMap::new();
+    args.insert("username", "btcmap.org".to_string());
+    args.insert("content", message);
 
-        info!("Sending discord message");
+    info!("Sending discord message");
 
-        let response = reqwest::blocking::Client::new()
-            .post(discord_webhook_url)
-            .json(&args)
-            .send();
+    let response = reqwest::blocking::Client::new()
+        .post(webhook_url)
+        .json(&args)
+        .send();
 
-        match response {
-            Ok(response) => {
-                info!(response_status = ?response.status(), "Got response");
-            }
-            Err(_) => {
-                error!("Failed to send Discord message");
-            }
-        };
-    } else {
-        warn!("DISCORD_WEBHOOK_URL is not set");
-    }
+    match response {
+        Ok(response) => {
+            info!(response_status = ?response.status(), "Got response");
+        }
+        Err(_) => {
+            error!("Failed to send Discord message");
+        }
+    };
 }
