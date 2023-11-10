@@ -99,12 +99,12 @@ pub async fn run() -> Result<()> {
             .service(
                 scope("areas")
                     .service(area::admin::post)
-                    .service(area::controller_v2::get)
-                    .service(area::controller_v2::get_by_url_alias)
-                    .service(area::controller_v2::patch_tags)
-                    .service(area::controller_v2::patch_by_url_alias)
-                    .service(area::controller_v2::post_tags)
-                    .service(area::controller_v2::delete_by_url_alias),
+                    .service(area::admin::patch_by_url_alias)
+                    .service(area::admin::post_tags)
+                    .service(area::admin::patch_tags)
+                    .service(area::admin::delete_by_url_alias)
+                    .service(area::v2::get)
+                    .service(area::v2::get_by_url_alias),
             )
             .service(
                 scope("reports")
@@ -137,12 +137,12 @@ pub async fn run() -> Result<()> {
                     .service(
                         scope("areas")
                             .service(area::admin::post)
-                            .service(area::controller_v2::get)
-                            .service(area::controller_v2::get_by_url_alias)
-                            .service(area::controller_v2::patch_tags)
-                            .service(area::controller_v2::patch_by_url_alias)
-                            .service(area::controller_v2::post_tags)
-                            .service(area::controller_v2::delete_by_url_alias),
+                            .service(area::admin::patch_by_url_alias)
+                            .service(area::admin::post_tags)
+                            .service(area::admin::patch_tags)
+                            .service(area::admin::delete_by_url_alias)
+                            .service(area::v2::get)
+                            .service(area::v2::get_by_url_alias),
                     )
                     .service(
                         scope("reports")

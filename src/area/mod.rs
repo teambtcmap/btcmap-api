@@ -1,5 +1,5 @@
-pub mod model;
-pub use model::Area;
-pub use model::AreaRepo;
+pub mod data;
+pub use data::Area;
+pub use data::AreaRepo;
 pub mod admin;
-pub mod controller_v2;
+pub mod v2;
