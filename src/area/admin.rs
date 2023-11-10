@@ -9,25 +9,46 @@ use actix_web::{
     HttpRequest, HttpResponse, Responder,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use time::OffsetDateTime;
-use tracing::warn;
+use tracing::{debug, warn};
 
 #[derive(Serialize, Deserialize)]
+pub struct AreaView {
+    pub id: i64,
+    pub tags: HashMap<String, Value>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub deleted_at: Option<OffsetDateTime>,
+}
+
+impl Into<AreaView> for Area {
+    fn into(self) -> AreaView {
+        AreaView {
+            id: self.id,
+            tags: self.tags,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            deleted_at: self.deleted_at,
+        }
+    }
+}
+
+impl Into<Json<AreaView>> for Area {
+    fn into(self) -> Json<AreaView> {
+        Json(self.into())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 struct PostArgs {
     tags: HashMap<String, Value>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct PatchArgs {
-    tags: HashMap<String, Value>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct PostTagsArgs {
-    name: String,
-    value: String,
 }
 
 #[post("")]
@@ -36,8 +57,8 @@ async fn post(
     args: Json<PostArgs>,
     auth: Data<AuthService>,
     repo: Data<AreaRepo>,
-) -> Result<impl Responder, ApiError> {
-    auth.check(&req).await?;
+) -> Result<Json<AreaView>, ApiError> {
+    let token = auth.check(&req).await?;
     if !args.tags.contains_key("url_alias") {
         Err(ApiError::new(500, format!("url_alias is missing")))?
     }
@@ -52,15 +73,19 @@ async fn post(
             format!("Area with url_alias = {} already exists", url_alias),
         ))?
     }
-    repo.insert(&args.tags).await.map_err(|_| {
+    let area = repo.insert(&args.tags).await.map_err(|_| {
         ApiError::new(
             500,
             format!("Failed to insert area with url_alias = {}", url_alias),
         )
     })?;
-    Ok(Json(json!({
-        "message": format!("Area with url_alias = {} has been created", url_alias),
-    })))
+    debug!(admin_channel_message = format!("{} created a new area", token.user_id));
+    Ok(area.into())
+}
+
+#[derive(Serialize, Deserialize)]
+struct PatchArgs {
+    tags: HashMap<String, Value>,
 }
 
 #[patch("{url_alias}")]
@@ -90,6 +115,12 @@ async fn patch_by_url_alias(
     };
 
     Ok(HttpResponse::Ok())
+}
+
+#[derive(Serialize, Deserialize)]
+struct PostTagsArgs {
+    name: String,
+    value: String,
 }
 
 #[post("{url_alias}/tags")]
@@ -191,18 +222,36 @@ async fn delete_by_url_alias(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use crate::area::admin::PostTagsArgs;
+    use crate::area::admin::{AreaView, PostArgs, PostTagsArgs};
     use crate::area::{Area, AreaRepo};
     use crate::auth::Token;
-    use crate::test::mock_state;
+    use crate::test::{mock_state, mock_tags};
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use http::StatusCode;
     use serde_json::{json, Value};
+    use std::collections::HashMap;
+
+    #[test]
+    async fn post_unauthorized() -> Result<()> {
+        let state = mock_state();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.area_repo))
+                .service(scope("/").service(super::post)),
+        )
+        .await;
+        let req = TestRequest::post()
+            .uri("/")
+            .set_json(json!({"tags": {}}))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
 
     #[test]
     async fn post() -> Result<()> {
@@ -211,38 +260,22 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
+                .app_data(Data::new(state.area_repo.clone()))
                 .service(scope("/").service(super::post)),
         )
         .await;
-        let args = r#"
-        {
-            "tags": {
-                "url_alias": "test-area",
-                "string": "bar",
-                "int": 5,
-                "float": 12.34,
-                "bool": false
-            }
-        }
-        "#;
-        let args: Value = serde_json::from_str(args)?;
+        let mut tags = mock_tags();
+        let url_alias = json!("test");
+        tags.insert("url_alias".into(), url_alias.clone());
         let req = TestRequest::post()
             .uri("/")
             .append_header(("Authorization", format!("Bearer {token}")))
-            .set_json(args)
+            .set_json(PostArgs { tags: tags.clone() })
             .to_request();
-        let res = test::call_service(&app, req).await;
-        assert!(res.status().is_success());
-        let area = state
-            .area_repo
-            .select_by_url_alias("test-area")
-            .await?
-            .unwrap();
-        assert!(area.tags["string"].is_string());
-        assert!(area.tags["int"].is_u64());
-        assert!(area.tags["float"].is_f64());
-        assert!(area.tags["bool"].is_boolean());
+        let res: AreaView = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.id);
+        assert_eq!(tags, res.tags);
+        assert!(res.deleted_at.is_none());
         Ok(())
     }
 

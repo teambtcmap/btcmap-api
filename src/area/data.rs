@@ -6,6 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::debug;
 
+#[derive(Clone)]
 pub struct AreaRepo {
     pool: Arc<Pool>,
 }
