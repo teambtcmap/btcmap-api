@@ -1,19 +1,12 @@
-use crate::auth::AuthService;
 use crate::element::Element;
 use crate::element::ElementRepo;
 use crate::osm::overpass::OverpassElement;
 use crate::ApiError;
 use actix_web::get;
-use actix_web::patch;
-use actix_web::post;
 use actix_web::web::Data;
-use actix_web::web::Form;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::HttpRequest;
-use actix_web::HttpResponse;
-use actix_web::Responder;
 use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -21,7 +14,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -66,12 +58,6 @@ impl Into<Json<GetItem>> for Element {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct PostTagsArgs {
-    name: String,
-    value: String,
-}
-
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
@@ -110,83 +96,14 @@ pub async fn get_by_osm_type_and_id(
         ))
 }
 
-#[patch("{id}/tags")]
-async fn patch_tags(
-    req: HttpRequest,
-    id: Path<String>,
-    args: Json<HashMap<String, Value>>,
-    auth: Data<AuthService>,
-    repo: Data<ElementRepo>,
-) -> Result<impl Responder, ApiError> {
-    let token = auth.check(&req).await?;
-    let id_parts: Vec<&str> = id.split(":").collect();
-    let r#type = id_parts[0];
-    let id = id_parts[1].parse::<i64>()?;
-    warn!(
-        token.user_id,
-        r#type, id, "User attempted to merge new tags",
-    );
-    match repo.select_by_osm_type_and_id(r#type, id).await? {
-        Some(element) => repo.patch_tags(element.id, &args).await?,
-        None => {
-            return Err(ApiError::new(
-                StatusCode::NOT_FOUND,
-                &format!("There is no element with type = {type} and id = {id}"),
-            ));
-        }
-    };
-    Ok(HttpResponse::Ok())
-}
-
-#[post("{id}/tags")]
-async fn post_tags(
-    req: HttpRequest,
-    id: Path<String>,
-    args: Form<PostTagsArgs>,
-    auth: Data<AuthService>,
-    repo: Data<ElementRepo>,
-) -> Result<impl Responder, ApiError> {
-    let token = auth.check(&req).await?;
-    let id_parts: Vec<&str> = id.split(":").collect();
-    let r#type = id_parts[0];
-    let id = id_parts[1].parse::<i64>()?;
-    warn!(
-        deprecated_api = true,
-        user_id = token.user_id,
-        id,
-        tag_name = args.name,
-        tag_value = args.value,
-        "User attempted to update element tag",
-    );
-    let element = repo.select_by_osm_type_and_id(r#type, id).await?;
-    match element {
-        Some(element) => {
-            if args.value.len() > 0 {
-                repo.set_tag(element.id, &args.name, &args.value.clone().into())
-                    .await?;
-            } else {
-                repo.remove_tag(element.id, &args.name).await?;
-            }
-            Ok(HttpResponse::Created())
-        }
-        None => Err(ApiError::new(
-            StatusCode::NOT_FOUND,
-            &format!("There is no element with id {type}:{id}"),
-        )),
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::auth::Token;
     use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
-    use reqwest::StatusCode;
-    use serde_json::json;
     use time::macros::datetime;
 
     #[test]
@@ -281,53 +198,6 @@ mod test {
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, element.into());
-        Ok(())
-    }
-
-    #[test]
-    async fn patch_tags() -> Result<()> {
-        let state = mock_state();
-        let token = Token::insert(1, "test", &state.conn)?.secret;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.auth))
-                .app_data(Data::new(state.element_repo))
-                .service(super::patch_tags),
-        )
-        .await;
-        let req = TestRequest::patch()
-            .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_json(json!({ "foo": "bar" }))
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::OK);
-        Ok(())
-    }
-
-    #[test]
-    async fn post_tags() -> Result<()> {
-        let state = mock_state();
-        let token = Token::insert(1, "test", &state.conn)?.secret;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.auth))
-                .app_data(Data::new(state.element_repo))
-                .service(super::post_tags),
-        )
-        .await;
-        let req = TestRequest::post()
-            .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_form(PostTagsArgs {
-                name: "foo".into(),
-                value: "bar".into(),
-            })
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::CREATED);
         Ok(())
     }
 }

@@ -79,10 +79,10 @@ pub async fn run() -> Result<()> {
             .app_data(web::FormConfig::default().limit(262_144))
             .service(
                 scope("elements")
-                    .service(element::controller_v2::get)
-                    .service(element::controller_v2::get_by_osm_type_and_id)
-                    .service(element::controller_v2::patch_tags)
-                    .service(element::controller_v2::post_tags),
+                    .service(element::admin::post_tags)
+                    .service(element::admin::patch_tags)
+                    .service(element::v2::get)
+                    .service(element::v2::get_by_osm_type_and_id),
             )
             .service(
                 scope("events")
@@ -115,10 +115,10 @@ pub async fn run() -> Result<()> {
                 scope("v2")
                     .service(
                         scope("elements")
-                            .service(element::controller_v2::get)
-                            .service(element::controller_v2::get_by_osm_type_and_id)
-                            .service(element::controller_v2::patch_tags)
-                            .service(element::controller_v2::post_tags),
+                            .service(element::admin::post_tags)
+                            .service(element::admin::patch_tags)
+                            .service(element::v2::get)
+                            .service(element::v2::get_by_osm_type_and_id),
                     )
                     .service(
                         scope("events")
@@ -148,7 +148,7 @@ pub async fn run() -> Result<()> {
                     )
                     .service(scope("tiles").service(tile::controller::get)),
             )
-            .service(scope("v3").service(scope("elements").service(element::controller_v3::get)))
+            .service(scope("v3").service(scope("elements").service(element::v3::get)))
     })
     .bind(("127.0.0.1", 8000))?
     .run()
