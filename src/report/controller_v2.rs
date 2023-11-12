@@ -145,15 +145,19 @@ async fn patch_tags(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::auth::Token;
+    use crate::report::controller_v2::GetItem;
+    use crate::report::Report;
     use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
-    use actix_web::web::scope;
+    use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use reqwest::StatusCode;
     use serde_json::{json, Value};
+    use std::collections::HashMap;
+    use time::macros::date;
+    use time::OffsetDateTime;
 
     #[test]
     async fn get_empty_table() -> Result<()> {
@@ -161,7 +165,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.report_repo))
-                .service(scope("/").service(get)),
+                .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
@@ -185,7 +189,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.report_repo))
-                .service(scope("/").service(get)),
+                .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
@@ -200,46 +204,22 @@ mod tests {
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
-        state.conn.execute(
-            "INSERT INTO report (
-                        area_id,
-                        date,
-                        updated_at
-                    ) VALUES (
-                        1,
-                        '2023-05-06',
-                        '2023-05-06T00:00:00Z'
-                    )",
-            [],
-        )?;
-        state.conn.execute(
-            "INSERT INTO report (
-                        area_id,
-                        date,
-                        updated_at
-                    ) VALUES (
-                        1,
-                        '2023-05-07',
-                        '2023-05-07T00:00:00Z'
-                    )",
-            [],
-        )?;
-        state.conn.execute(
-            "INSERT INTO report (
-                        area_id,
-                        date,
-                        updated_at
-                    ) VALUES (
-                        1,
-                        '2023-05-08',
-                        '2023-05-08T00:00:00Z'
-                    )",
-            [],
-        )?;
+        state
+            .report_repo
+            .insert(1, &date!(2023 - 05 - 06), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .insert(1, &date!(2023 - 05 - 07), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .insert(1, &date!(2023 - 05 - 08), &HashMap::new())
+            .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.report_repo))
-                .service(scope("/").service(get)),
+                .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/?limit=2").to_request();
@@ -265,7 +245,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.report_repo))
-                .service(scope("/").service(get)),
+                .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get()

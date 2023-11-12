@@ -33,6 +33,22 @@ impl ReportRepo {
     }
 
     #[cfg(test)]
+    pub async fn insert(
+        &self,
+        area_id: i64,
+        date: &Date,
+        tags: &HashMap<String, Value>,
+    ) -> Result<Report> {
+        let date = date.clone();
+        let tags = tags.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Report::insert(area_id, &date, &tags, conn))
+            .await?
+    }
+
+    #[cfg(test)]
     pub async fn _select_all(&self, limit: Option<i64>) -> Result<Vec<Report>> {
         self.pool
             .get()
@@ -78,7 +94,7 @@ impl Report {
         date: &Date,
         tags: &HashMap<String, Value>,
         conn: &Connection,
-    ) -> Result<()> {
+    ) -> Result<Report> {
         let query = r#"
             INSERT INTO report (
                 area_id,
@@ -100,7 +116,8 @@ impl Report {
             },
         )?;
 
-        Ok(())
+        Ok(Report::select_by_id(conn.last_insert_rowid(), &conn)?
+            .ok_or(Error::DbTableRowNotFound)?)
     }
 
     #[cfg(test)]

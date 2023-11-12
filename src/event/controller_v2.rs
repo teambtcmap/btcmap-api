@@ -177,9 +177,9 @@ mod tests {
     async fn get_with_limit() -> Result<()> {
         let state = mock_state();
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-05T00:00:00Z')", [])?;
-        state.conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-06T00:00:00Z')", [])?;
-        state.conn.execute("INSERT INTO event (user_id, element_id, type, updated_at) VALUES (1, 1, 'test', '2023-05-07T00:00:00Z')", [])?;
+        state.event_repo.insert(1, 1, "").await?;
+        state.event_repo.insert(1, 1, "").await?;
+        state.event_repo.insert(1, 1, "").await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.event_repo))

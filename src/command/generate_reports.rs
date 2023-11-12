@@ -242,27 +242,29 @@ async fn insert_report(
 
 #[cfg(test)]
 mod test {
-    use serde_json::json;
-    use time::Duration;
-
-    use crate::command::db;
-
     use super::*;
+    use crate::test::mock_state;
+    use serde_json::json;
+    use time::{macros::date, Duration};
+    use tokio::test;
 
-    #[actix_web::test]
+    #[test]
     async fn insert_report() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-
-        for i in 1..100 {
-            super::insert_report(i, &HashMap::new(), &conn).await?;
+        let state = mock_state();
+        let mut area_tags = HashMap::new();
+        area_tags.insert("url_alias".into(), json!("test"));
+        state.area_repo.insert(&area_tags).await?;
+        for _ in 1..100 {
+            state
+                .report_repo
+                .insert(1, &date!(2023 - 11 - 12), &HashMap::new())
+                .await?;
         }
-
         Ok(())
     }
 
     #[test]
-    fn generate_report_tags() -> Result<()> {
+    async fn generate_report_tags() -> Result<()> {
         let element_1 = json!({
           "type": "node",
           "id": 25338659,
