@@ -99,10 +99,8 @@ pub async fn run() -> Result<()> {
             .service(
                 scope("areas")
                     .service(area::admin::post)
-                    .service(area::admin::patch_by_url_alias)
-                    .service(area::admin::post_tags)
-                    .service(area::admin::patch_tags)
-                    .service(area::admin::delete_by_url_alias)
+                    .service(area::admin::patch)
+                    .service(area::admin::delete)
                     .service(area::v2::get)
                     .service(area::v2::get_by_url_alias),
             )
@@ -137,10 +135,8 @@ pub async fn run() -> Result<()> {
                     .service(
                         scope("areas")
                             .service(area::admin::post)
-                            .service(area::admin::patch_by_url_alias)
-                            .service(area::admin::post_tags)
-                            .service(area::admin::patch_tags)
-                            .service(area::admin::delete_by_url_alias)
+                            .service(area::admin::patch)
+                            .service(area::admin::delete)
                             .service(area::v2::get)
                             .service(area::v2::get_by_url_alias),
                     )

@@ -55,7 +55,6 @@ impl AreaRepo {
             .await?
     }
 
-    #[cfg(test)]
     pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
         self.pool
             .get()
@@ -79,15 +78,6 @@ impl AreaRepo {
             .get()
             .await?
             .interact(move |conn| Area::_patch_tags(id, &tags, conn))
-            .await?
-    }
-
-    pub async fn remove_tag(&self, id: i64, tag: &str) -> Result<Area> {
-        let tag = tag.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_remove_tag(id, &tag, conn))
             .await?
     }
 
@@ -239,29 +229,6 @@ impl Area {
         Ok(Area::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub fn __remove_tag(&self, tag: &str, conn: &Connection) -> Result<Area> {
-        Area::_remove_tag(self.id, tag, conn)
-    }
-
-    pub fn _remove_tag(id: i64, tag: &str, conn: &Connection) -> Result<Area> {
-        let query = format!(
-            r#"
-                UPDATE {TABLE}
-                SET {COL_TAGS} = json_remove({COL_TAGS}, :tag)
-                WHERE {COL_ROWID} = :id
-            "#
-        );
-        debug!(query);
-        conn.execute(
-            &query,
-            named_params! {
-                ":id": id,
-                ":tag": format!("$.{tag}"),
-            },
-        )?;
-        Ok(Area::select_by_id(id, conn)?.ok_or(Error::DbTableRowNotFound)?)
-    }
-
     #[cfg(test)]
     pub fn __set_updated_at(&self, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Area> {
         Area::_set_updated_at(self.id, updated_at, conn)
@@ -357,7 +324,7 @@ mod test {
         test::{mock_state, mock_tags},
         Result,
     };
-    use serde_json::{json, Value};
+    use serde_json::json;
     use std::collections::HashMap;
     use time::{macros::datetime, OffsetDateTime};
     use tokio::test;
@@ -454,20 +421,6 @@ mod test {
         let area = state.area_repo.patch_tags(area.id, &tags).await?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         assert_eq!(tag_2_value, area.tags[tag_2_name]);
-        Ok(())
-    }
-
-    #[test]
-    async fn remove_tag() -> Result<()> {
-        let state = mock_state();
-        let tag_name = "tag_name";
-        let tag_value = json!("tag_value");
-        let mut tags: HashMap<String, Value> = HashMap::new();
-        tags.insert(tag_name.into(), tag_value.clone());
-        let area = state.area_repo.insert(&tags).await?;
-        assert_eq!(tag_value, area.tags[tag_name].as_str().unwrap());
-        let area = state.area_repo.remove_tag(area.id, tag_name).await?;
-        assert!(area.tags.get(tag_name).is_none());
         Ok(())
     }
 

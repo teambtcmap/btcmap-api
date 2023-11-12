@@ -5,14 +5,15 @@ use crate::{
 };
 use actix_web::{
     delete, patch, post,
-    web::{Data, Form, Json, Path},
-    HttpRequest, HttpResponse, Responder,
+    web::{Data, Json, Path},
+    HttpRequest,
 };
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use time::OffsetDateTime;
-use tracing::{debug, warn};
+use tracing::debug;
 
 #[derive(Serialize, Deserialize)]
 pub struct AreaView {
@@ -59,27 +60,26 @@ async fn post(
     repo: Data<AreaRepo>,
 ) -> Result<Json<AreaView>, ApiError> {
     let token = auth.check(&req).await?;
-    if !args.tags.contains_key("url_alias") {
-        Err(ApiError::new(500, format!("url_alias is missing")))?
-    }
-    let url_alias = &args.tags.get("url_alias").unwrap();
-    if !url_alias.is_string() {
-        Err(ApiError::new(500, format!("url_alias should be a string")))?
-    }
-    let url_alias = url_alias.as_str().unwrap();
-    if let Some(_) = repo.select_by_url_alias(url_alias).await? {
+    let url_alias = &args
+        .tags
+        .get("url_alias")
+        .ok_or(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Mandatory tag is missing: url_alias",
+        ))?
+        .as_str()
+        .ok_or(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "This tag should be a string: url_alias",
+        ))?;
+    if repo.select_by_url_alias(url_alias).await?.is_some() {
         Err(ApiError::new(
-            303,
-            format!("Area with url_alias = {} already exists", url_alias),
+            StatusCode::CONFLICT,
+            "This url_alias is already in use",
         ))?
     }
-    let area = repo.insert(&args.tags).await.map_err(|_| {
-        ApiError::new(
-            500,
-            format!("Failed to insert area with url_alias = {}", url_alias),
-        )
-    })?;
-    debug!(admin_channel_message = format!("{} created a new area", token.user_id));
+    let area = repo.insert(&args.tags).await?;
+    debug!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} created a new area: https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
     Ok(area.into())
 }
 
@@ -88,141 +88,56 @@ struct PatchArgs {
     tags: HashMap<String, Value>,
 }
 
-#[patch("{url_alias}")]
-async fn patch_by_url_alias(
+#[patch("{id}")]
+async fn patch(
     req: HttpRequest,
+    id: Path<String>,
     args: Json<PatchArgs>,
-    url_alias: Path<String>,
     auth: Data<AuthService>,
     repo: Data<AreaRepo>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<Json<AreaView>, ApiError> {
     let token = auth.check(&req).await?;
-    let area_url_alias = url_alias.into_inner();
-
-    warn!(
-        token.user_id,
-        area_url_alias, "User attempted to merge new tags",
-    );
-
-    match repo.select_by_url_alias(&area_url_alias).await? {
-        Some(area) => repo.patch_tags(area.id, &args.tags).await?,
-        None => {
-            return Err(ApiError::new(
-                404,
-                &format!("There is no area with url_alias = {area_url_alias}"),
-            ));
-        }
-    };
-
-    Ok(HttpResponse::Ok())
+    let int_id = id.parse::<i64>();
+    let area = match int_id {
+        Ok(id) => repo.select_by_id(id).await,
+        Err(_) => repo.select_by_url_alias(&id).await,
+    }?
+    .ok_or(ApiError::new(
+        StatusCode::NOT_FOUND,
+        &format!("There is no area with id or url_alias = {}", id),
+    ))?;
+    let area = repo.patch_tags(area.id, &args.tags).await?;
+    debug!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} updated area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    Ok(area.into())
 }
 
-#[derive(Serialize, Deserialize)]
-struct PostTagsArgs {
-    name: String,
-    value: String,
-}
-
-#[post("{url_alias}/tags")]
-async fn post_tags(
+#[delete("{id}")]
+async fn delete(
     req: HttpRequest,
-    args: Form<PostTagsArgs>,
-    url_alias: Path<String>,
+    id: Path<String>,
     auth: Data<AuthService>,
     repo: Data<AreaRepo>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<Json<AreaView>, ApiError> {
     let token = auth.check(&req).await?;
-    let area_url_alias = url_alias.into_inner();
-
-    warn!(
-        deprecated_api = true,
-        token.user_id,
-        area_url_alias,
-        tag_name = args.name,
-        tag_value = args.value,
-        "User attempted to update area tag",
-    );
-
-    let area: Option<Area> = repo.select_by_url_alias(&area_url_alias).await?;
-
-    match area {
-        Some(area) => {
-            if args.value.len() > 0 {
-                let mut patch_set = HashMap::new();
-                patch_set.insert(args.name.clone(), Value::String(args.value.clone()));
-                repo.patch_tags(area.id, &patch_set).await?;
-            } else {
-                repo.remove_tag(area.id, &args.name).await?;
-            }
-
-            Ok(HttpResponse::Created())
-        }
-        None => Err(ApiError::new(
-            404,
-            &format!("There is no area with url_alias = {area_url_alias}"),
-        )),
-    }
-}
-
-#[patch("{url_alias}/tags")]
-async fn patch_tags(
-    req: HttpRequest,
-    args: Json<HashMap<String, Value>>,
-    url_alias: Path<String>,
-    auth: Data<AuthService>,
-    repo: Data<AreaRepo>,
-) -> Result<impl Responder, ApiError> {
-    let token = auth.check(&req).await?;
-
-    warn!(
-        token.user_id,
-        url_alias = url_alias.as_str(),
-        "User attempted to merge new tags",
-    );
-
-    match repo.select_by_url_alias(&url_alias).await? {
-        Some(area) => repo.patch_tags(area.id, &args).await?,
-        None => {
-            return Err(ApiError::new(
-                404,
-                &format!("There is no area with url_alias = {url_alias}"),
-            ));
-        }
-    };
-
-    Ok(HttpResponse::Ok())
-}
-
-#[delete("{url_alias}")]
-async fn delete_by_url_alias(
-    req: HttpRequest,
-    url_alias: Path<String>,
-    auth: Data<AuthService>,
-    repo: Data<AreaRepo>,
-) -> Result<impl Responder, ApiError> {
-    let token = auth.check(&req).await?;
-    let url_alias = url_alias.into_inner();
-
-    warn!(token.user_id, url_alias, "User attempted to delete an area",);
-
-    let area: Option<Area> = repo.select_by_url_alias(&url_alias).await?;
-
-    match area {
-        Some(area) => {
-            repo.set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
-                .await?;
-            Ok(HttpResponse::Ok())
-        }
-        None => Err(ApiError::new(
-            404,
-            &format!("There is no area with url_alias = {url_alias}"),
-        )),
-    }
+    let int_id = id.parse::<i64>();
+    let area = match int_id {
+        Ok(id) => repo.select_by_id(id).await,
+        Err(_) => repo.select_by_url_alias(&id).await,
+    }?
+    .ok_or(ApiError::new(
+        StatusCode::NOT_FOUND,
+        &format!("There is no area with id or url_alias = {}", id),
+    ))?;
+    let area = repo
+        .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
+        .await?;
+    debug!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} deleted area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    Ok(area.into())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::area::admin::{AreaView, PostArgs, PostTagsArgs};
+    use crate::area::admin::{AreaView, PatchArgs, PostArgs};
     use crate::area::{Area, AreaRepo};
     use crate::auth::Token;
     use crate::test::{mock_state, mock_tags};
@@ -280,7 +195,29 @@ mod tests {
     }
 
     #[test]
-    async fn patch_by_url_alias() -> Result<()> {
+    async fn patch_unauthorized() -> Result<()> {
+        let state = mock_state();
+        state.area_repo.insert(&HashMap::new()).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.area_repo))
+                .service(super::patch),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri("/1")
+            .set_json(PatchArgs {
+                tags: HashMap::new(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch() -> Result<()> {
         let state = mock_state();
         let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
@@ -291,7 +228,7 @@ mod tests {
             App::new()
                 .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
-                .service(super::patch_by_url_alias),
+                .service(super::patch),
         )
         .await;
         let args = r#"
@@ -325,9 +262,8 @@ mod tests {
     }
 
     #[test]
-    async fn post_tags() -> Result<()> {
+    async fn delete_unauthorized() -> Result<()> {
         let state = mock_state();
-        let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -336,44 +272,14 @@ mod tests {
             App::new()
                 .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
-                .service(super::post_tags),
+                .service(super::delete),
         )
         .await;
-        let req = TestRequest::post()
-            .uri(&format!("/{url_alias}/tags"))
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_form(PostTagsArgs {
-                name: "foo".into(),
-                value: "bar".into(),
-            })
+        let req = TestRequest::delete()
+            .uri(&format!("/{url_alias}"))
             .to_request();
         let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::CREATED);
-        Ok(())
-    }
-
-    #[test]
-    async fn patch_tags() -> Result<()> {
-        let state = mock_state();
-        let token = Token::insert(1, "test", &state.conn)?.secret;
-        let url_alias = "test";
-        let mut tags = HashMap::new();
-        tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        state.area_repo.insert(&tags).await?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.auth))
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
-                .service(super::patch_tags),
-        )
-        .await;
-        let req = TestRequest::patch()
-            .uri(&format!("/{url_alias}/tags"))
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_json(json!({ "foo": "bar" }))
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
@@ -389,7 +295,7 @@ mod tests {
             App::new()
                 .app_data(Data::new(state.auth))
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
-                .service(super::delete_by_url_alias),
+                .service(super::delete),
         )
         .await;
         let req = TestRequest::delete()

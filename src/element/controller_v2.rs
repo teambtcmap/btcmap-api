@@ -14,6 +14,7 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
+use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -104,7 +105,7 @@ pub async fn get_by_osm_type_and_id(
         .await?
         .map(|it| it.into())
         .ok_or(ApiError::new(
-            404,
+            StatusCode::NOT_FOUND,
             &format!("Element with id {id} doesn't exist"),
         ))
 }
@@ -129,7 +130,7 @@ async fn patch_tags(
         Some(element) => repo.patch_tags(element.id, &args).await?,
         None => {
             return Err(ApiError::new(
-                404,
+                StatusCode::NOT_FOUND,
                 &format!("There is no element with type = {type} and id = {id}"),
             ));
         }
@@ -169,7 +170,7 @@ async fn post_tags(
             Ok(HttpResponse::Created())
         }
         None => Err(ApiError::new(
-            404,
+            StatusCode::NOT_FOUND,
             &format!("There is no element with id {type}:{id}"),
         )),
     }

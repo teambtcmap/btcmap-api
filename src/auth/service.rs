@@ -2,6 +2,7 @@ use super::Token;
 use crate::ApiError;
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
+use http::StatusCode;
 use rusqlite::Connection;
 use std::sync::Arc;
 use tracing::warn;
@@ -33,11 +34,17 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
         .map(|it| it.to_str().unwrap_or(""))
         .unwrap_or("");
     if auth_header.len() == 0 {
-        return Err(ApiError::new(401, "Authorization header is missing"));
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "Authorization header is missing",
+        ));
     }
     let auth_header_parts: Vec<&str> = auth_header.split(" ").collect();
     if auth_header_parts.len() != 2 {
-        return Err(ApiError::new(401, "Authorization header is invalid"));
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "Authorization header is invalid",
+        ));
     }
     let secret = auth_header_parts[1];
     let token = Token::select_by_secret(secret, db)?;
@@ -53,7 +60,7 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
         }
         None => {
             warn!(admin_channel_message = "Someone tried and failed to access admin API");
-            return Err(ApiError::new(401, "Invalid token"));
+            return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Invalid token"));
         }
     }
 }

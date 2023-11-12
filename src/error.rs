@@ -129,9 +129,9 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    pub fn new<S: AsRef<str>>(http_code: u16, message: S) -> ApiError {
+    pub fn new<S: AsRef<str>>(http_code: StatusCode, message: S) -> ApiError {
         ApiError {
-            http_code: StatusCode::from_u16(http_code).unwrap(),
+            http_code,
             message: message.as_ref().to_string(),
         }
     }
@@ -160,18 +160,18 @@ impl Display for ApiError {
 
 impl From<rusqlite::Error> for ApiError {
     fn from(error: rusqlite::Error) -> Self {
-        ApiError::new(500, &error.to_string())
+        ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
     }
 }
 
 impl From<crate::Error> for ApiError {
     fn from(error: crate::Error) -> Self {
-        ApiError::new(500, &error.to_string())
+        ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
     }
 }
 
 impl From<ParseIntError> for ApiError {
     fn from(error: ParseIntError) -> Self {
-        ApiError::new(500, &error.to_string())
+        ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
     }
 }

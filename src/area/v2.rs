@@ -6,6 +6,7 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -80,7 +81,7 @@ async fn get_by_url_alias(
     repo.select_by_url_alias(&url_alias)
         .await?
         .ok_or(ApiError::new(
-            404,
+            StatusCode::NOT_FOUND,
             &format!("Area with url_alias = {url_alias} doesn't exist"),
         ))
         .map(|it| it.into())

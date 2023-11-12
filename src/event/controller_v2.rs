@@ -1,3 +1,4 @@
+use super::Event;
 use crate::auth::AuthService;
 use crate::event::model::EventRepo;
 use crate::ApiError;
@@ -10,6 +11,7 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
+use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -17,8 +19,6 @@ use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
-
-use super::Event;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -92,7 +92,7 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<EventRepo>) -> Result<Json<GetI
         .await?
         .map(|it| it.into())
         .ok_or(ApiError::new(
-            404,
+            StatusCode::NOT_FOUND,
             &format!("Event with id = {id} doesn't exist"),
         ))
 }
@@ -115,7 +115,7 @@ async fn patch_tags(
         "User attempted to merge new tags",
     );
     let event = repo.select_by_id(id).await?.ok_or(ApiError::new(
-        404,
+        StatusCode::NOT_FOUND,
         &format!("There is no event with id = {id}"),
     ))?;
     repo.patch_tags(event.id, &args).await?;

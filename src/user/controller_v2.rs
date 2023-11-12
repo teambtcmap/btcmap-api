@@ -12,6 +12,7 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
+use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -86,7 +87,7 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<UserRepo>) -> Result<Json<GetIt
         .await?
         .map(|it| it.into())
         .ok_or(ApiError::new(
-            404,
+            StatusCode::NOT_FOUND,
             &format!("User with id = {id} doesn't exist"),
         ))
 }
@@ -112,7 +113,7 @@ async fn patch_tags(
     );
 
     repo.select_by_id(user_id).await?.ok_or(ApiError::new(
-        404,
+        StatusCode::NOT_FOUND,
         &format!("User with id = {user_id} doesn't exist"),
     ))?;
 

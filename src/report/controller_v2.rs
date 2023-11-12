@@ -1,3 +1,4 @@
+use super::Report;
 use crate::auth::AuthService;
 use crate::report::model::ReportRepo;
 use crate::ApiError;
@@ -10,6 +11,7 @@ use actix_web::web::Query;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::Responder;
+use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -17,8 +19,6 @@ use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::warn;
-
-use super::Report;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -100,7 +100,7 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<ReportRepo>) -> Result<Json<Get
         .await?
         .map(|it| it.into())
         .ok_or(ApiError::new(
-            404,
+            StatusCode::NOT_FOUND,
             &format!("Report with id = {id} doesn't exist"),
         ))
 }
@@ -126,7 +126,7 @@ async fn patch_tags(
     );
 
     repo.select_by_id(report_id).await?.ok_or(ApiError::new(
-        404,
+        StatusCode::NOT_FOUND,
         &format!("Report with id = {report_id} doesn't exist"),
     ))?;
 
