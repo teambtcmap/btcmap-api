@@ -45,7 +45,8 @@ impl EventRepo {
             .await?
     }
 
-    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Event>> {
+    #[cfg(test)]
+    pub async fn _select_all(&self, limit: Option<i64>) -> Result<Vec<Event>> {
         self.pool
             .get()
             .await?
@@ -124,6 +125,7 @@ impl Event {
             .ok_or(Error::DbTableRowNotFound)?)
     }
 
+    #[cfg(test)]
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Event>> {
         let query = format!(
             r#"

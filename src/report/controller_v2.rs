@@ -17,6 +17,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
+use time::Duration;
 use time::OffsetDateTime;
 use tracing::warn;
 
@@ -85,7 +86,14 @@ async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<Ge
             .map(|it| it.into())
             .collect(),
         None => repo
-            .select_all(args.limit)
+            .select_updated_since(
+                &OffsetDateTime::now_utc()
+                    .checked_sub(Duration::days(7))
+                    .unwrap()
+                    .format(&Rfc3339)
+                    .unwrap(),
+                args.limit,
+            )
             .await?
             .into_iter()
             .map(|it| it.into())

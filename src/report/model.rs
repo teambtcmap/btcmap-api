@@ -32,7 +32,8 @@ impl ReportRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Report>> {
+    #[cfg(test)]
+    pub async fn _select_all(&self, limit: Option<i64>) -> Result<Vec<Report>> {
         self.pool
             .get()
             .await?
@@ -102,6 +103,7 @@ impl Report {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Report>> {
         let query = r#"
             SELECT
