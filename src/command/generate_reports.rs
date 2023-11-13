@@ -30,7 +30,10 @@ pub async fn run(mut conn: Connection) -> Result<()> {
 
     let elements = overpass::query_bitcoin_merchants().await?;
 
-    let areas: Vec<Area> = vec![];
+    let areas: Vec<Area> = Area::select_all(None, &conn)?
+        .into_iter()
+        .filter(|it| it.deleted_at == None)
+        .collect();
 
     let tx = conn.transaction()?;
 
