@@ -131,7 +131,7 @@ async fn patch_tags(
     let element = repo.patch_tags(element.id, &args).await?;
     debug!(
         admin_channel_message = format!(
-            "User https://api.btcmap.org/v2/users/{} used patched tags for element https://api.btcmap.org/v2/elements/{} {}",
+            "User https://api.btcmap.org/v2/users/{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
             token.user_id, id, serde_json::to_string_pretty(&args).unwrap(),
         )
     );

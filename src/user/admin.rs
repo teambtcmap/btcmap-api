@@ -7,7 +7,7 @@ use actix_web::{
 use http::StatusCode;
 use serde_json::Value;
 use std::collections::HashMap;
-use tracing::warn;
+use tracing::debug;
 
 #[patch("{id}/tags")]
 async fn patch_tags(
@@ -18,24 +18,17 @@ async fn patch_tags(
     repo: Data<UserRepo>,
 ) -> Result<impl Responder, ApiError> {
     let token = auth.check(&req).await?;
-    let user_id = id.into_inner();
-
-    let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
-
-    warn!(
-        actor_id = token.user_id,
-        user_id,
-        tags = keys.join(", "),
-        "User attempted to update user tags",
-    );
-
-    repo.select_by_id(user_id).await?.ok_or(ApiError::new(
+    repo.select_by_id(*id).await?.ok_or(ApiError::new(
         StatusCode::NOT_FOUND,
-        &format!("User with id = {user_id} doesn't exist"),
+        &format!("User with id = {id} doesn't exist"),
     ))?;
-
-    repo.patch_tags(user_id, &args).await?;
-
+    repo.patch_tags(*id, &args).await?;
+    debug!(
+        admin_channel_message = format!(
+            "User https://api.btcmap.org/v2/users/{} patched tags for user https://api.btcmap.org/v2/users/{} {}",
+            token.user_id, id, serde_json::to_string_pretty(&args).unwrap(),
+        )
+    );
     Ok(HttpResponse::Ok())
 }
 
