@@ -86,9 +86,8 @@ pub async fn run() -> Result<()> {
             )
             .service(
                 scope("events")
-                    .service(event::controller_v2::get)
-                    .service(event::controller_v2::get_by_id)
-                    .service(event::controller_v2::patch_tags),
+                    .service(event::v2::get)
+                    .service(event::v2::get_by_id),
             )
             .service(
                 scope("users")
@@ -122,9 +121,8 @@ pub async fn run() -> Result<()> {
                     )
                     .service(
                         scope("events")
-                            .service(event::controller_v2::get)
-                            .service(event::controller_v2::get_by_id)
-                            .service(event::controller_v2::patch_tags),
+                            .service(event::v2::get)
+                            .service(event::v2::get_by_id),
                     )
                     .service(
                         scope("users")

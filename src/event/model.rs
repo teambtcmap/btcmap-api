@@ -75,7 +75,7 @@ impl EventRepo {
             .await?
     }
 
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Event> {
+    pub async fn _patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Event> {
         let tags = tags.clone();
         self.pool
             .get()
