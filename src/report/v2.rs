@@ -1,16 +1,11 @@
 use super::Report;
-use crate::auth::AuthService;
 use crate::report::model::ReportRepo;
 use crate::ApiError;
 use actix_web::get;
-use actix_web::patch;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::HttpRequest;
-use actix_web::HttpResponse;
-use actix_web::Responder;
 use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -19,7 +14,6 @@ use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
-use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -113,48 +107,16 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<ReportRepo>) -> Result<Json<Get
         ))
 }
 
-#[patch("{id}/tags")]
-async fn patch_tags(
-    req: HttpRequest,
-    id: Path<i64>,
-    args: Json<HashMap<String, Value>>,
-    auth: Data<AuthService>,
-    repo: Data<ReportRepo>,
-) -> Result<impl Responder, ApiError> {
-    let token = auth.check(&req).await?;
-    let report_id = id.into_inner();
-
-    let keys: Vec<String> = args.keys().map(|it| it.to_string()).collect();
-
-    warn!(
-        user_id = token.user_id,
-        report_id,
-        tags = keys.join(", "),
-        "User attempted to update report tags",
-    );
-
-    repo.select_by_id(report_id).await?.ok_or(ApiError::new(
-        StatusCode::NOT_FOUND,
-        &format!("Report with id = {report_id} doesn't exist"),
-    ))?;
-
-    repo.patch_tags(report_id, &args).await?;
-
-    Ok(HttpResponse::Ok())
-}
-
 #[cfg(test)]
-mod tests {
-    use crate::auth::Token;
-    use crate::report::controller_v2::GetItem;
+mod test {
+    use crate::report::v2::GetItem;
     use crate::report::Report;
     use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
-    use reqwest::StatusCode;
-    use serde_json::{json, Value};
+    use serde_json::Value;
     use std::collections::HashMap;
     use time::macros::date;
     use time::OffsetDateTime;
@@ -253,34 +215,6 @@ mod tests {
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
-        Ok(())
-    }
-
-    #[test]
-    async fn patch_tags() -> Result<()> {
-        let state = mock_state();
-        let mut area_tags = HashMap::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
-        let token = Token::insert(1, "test", &state.conn)?.secret;
-        state.conn.execute(
-                    "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2020-01-01', '2022-01-05T00:00:00Z')",
-                    [],
-                )?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.auth))
-                .app_data(Data::new(state.report_repo))
-                .service(super::patch_tags),
-        )
-        .await;
-        let req = TestRequest::patch()
-            .uri(&format!("/1/tags"))
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_json(json!({ "foo": "bar" }))
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::OK);
         Ok(())
     }
 }

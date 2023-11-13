@@ -78,7 +78,8 @@ impl ReportRepo {
             .await?
     }
 
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Report> {
+    #[cfg(test)]
+    pub async fn _patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Report> {
         let tags = tags.clone();
         self.pool
             .get()
@@ -199,6 +200,7 @@ impl Report {
             .optional()?)
     }
 
+    #[cfg(test)]
     pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Report> {
         let query = r#"
             UPDATE report
