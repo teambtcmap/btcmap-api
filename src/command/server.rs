@@ -93,9 +93,9 @@ pub async fn run() -> Result<()> {
             )
             .service(
                 scope("users")
-                    .service(user::controller_v2::get)
-                    .service(user::controller_v2::get_by_id)
-                    .service(user::controller_v2::patch_tags),
+                    .service(user::admin::patch_tags)
+                    .service(user::v2::get)
+                    .service(user::v2::get_by_id),
             )
             .service(
                 scope("areas")
@@ -127,9 +127,9 @@ pub async fn run() -> Result<()> {
                     )
                     .service(
                         scope("users")
-                            .service(user::controller_v2::get)
-                            .service(user::controller_v2::get_by_id)
-                            .service(user::controller_v2::patch_tags),
+                            .service(user::admin::patch_tags)
+                            .service(user::v2::get)
+                            .service(user::v2::get_by_id),
                     )
                     .service(
                         scope("areas")
