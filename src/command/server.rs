@@ -52,18 +52,20 @@ pub async fn run() -> Result<()> {
                 srv.call(req).map(move |res| {
                     if let Ok(res) = res.as_ref() {
                         let res_status = res.status().as_u16();
-                        info!(
-                            req_query_string,
-                            req_method,
-                            req_path,
-                            req_version,
-                            req_ip,
-                            req_real_ip,
-                            res_status,
-                            res_time_sec = (OffsetDateTime::now_utc() - req_time).as_seconds_f64(),
-                        );
+                        let res_time_sec = (OffsetDateTime::now_utc() - req_time).as_seconds_f64();
+                        if res_time_sec > 5.0 {
+                            info!(
+                                req_query_string,
+                                req_method,
+                                req_path,
+                                req_version,
+                                req_ip,
+                                req_real_ip,
+                                res_status,
+                                res_time_sec,
+                            );
+                        }
                     }
-
                     res
                 })
             })

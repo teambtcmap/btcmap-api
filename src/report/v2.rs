@@ -64,12 +64,6 @@ impl Into<Json<GetItem>> for Report {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct PostTagsArgs {
-    name: String,
-    value: String,
-}
-
 #[get("")]
 async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<GetItem>>, ApiError> {
     Ok(Json(match &args.updated_since {
