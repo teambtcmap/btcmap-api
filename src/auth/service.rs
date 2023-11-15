@@ -67,13 +67,15 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::command::db;
-    use crate::Result;
+    use crate::auth::Token;
+    use crate::osm::osm::OsmUser;
+    use crate::test::mock_state;
+    use crate::{ApiError, Result};
+    use actix_web::test::{self, TestRequest};
+    use actix_web::HttpRequest;
     use actix_web::{
         dev::Response,
         get,
-        test::{self, TestRequest},
         web::{scope, Data},
         App, Responder,
     };
@@ -81,12 +83,12 @@ mod tests {
 
     #[actix_web::test]
     async fn no_header() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-        Token::insert(1, "test", &conn)?;
+        let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
+        Token::insert(1, "test", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.conn))
                 .service(scope("/").service(get)),
         )
         .await;
@@ -98,12 +100,12 @@ mod tests {
 
     #[actix_web::test]
     async fn valid_token() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
-        Token::insert(1, "test", &conn)?;
+        let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
+        Token::insert(1, "test", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(conn))
+                .app_data(Data::new(state.conn))
                 .service(scope("/").service(get)),
         )
         .await;
@@ -118,7 +120,7 @@ mod tests {
 
     #[get("")]
     async fn get(req: HttpRequest, db: Data<Connection>) -> Result<impl Responder, ApiError> {
-        get_admin_token(&db, &req.headers())?;
+        super::get_admin_token(&db, &req.headers())?;
         Ok(Response::ok())
     }
 }

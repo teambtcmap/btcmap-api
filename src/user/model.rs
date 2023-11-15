@@ -11,7 +11,7 @@ pub struct UserRepo {
 
 pub struct User {
     pub id: i64,
-    pub osm_json: OsmUser,
+    pub osm_data: OsmUser,
     pub tags: HashMap<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
@@ -21,6 +21,17 @@ pub struct User {
 impl UserRepo {
     pub fn new(pool: &Arc<Pool>) -> Self {
         Self { pool: pool.clone() }
+    }
+
+    #[cfg(test)]
+    pub async fn insert(&self, id: i64, osm_data: &OsmUser) -> Result<()> {
+        let osm_data = osm_data.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| User::insert(id, &osm_data, conn))
+            .await??;
+        Ok(())
     }
 
     pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<User>> {
@@ -63,14 +74,14 @@ impl UserRepo {
 }
 
 impl User {
-    pub fn insert(id: i64, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
+    pub fn insert(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {
         let query = r#"
             INSERT INTO user (
                 rowid,
-                osm_json
+                osm_data
             ) VALUES (
                 :id,
-                :osm_json
+                :osm_data
             )
         "#;
 
@@ -78,7 +89,7 @@ impl User {
             query,
             named_params! {
                 ":id": id,
-                ":osm_json": serde_json::to_string(osm_json)?,
+                ":osm_data": serde_json::to_string(osm_data)?,
             },
         )?;
 
@@ -89,7 +100,7 @@ impl User {
         let query = r#"
             SELECT
                 rowid,
-                osm_json,
+                osm_data,
                 tags,
                 created_at,
                 updated_at,
@@ -116,7 +127,7 @@ impl User {
         let query = r#"
             SELECT
                 rowid,
-                osm_json,
+                osm_data,
                 tags,
                 created_at,
                 updated_at,
@@ -140,7 +151,7 @@ impl User {
         let query = r#"
             SELECT
                 rowid,
-                osm_json,
+                osm_data,
                 tags,
                 created_at,
                 updated_at,
@@ -171,10 +182,10 @@ impl User {
         Ok(User::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
-    pub fn set_osm_json(id: i64, osm_json: &OsmUser, conn: &Connection) -> Result<()> {
+    pub fn set_osm_data(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {
         let query = r#"
             UPDATE user
-            SET osm_json = json(:osm_json)
+            SET osm_data = json(:osm_data)
             WHERE rowid = :id
         "#;
 
@@ -182,7 +193,7 @@ impl User {
             query,
             named_params! {
                 ":id": id,
-                ":osm_json": serde_json::to_string(osm_json)?,
+                ":osm_data": serde_json::to_string(osm_data)?,
             },
         )?;
 
@@ -192,15 +203,15 @@ impl User {
 
 const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
     |row: &Row| -> rusqlite::Result<User> {
-        let osm_json: String = row.get(1)?;
-        let osm_json: OsmUser = serde_json::from_str(&osm_json).unwrap();
+        let osm_data: String = row.get(1)?;
+        let osm_data: OsmUser = serde_json::from_str(&osm_data).unwrap();
 
         let tags: String = row.get(2)?;
         let tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(User {
             id: row.get(0)?,
-            osm_json,
+            osm_data,
             tags,
             created_at: row.get(3)?,
             updated_at: row.get(4)?,
@@ -238,15 +249,15 @@ mod test {
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
         conn.execute(
-            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (1, json(?), '2020-01-01T00:00:00Z')",
+            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2020-01-01T00:00:00Z')",
             [serde_json::to_string(&OsmUser::mock())?],
         )?;
         conn.execute(
-            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (2, json(?), '2020-01-02T00:00:00Z')",
+            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2020-01-02T00:00:00Z')",
             [serde_json::to_string(&OsmUser::mock())?],
         )?;
         conn.execute(
-            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (3, json(?), '2020-01-03T00:00:00Z')",
+            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (3, json(?), '2020-01-03T00:00:00Z')",
             [serde_json::to_string(&OsmUser::mock())?],
         )?;
         assert_eq!(
@@ -287,7 +298,7 @@ mod test {
     }
 
     #[test]
-    fn set_osm_json() -> Result<()> {
+    fn set_osm_data() -> Result<()> {
         let conn = mock_conn();
         let user = OsmUser {
             id: 1,
@@ -298,9 +309,9 @@ mod test {
             id: 2,
             ..OsmUser::mock()
         };
-        User::set_osm_json(1, &user, &conn)?;
+        User::set_osm_data(1, &user, &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();
-        assert_eq!(2, user.osm_json.id);
+        assert_eq!(2, user.osm_data.id);
         Ok(())
     }
 }

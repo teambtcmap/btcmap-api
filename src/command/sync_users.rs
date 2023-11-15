@@ -47,12 +47,12 @@ pub async fn run(conn: Connection) -> Result<()> {
             cached_user.id
         )))?;
 
-        let db_user_str = serde_json::to_string(&cached_user.osm_json)?;
+        let db_user_str = serde_json::to_string(&cached_user.osm_data)?;
         let fresh_user_str = serde_json::to_string(&fresh_user)?;
 
         if fresh_user_str != db_user_str {
             info!("Change detected");
-            User::set_osm_json(
+            User::set_osm_data(
                 cached_user.id,
                 &serde_json::from_value(fresh_user.clone())?,
                 &conn,

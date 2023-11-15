@@ -142,6 +142,7 @@ async fn patch_tags(
 mod test {
     use crate::auth::Token;
     use crate::element::admin::PostTagsArgs;
+    use crate::osm::osm::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::Result;
@@ -154,6 +155,7 @@ mod test {
     #[test]
     async fn post_tags() -> Result<()> {
         let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         let token = Token::insert(1, "test", &state.conn)?.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
@@ -179,6 +181,7 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         let token = Token::insert(1, "test", &state.conn)?.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(

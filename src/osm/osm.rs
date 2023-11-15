@@ -65,7 +65,7 @@ struct OsmUserResponse {
     user: OsmUser,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct OsmUser {
     pub id: i64,
     pub display_name: String,
@@ -80,32 +80,32 @@ pub struct OsmUser {
     pub blocks: Blocks,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ContributorTerms {
     pub agreed: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Img {
     pub href: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Changesets {
     pub count: i32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Traces {
     pub count: i32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Blocks {
     received: BlocksReceived,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BlocksReceived {
     count: i32,
     active: i32,

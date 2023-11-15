@@ -140,6 +140,7 @@ mod tests {
     use crate::area::admin::{AreaView, PatchArgs, PostArgs};
     use crate::area::{Area, AreaRepo};
     use crate::auth::Token;
+    use crate::osm::osm::OsmUser;
     use crate::test::{mock_state, mock_tags};
     use crate::Result;
     use actix_web::test::TestRequest;
@@ -171,6 +172,7 @@ mod tests {
     #[test]
     async fn post() -> Result<()> {
         let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         let token = Token::insert(1, "test", &state.conn)?.secret;
         let app = test::init_service(
             App::new()
@@ -219,6 +221,7 @@ mod tests {
     #[test]
     async fn patch() -> Result<()> {
         let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
@@ -286,6 +289,7 @@ mod tests {
     #[test]
     async fn delete() -> Result<()> {
         let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         let token = Token::insert(1, "test", &state.conn)?.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();

@@ -58,6 +58,7 @@ pub fn pool() -> Result<Pool> {
             let conn = conn.lock().unwrap();
             conn.pragma_update(None, "journal_mode", "WAL").unwrap();
             conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+            conn.pragma_update(None, "foreign_keys", "ON").unwrap();
             Ok(())
         })))
         .build()?)

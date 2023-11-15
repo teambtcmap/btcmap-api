@@ -48,9 +48,9 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state();
-        let token = Token::insert(1, "test", &state.conn)?.secret;
         let user_id = 1;
         User::insert(user_id, &OsmUser::mock(), &state.conn)?;
+        let token = Token::insert(1, "test", &state.conn)?.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))

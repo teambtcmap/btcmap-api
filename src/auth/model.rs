@@ -8,7 +8,7 @@ pub struct Token {
     pub secret: String,
     pub created_at: String,
     pub updated_at: String,
-    pub deleted_at: String,
+    pub deleted_at: Option<String>,
 }
 
 impl Token {

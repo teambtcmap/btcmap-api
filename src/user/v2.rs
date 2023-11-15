@@ -37,7 +37,7 @@ impl Into<GetItem> for User {
     fn into(self) -> GetItem {
         GetItem {
             id: self.id,
-            osm_json: self.osm_json,
+            osm_json: self.osm_data,
             tags: self.tags,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -133,11 +133,11 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let state = mock_state();
         state.conn.execute(
-            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
+            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
             [serde_json::to_string(&OsmUser::mock())?],
         )?;
         state.conn.execute(
-            "INSERT INTO user (rowid, osm_json, updated_at) VALUES (2, json(?), '2022-02-05T00:00:00Z')",
+            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2022-02-05T00:00:00Z')",
             [serde_json::to_string(&OsmUser::mock())?],
         )?;
         let app = test::init_service(
