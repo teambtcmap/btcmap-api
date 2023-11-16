@@ -290,20 +290,24 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Event> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
-    use serde_json::json;
-    use time::{macros::datetime, OffsetDateTime};
-
-    use crate::{element::Element, osm::overpass::OverpassElement, test::mock_conn, Result};
-
     use super::Event;
+    use crate::{
+        element::Element,
+        osm::{osm::OsmUser, overpass::OverpassElement},
+        test::mock_conn,
+        user::User,
+        Result,
+    };
+    use serde_json::json;
+    use std::collections::HashMap;
+    use time::{macros::datetime, OffsetDateTime};
 
     #[test]
     fn insert() -> Result<()> {
         let conn = mock_conn();
+        let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let event = Event::insert(1, element.id, "create", &conn)?;
+        let event = Event::insert(user.id, element.id, "create", &conn)?;
         assert_eq!(event, Event::select_by_id(event.id, &conn)?.unwrap());
         Ok(())
     }
@@ -311,12 +315,13 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = mock_conn();
+        let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(
             vec![
-                Event::insert(1, element.id, "", &conn)?,
-                Event::insert(1, element.id, "", &conn)?,
-                Event::insert(1, element.id, "", &conn)?,
+                Event::insert(user.id, element.id, "", &conn)?,
+                Event::insert(user.id, element.id, "", &conn)?,
+                Event::insert(user.id, element.id, "", &conn)?,
             ],
             Event::select_all(None, &conn)?
         );
@@ -326,8 +331,9 @@ mod test {
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
+        let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        Event::insert(1, element.id, "", &conn)?
+        Event::insert(user.id, element.id, "", &conn)?
             .set_updated_at(&datetime!(2020-01-01 00:00 UTC), &conn)?;
         assert_eq!(
             vec![
@@ -344,8 +350,9 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
+        let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let event = Event::insert(1, element.id, "", &conn)?;
+        let event = Event::insert(user.id, element.id, "", &conn)?;
         assert_eq!(event, Event::select_by_id(1, &conn)?.unwrap());
         Ok(())
     }
@@ -358,8 +365,9 @@ mod test {
         let tag_1_value_2 = json!("tag_1_value_2");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
+        let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let event = Event::insert(1, element.id, "", &conn)?;
+        let event = Event::insert(user.id, element.id, "", &conn)?;
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value_1.clone());
         let event = event.patch_tags(&tags, &conn)?;
@@ -379,8 +387,10 @@ mod test {
     fn set_updated_at() -> Result<()> {
         let conn = mock_conn();
         let updated_at = OffsetDateTime::now_utc();
+        let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let event = Event::insert(1, element.id, "", &conn)?.set_updated_at(&updated_at, &conn)?;
+        let event =
+            Event::insert(user.id, element.id, "", &conn)?.set_updated_at(&updated_at, &conn)?;
         assert_eq!(
             updated_at,
             Event::select_by_id(event.id, &conn)?.unwrap().updated_at,

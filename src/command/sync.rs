@@ -229,7 +229,7 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Resul
         None => Err(Error::Other(format!(
             "User with id = {user_id} doesn't exist on OSM"
         )))?,
-    }
+    };
 
     Ok(())
 }

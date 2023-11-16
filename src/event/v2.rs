@@ -100,6 +100,7 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<EventRepo>) -> Result<Json<GetI
 #[cfg(test)]
 mod test {
     use crate::event::v2::GetItem;
+    use crate::osm::osm::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::Result;
@@ -126,8 +127,9 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let state = mock_state();
+        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.event_repo.insert(1, element.id, "").await?;
+        state.event_repo.insert(user.id, element.id, "").await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.event_repo))
@@ -143,6 +145,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.event_repo.insert(1, 1, "").await?;
         state.event_repo.insert(1, 1, "").await?;
@@ -162,13 +165,14 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state();
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 0, '2022-01-05T00:00:00Z')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 1, '2022-01-05T00:00:00Z')",
             [],
         )?;
         state.conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 0, '2022-02-05T00:00:00Z')",
+            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 1, '2022-02-05T00:00:00Z')",
             [],
         )?;
         let app = test::init_service(
@@ -189,8 +193,9 @@ mod test {
     async fn get_by_id() -> Result<()> {
         let state = mock_state();
         let event_id = 1;
-        state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.event_repo.insert(1, 1, "").await?;
+        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        state.event_repo.insert(user.id, element.id, "").await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.event_repo))

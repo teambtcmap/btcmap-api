@@ -24,14 +24,13 @@ impl UserRepo {
     }
 
     #[cfg(test)]
-    pub async fn insert(&self, id: i64, osm_data: &OsmUser) -> Result<()> {
+    pub async fn insert(&self, id: i64, osm_data: &OsmUser) -> Result<User> {
         let osm_data = osm_data.clone();
         self.pool
             .get()
             .await?
             .interact(move |conn| User::insert(id, &osm_data, conn))
-            .await??;
-        Ok(())
+            .await?
     }
 
     pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<User>> {
@@ -74,7 +73,7 @@ impl UserRepo {
 }
 
 impl User {
-    pub fn insert(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {
+    pub fn insert(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<User> {
         let query = r#"
             INSERT INTO user (
                 rowid,
@@ -93,7 +92,10 @@ impl User {
             },
         )?;
 
-        Ok(())
+        Ok(
+            User::select_by_id(conn.last_insert_rowid(), &conn)?
+                .ok_or(Error::DbTableRowNotFound)?,
+        )
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<User>> {
