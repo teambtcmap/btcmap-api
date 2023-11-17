@@ -21,17 +21,16 @@ pub fn mock_conn() -> Connection {
 
 static MEM_DB_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
-pub fn mock_state() -> State {
-    let uri = format!(
-        "file::testdb_{}:?mode=memory&cache=shared",
-        MEM_DB_COUNTER.fetch_add(1, Ordering::Relaxed)
-    );
-    let mut conn = Connection::open(&uri).unwrap();
-    db::migrate(&mut conn).unwrap();
-    let pool = Arc::new(Config::new(uri).create_pool(Runtime::Tokio1).unwrap());
+pub async fn mock_state() -> State {
+    let pool = Arc::new(mock_pool());
+    pool.get()
+        .await
+        .unwrap()
+        .interact(|conn| db::migrate(conn).unwrap())
+        .await
+        .unwrap();
     State {
         pool: pool.clone(),
-        conn: conn,
         auth: AuthService::new(&pool),
         area_repo: AreaRepo::new(&pool),
         element_repo: ElementRepo::new(&pool),
@@ -41,9 +40,21 @@ pub fn mock_state() -> State {
     }
 }
 
+pub fn mock_pool() -> Pool {
+    let uri = format!(
+        "file::testdb_{}:?mode=memory&cache=shared",
+        MEM_DB_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    Config::new(uri)
+        .builder(Runtime::Tokio1)
+        .unwrap()
+        .max_size(8)
+        .build()
+        .unwrap()
+}
+
 pub struct State {
     pub pool: Arc<Pool>,
-    pub conn: Connection,
     pub auth: AuthService,
     pub area_repo: AreaRepo,
     pub element_repo: ElementRepo,

@@ -331,7 +331,7 @@ mod test {
 
     #[test]
     async fn insert() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let tags = mock_tags();
         let res = state.area_repo.insert(&tags).await?;
         assert_eq!(tags, res.tags);
@@ -341,7 +341,7 @@ mod test {
 
     #[test]
     async fn select_all() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         assert_eq!(
             vec![
                 state.area_repo.insert(&HashMap::new()).await?,
@@ -355,7 +355,7 @@ mod test {
 
     #[test]
     async fn select_updated_since() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let _area_1 = state.area_repo.insert(&mock_tags()).await?;
         let _area_1 = state
             .area_repo
@@ -383,7 +383,7 @@ mod test {
 
     #[test]
     async fn select_by_id() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let area = state.area_repo.insert(&HashMap::new()).await?;
         assert_eq!(area, state.area_repo.select_by_id(area.id).await?.unwrap());
         Ok(())
@@ -391,7 +391,7 @@ mod test {
 
     #[test]
     async fn select_by_url_alias() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let url_alias = json!("url_alias_value");
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), url_alias.clone());
@@ -408,7 +408,7 @@ mod test {
 
     #[test]
     async fn patch_tags() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let tag_1_name = "tag_1_name";
         let tag_1_value = json!("tag_1_value");
         let tag_2_name = "tag_2_name";
@@ -426,7 +426,7 @@ mod test {
 
     #[test]
     async fn set_deleted_at() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let area = state.area_repo.insert(&HashMap::new()).await?;
         let area = state
             .area_repo

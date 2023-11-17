@@ -139,7 +139,6 @@ async fn delete(
 mod tests {
     use crate::area::admin::{AreaView, PatchArgs, PostArgs};
     use crate::area::{Area, AreaRepo};
-    use crate::auth::Token;
     use crate::osm::osm::OsmUser;
     use crate::test::{mock_state, mock_tags};
     use crate::Result;
@@ -152,7 +151,7 @@ mod tests {
 
     #[test]
     async fn post_unauthorized() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
@@ -171,9 +170,9 @@ mod tests {
 
     #[test]
     async fn post() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = Token::insert(1, "test", &state.conn)?.secret;
+        let token = state.auth.mock_token(1, "test").await.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
@@ -198,7 +197,7 @@ mod tests {
 
     #[test]
     async fn patch_unauthorized() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.area_repo.insert(&HashMap::new()).await?;
         let app = test::init_service(
             App::new()
@@ -220,9 +219,9 @@ mod tests {
 
     #[test]
     async fn patch() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = Token::insert(1, "test", &state.conn)?.secret;
+        let token = state.auth.mock_token(1, "test").await.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -266,7 +265,7 @@ mod tests {
 
     #[test]
     async fn delete_unauthorized() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -288,9 +287,9 @@ mod tests {
 
     #[test]
     async fn delete() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = Token::insert(1, "test", &state.conn)?.secret;
+        let token = state.auth.mock_token(1, "test").await.secret;
         let url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));

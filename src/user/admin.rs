@@ -34,10 +34,8 @@ async fn patch_tags(
 
 #[cfg(test)]
 mod test {
-    use crate::auth::Token;
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
-    use crate::user::User;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -47,10 +45,10 @@ mod test {
 
     #[test]
     async fn patch_tags() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let user_id = 1;
-        User::insert(user_id, &OsmUser::mock(), &state.conn)?;
-        let token = Token::insert(1, "test", &state.conn)?.secret;
+        state.user_repo.insert(user_id, &OsmUser::mock()).await?;
+        let token = state.auth.mock_token(1, "test").await.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))

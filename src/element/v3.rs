@@ -14,10 +14,9 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
-    #[serde(default)]
-    #[serde(with = "time::serde::rfc3339::option")]
-    updated_since: Option<OffsetDateTime>,
-    limit: Option<i64>,
+    #[serde(with = "time::serde::rfc3339")]
+    updated_since: OffsetDateTime,
+    limit: i64,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -68,35 +67,44 @@ pub async fn get(
     args: Query<GetArgs>,
     repo: Data<ElementRepo>,
 ) -> Result<Json<Vec<GetItem>>, ApiError> {
-    Ok(Json(match &args.updated_since {
-        Some(updated_since) => repo
-            .select_updated_since(&updated_since, args.limit)
+    Ok(Json(
+        repo.select_updated_since(&args.updated_since, Some(args.limit))
             .await?
             .into_iter()
             .map(|it| it.into())
             .collect(),
-        None => repo
-            .select_all(args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    }))
+    ))
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::element::ElementRepo;
+    use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
-    use actix_web::web::scope;
+    use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use http::StatusCode;
     use time::macros::datetime;
 
     #[test]
+    async fn get_no_updated_since() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(ElementRepo::mock()))
+                .service(scope("/limit=1").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(StatusCode::BAD_REQUEST, res.status());
+        Ok(())
+    }
+
+    #[test]
     async fn get_empty_array() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.element_repo))
@@ -104,14 +112,14 @@ mod test {
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
-        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 0);
         Ok(())
     }
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
@@ -120,14 +128,14 @@ mod test {
         )
         .await;
         let req = TestRequest::get().uri("/").to_request();
-        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, vec![element.into()]);
         Ok(())
     }
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let element_1 = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
         let _element_3 = state.element_repo.insert(&OverpassElement::mock(3)).await?;
@@ -138,24 +146,24 @@ mod test {
         )
         .await;
         let req = TestRequest::get().uri("/?limit=2").to_request();
-        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, vec![element_1.into(), element_2.into()]);
         Ok(())
     }
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state();
-        let _element_1 = state
+        let state = mock_state().await;
+        let element_1 = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        state
             .element_repo
-            .insert(&OverpassElement::mock(1))
-            .await?
-            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &state.conn)?;
-        let element_2 = state
+            .set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC))
+            .await?;
+        let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
+        state
             .element_repo
-            .insert(&OverpassElement::mock(2))
-            .await?
-            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &state.conn)?;
+            .set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC))
+            .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.element_repo))
@@ -165,7 +173,7 @@ mod test {
         let req = TestRequest::get()
             .uri("/?updated_since=2022-01-10T00:00:00Z")
             .to_request();
-        let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, vec![element_2.into()]);
         Ok(())
     }

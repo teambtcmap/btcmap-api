@@ -108,7 +108,7 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.element_repo))
@@ -123,7 +123,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
@@ -140,7 +140,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.element_repo.insert(&OverpassElement::mock(2)).await?;
         state.element_repo.insert(&OverpassElement::mock(3)).await?;
@@ -158,17 +158,17 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
+        let element_1 = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state
             .element_repo
-            .insert(&OverpassElement::mock(1))
-            .await?
-            .set_updated_at(&datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+            .set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC))
+            .await?;
+        let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
         state
             .element_repo
-            .insert(&OverpassElement::mock(2))
-            .await?
-            .set_updated_at(&datetime!(2022-02-05 00:00 UTC), &state.conn)?;
+            .set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC))
+            .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.element_repo))
@@ -185,7 +185,7 @@ mod test {
 
     #[test]
     async fn get_by_osm_type_and_id() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()

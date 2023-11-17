@@ -253,7 +253,7 @@ mod test {
 
     #[test]
     async fn insert_report() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), json!("test"));
         state.area_repo.insert(&area_tags).await?;

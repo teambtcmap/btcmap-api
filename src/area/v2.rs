@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&tags).await?;
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&tags).await?;
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let area_url_alias = "test";
         let mut tags = HashMap::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));

@@ -83,6 +83,16 @@ impl EventRepo {
             .interact(move |conn| Event::_patch_tags(id, &tags, conn))
             .await?
     }
+
+    #[cfg(test)]
+    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Event> {
+        let updated_at = updated_at.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Event::_set_updated_at(id, &updated_at, conn))
+            .await?
+    }
 }
 
 const TABLE: &str = "event";
@@ -245,6 +255,15 @@ impl Event {
 
     #[cfg(test)]
     pub fn set_updated_at(&self, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Event> {
+        Event::_set_updated_at(self.id, updated_at, conn)
+    }
+
+    #[cfg(test)]
+    pub fn _set_updated_at(
+        id: i64,
+        updated_at: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<Event> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -256,11 +275,11 @@ impl Event {
         conn.execute(
             &query,
             named_params! {
-                ":id": self.id,
+                ":id": id,
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        Ok(Event::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Event::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
     #[cfg(test)]

@@ -91,7 +91,6 @@ mod test {
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
     use crate::user::v2::GetItem;
-    use crate::user::User;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -100,7 +99,7 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.user_repo))
@@ -115,8 +114,8 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state();
-        User::insert(1, &OsmUser::mock(), &state.conn)?;
+        let state = mock_state().await;
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.user_repo))
@@ -131,15 +130,17 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state();
-        state.conn.execute(
-            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
-            [serde_json::to_string(&OsmUser::mock())?],
-        )?;
-        state.conn.execute(
-            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2022-02-05T00:00:00Z')",
-            [serde_json::to_string(&OsmUser::mock())?],
-        )?;
+        let state = mock_state().await;
+        state.pool.get().await?.interact(|conn| {
+            conn.execute(
+                "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
+                [serde_json::to_string(&OsmUser::mock()).unwrap()],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2022-02-05T00:00:00Z')",
+                [serde_json::to_string(&OsmUser::mock()).unwrap()],
+            ).unwrap();
+        }).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.user_repo))
@@ -156,9 +157,9 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let user_id = 1;
-        User::insert(user_id, &OsmUser::mock(), &state.conn)?;
+        state.user_repo.insert(user_id, &OsmUser::mock()).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.user_repo))

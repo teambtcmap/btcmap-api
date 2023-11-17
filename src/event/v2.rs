@@ -108,10 +108,11 @@ mod test {
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use serde_json::Value;
+    use time::macros::datetime;
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.event_repo))
@@ -126,7 +127,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.event_repo.insert(user.id, element.id, "").await?;
@@ -144,7 +145,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.user_repo.insert(1, &OsmUser::mock()).await?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.event_repo.insert(1, 1, "").await?;
@@ -164,17 +165,19 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.user_repo.insert(1, &OsmUser::mock()).await?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 1, '2022-01-05T00:00:00Z')",
-            [],
-        )?;
-        state.conn.execute(
-            "INSERT INTO event (element_id, type, user_id, updated_at) VALUES (1, '', 1, '2022-02-05T00:00:00Z')",
-            [],
-        )?;
+        let event_1 = state.event_repo.insert(1, 1, "").await?;
+        state
+            .event_repo
+            .set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC))
+            .await?;
+        let event_2 = state.event_repo.insert(1, 1, "").await?;
+        state
+            .event_repo
+            .set_updated_at(event_2.id, &datetime!(2022-02-05 00:00:00 UTC))
+            .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.event_repo))
@@ -191,7 +194,7 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let event_id = 1;
         let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;

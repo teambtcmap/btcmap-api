@@ -11,6 +11,7 @@ use std::sync::Arc;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
+use tracing::debug;
 
 pub struct ReportRepo {
     pool: Arc<Pool>,
@@ -53,7 +54,7 @@ impl ReportRepo {
         self.pool
             .get()
             .await?
-            .interact(move |conn| Report::select_all(limit, conn))
+            .interact(move |conn| Report::_select_all(limit, conn))
             .await?
     }
 
@@ -79,12 +80,22 @@ impl ReportRepo {
     }
 
     #[cfg(test)]
-    pub async fn _patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Report> {
+    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Report> {
         let tags = tags.clone();
         self.pool
             .get()
             .await?
             .interact(move |conn| Report::patch_tags(id, &tags, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Report> {
+        let updated_at = updated_at.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Report::_set_updated_at(id, &updated_at, conn))
             .await?
     }
 }
@@ -122,7 +133,7 @@ impl Report {
     }
 
     #[cfg(test)]
-    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Report>> {
+    pub fn _select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Report>> {
         let query = r#"
             SELECT
                 r.rowid,
@@ -194,7 +205,7 @@ impl Report {
             LEFT JOIN area a ON a.rowid = r.area_id
             WHERE r.rowid = :id
         "#;
-
+        debug!(query);
         Ok(conn
             .query_row(query, named_params! { ":id": id }, mapper())
             .optional()?)
@@ -210,6 +221,39 @@ impl Report {
         conn.execute(
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
+        )?;
+        Ok(Report::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+    }
+
+    #[cfg(test)]
+    pub fn __set_updated_at(
+        &self,
+        updated_at: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<Report> {
+        Report::_set_updated_at(self.id, updated_at, conn)
+    }
+
+    #[cfg(test)]
+    pub fn _set_updated_at(
+        id: i64,
+        updated_at: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<Report> {
+        let query = format!(
+            r#"
+                UPDATE report
+                SET updated_at = :updated_at
+                WHERE id = :id
+            "#
+        );
+        debug!(query);
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":updated_at": updated_at.format(&time::format_description::well_known::Rfc3339)?,
+            },
         )?;
         Ok(Report::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
@@ -237,102 +281,113 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 
 #[cfg(test)]
 mod test {
-    use super::Report;
     use crate::{test::mock_state, Result};
     use std::collections::HashMap;
-    use time::OffsetDateTime;
+    use time::{macros::datetime, OffsetDateTime};
     use tokio::test;
 
     #[test]
     async fn insert() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &state.conn,
-        )?;
-        let reports = Report::select_all(None, &state.conn)?;
+        state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        let reports = state
+            .report_repo
+            .select_updated_since("2000-01-01", None)
+            .await?;
         assert_eq!(1, reports.len());
         Ok(())
     }
 
     #[test]
     async fn select_all() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &state.conn,
-        )?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &state.conn,
-        )?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &state.conn,
-        )?;
-        let reports = Report::select_all(None, &state.conn)?;
+        state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        let reports = state
+            .report_repo
+            .select_updated_since("2000-01-01", None)
+            .await?;
         assert_eq!(3, reports.len());
         Ok(())
     }
 
     #[test]
     async fn select_updated_since() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
-        state.conn.execute(
-                "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2020-01-01', '2020-01-01T00:00:00Z')",
-                [],
-            )?;
-        state.conn.execute(
-                "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2020-01-02', '2020-01-02T00:00:00Z')",
-                [],
-            )?;
-        state.conn.execute(
-                "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2020-01-03', '2020-01-03T00:00:00Z')",
-                [],
-            )?;
+        let report_1 = state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .set_updated_at(report_1.id, &datetime!(2020-01-01 00:00:00 UTC))
+            .await?;
+        let report_2 = state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .set_updated_at(report_2.id, &datetime!(2020-01-02 00:00:00 UTC))
+            .await?;
+        let report_3 = state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .set_updated_at(report_3.id, &datetime!(2020-01-03 00:00:00 UTC))
+            .await?;
         assert_eq!(
             2,
-            Report::select_updated_since("2020-01-01T00:00:00Z", None, &state.conn)?.len()
+            state
+                .report_repo
+                .select_updated_since("2020-01-01T00:00:00Z", None)
+                .await?
+                .len()
         );
         Ok(())
     }
 
     #[test]
     async fn select_by_id() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &state.conn,
-        )?;
-        assert!(Report::select_by_id(1, &state.conn)?.is_some());
+        state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        assert!(state.report_repo.select_by_id(1).await?.is_some());
         Ok(())
     }
 
     #[test]
     async fn merge_tags() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
@@ -342,20 +397,18 @@ mod test {
         let tag_2_value = "test";
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &state.conn,
-        )?;
-        let report = Report::select_by_id(1, &state.conn)?.unwrap();
+        state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        let report = state.report_repo.select_by_id(1).await?.unwrap();
         assert!(report.tags.is_empty());
-        Report::patch_tags(1, &tags, &state.conn)?;
-        let report = Report::select_by_id(1, &state.conn)?.unwrap();
+        state.report_repo.patch_tags(1, &tags).await?;
+        let report = state.report_repo.select_by_id(1).await?.unwrap();
         assert_eq!(1, report.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
-        Report::patch_tags(1, &tags, &state.conn)?;
-        let report = Report::select_by_id(1, &state.conn)?.unwrap();
+        state.report_repo.patch_tags(1, &tags).await?;
+        let report = state.report_repo.select_by_id(1).await?.unwrap();
         assert_eq!(2, report.tags.len());
         Ok(())
     }

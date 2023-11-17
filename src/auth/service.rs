@@ -16,6 +16,19 @@ impl AuthService {
         Self { pool: pool.clone() }
     }
 
+    #[cfg(test)]
+    pub async fn mock_token(&self, user_id: i64, secret: &str) -> Token {
+        let secret = secret.to_string();
+        self.pool
+            .get()
+            .await
+            .unwrap()
+            .interact(move |conn| Token::insert(user_id, &secret, conn))
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
     pub async fn check(&self, req: &HttpRequest) -> Result<Token, ApiError> {
         let headers = req.headers().clone();
         self.pool
@@ -67,7 +80,7 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
 
 #[cfg(test)]
 mod tests {
-    use crate::auth::Token;
+    use crate::auth::AuthService;
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
     use crate::{ApiError, Result};
@@ -79,16 +92,15 @@ mod tests {
         web::{scope, Data},
         App, Responder,
     };
-    use rusqlite::Connection;
 
     #[actix_web::test]
     async fn no_header() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.user_repo.insert(1, &OsmUser::mock()).await?;
-        Token::insert(1, "test", &state.conn)?;
+        state.auth.mock_token(1, "test").await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .service(scope("/").service(get)),
         )
         .await;
@@ -100,12 +112,12 @@ mod tests {
 
     #[actix_web::test]
     async fn valid_token() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         state.user_repo.insert(1, &OsmUser::mock()).await?;
-        Token::insert(1, "test", &state.conn)?;
+        state.auth.mock_token(1, "test").await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.conn))
+                .app_data(Data::new(state.auth))
                 .service(scope("/").service(get)),
         )
         .await;
@@ -119,8 +131,8 @@ mod tests {
     }
 
     #[get("")]
-    async fn get(req: HttpRequest, db: Data<Connection>) -> Result<impl Responder, ApiError> {
-        super::get_admin_token(&db, &req.headers())?;
+    async fn get(req: HttpRequest, auth: Data<AuthService>) -> Result<impl Responder, ApiError> {
+        auth.check(&req).await?;
         Ok(Response::ok())
     }
 }

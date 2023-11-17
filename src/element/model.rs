@@ -27,6 +27,13 @@ impl ElementRepo {
     }
 
     #[cfg(test)]
+    pub fn mock() -> Self {
+        Self {
+            pool: Arc::new(crate::test::mock_pool()),
+        }
+    }
+
+    #[cfg(test)]
     pub async fn insert(&self, overpass_data: &OverpassElement) -> Result<Element> {
         let overpass_data = overpass_data.clone();
         self.pool
@@ -95,6 +102,16 @@ impl ElementRepo {
             .get()
             .await?
             .interact(move |conn| Element::_remove_tag(id, &name, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Element> {
+        let updated_at = updated_at.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::_set_updated_at(id, &updated_at, conn))
             .await?
     }
 }
@@ -317,6 +334,15 @@ impl Element {
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Element> {
+        Element::_set_updated_at(self.id, updated_at, conn)
+    }
+
+    #[cfg(test)]
+    pub fn _set_updated_at(
+        id: i64,
+        updated_at: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<Element> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -328,11 +354,11 @@ impl Element {
         conn.execute(
             &query,
             named_params! {
-                ":id": self.id,
+                ":id": id,
                 ":updated_at": updated_at.format(&Rfc3339).unwrap(),
             },
         )?;
-        Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
     }
 
     pub fn set_deleted_at(

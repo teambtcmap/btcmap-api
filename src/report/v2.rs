@@ -104,7 +104,6 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<ReportRepo>) -> Result<Json<Get
 #[cfg(test)]
 mod test {
     use crate::report::v2::GetItem;
-    use crate::report::Report;
     use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
@@ -112,12 +111,12 @@ mod test {
     use actix_web::{test, App};
     use serde_json::Value;
     use std::collections::HashMap;
-    use time::macros::date;
+    use time::macros::{date, datetime};
     use time::OffsetDateTime;
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.report_repo))
@@ -132,16 +131,14 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &HashMap::new(),
-            &state.conn,
-        )?;
+        state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.report_repo))
@@ -156,7 +153,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
@@ -186,18 +183,26 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state();
+        let state = mock_state().await;
         let mut area_tags = HashMap::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
-        state.conn.execute(
-                    "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-01-05', '2022-01-05T00:00:00Z')",
-                    [],
-                )?;
-        state.conn.execute(
-                    "INSERT INTO report (area_id, date, updated_at) VALUES (1, '2022-02-05', '2022-02-05T00:00:00Z')",
-                    [],
-                )?;
+        let report_1 = state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .set_updated_at(report_1.id, &datetime!(2022-01-05 00:00:00 UTC))
+            .await?;
+        let report_2 = state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .await?;
+        state
+            .report_repo
+            .set_updated_at(report_2.id, &datetime!(2022-02-05 00:00:00 UTC))
+            .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.report_repo))
