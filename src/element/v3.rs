@@ -22,13 +22,11 @@ pub struct GetArgs {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct GetItem {
-    pub id: String,
+    pub id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub osm_data: Option<OverpassElement>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<HashMap<String, Value>>,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
     #[serde(default)]
@@ -39,7 +37,6 @@ pub struct GetItem {
 
 impl Into<GetItem> for Element {
     fn into(self) -> GetItem {
-        let id = self.overpass_data.btcmap_id();
         let overpass_data = if self.deleted_at.is_none() {
             Some(self.overpass_data)
         } else {
@@ -51,10 +48,9 @@ impl Into<GetItem> for Element {
             None
         };
         GetItem {
-            id: id,
+            id: self.id,
             osm_data: overpass_data,
             tags,
-            created_at: self.created_at,
             updated_at: self.updated_at,
             deleted_at: self.deleted_at,
         }
