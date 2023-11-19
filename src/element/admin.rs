@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use time::OffsetDateTime;
-use tracing::debug;
+use tracing::warn;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct ElementView {
@@ -94,7 +94,7 @@ async fn post_tags(
     } else {
         repo.remove_tag(element.id, &args.name).await?
     };
-    debug!(
+    warn!(
         admin_channel_message = format!(
             "WARNING: User https://api.btcmap.org/v2/users/{} used DEPRECATED API to set {} = {}",
             token.user_id, args.name, args.value,
@@ -128,7 +128,7 @@ async fn patch_tags(
             id,
         )))?;
     let element = repo.patch_tags(element.id, &args).await?;
-    debug!(
+    warn!(
         admin_channel_message = format!(
             "User https://api.btcmap.org/v2/users/{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
             token.user_id, id, serde_json::to_string_pretty(&args).unwrap(),

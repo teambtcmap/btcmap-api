@@ -6,7 +6,7 @@ use actix_web::{
 };
 use serde_json::Value;
 use std::collections::HashMap;
-use tracing::debug;
+use tracing::warn;
 
 #[patch("{id}/tags")]
 async fn patch_tags(
@@ -23,7 +23,7 @@ async fn patch_tags(
             "User with id = {id} doesn't exist"
         )))?;
     repo.patch_tags(*id, &args).await?;
-    debug!(
+    warn!(
         admin_channel_message = format!(
             "User https://api.btcmap.org/v2/users/{} patched tags for user https://api.btcmap.org/v2/users/{} {}",
             token.user_id, id, serde_json::to_string_pretty(&args).unwrap(),

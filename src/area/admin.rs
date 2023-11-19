@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use time::OffsetDateTime;
-use tracing::debug;
+use tracing::warn;
 
 #[derive(Serialize, Deserialize)]
 pub struct AreaView {
@@ -75,7 +75,7 @@ async fn post(
         ))?
     }
     let area = repo.insert(&args.tags).await?;
-    debug!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} created a new area: https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    warn!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} created a new area: https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
     Ok(area.into())
 }
 
@@ -103,7 +103,7 @@ async fn patch(
         id,
     )))?;
     let area = repo.patch_tags(area.id, &args.tags).await?;
-    debug!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} updated area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    warn!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} updated area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
     Ok(area.into())
 }
 
@@ -127,7 +127,7 @@ async fn delete(
     let area = repo
         .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
         .await?;
-    debug!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} deleted area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    warn!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} deleted area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
     Ok(area.into())
 }
 
