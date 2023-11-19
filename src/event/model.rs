@@ -132,7 +132,7 @@ impl Event {
             },
         )?;
         Ok(Event::select_by_id(conn.last_insert_rowid(), &conn)?
-            .ok_or(Error::DbTableRowNotFound)?)
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     #[cfg(test)]
@@ -250,7 +250,8 @@ impl Event {
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Ok(Event::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Event::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     #[cfg(test)]
@@ -279,7 +280,8 @@ impl Event {
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        Ok(Event::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Event::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     #[cfg(test)]

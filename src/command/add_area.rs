@@ -96,7 +96,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
     );
 
     match Area::select_by_url_alias(url_alias, conn)? {
-        Some(_) => Err(Error::Other(
+        Some(_) => Err(Error::HttpConflict(
             "Area with this url_alias already exists".into(),
         ))?,
         None => Area::insert(&tags, conn)?,

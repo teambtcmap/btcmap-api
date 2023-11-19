@@ -129,7 +129,7 @@ impl Report {
         )?;
 
         Ok(Report::select_by_id(conn.last_insert_rowid(), &conn)?
-            .ok_or(Error::DbTableRowNotFound)?)
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     #[cfg(test)]
@@ -222,7 +222,8 @@ impl Report {
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        Ok(Report::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Report::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     #[cfg(test)]
@@ -255,7 +256,8 @@ impl Report {
                 ":updated_at": updated_at.format(&time::format_description::well_known::Rfc3339)?,
             },
         )?;
-        Ok(Report::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Report::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 }
 

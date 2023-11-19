@@ -1,11 +1,10 @@
 use super::Element;
-use crate::{auth::AuthService, element::ElementRepo, osm::overpass::OverpassElement, ApiError};
+use crate::{auth::AuthService, element::ElementRepo, osm::overpass::OverpassElement, Error};
 use actix_web::{
     patch, post,
     web::{Data, Form, Json, Path},
     HttpRequest,
 };
-use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -72,23 +71,23 @@ async fn post_tags(
     args: Form<PostTagsArgs>,
     auth: Data<AuthService>,
     repo: Data<ElementRepo>,
-) -> Result<Json<ElementView>, ApiError> {
+) -> Result<Json<ElementView>, Error> {
     let token = auth.check(&req).await?;
     let id_parts: Vec<&str> = id.split(":").collect();
     if id_parts.len() != 2 {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Invalid identifier"));
+        Err(Error::HttpBadRequest("Invalid identifier".into()))?
     }
     let r#type = id_parts[0];
     let id = id_parts[1]
         .parse::<i64>()
-        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "Invalid identifier"))?;
+        .map_err(|_| Error::HttpBadRequest("Invalid identifier".into()))?;
     let element = repo
         .select_by_osm_type_and_id(r#type, id)
         .await?
-        .ok_or(ApiError::new(
-            StatusCode::NOT_FOUND,
-            &format!("There is no element with id = {}", id),
-        ))?;
+        .ok_or(Error::HttpNotFound(format!(
+            "There is no element with id = {}",
+            id,
+        )))?;
     let element = if args.value.len() > 0 {
         repo.set_tag(element.id, &args.name, &args.value.clone().into())
             .await?
@@ -111,23 +110,23 @@ async fn patch_tags(
     args: Json<HashMap<String, Value>>,
     auth: Data<AuthService>,
     repo: Data<ElementRepo>,
-) -> Result<Json<ElementView>, ApiError> {
+) -> Result<Json<ElementView>, Error> {
     let token = auth.check(&req).await?;
     let id_parts: Vec<&str> = id.split(":").collect();
     if id_parts.len() != 2 {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Invalid identifier"));
+        Err(Error::HttpBadRequest("Invalid identifier".into()))?
     }
     let r#type = id_parts[0];
     let id = id_parts[1]
         .parse::<i64>()
-        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "Invalid identifier"))?;
+        .map_err(|_| Error::HttpBadRequest("Invalid identifier".into()))?;
     let element = repo
         .select_by_osm_type_and_id(r#type, id)
         .await?
-        .ok_or(ApiError::new(
-            StatusCode::NOT_FOUND,
-            &format!("There is no element with id = {}", id),
-        ))?;
+        .ok_or(Error::HttpNotFound(format!(
+            "There is no element with id = {}",
+            id,
+        )))?;
     let element = repo.patch_tags(element.id, &args).await?;
     debug!(
         admin_channel_message = format!(

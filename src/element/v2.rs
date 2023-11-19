@@ -1,13 +1,12 @@
 use crate::element::Element;
 use crate::element::ElementRepo;
 use crate::osm::overpass::OverpassElement;
-use crate::ApiError;
+use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -62,7 +61,7 @@ impl Into<Json<GetItem>> for Element {
 pub async fn get(
     args: Query<GetArgs>,
     repo: Data<ElementRepo>,
-) -> Result<Json<Vec<GetItem>>, ApiError> {
+) -> Result<Json<Vec<GetItem>>, Error> {
     Ok(Json(match &args.updated_since {
         Some(updated_since) => repo
             .select_updated_since(&updated_since, args.limit)
@@ -83,17 +82,18 @@ pub async fn get(
 pub async fn get_by_osm_type_and_id(
     id: Path<String>,
     repo: Data<ElementRepo>,
-) -> Result<Json<GetItem>, ApiError> {
+) -> Result<Json<GetItem>, Error> {
     let id_parts: Vec<&str> = id.split(":").collect();
     let r#type = id_parts[0];
-    let id = id_parts[1].parse::<i64>()?;
+    let id = id_parts[1]
+        .parse::<i64>()
+        .map_err(|_| Error::HttpBadRequest("Invalid ID".into()))?;
     repo.select_by_osm_type_and_id(r#type, id)
         .await?
         .map(|it| it.into())
-        .ok_or(ApiError::new(
-            StatusCode::NOT_FOUND,
-            &format!("Element with id {id} doesn't exist"),
-        ))
+        .ok_or(Error::HttpNotFound(format!(
+            "Element with id {id} doesn't exist"
+        )))
 }
 
 #[cfg(test)]

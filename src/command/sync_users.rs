@@ -42,7 +42,7 @@ pub async fn run(conn: Connection) -> Result<()> {
 
         let body = res.text().await?;
         let body: Value = serde_json::from_str(&body)?;
-        let fresh_user: &Value = body.get("user").ok_or(Error::Other(format!(
+        let fresh_user: &Value = body.get("user").ok_or(Error::OsmApi(format!(
             "Failed to fetch user {}",
             cached_user.id
         )))?;

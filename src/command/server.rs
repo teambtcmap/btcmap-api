@@ -5,12 +5,12 @@ use crate::element::ElementRepo;
 use crate::event::model::EventRepo;
 use crate::report::model::ReportRepo;
 use crate::user::UserRepo;
-use crate::{area, element, user};
+use crate::{area, element, error, user};
 use crate::{event, tile};
 use crate::{report, Result};
 use actix_web::dev::Service;
-use actix_web::web;
 use actix_web::web::scope;
+use actix_web::web::QueryConfig;
 use actix_web::{
     middleware::{Compress, NormalizePath},
     web::Data,
@@ -71,14 +71,13 @@ pub async fn run() -> Result<()> {
             })
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
-            .app_data(Data::new(db::open_connection().unwrap()))
             .app_data(Data::new(auth_service))
             .app_data(Data::new(area_repo))
             .app_data(Data::new(element_repo))
             .app_data(Data::new(event_repo))
             .app_data(Data::new(report_repo))
             .app_data(Data::new(user_repo))
-            .app_data(web::FormConfig::default().limit(262_144))
+            .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
                 scope("elements")
                     .service(element::admin::post_tags)

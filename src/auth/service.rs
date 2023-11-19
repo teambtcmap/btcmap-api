@@ -1,8 +1,8 @@
+use crate::Error;
+
 use super::Token;
-use crate::ApiError;
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
-use http::StatusCode;
 use rusqlite::Connection;
 use std::sync::Arc;
 use tracing::warn;
@@ -29,7 +29,7 @@ impl AuthService {
             .unwrap()
     }
 
-    pub async fn check(&self, req: &HttpRequest) -> Result<Token, ApiError> {
+    pub async fn check(&self, req: &HttpRequest) -> Result<Token, Error> {
         let headers = req.headers().clone();
         self.pool
             .get()
@@ -41,23 +41,21 @@ impl AuthService {
     }
 }
 
-pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, ApiError> {
+pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Error> {
     let auth_header = headers
         .get("Authorization")
         .map(|it| it.to_str().unwrap_or(""))
         .unwrap_or("");
     if auth_header.len() == 0 {
-        return Err(ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "Authorization header is missing",
-        ));
+        Err(Error::HttpUnauthorized(
+            "Authorization header is missing".into(),
+        ))?
     }
     let auth_header_parts: Vec<&str> = auth_header.split(" ").collect();
     if auth_header_parts.len() != 2 {
-        return Err(ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "Authorization header is invalid",
-        ));
+        Err(Error::HttpUnauthorized(
+            "Authorization header is invalid".into(),
+        ))?
     }
     let secret = auth_header_parts[1];
     let token = Token::select_by_secret(secret, db)?;
@@ -73,7 +71,7 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Ap
         }
         None => {
             warn!(admin_channel_message = "Someone tried and failed to access admin API");
-            return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Invalid token"));
+            Err(Error::HttpUnauthorized("Invalid token".into()))?
         }
     }
 }
@@ -83,7 +81,7 @@ mod tests {
     use crate::auth::AuthService;
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
-    use crate::{ApiError, Result};
+    use crate::{Error, Result};
     use actix_web::test::{self, TestRequest};
     use actix_web::HttpRequest;
     use actix_web::{
@@ -131,7 +129,7 @@ mod tests {
     }
 
     #[get("")]
-    async fn get(req: HttpRequest, auth: Data<AuthService>) -> Result<impl Responder, ApiError> {
+    async fn get(req: HttpRequest, auth: Data<AuthService>) -> Result<impl Responder, Error> {
         auth.check(&req).await?;
         Ok(Response::ok())
     }

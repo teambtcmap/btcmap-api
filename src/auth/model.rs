@@ -14,6 +14,8 @@ pub struct Token {
 impl Token {
     #[cfg(test)]
     pub fn insert(user_id: i64, secret: &str, conn: &Connection) -> Result<Token> {
+        use crate::Error;
+
         let query = format!(
             r#"
                 INSERT INTO token (
@@ -33,7 +35,8 @@ impl Token {
                 ":secret": secret,
             },
         )?;
-        Ok(Token::select_by_secret(secret, conn)?.ok_or(crate::Error::DbTableRowNotFound)?)
+        Ok(Token::select_by_secret(secret, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn select_by_secret(secret: &str, conn: &Connection) -> Result<Option<Token>> {

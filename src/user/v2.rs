@@ -1,13 +1,12 @@
 use crate::osm::osm::OsmUser;
 use crate::user::User;
 use crate::user::UserRepo;
-use crate::ApiError;
+use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -57,7 +56,7 @@ impl Into<Json<GetItem>> for User {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, repo: Data<UserRepo>) -> Result<Json<Vec<GetItem>>, ApiError> {
+async fn get(args: Query<GetArgs>, repo: Data<UserRepo>) -> Result<Json<Vec<GetItem>>, Error> {
     Ok(Json(match &args.updated_since {
         Some(updated_since) => repo
             .select_updated_since(updated_since, args.limit)
@@ -75,15 +74,14 @@ async fn get(args: Query<GetArgs>, repo: Data<UserRepo>) -> Result<Json<Vec<GetI
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, repo: Data<UserRepo>) -> Result<Json<GetItem>, ApiError> {
+pub async fn get_by_id(id: Path<i64>, repo: Data<UserRepo>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
     repo.select_by_id(id)
         .await?
         .map(|it| it.into())
-        .ok_or(ApiError::new(
-            StatusCode::NOT_FOUND,
-            &format!("User with id = {id} doesn't exist"),
-        ))
+        .ok_or(Error::HttpNotFound(format!(
+            "User with id = {id} doesn't exist"
+        )))
 }
 
 #[cfg(test)]

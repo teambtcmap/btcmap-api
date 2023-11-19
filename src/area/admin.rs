@@ -1,14 +1,13 @@
 use crate::{
     area::{Area, AreaRepo},
     auth::AuthService,
-    ApiError,
+    Error,
 };
 use actix_web::{
     delete, patch, post,
     web::{Data, Json, Path},
     HttpRequest,
 };
-use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -58,24 +57,21 @@ async fn post(
     args: Json<PostArgs>,
     auth: Data<AuthService>,
     repo: Data<AreaRepo>,
-) -> Result<Json<AreaView>, ApiError> {
+) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
     let url_alias = &args
         .tags
         .get("url_alias")
-        .ok_or(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "Mandatory tag is missing: url_alias",
+        .ok_or(Error::HttpBadRequest(
+            "Mandatory tag is missing: url_alias".into(),
         ))?
         .as_str()
-        .ok_or(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "This tag should be a string: url_alias",
+        .ok_or(Error::HttpBadRequest(
+            "This tag should be a string: url_alias".into(),
         ))?;
     if repo.select_by_url_alias(url_alias).await?.is_some() {
-        Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "This url_alias is already in use",
+        Err(Error::HttpConflict(
+            "This url_alias is already in use".into(),
         ))?
     }
     let area = repo.insert(&args.tags).await?;
@@ -95,17 +91,17 @@ async fn patch(
     args: Json<PatchArgs>,
     auth: Data<AuthService>,
     repo: Data<AreaRepo>,
-) -> Result<Json<AreaView>, ApiError> {
+) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
     let int_id = id.parse::<i64>();
     let area = match int_id {
         Ok(id) => repo.select_by_id(id).await,
         Err(_) => repo.select_by_url_alias(&id).await,
     }?
-    .ok_or(ApiError::new(
-        StatusCode::NOT_FOUND,
-        &format!("There is no area with id or url_alias = {}", id),
-    ))?;
+    .ok_or(Error::HttpNotFound(format!(
+        "There is no area with id or url_alias = {}",
+        id,
+    )))?;
     let area = repo.patch_tags(area.id, &args.tags).await?;
     debug!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} updated area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
     Ok(area.into())
@@ -117,17 +113,17 @@ async fn delete(
     id: Path<String>,
     auth: Data<AuthService>,
     repo: Data<AreaRepo>,
-) -> Result<Json<AreaView>, ApiError> {
+) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
     let int_id = id.parse::<i64>();
     let area = match int_id {
         Ok(id) => repo.select_by_id(id).await,
         Err(_) => repo.select_by_url_alias(&id).await,
     }?
-    .ok_or(ApiError::new(
-        StatusCode::NOT_FOUND,
-        &format!("There is no area with id or url_alias = {}", id),
-    ))?;
+    .ok_or(Error::HttpNotFound(format!(
+        "There is no area with id or url_alias = {}",
+        id,
+    )))?;
     let area = repo
         .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
         .await?;

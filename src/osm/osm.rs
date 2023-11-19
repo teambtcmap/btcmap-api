@@ -52,7 +52,7 @@ async fn _get_element(res: Response) -> Result<Option<OsmElement>> {
     } else {
         match res.status() {
             StatusCode::NOT_FOUND => return Ok(None),
-            _ => Err(Error::Other(format!(
+            _ => Err(Error::OsmApi(format!(
                 "Unexpected response status: {}",
                 res.status()
             )))?,
@@ -149,7 +149,7 @@ async fn _get_user(res: Response) -> Result<Option<OsmUser>> {
     } else {
         match res.status() {
             StatusCode::NOT_FOUND => return Ok(None),
-            _ => Err(Error::Other(format!(
+            _ => Err(Error::OsmApi(format!(
                 "Unexpected response status: {}",
                 res.status()
             )))?,

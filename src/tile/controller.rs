@@ -1,8 +1,7 @@
+use crate::Error;
 use actix_web::{get, web::Query, HttpResponse, Responder};
 use reqwest::StatusCode;
 use serde::Deserialize;
-
-use crate::ApiError;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
@@ -13,7 +12,7 @@ pub struct GetArgs {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>) -> Result<impl Responder, ApiError> {
+async fn get(args: Query<GetArgs>) -> Result<impl Responder, Error> {
     let api_key = std::env::var("STADIA_API_KEY").unwrap();
     let url = format!(
         "https://tiles.stadiamaps.com/tiles/{}/{}/{}/{}@2x.png?api_key={}",

@@ -146,7 +146,7 @@ pub async fn query_bitcoin_merchants() -> Result<Vec<OverpassElement>> {
     let response = response.json::<Response>().await?;
 
     if response.elements.len() == 0 {
-        Err(Error::Other(format!(
+        Err(Error::OverpassApi(format!(
             "Got suspicious response: {}",
             serde_json::to_string_pretty(&response)?
         )))?
@@ -155,7 +155,7 @@ pub async fn query_bitcoin_merchants() -> Result<Vec<OverpassElement>> {
     info!(elements = response.elements.len(), "Fetched elements");
 
     if response.elements.len() < 5000 {
-        Err(Error::Other("Data set is most likely invalid".into()))?
+        Err(Error::OverpassApi("Data set is most likely invalid".into()))?
     }
 
     Ok(response.elements)

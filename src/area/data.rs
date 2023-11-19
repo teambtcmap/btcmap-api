@@ -125,7 +125,8 @@ impl Area {
             &query,
             named_params! { ":tags": serde_json::to_string(tags)? },
         )?;
-        Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Area>> {
@@ -226,7 +227,8 @@ impl Area {
                 ":tags": serde_json::to_string(tags)?,
             },
         )?;
-        Ok(Area::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Area::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     #[cfg(test)]
@@ -255,7 +257,8 @@ impl Area {
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        Ok(Area::select_by_id(id, conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Area::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn __set_deleted_at(
@@ -301,7 +304,8 @@ impl Area {
                 conn.execute(&query, named_params! { ":id": id })?;
             }
         };
-        Ok(Area::select_by_id(id, conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Area::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {

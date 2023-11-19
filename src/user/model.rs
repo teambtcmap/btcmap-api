@@ -92,10 +92,8 @@ impl User {
             },
         )?;
 
-        Ok(
-            User::select_by_id(conn.last_insert_rowid(), &conn)?
-                .ok_or(Error::DbTableRowNotFound)?,
-        )
+        Ok(User::select_by_id(conn.last_insert_rowid(), &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<User>> {
@@ -181,7 +179,8 @@ impl User {
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        Ok(User::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(User::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn set_osm_data(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {

@@ -66,7 +66,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
             let fresh_element = match osm::get_element(element_type, osm_id).await? {
                 Some(fresh_element) => fresh_element,
-                None => Err(Error::Other(format!(
+                None => Err(Error::OsmApi(format!(
                     "Failed to fetch element {element_type}:{osm_id} from OSM"
                 )))?,
             };
@@ -77,7 +77,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         "Overpass lied about element {element_type}:{osm_id} being deleted"
                     );
                     error!(element_type, osm_id, discord_message = message, message,);
-                    Err(Error::Other(message.into()))?
+                    Err(Error::OverpassApi(message.into()))?
                 }
             }
 
@@ -226,7 +226,7 @@ pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Resul
 
     match user {
         Some(user) => User::insert(user_id, &user, &conn)?,
-        None => Err(Error::Other(format!(
+        None => Err(Error::OsmApi(format!(
             "User with id = {user_id} doesn't exist on OSM"
         )))?,
     };

@@ -1,4 +1,4 @@
-use crate::{area::Area, Error, Result};
+use crate::{area::Area, Result};
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::Value;
@@ -14,24 +14,33 @@ struct CountryJson {
 pub async fn run(path: &str, conn: &mut Connection) -> Result<()> {
     let path = Path::new(path);
     if !path.try_exists().is_ok_and(|it| it == true) {
-        return Err(Error::Other(format!("Path doesnt exist: {path:?}")))?;
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Path doesnt exist: {path:?}"),
+        ))?
     }
     info!(path = path.to_str(), "Given path is correct");
     if !path.is_dir() {
-        return Err(Error::Other(format!("Path is not a directory: {path:?}")))?;
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Path is not a directory: {path:?}"),
+        ))?
     }
     let tx = conn.transaction()?;
     for dir_entry in path.read_dir().expect("Failed to read files") {
         if let Ok(dir_entry) = dir_entry {
             if !dir_entry.path().is_file() {
-                return Err(Error::Other(format!("Not a file: {:?}", dir_entry.path())))?;
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Not a file: {:?}", dir_entry.path()),
+                ))?
             }
 
             if dir_entry.file_name().len() != 7 {
-                Err(Error::Other(format!(
-                    "Invalid file name: {:?}",
-                    dir_entry.file_name()
-                )))?;
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Invalid file name: {:?}", dir_entry.file_name()),
+                ))?
             }
 
             let file = File::open(dir_entry.path())?;

@@ -1,4 +1,3 @@
-use crate::error::Error;
 use crate::Result;
 use deadpool_sqlite::Config;
 use deadpool_sqlite::Hook;
@@ -10,7 +9,6 @@ use include_dir::Dir;
 use rusqlite::Connection;
 use std::fmt;
 use std::fs::create_dir_all;
-use std::fs::remove_file;
 use tracing::info;
 use tracing::warn;
 
@@ -30,21 +28,6 @@ impl fmt::Display for Migration {
                 .replace(";", "; "),
         )
     }
-}
-
-pub fn run(args: &[String], db: Connection) -> Result<()> {
-    let first_arg = match args.first() {
-        Some(some) => some,
-        None => Err(Error::CLI("No DB actions passed".into()))?,
-    };
-
-    match first_arg.as_str() {
-        "migrate" => {}
-        "drop" => drop(db)?,
-        _ => Err(Error::CLI(format!("Unknown command: {first_arg}")))?,
-    }
-
-    Ok(())
 }
 
 pub fn migrate(db: &mut Connection) -> Result<()> {
@@ -111,16 +94,6 @@ fn execute_migrations(migrations: &Vec<Migration>, db: &mut Connection) -> Resul
     Ok(())
 }
 
-fn drop(db: Connection) -> Result<()> {
-    remove_file(
-        db.path()
-            .ok_or(Error::Other("Failed to find database path".into()))?,
-    )?;
-    let db_path = db.path().unwrap();
-    info!(?db_path, "Database file was removed");
-    Ok(())
-}
-
 fn get_migrations() -> Result<Vec<Migration>> {
     let mut index = 1;
     let mut res = vec![];
@@ -151,54 +124,31 @@ fn get_migrations() -> Result<Vec<Migration>> {
 use std::path::PathBuf;
 
 #[cfg(test)]
-pub mod tests {
-    use super::*;
+pub mod test {
+    use rusqlite::Connection;
 
-    #[test]
-    fn run() -> Result<()> {
-        let res = super::run(&[], Connection::open_in_memory()?);
-        assert!(res.is_err());
-
-        let res = super::run(&["test".into()], Connection::open_in_memory()?);
-        assert!(res.is_err());
-
-        let res = super::run(&["migrate".into()], Connection::open_in_memory()?);
-        assert!(res.is_ok());
-
-        let res = super::run(&["drop".into()], Connection::open_in_memory()?);
-        assert!(res.is_err());
-
-        Ok(())
-    }
+    use crate::Result;
 
     #[test]
     fn run_migrations() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
-
-        let mut migrations = vec![Migration(1, "CREATE TABLE foo(bar);".into())];
-        execute_migrations(&migrations, &mut conn)?;
-
+        let mut migrations = vec![super::Migration(1, "CREATE TABLE foo(bar);".into())];
+        super::execute_migrations(&migrations, &mut conn)?;
         let schema_ver: i16 =
             conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
                 row.get(0)
             })?;
-
         assert_eq!(1, schema_ver);
-
-        migrations.push(Migration(
+        migrations.push(super::Migration(
             2,
             "INSERT INTO foo (bar) values ('qwerty');".into(),
         ));
-
-        execute_migrations(&migrations, &mut conn)?;
-
+        super::execute_migrations(&migrations, &mut conn)?;
         let schema_ver: i16 =
             conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
                 row.get(0)
             })?;
-
         assert_eq!(2, schema_ver);
-
         Ok(())
     }
 }

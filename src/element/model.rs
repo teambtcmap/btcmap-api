@@ -139,7 +139,7 @@ impl Element {
             named_params! { ":overpass_data": serde_json::to_string(overpass_data)?},
         )?;
         Ok(Element::select_by_id(conn.last_insert_rowid(), &conn)?
-            .ok_or(Error::DbTableRowNotFound)?)
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
@@ -247,7 +247,8 @@ impl Element {
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(self.id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn _patch_tags(
@@ -268,7 +269,8 @@ impl Element {
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Ok(Element::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn set_overpass_data(
@@ -291,7 +293,8 @@ impl Element {
                 ":overpass_data": serde_json::to_string(overpass_data)?,
             },
         )?;
-        Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(self.id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn set_tag(&self, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
@@ -325,7 +328,8 @@ impl Element {
                 ":name": format!("$.{name}"),
             },
         )?;
-        Ok(Element::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     #[cfg(test)]
@@ -358,7 +362,8 @@ impl Element {
                 ":updated_at": updated_at.format(&Rfc3339).unwrap(),
             },
         )?;
-        Ok(Element::select_by_id(id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn set_deleted_at(
@@ -396,7 +401,8 @@ impl Element {
                 conn.execute(&query, named_params! { ":id": self.id })?;
             }
         };
-        Ok(Element::select_by_id(self.id, &conn)?.ok_or(Error::DbTableRowNotFound)?)
+        Ok(Element::select_by_id(self.id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
     pub fn tag(&self, name: &str) -> &Value {

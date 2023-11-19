@@ -1,10 +1,9 @@
-use crate::{auth::AuthService, user::UserRepo, ApiError};
+use crate::{auth::AuthService, user::UserRepo, Error};
 use actix_web::{
     patch,
     web::{Data, Json, Path},
     HttpRequest, HttpResponse, Responder,
 };
-use http::StatusCode;
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::debug;
@@ -16,12 +15,13 @@ async fn patch_tags(
     args: Json<HashMap<String, Value>>,
     auth: Data<AuthService>,
     repo: Data<UserRepo>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<impl Responder, Error> {
     let token = auth.check(&req).await?;
-    repo.select_by_id(*id).await?.ok_or(ApiError::new(
-        StatusCode::NOT_FOUND,
-        &format!("User with id = {id} doesn't exist"),
-    ))?;
+    repo.select_by_id(*id)
+        .await?
+        .ok_or(Error::HttpNotFound(format!(
+            "User with id = {id} doesn't exist"
+        )))?;
     repo.patch_tags(*id, &args).await?;
     debug!(
         admin_channel_message = format!(

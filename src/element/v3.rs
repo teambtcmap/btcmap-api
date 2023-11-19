@@ -1,7 +1,7 @@
 use crate::element::Element;
 use crate::element::ElementRepo;
 use crate::osm::overpass::OverpassElement;
-use crate::ApiError;
+use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
@@ -66,7 +66,7 @@ impl Into<Json<GetItem>> for Element {
 pub async fn get(
     args: Query<GetArgs>,
     repo: Data<ElementRepo>,
-) -> Result<Json<Vec<GetItem>>, ApiError> {
+) -> Result<Json<Vec<GetItem>>, Error> {
     Ok(Json(
         repo.select_updated_since(&args.updated_since, Some(args.limit))
             .await?
@@ -79,11 +79,12 @@ pub async fn get(
 #[cfg(test)]
 mod test {
     use crate::element::ElementRepo;
+    use crate::error::{self, ApiError};
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
-    use actix_web::web::{scope, Data};
+    use actix_web::web::{scope, Data, QueryConfig};
     use actix_web::{test, App};
     use http::StatusCode;
     use time::macros::datetime;
@@ -92,13 +93,33 @@ mod test {
     async fn get_no_updated_since() -> Result<()> {
         let app = test::init_service(
             App::new()
+                .app_data(QueryConfig::default().error_handler(error::query_error_handler))
                 .app_data(Data::new(ElementRepo::mock()))
-                .service(scope("/limit=1").service(super::get)),
+                .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(StatusCode::BAD_REQUEST, res.status());
+        let req = TestRequest::get().uri("/?limit=1").to_request();
+        let res: ApiError = test::try_call_and_read_body_json(&app, req).await.unwrap();
+        assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
+        assert!(res.message.contains("missing field `updated_since`"));
+        Ok(())
+    }
+
+    #[test]
+    async fn get_no_limit() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(QueryConfig::default().error_handler(error::query_error_handler))
+                .app_data(Data::new(ElementRepo::mock()))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?updated_since=2020-01-01T00:00:00Z")
+            .to_request();
+        let res: ApiError = test::try_call_and_read_body_json(&app, req).await.unwrap();
+        assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
+        assert!(res.message.contains("missing field `limit`"));
         Ok(())
     }
 
@@ -111,7 +132,9 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get()
+            .uri("/?updated_since=2020-01-01T00:00:00Z&limit=1")
+            .to_request();
         let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 0);
         Ok(())
@@ -127,7 +150,9 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get()
+            .uri("/?updated_since=2020-01-01T00:00:00Z&limit=1")
+            .to_request();
         let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, vec![element.into()]);
         Ok(())
@@ -145,7 +170,9 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/?limit=2").to_request();
+        let req = TestRequest::get()
+            .uri("/?updated_since=2020-01-01T00:00:00Z&limit=2")
+            .to_request();
         let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, vec![element_1.into(), element_2.into()]);
         Ok(())
@@ -160,7 +187,7 @@ mod test {
             .set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC))
             .await?;
         let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
-        state
+        let element_2 = state
             .element_repo
             .set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC))
             .await?;
@@ -171,7 +198,7 @@ mod test {
         )
         .await;
         let req = TestRequest::get()
-            .uri("/?updated_since=2022-01-10T00:00:00Z")
+            .uri("/?updated_since=2022-01-10T00:00:00Z&limit=100")
             .to_request();
         let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, vec![element_2.into()]);

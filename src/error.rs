@@ -1,39 +1,47 @@
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    num::{ParseIntError, TryFromIntError},
-};
-
-use actix_web::{http::header::ContentType, HttpResponse, ResponseError};
-use deadpool_sqlite::{BuildError, ConfigError, CreatePoolError, InteractError, PoolError};
+use actix_web::{error::QueryPayloadError, HttpRequest, HttpResponse, ResponseError};
 use reqwest::StatusCode;
-use tokio::task::JoinError;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Error {
-    CLI(String),
     IO(std::io::Error),
-    DB(rusqlite::Error),
+    Rusqlite(rusqlite::Error),
     Http(http::Error),
     Reqwest(reqwest::Error),
-    Serde(serde_json::Error),
-    Api(ApiError),
-    DbTableRowNotFound,
-    Other(String),
+    SerdeJson(serde_json::Error),
+    TimeFormat(time::error::Format),
+    OsmApi(String),
+    OverpassApi(String),
+    DeadpoolPool(deadpool_sqlite::PoolError),
+    DeadpoolInteract(deadpool_sqlite::InteractError),
+    DeadpoolConfig(deadpool_sqlite::ConfigError),
+    DeadpoolBuild(deadpool_sqlite::BuildError),
+    HttpBadRequest(String),
+    HttpUnauthorized(String),
+    HttpNotFound(String),
+    HttpConflict(String),
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::CLI(err) => write!(f, "{}", err),
             Error::IO(err) => err.fmt(f),
-            Error::DB(err) => err.fmt(f),
+            Error::Rusqlite(err) => err.fmt(f),
             Error::Http(err) => err.fmt(f),
             Error::Reqwest(err) => err.fmt(f),
-            Error::Serde(err) => err.fmt(f),
-            Error::Api(err) => err.fmt(f),
-            Error::DbTableRowNotFound => write!(f, "DbTableRowNotFound"),
-            Error::Other(err) => write!(f, "{}", err),
+            Error::SerdeJson(err) => err.fmt(f),
+            Error::TimeFormat(err) => err.fmt(f),
+            Error::OsmApi(err) => err.fmt(f),
+            Error::OverpassApi(err) => err.fmt(f),
+            Error::DeadpoolPool(err) => err.fmt(f),
+            Error::DeadpoolInteract(err) => err.fmt(f),
+            Error::DeadpoolConfig(err) => err.fmt(f),
+            Error::DeadpoolBuild(err) => err.fmt(f),
+            Error::HttpBadRequest(err) => write!(f, "{}", err),
+            Error::HttpNotFound(err) => write!(f, "{}", err),
+            Error::HttpConflict(err) => write!(f, "{}", err),
+            Error::HttpUnauthorized(err) => write!(f, "{}", err),
         }
     }
 }
@@ -46,7 +54,7 @@ impl From<std::io::Error> for Error {
 
 impl From<rusqlite::Error> for Error {
     fn from(error: rusqlite::Error) -> Self {
-        Error::DB(error)
+        Error::Rusqlite(error)
     }
 }
 
@@ -64,114 +72,65 @@ impl From<reqwest::Error> for Error {
 
 impl From<serde_json::Error> for Error {
     fn from(error: serde_json::Error) -> Self {
-        Error::Serde(error)
-    }
-}
-
-impl From<Error> for std::io::Error {
-    fn from(error: Error) -> Self {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("{error}"))
-    }
-}
-
-impl From<TryFromIntError> for Error {
-    fn from(_: TryFromIntError) -> Self {
-        Error::Other("Integer casting failed".into())
+        Error::SerdeJson(error)
     }
 }
 
 impl From<time::error::Format> for Error {
-    fn from(_: time::error::Format) -> Self {
-        Error::Other("Time formatting error".into())
+    fn from(error: time::error::Format) -> Self {
+        Error::TimeFormat(error)
     }
 }
 
-impl From<JoinError> for Error {
-    fn from(_: JoinError) -> Self {
-        Error::Other("Join error".into())
+impl From<deadpool_sqlite::PoolError> for Error {
+    fn from(error: deadpool_sqlite::PoolError) -> Self {
+        Error::DeadpoolPool(error)
     }
 }
 
-impl From<InteractError> for Error {
-    fn from(_: InteractError) -> Self {
-        Error::Other("Interact error".into())
+impl From<deadpool_sqlite::InteractError> for Error {
+    fn from(error: deadpool_sqlite::InteractError) -> Self {
+        Error::DeadpoolInteract(error)
     }
 }
 
-impl From<PoolError> for Error {
-    fn from(_: PoolError) -> Self {
-        Error::Other("Pool error".into())
+impl From<deadpool_sqlite::ConfigError> for Error {
+    fn from(error: deadpool_sqlite::ConfigError) -> Self {
+        Error::DeadpoolConfig(error)
     }
 }
 
-impl From<CreatePoolError> for Error {
-    fn from(_: CreatePoolError) -> Self {
-        Error::Other("Create pool error".into())
+impl From<deadpool_sqlite::BuildError> for Error {
+    fn from(error: deadpool_sqlite::BuildError) -> Self {
+        Error::DeadpoolBuild(error)
     }
 }
 
-impl From<ConfigError> for Error {
-    fn from(_: ConfigError) -> Self {
-        Error::Other("Pool config error".into())
-    }
+pub fn query_error_handler(err: QueryPayloadError, _req: &HttpRequest) -> actix_web::Error {
+    Error::HttpBadRequest(format!("Invalid arguments: {err}")).into()
 }
 
-impl From<BuildError> for Error {
-    fn from(_: BuildError) -> Self {
-        Error::Other("Pool building error".into())
-    }
-}
-
-#[derive(Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct ApiError {
-    pub http_code: StatusCode,
+    pub http_code: u16,
     pub message: String,
 }
 
-impl ApiError {
-    pub fn new<S: AsRef<str>>(http_code: StatusCode, message: S) -> ApiError {
-        ApiError {
-            http_code,
-            message: message.as_ref().to_string(),
-        }
-    }
-}
-
-impl ResponseError for ApiError {
+impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
-        let mut body: HashMap<&str, &str> = HashMap::new();
-        body.insert("message", &self.message);
-
-        HttpResponse::build(self.http_code)
-            .insert_header(ContentType::json())
-            .body(serde_json::to_string(&body).unwrap() + "\n")
+        HttpResponse::build(self.status_code()).json(ApiError {
+            http_code: self.status_code().as_u16(),
+            message: self.to_string(),
+        })
     }
 
     fn status_code(&self) -> StatusCode {
-        self.http_code
-    }
-}
-
-impl Display for ApiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl From<rusqlite::Error> for ApiError {
-    fn from(error: rusqlite::Error) -> Self {
-        ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
-    }
-}
-
-impl From<crate::Error> for ApiError {
-    fn from(error: crate::Error) -> Self {
-        ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
-    }
-}
-
-impl From<ParseIntError> for ApiError {
-    fn from(error: ParseIntError) -> Self {
-        ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+        match self {
+            Error::HttpBadRequest(_) => StatusCode::BAD_REQUEST,
+            Error::HttpUnauthorized(_) => StatusCode::UNAUTHORIZED,
+            Error::HttpNotFound(_) => StatusCode::NOT_FOUND,
+            Error::HttpConflict(_) => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }

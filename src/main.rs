@@ -14,7 +14,6 @@ use command::server;
 use command::sync;
 use command::sync_users;
 use discord::DiscordLayer;
-pub use error::ApiError;
 pub use error::Error;
 mod auth;
 mod command;
@@ -79,12 +78,6 @@ async fn main() -> ExitCode {
 
             if let Err(e) = server::run().await {
                 error!(?e, "Failed to start a server");
-                return ExitCode::FAILURE;
-            }
-        }
-        "db" => {
-            if let Err(e) = db::run(&args[2..], db) {
-                error!(?e, "Failed execute database action");
                 return ExitCode::FAILURE;
             }
         }

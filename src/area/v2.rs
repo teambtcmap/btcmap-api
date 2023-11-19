@@ -1,12 +1,11 @@
 use crate::area::Area;
 use crate::area::AreaRepo;
-use crate::ApiError;
+use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use http::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -56,7 +55,7 @@ impl Into<Json<GetItem>> for Area {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, repo: Data<AreaRepo>) -> Result<Json<Vec<GetItem>>, ApiError> {
+async fn get(args: Query<GetArgs>, repo: Data<AreaRepo>) -> Result<Json<Vec<GetItem>>, Error> {
     Ok(Json(match &args.updated_since {
         Some(updated_since) => repo
             .select_updated_since(updated_since, args.limit)
@@ -77,13 +76,12 @@ async fn get(args: Query<GetArgs>, repo: Data<AreaRepo>) -> Result<Json<Vec<GetI
 async fn get_by_url_alias(
     url_alias: Path<String>,
     repo: Data<AreaRepo>,
-) -> Result<Json<GetItem>, ApiError> {
+) -> Result<Json<GetItem>, Error> {
     repo.select_by_url_alias(&url_alias)
         .await?
-        .ok_or(ApiError::new(
-            StatusCode::NOT_FOUND,
-            &format!("Area with url_alias = {url_alias} doesn't exist"),
-        ))
+        .ok_or(Error::HttpNotFound(format!(
+            "Area with url_alias = {url_alias} doesn't exist"
+        )))
         .map(|it| it.into())
 }
 
