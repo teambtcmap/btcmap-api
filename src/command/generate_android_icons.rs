@@ -75,6 +75,7 @@ impl OverpassElement {
         let golf = self.tag("golf");
         let shelter_type = self.tag("shelter_type");
         let aeroway = self.tag("aeroway");
+        let highway = self.tag("highway");
 
         let mut icon_id: &str = "question_mark";
 
@@ -156,6 +157,10 @@ impl OverpassElement {
 
         if building == "farm" {
             icon_id = "storefront"
+        }
+
+        if building == "apartments" {
+            icon_id = "hotel"
         }
 
         if office == "yes" {
@@ -1508,6 +1513,10 @@ impl OverpassElement {
 
         if golf == "clubhouse" {
             icon_id = "golf_course"
+        }
+
+        if highway == "services" {
+            icon_id = "directions_car"
         }
 
         if amenity == "fast_food" && cuisine == "ice_cream" {
