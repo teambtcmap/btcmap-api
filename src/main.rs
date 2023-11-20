@@ -9,7 +9,6 @@ use command::generate_android_icons;
 use command::generate_element_categories;
 use command::generate_reports;
 use command::import_countries;
-use command::lint;
 use command::server;
 use command::sync;
 use command::sync_users;
@@ -36,6 +35,7 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
+mod lint;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -118,7 +118,7 @@ async fn main() -> ExitCode {
             }
         }
         "lint" => {
-            if let Err(e) = lint::run(db).await {
+            if let Err(e) = command::lint::run(db) {
                 error!(?e, "Failed to run linter");
                 return ExitCode::FAILURE;
             }

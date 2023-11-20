@@ -76,6 +76,7 @@ impl OverpassElement {
         let shelter_type = self.tag("shelter_type");
         let aeroway = self.tag("aeroway");
         let highway = self.tag("highway");
+        let aerialway = self.tag("aerialway");
 
         let mut icon_id: &str = "question_mark";
 
@@ -127,6 +128,14 @@ impl OverpassElement {
             icon_id = "agriculture"
         }
 
+        if landuse == "farmland" {
+            icon_id = "agriculture"
+        }
+
+        if landuse == "farm" {
+            icon_id = "agriculture"
+        }
+
         if building == "commercial" {
             icon_id = "business"
         }
@@ -161,6 +170,10 @@ impl OverpassElement {
 
         if building == "apartments" {
             icon_id = "hotel"
+        }
+
+        if building == "warehouse" {
+            icon_id = "warehouse";
         }
 
         if office == "yes" {
@@ -1091,6 +1104,10 @@ impl OverpassElement {
             icon_id = "photo_camera"
         }
 
+        if amenity == "boat_storage" {
+            icon_id = "directions_boat"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -1517,6 +1534,10 @@ impl OverpassElement {
 
         if highway == "services" {
             icon_id = "directions_car"
+        }
+
+        if aerialway == "gondola" {
+            icon_id = "panorama"
         }
 
         if amenity == "fast_food" && cuisine == "ice_cream" {
