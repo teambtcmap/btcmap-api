@@ -74,7 +74,13 @@ async fn post(
         ))?
     }
     let area = repo.insert(&args.tags).await?;
-    warn!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} created a new area: https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    warn!(
+        admin_channel_message = format!(
+            "{} created a new area: https://api.btcmap.org/v2/areas/{}",
+            token.user_name,
+            area.tags["url_alias"].as_str().unwrap(),
+        )
+    );
     Ok(area.into())
 }
 
@@ -102,7 +108,13 @@ async fn patch(
         id,
     )))?;
     let area = repo.patch_tags(area.id, &args.tags).await?;
-    warn!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} updated area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    warn!(
+        admin_channel_message = format!(
+            "{} updated area https://api.btcmap.org/v2/areas/{}",
+            token.user_name,
+            area.tags["url_alias"].as_str().unwrap()
+        )
+    );
     Ok(area.into())
 }
 
@@ -126,7 +138,13 @@ async fn delete(
     let area = repo
         .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
         .await?;
-    warn!(admin_channel_message = format!("User https://api.btcmap.org/v2/users/{} deleted area https://api.btcmap.org/v2/areas/{}", token.user_id, area.tags["url_alias"].as_str().unwrap()));
+    warn!(
+        admin_channel_message = format!(
+            "User {} deleted area https://api.btcmap.org/v2/areas/{}",
+            token.user_name,
+            area.tags["url_alias"].as_str().unwrap(),
+        )
+    );
     Ok(area.into())
 }
 

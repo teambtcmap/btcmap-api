@@ -96,8 +96,8 @@ async fn post_tags(
     };
     warn!(
         admin_channel_message = format!(
-            "WARNING: User https://api.btcmap.org/v2/users/{} used DEPRECATED API to set {} = {}",
-            token.user_id, args.name, args.value,
+            "WARNING: {} used DEPRECATED API to set {} = {}",
+            token.user_name, args.name, args.value,
         )
     );
     Ok(element.into())
@@ -130,8 +130,8 @@ async fn patch_tags(
     let element = repo.patch_tags(element.id, &args).await?;
     warn!(
         admin_channel_message = format!(
-            "User https://api.btcmap.org/v2/users/{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
-            token.user_id, id, serde_json::to_string_pretty(&args).unwrap(),
+            "{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
+            token.user_name, id, serde_json::to_string_pretty(&args).unwrap(),
         )
     );
     Ok(element.into())

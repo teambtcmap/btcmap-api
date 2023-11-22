@@ -1,6 +1,5 @@
-use crate::Error;
-
 use super::Token;
+use crate::Error;
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
@@ -36,8 +35,7 @@ impl AuthService {
             .await
             .unwrap()
             .interact(move |conn| get_admin_token(&conn, &headers))
-            .await
-            .unwrap()
+            .await?
     }
 }
 
@@ -61,12 +59,6 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Er
     let token = Token::select_by_secret(secret, db)?;
     match token {
         Some(token) => {
-            warn!(
-                admin_channel_message = format!(
-                    "Admin API was accessed by https://api.btcmap.org/v2/users/{}",
-                    token.user_id
-                )
-            );
             return Ok(token);
         }
         None => {

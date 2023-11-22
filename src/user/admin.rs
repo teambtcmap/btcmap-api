@@ -25,8 +25,8 @@ async fn patch_tags(
     repo.patch_tags(*id, &args).await?;
     warn!(
         admin_channel_message = format!(
-            "User https://api.btcmap.org/v2/users/{} patched tags for user https://api.btcmap.org/v2/users/{} {}",
-            token.user_id, id, serde_json::to_string_pretty(&args).unwrap(),
+            "User {} patched tags for user https://api.btcmap.org/v2/users/{} {}",
+            token.user_name, id, serde_json::to_string_pretty(&args).unwrap(),
         )
     );
     Ok(HttpResponse::Ok())

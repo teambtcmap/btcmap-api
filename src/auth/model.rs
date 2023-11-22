@@ -5,6 +5,7 @@ use tracing::debug;
 pub struct Token {
     pub id: i64,
     pub user_id: i64,
+    pub user_name: String,
     pub secret: String,
     pub created_at: String,
     pub updated_at: String,
@@ -43,13 +44,15 @@ impl Token {
         let query = format!(
             r#"
                 SELECT
-                    id,
-                    user_id,
-                    secret,
-                    created_at,
-                    updated_at,
-                    deleted_at
-                FROM token
+                    t.id,
+                    t.user_id,
+                    json_extract(u.osm_data, '$.display_name'),
+                    t.secret,
+                    t.created_at,
+                    t.updated_at,
+                    t.deleted_at
+                FROM token t
+                JOIN user u on u.id = user_id
                 WHERE secret = :secret
             "#
         );
@@ -64,10 +67,11 @@ impl Token {
             Ok(Token {
                 id: row.get(0)?,
                 user_id: row.get(1)?,
-                secret: row.get(2)?,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
+                user_name: row.get(2)?,
+                secret: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+                deleted_at: row.get(6)?,
             })
         }
     }
