@@ -1,8 +1,8 @@
 use crate::{Error, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
-use serde_json::Value;
-use std::{collections::HashMap, sync::Arc};
+use serde_json::{Map, Value};
+use std::sync::Arc;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::debug;
 
@@ -14,7 +14,7 @@ pub struct AreaRepo {
 #[derive(PartialEq, Debug)]
 pub struct Area {
     pub id: i64,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
@@ -25,7 +25,7 @@ impl AreaRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn insert(&self, tags: &HashMap<String, Value>) -> Result<Area> {
+    pub async fn insert(&self, tags: &Map<String, Value>) -> Result<Area> {
         let tags = tags.clone();
         self.pool
             .get()
@@ -72,7 +72,7 @@ impl AreaRepo {
             .await?
     }
 
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Area> {
+    pub async fn patch_tags(&self, id: i64, tags: &Map<String, Value>) -> Result<Area> {
         let tags = tags.clone();
         self.pool
             .get()
@@ -113,7 +113,7 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Area {
-    pub fn insert(tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
+    pub fn insert(tags: &Map<String, Value>, conn: &Connection) -> Result<Area> {
         let query = format!(
             r#"
                 INSERT INTO {TABLE} ({COL_TAGS}) 
@@ -207,11 +207,11 @@ impl Area {
             .optional()?)
     }
 
-    pub fn patch_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
+    pub fn patch_tags(&self, tags: &Map<String, Value>, conn: &Connection) -> Result<Area> {
         Area::_patch_tags(self.id, tags, conn)
     }
 
-    pub fn _patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Area> {
+    pub fn _patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Area> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -328,8 +328,7 @@ mod test {
         test::{mock_state, mock_tags},
         Result,
     };
-    use serde_json::json;
-    use std::collections::HashMap;
+    use serde_json::{json, Map};
     use time::{macros::datetime, OffsetDateTime};
     use tokio::test;
 
@@ -348,9 +347,9 @@ mod test {
         let state = mock_state().await;
         assert_eq!(
             vec![
-                state.area_repo.insert(&HashMap::new()).await?,
-                state.area_repo.insert(&HashMap::new()).await?,
-                state.area_repo.insert(&HashMap::new()).await?,
+                state.area_repo.insert(&Map::new()).await?,
+                state.area_repo.insert(&Map::new()).await?,
+                state.area_repo.insert(&Map::new()).await?,
             ],
             state.area_repo.select_all(None).await?,
         );
@@ -388,7 +387,7 @@ mod test {
     #[test]
     async fn select_by_id() -> Result<()> {
         let state = mock_state().await;
-        let area = state.area_repo.insert(&HashMap::new()).await?;
+        let area = state.area_repo.insert(&Map::new()).await?;
         assert_eq!(area, state.area_repo.select_by_id(area.id).await?.unwrap());
         Ok(())
     }
@@ -397,7 +396,7 @@ mod test {
     async fn select_by_url_alias() -> Result<()> {
         let state = mock_state().await;
         let url_alias = json!("url_alias_value");
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("url_alias".into(), url_alias.clone());
         state.area_repo.insert(&tags).await?;
         let area = state
@@ -417,7 +416,7 @@ mod test {
         let tag_1_value = json!("tag_1_value");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
         let area = state.area_repo.insert(&tags).await?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
@@ -431,7 +430,7 @@ mod test {
     #[test]
     async fn set_deleted_at() -> Result<()> {
         let state = mock_state().await;
-        let area = state.area_repo.insert(&HashMap::new()).await?;
+        let area = state.area_repo.insert(&Map::new()).await?;
         let area = state
             .area_repo
             .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))

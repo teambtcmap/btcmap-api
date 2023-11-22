@@ -63,8 +63,8 @@ pub struct State {
     pub user_repo: UserRepo,
 }
 
-pub fn mock_tags() -> HashMap<String, Value> {
-    let mut tags = HashMap::new();
+pub fn mock_tags() -> Map<String, Value> {
+    let mut tags = Map::new();
     tags.insert("null".into(), Value::Null);
     tags.insert("bool".into(), Value::Bool(true));
     tags.insert("number".into(), Value::Number(1.into()));

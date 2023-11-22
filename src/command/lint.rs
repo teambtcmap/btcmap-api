@@ -1,6 +1,6 @@
+use crate::lint;
 use crate::Connection;
 use crate::Result;
-use crate::lint;
 
 pub fn run(conn: Connection) -> Result<()> {
     lint::generate_issues(&conn)?;

@@ -1,14 +1,14 @@
 use crate::{area::Area, Result};
 use rusqlite::Connection;
 use serde::Deserialize;
-use serde_json::Value;
-use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
+use serde_json::{Map, Value};
+use std::{fs::File, io::BufReader, path::Path};
 use tracing::info;
 
 #[derive(Deserialize)]
 struct CountryJson {
     id: String,
-    tags: HashMap<String, Value>,
+    tags: Map<String, Value>,
 }
 
 pub async fn run(path: &str, conn: &mut Connection) -> Result<()> {

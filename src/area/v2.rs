@@ -8,8 +8,8 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -24,7 +24,7 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: String,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     async fn get_one_row() -> Result<()> {
         let state = mock_state().await;
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&tags).await?;
         state.area_repo.insert(&tags).await?;
@@ -151,7 +151,7 @@ mod tests {
     async fn get_by_id() -> Result<()> {
         let state = mock_state().await;
         let area_url_alias = "test";
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(

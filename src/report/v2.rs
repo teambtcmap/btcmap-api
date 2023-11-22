@@ -107,7 +107,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
-    use serde_json::Value;
+    use serde_json::{Map, Value};
     use std::collections::HashMap;
     use time::macros::{date, datetime};
     use time::OffsetDateTime;
@@ -130,7 +130,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         state
@@ -152,7 +152,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         state
@@ -182,7 +182,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         let report_1 = state

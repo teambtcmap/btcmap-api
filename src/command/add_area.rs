@@ -1,15 +1,11 @@
-use std::{
-    collections::HashMap,
-    io::{stdin, stdout, Write},
-};
-
 use crate::{area::Area, Error, Result};
 use rusqlite::Connection;
 use serde_json::{Map, Value};
+use std::io::{stdin, stdout, Write};
 
 pub async fn run(conn: &Connection) -> Result<()> {
     println!("Adding area");
-    let mut tags = HashMap::new();
+    let mut tags = Map::new();
 
     print!("url_alias ");
     stdout().flush().unwrap();

@@ -9,15 +9,14 @@ use actix_web::{
     HttpRequest,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::HashMap;
+use serde_json::{Map, Value};
 use time::OffsetDateTime;
 use tracing::warn;
 
 #[derive(Serialize, Deserialize)]
 pub struct AreaView {
     pub id: i64,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -48,7 +47,7 @@ impl Into<Json<AreaView>> for Area {
 
 #[derive(Serialize, Deserialize, Clone)]
 struct PostArgs {
-    tags: HashMap<String, Value>,
+    tags: Map<String, Value>,
 }
 
 #[post("")]
@@ -81,7 +80,7 @@ async fn post(
 
 #[derive(Serialize, Deserialize)]
 struct PatchArgs {
-    tags: HashMap<String, Value>,
+    tags: Map<String, Value>,
 }
 
 #[patch("{id}")]
@@ -142,8 +141,7 @@ mod tests {
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use http::StatusCode;
-    use serde_json::{json, Value};
-    use std::collections::HashMap;
+    use serde_json::{json, Map, Value};
 
     #[test]
     async fn post_unauthorized() -> Result<()> {
@@ -194,7 +192,7 @@ mod tests {
     #[test]
     async fn patch_unauthorized() -> Result<()> {
         let state = mock_state().await;
-        state.area_repo.insert(&HashMap::new()).await?;
+        state.area_repo.insert(&Map::new()).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
@@ -204,9 +202,7 @@ mod tests {
         .await;
         let req = TestRequest::patch()
             .uri("/1")
-            .set_json(PatchArgs {
-                tags: HashMap::new(),
-            })
+            .set_json(PatchArgs { tags: Map::new() })
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
@@ -219,7 +215,7 @@ mod tests {
         state.user_repo.insert(1, &OsmUser::mock()).await?;
         let token = state.auth.mock_token(1, "test").await.secret;
         let url_alias = "test";
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
@@ -263,7 +259,7 @@ mod tests {
     async fn delete_unauthorized() -> Result<()> {
         let state = mock_state().await;
         let url_alias = "test";
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
@@ -287,7 +283,7 @@ mod tests {
         state.user_repo.insert(1, &OsmUser::mock()).await?;
         let token = state.auth.mock_token(1, "test").await.secret;
         let url_alias = "test";
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(

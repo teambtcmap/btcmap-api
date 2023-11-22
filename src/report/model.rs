@@ -284,6 +284,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 #[cfg(test)]
 mod test {
     use crate::{test::mock_state, Result};
+    use serde_json::Map;
     use std::collections::HashMap;
     use time::{macros::datetime, OffsetDateTime};
     use tokio::test;
@@ -291,7 +292,7 @@ mod test {
     #[test]
     async fn insert() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         state
@@ -309,7 +310,7 @@ mod test {
     #[test]
     async fn select_all() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         state
@@ -335,7 +336,7 @@ mod test {
     #[test]
     async fn select_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         let report_1 = state
@@ -376,7 +377,7 @@ mod test {
     #[test]
     async fn select_by_id() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         state
@@ -390,7 +391,7 @@ mod test {
     #[test]
     async fn merge_tags() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         state.area_repo.insert(&area_tags).await?;
         let tag_1_name = "foo";

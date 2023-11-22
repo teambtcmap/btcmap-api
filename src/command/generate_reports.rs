@@ -247,14 +247,14 @@ async fn insert_report(
 mod test {
     use super::*;
     use crate::test::mock_state;
-    use serde_json::json;
+    use serde_json::{json, Map};
     use time::{macros::date, Duration};
     use tokio::test;
 
     #[test]
     async fn insert_report() -> Result<()> {
         let state = mock_state().await;
-        let mut area_tags = HashMap::new();
+        let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
         state.area_repo.insert(&area_tags).await?;
         for _ in 1..100 {
