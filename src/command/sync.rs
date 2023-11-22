@@ -1,5 +1,6 @@
 use crate::element::Element;
 use crate::event::Event;
+use crate::lint;
 use crate::osm::osm;
 use crate::osm::overpass::query_bitcoin_merchants;
 use crate::osm::overpass::OverpassElement;
@@ -165,6 +166,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                             &tx,
                         )?;
                     }
+
+                    lint::generate_element_issues(&cached_element, &tx)?;
                 }
 
                 if cached_element.deleted_at.is_some() {
@@ -191,10 +194,12 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
 
-                element.set_tag("category", &category.clone().into(), &tx)?;
-                element.set_tag("icon:android", &android_icon.clone().into(), &tx)?;
+                let element = element.set_tag("category", &category.clone().into(), &tx)?;
+                let element = element.set_tag("icon:android", &android_icon.clone().into(), &tx)?;
 
                 info!(category, android_icon);
+
+                lint::generate_element_issues(&element, &tx)?;
 
                 let message = format!("User {user_display_name} added https://www.openstreetmap.org/{element_type}/{osm_id}");
                 info!(

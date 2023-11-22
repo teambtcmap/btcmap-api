@@ -136,6 +136,10 @@ impl OverpassElement {
             icon_id = "agriculture"
         }
 
+        if landuse == "industrial" {
+            icon_id = "factory"
+        }
+
         if building == "commercial" {
             icon_id = "business"
         }

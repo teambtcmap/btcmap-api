@@ -1,22 +1,55 @@
 use crate::{element::Element, Result};
 use rusqlite::Connection;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use time::{macros::format_description, Date, OffsetDateTime};
 
 #[derive(Serialize)]
 pub struct Report {
     pub created_at: OffsetDateTime,
     pub issues_count: i32,
-    pub issues: Vec<Issue>,
+    pub issues: Vec<ReportIssue>,
 }
 
 #[derive(Serialize)]
-pub struct Issue {
-    pub element_id: i64,
-    pub osm_url: String,
+pub struct ReportIssue {
     pub r#type: String,
     pub severity: u8,
     pub description: String,
+    pub osm_url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Issue {
+    pub r#type: String,
+    pub severity: u8,
+    pub description: String,
+}
+
+pub fn generate_issues(conn: &Connection) -> Result<()> {
+    let elements: Vec<_> = Element::select_all(None, &conn)?
+        .into_iter()
+        .filter(|it| it.deleted_at.is_none())
+        .collect();
+    for element in elements {
+        generate_element_issues(&element, conn)?;
+    }
+    Ok(())
+}
+
+pub fn generate_element_issues(element: &Element, conn: &Connection) -> Result<()> {
+    let issues = get_issues(&element);
+    if issues.is_empty() && !element.tags.contains_key("issues") {
+        return Ok(());
+    }
+    if issues.is_empty() && element.tags.contains_key("issues") {
+        element.remove_tag("issues", conn)?;
+        return Ok(());
+    }
+    let issues = serde_json::to_value(&issues)?;
+    if element.tag("issues") != &issues {
+        element.set_tag("issues", &issues, conn)?;
+    }
+    Ok(())
 }
 
 pub fn generate_report(conn: &Connection) -> Result<Report> {
@@ -28,9 +61,25 @@ pub fn generate_report(conn: &Connection) -> Result<Report> {
 }
 
 fn _generate_report(elements: Vec<Element>) -> Result<Report> {
-    let mut issues: Vec<Issue> = vec![];
+    let mut issues: Vec<ReportIssue> = vec![];
     for element in &elements {
-        issues.append(&mut get_issues(element));
+        if !element.tags.contains_key("issues") {
+            continue;
+        }
+        let element_issues: Vec<Issue> = serde_json::from_value(element.tags["issues"].clone())?;
+        let mut element_issues: Vec<ReportIssue> = element_issues
+            .into_iter()
+            .map(|it| ReportIssue {
+                r#type: it.r#type,
+                severity: it.severity,
+                description: it.description,
+                osm_url: format!(
+                    "https://openstreetmap.org/{}/{}",
+                    element.overpass_data.r#type, element.overpass_data.id,
+                ),
+            })
+            .collect();
+        issues.append(&mut element_issues);
     }
     issues.sort_by(|a, b| b.severity.cmp(&a.severity));
     Ok(Report {
@@ -62,26 +111,16 @@ fn get_date_format_issues(element: &Element) -> Vec<Issue> {
     let survey_date = element.overpass_data.tag("survey:date");
     if survey_date.len() > 0 && Date::parse(survey_date, &date_format).is_err() {
         res.push(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "date_format".into(),
-            severity: 1,
+            severity: 20,
             description: "survey:date is not formatted properly".into(),
         });
     }
     let check_date = element.overpass_data.tag("check_date");
     if check_date.len() > 0 && Date::parse(check_date, &date_format).is_err() {
         res.push(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "date_format".into(),
-            severity: 1,
+            severity: 20,
             description: "check_date is not formatted properly".into(),
         });
     }
@@ -90,13 +129,8 @@ fn get_date_format_issues(element: &Element) -> Vec<Issue> {
         && Date::parse(check_date_currency_xbt, &date_format).is_err()
     {
         res.push(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "date_format".into(),
-            severity: 1,
+            severity: 20,
             description: "check_date:currency:XBT is not formatted properly".into(),
         });
     }
@@ -108,11 +142,6 @@ fn get_misspelled_tag_issues(element: &Element) -> Vec<Issue> {
     let payment_lighting = element.overpass_data.tag("payment:lighting");
     if payment_lighting.len() > 0 {
         res.push(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "misspelled_tag".into(),
             severity: 15,
             description: "Spelling issue: payment:lighting".into(),
@@ -121,11 +150,6 @@ fn get_misspelled_tag_issues(element: &Element) -> Vec<Issue> {
     let payment_lightning_contacless = element.overpass_data.tag("payment:lightning_contacless");
     if payment_lightning_contacless.len() > 0 {
         res.push(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "misspelled_tag".into(),
             severity: 15,
             description: "Spelling issue: payment:lightning_contacless".into(),
@@ -134,11 +158,6 @@ fn get_misspelled_tag_issues(element: &Element) -> Vec<Issue> {
     let payment_lighting_contactless = element.overpass_data.tag("payment:lighting_contactless");
     if payment_lighting_contactless.len() > 0 {
         res.push(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "misspelled_tag".into(),
             severity: 15,
             description: "Spelling issue: payment:lighting_contactless".into(),
@@ -152,11 +171,6 @@ fn get_missing_icon_issue(element: &Element) -> Option<Issue> {
         || element.tag("icon:android").as_str().unwrap_or_default() == "question_mark"
     {
         return Some(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "missing_icon".into(),
             severity: 10,
             description: "Icon is missing".into(),
@@ -169,11 +183,6 @@ fn get_missing_icon_issue(element: &Element) -> Option<Issue> {
 fn get_not_verified_issue(element: &Element) -> Option<Issue> {
     if element.overpass_data.verification_date().is_none() {
         return Some(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "not_verified".into(),
             severity: 5,
             description: "Not verified".into(),
@@ -186,13 +195,8 @@ fn get_not_verified_issue(element: &Element) -> Option<Issue> {
 fn get_out_of_date_issue(element: &Element) -> Option<Issue> {
     if element.overpass_data.verification_date().is_some() && !element.overpass_data.up_to_date() {
         return Some(Issue {
-            element_id: element.id,
-            osm_url: format!(
-                "https://openstreetmap.org/{}/{}",
-                element.overpass_data.r#type, element.overpass_data.id,
-            ),
             r#type: "out_of_date".into(),
-            severity: 5,
+            severity: 1,
             description: "Out of date".into(),
         });
     }

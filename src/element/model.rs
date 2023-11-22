@@ -307,7 +307,6 @@ impl Element {
         Element::_patch_tags(id, &patch_set, conn)
     }
 
-    #[cfg(test)]
     pub fn remove_tag(&self, name: &str, conn: &Connection) -> Result<Element> {
         Element::_remove_tag(self.id, name, conn)
     }
