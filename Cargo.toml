@@ -57,4 +57,8 @@ futures-util = { version = "0.3.28", default-features = false }
 # https://github.com/hyperium/http/releases
 http = { version = "0.2.9", default-features = false }
 
+# https://github.com/bikeshedder/deadpool/tags
 deadpool-sqlite = { version = "0.6.0", default-features = false, features = ["rt_tokio_1"] }
+
+# https://github.com/AaronErhardt/actix-governor/releases
+actix-governor = { version = "0.5.0", default-features = false }

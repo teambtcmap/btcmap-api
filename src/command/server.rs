@@ -8,7 +8,8 @@ use crate::user::UserRepo;
 use crate::{area, element, error, user};
 use crate::{event, tile};
 use crate::{report, Result};
-use actix_web::dev::Service;
+use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
+use actix_web::dev::{Service, ServiceRequest};
 use actix_web::web::scope;
 use actix_web::web::QueryConfig;
 use actix_web::{
@@ -17,6 +18,7 @@ use actix_web::{
     App, HttpServer,
 };
 use futures_util::future::FutureExt;
+use http::HeaderValue;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use tracing::info;
@@ -24,6 +26,13 @@ use tracing::info;
 pub async fn run() -> Result<()> {
     // All the worker threads are sharing a single connection pool
     let pool = Arc::new(db::pool()?);
+
+    let rate_limit_conf = GovernorConfigBuilder::default()
+        .per_millisecond(500)
+        .burst_size(100)
+        .key_extractor(RealIpKeyExtractor)
+        .finish()
+        .unwrap();
 
     HttpServer::new(move || {
         let auth_service = AuthService::new(&pool);
@@ -71,6 +80,7 @@ pub async fn run() -> Result<()> {
             })
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
+            .wrap(Governor::new(&rate_limit_conf))
             .app_data(Data::new(auth_service))
             .app_data(Data::new(area_repo))
             .app_data(Data::new(element_repo))
@@ -152,4 +162,21 @@ pub async fn run() -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+#[derive(Clone)]
+pub struct RealIpKeyExtractor;
+
+impl KeyExtractor for RealIpKeyExtractor {
+    type Key = HeaderValue;
+    type KeyExtractionError = SimpleKeyExtractionError<&'static str>;
+
+    fn extract(&self, req: &ServiceRequest) -> Result<Self::Key, Self::KeyExtractionError> {
+        req.headers()
+            .get("x-forwarded-for")
+            .map(|it| it.clone())
+            .ok_or_else(|| {
+                SimpleKeyExtractionError::new("Could not extract real IP address from request")
+            })
+    }
 }
