@@ -28,6 +28,13 @@ pub async fn run() -> Result<()> {
     let pool = Arc::new(db::pool()?);
 
     let rate_limit_conf = GovernorConfigBuilder::default()
+        .per_second(1)
+        .burst_size(30)
+        .key_extractor(RealIpKeyExtractor)
+        .finish()
+        .unwrap();
+
+    let tile_rate_limit_conf = GovernorConfigBuilder::default()
         .per_millisecond(500)
         .burst_size(100)
         .key_extractor(RealIpKeyExtractor)
@@ -80,7 +87,6 @@ pub async fn run() -> Result<()> {
             })
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
-            .wrap(Governor::new(&rate_limit_conf))
             .app_data(Data::new(auth_service))
             .app_data(Data::new(area_repo))
             .app_data(Data::new(element_repo))
@@ -89,39 +95,13 @@ pub async fn run() -> Result<()> {
             .app_data(Data::new(user_repo))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
-                scope("elements")
-                    .service(element::admin::post_tags)
-                    .service(element::admin::patch_tags)
-                    .service(element::v2::get)
-                    .service(element::v2::get_by_osm_type_and_id),
+                scope("tiles")
+                    .wrap(Governor::new(&tile_rate_limit_conf))
+                    .service(tile::controller::get),
             )
             .service(
-                scope("events")
-                    .service(event::v2::get)
-                    .service(event::v2::get_by_id),
-            )
-            .service(
-                scope("users")
-                    .service(user::admin::patch_tags)
-                    .service(user::v2::get)
-                    .service(user::v2::get_by_id),
-            )
-            .service(
-                scope("areas")
-                    .service(area::admin::post)
-                    .service(area::admin::patch)
-                    .service(area::admin::delete)
-                    .service(area::v2::get)
-                    .service(area::v2::get_by_url_alias),
-            )
-            .service(
-                scope("reports")
-                    .service(report::v2::get)
-                    .service(report::v2::get_by_id),
-            )
-            .service(scope("tiles").service(tile::controller::get))
-            .service(
-                scope("v2")
+                scope("")
+                    .wrap(Governor::new(&rate_limit_conf))
                     .service(
                         scope("elements")
                             .service(element::admin::post_tags)
@@ -152,10 +132,48 @@ pub async fn run() -> Result<()> {
                         scope("reports")
                             .service(report::v2::get)
                             .service(report::v2::get_by_id),
-                    )
-                    .service(scope("tiles").service(tile::controller::get)),
+                    ),
             )
-            .service(scope("v3").service(scope("elements").service(element::v3::get)))
+            .service(
+                scope("v2")
+                    .wrap(Governor::new(&rate_limit_conf))
+                    .service(
+                        scope("elements")
+                            .service(element::admin::post_tags)
+                            .service(element::admin::patch_tags)
+                            .service(element::v2::get)
+                            .service(element::v2::get_by_osm_type_and_id),
+                    )
+                    .service(
+                        scope("events")
+                            .service(event::v2::get)
+                            .service(event::v2::get_by_id),
+                    )
+                    .service(
+                        scope("users")
+                            .service(user::admin::patch_tags)
+                            .service(user::v2::get)
+                            .service(user::v2::get_by_id),
+                    )
+                    .service(
+                        scope("areas")
+                            .service(area::admin::post)
+                            .service(area::admin::patch)
+                            .service(area::admin::delete)
+                            .service(area::v2::get)
+                            .service(area::v2::get_by_url_alias),
+                    )
+                    .service(
+                        scope("reports")
+                            .service(report::v2::get)
+                            .service(report::v2::get_by_id),
+                    ),
+            )
+            .service(
+                scope("v3")
+                    .wrap(Governor::new(&rate_limit_conf))
+                    .service(scope("elements").service(element::v3::get)),
+            )
     })
     .bind(("127.0.0.1", 8000))?
     .run()
