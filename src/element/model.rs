@@ -2,7 +2,7 @@ use crate::Result;
 use crate::{osm::overpass::OverpassElement, Error};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::debug;
@@ -64,6 +64,14 @@ impl ElementRepo {
             .await?
     }
 
+    pub async fn select_by_id(&self, id: i64) -> Result<Option<Element>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Element::select_by_id(id, conn))
+            .await?
+    }
+
     pub async fn select_by_osm_type_and_id(
         &self,
         r#type: &str,
@@ -77,7 +85,7 @@ impl ElementRepo {
             .await?
     }
 
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Element> {
+    pub async fn patch_tags(&self, id: i64, tags: &Map<String, Value>) -> Result<Element> {
         let tags = tags.clone();
         self.pool
             .get()
@@ -253,7 +261,7 @@ impl Element {
 
     pub fn _patch_tags(
         id: i64,
-        tags: &HashMap<String, Value>,
+        tags: &Map<String, Value>,
         conn: &Connection,
     ) -> crate::Result<Element> {
         let query = format!(
@@ -302,7 +310,7 @@ impl Element {
     }
 
     pub fn _set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
-        let mut patch_set = HashMap::new();
+        let mut patch_set = Map::new();
         patch_set.insert(name.into(), value.clone());
         Element::_patch_tags(id, &patch_set, conn)
     }

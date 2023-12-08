@@ -104,6 +104,7 @@ pub async fn run() -> Result<()> {
                     .wrap(Governor::new(&rate_limit_conf))
                     .service(
                         scope("elements")
+                            .service(element::admin::patch)
                             .service(element::admin::post_tags)
                             .service(element::admin::patch_tags)
                             .service(element::v2::get)

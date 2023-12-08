@@ -6,7 +6,7 @@ use actix_web::{
     HttpRequest,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use time::OffsetDateTime;
 use tracing::warn;
@@ -59,6 +59,49 @@ impl Into<Json<ElementView>> for Element {
 }
 
 #[derive(Serialize, Deserialize)]
+struct PatchArgs {
+    tags: Map<String, Value>,
+}
+
+#[patch("{id}")]
+async fn patch(
+    req: HttpRequest,
+    id: Path<String>,
+    args: Json<PatchArgs>,
+    auth: Data<AuthService>,
+    repo: Data<ElementRepo>,
+) -> Result<Json<ElementView>, Error> {
+    let token = auth.check(&req).await?;
+    let int_id = id.parse::<i64>();
+    let element = match int_id {
+        Ok(id) => repo.select_by_id(id).await,
+        Err(_) => {
+            let id_parts: Vec<&str> = id.split(":").collect();
+            if id_parts.len() != 2 {
+                Err(Error::HttpBadRequest("Invalid identifier".into()))?
+            }
+            let r#type = id_parts[0];
+            let id = id_parts[1]
+                .parse::<i64>()
+                .map_err(|_| Error::HttpBadRequest("Invalid identifier".into()))?;
+            repo.select_by_osm_type_and_id(r#type, id).await
+        }
+    }?
+    .ok_or(Error::HttpNotFound(format!(
+        "There is no element with id = {id}"
+    )))?;
+    let element = repo.patch_tags(element.id, &args.tags).await?;
+    warn!(
+        admin_channel_message = format!(
+            "{} updated element https://api.btcmap.org/v2/elements/{}",
+            token.user_name,
+            element.overpass_data.btcmap_id(),
+        )
+    );
+    Ok(element.into())
+}
+
+#[derive(Serialize, Deserialize)]
 struct PostTagsArgs {
     name: String,
     value: String,
@@ -107,7 +150,7 @@ async fn post_tags(
 async fn patch_tags(
     req: HttpRequest,
     id: Path<String>,
-    args: Json<HashMap<String, Value>>,
+    args: Json<Map<String, Value>>,
     auth: Data<AuthService>,
     repo: Data<ElementRepo>,
 ) -> Result<Json<ElementView>, Error> {
@@ -131,7 +174,9 @@ async fn patch_tags(
     warn!(
         admin_channel_message = format!(
             "{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
-            token.user_name, id, serde_json::to_string_pretty(&args).unwrap(),
+            token.user_name,
+            id,
+            serde_json::to_string_pretty(&args).unwrap(),
         )
     );
     Ok(element.into())
@@ -139,7 +184,8 @@ async fn patch_tags(
 
 #[cfg(test)]
 mod test {
-    use crate::element::admin::PostTagsArgs;
+    use crate::element::admin::{PatchArgs, PostTagsArgs};
+    use crate::element::ElementRepo;
     use crate::osm::osm::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
@@ -148,7 +194,66 @@ mod test {
     use actix_web::web::Data;
     use actix_web::{test, App};
     use reqwest::StatusCode;
-    use serde_json::json;
+    use serde_json::{json, Map, Value};
+
+    #[test]
+    async fn patch_unauthorized() -> Result<()> {
+        let state = mock_state().await;
+        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.element_repo))
+                .service(super::patch),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri("/1")
+            .set_json(PatchArgs { tags: Map::new() })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch() -> Result<()> {
+        let state = mock_state().await;
+        state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let token = state.auth.mock_token(1, "test").await.secret;
+        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(state.auth))
+                .app_data(Data::new(ElementRepo::new(&state.pool)))
+                .service(super::patch),
+        )
+        .await;
+        let args = r#"
+        {
+            "tags": {
+                "string": "bar",
+                "unsigned": 5,
+                "float": 12.34,
+                "bool": true
+            }
+        }
+        "#;
+        let args: Value = serde_json::from_str(args)?;
+        let req = TestRequest::patch()
+            .uri(&format!("/{}", element.overpass_data.btcmap_id()))
+            .append_header(("Authorization", format!("Bearer {token}")))
+            .set_json(args)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+        let element = state.element_repo.select_by_id(element.id).await?.unwrap();
+        assert!(element.tags["string"].is_string());
+        assert!(element.tags["unsigned"].is_u64());
+        assert!(element.tags["float"].is_f64());
+        assert!(element.tags["bool"].is_boolean());
+        Ok(())
+    }
 
     #[test]
     async fn post_tags() -> Result<()> {
