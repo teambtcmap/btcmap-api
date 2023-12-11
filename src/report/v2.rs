@@ -18,6 +18,7 @@ use time::OffsetDateTime;
 pub struct GetArgs {
     updated_since: Option<String>,
     limit: Option<i64>,
+    compress: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,27 +66,75 @@ impl Into<Json<GetItem>> for Report {
 
 #[get("")]
 async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<GetItem>>, Error> {
-    Ok(Json(match &args.updated_since {
-        Some(updated_since) => repo
-            .select_updated_since(updated_since, args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-        None => repo
-            .select_updated_since(
-                &OffsetDateTime::now_utc()
-                    .checked_sub(Duration::days(7))
-                    .unwrap()
-                    .format(&Rfc3339)
-                    .unwrap(),
-                args.limit,
-            )
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    }))
+    if args.compress.unwrap_or(false) {
+        let res: Vec<GetItem> = match &args.updated_since {
+            Some(updated_since) => repo
+                .select_updated_since(updated_since, args.limit)
+                .await?
+                .into_iter()
+                .map(|it| it.into())
+                .collect(),
+            None => repo
+                .select_updated_since(
+                    &OffsetDateTime::now_utc()
+                        .checked_sub(Duration::days(7))
+                        .unwrap()
+                        .format(&Rfc3339)
+                        .unwrap(),
+                    args.limit,
+                )
+                .await?
+                .into_iter()
+                .map(|it| it.into())
+                .collect(),
+        };
+
+        let mut map: HashMap<String, Vec<GetItem>> = HashMap::new();
+
+        for item in res {
+            if !map.contains_key(&item.area_id) {
+                map.insert(item.area_id.clone(), vec![]);
+            }
+
+            let prev_entries = map.get_mut(&item.area_id).unwrap();
+
+            if prev_entries.last().is_none() || prev_entries.last().unwrap().tags != item.tags {
+                prev_entries.push(item);
+            }
+        }
+
+        let mut compressed_res: Vec<GetItem> = vec![];
+
+        for (_, mut v) in map {
+            compressed_res.append(&mut v);
+        }
+
+        compressed_res.sort_by_key(|it| it.updated_at);
+
+        Ok(Json(compressed_res))
+    } else {
+        Ok(Json(match &args.updated_since {
+            Some(updated_since) => repo
+                .select_updated_since(updated_since, args.limit)
+                .await?
+                .into_iter()
+                .map(|it| it.into())
+                .collect(),
+            None => repo
+                .select_updated_since(
+                    &OffsetDateTime::now_utc()
+                        .checked_sub(Duration::days(7))
+                        .unwrap()
+                        .format(&Rfc3339)
+                        .unwrap(),
+                    args.limit,
+                )
+                .await?
+                .into_iter()
+                .map(|it| it.into())
+                .collect(),
+        }))
+    }
 }
 
 #[get("{id}")]

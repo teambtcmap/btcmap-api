@@ -30,14 +30,14 @@ pub async fn run() -> Result<()> {
     let rate_limit_conf = GovernorConfigBuilder::default()
         .per_second(1)
         .burst_size(30)
-        .key_extractor(RealIpKeyExtractor)
+        .key_extractor(get_key_extractor())
         .finish()
         .unwrap();
 
     let tile_rate_limit_conf = GovernorConfigBuilder::default()
         .per_millisecond(500)
         .burst_size(100)
-        .key_extractor(RealIpKeyExtractor)
+        .key_extractor(get_key_extractor())
         .finish()
         .unwrap();
 
@@ -181,6 +181,16 @@ pub async fn run() -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+#[cfg(not(debug_assertions))]
+pub fn get_key_extractor() -> RealIpKeyExtractor {
+    RealIpKeyExtractor
+}
+
+#[cfg(debug_assertions)]
+pub fn get_key_extractor() -> actix_governor::PeerIpKeyExtractor {
+    actix_governor::PeerIpKeyExtractor
 }
 
 #[derive(Clone)]
