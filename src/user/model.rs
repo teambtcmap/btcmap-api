@@ -99,14 +99,14 @@ impl User {
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<User>> {
         let query = r#"
             SELECT
-                rowid,
+                id,
                 osm_data,
                 tags,
                 created_at,
                 updated_at,
                 deleted_at
             FROM user
-            ORDER BY updated_at, rowid
+            ORDER BY updated_at, id
             LIMIT :limit
         "#;
 
@@ -165,6 +165,16 @@ impl User {
             .optional()?)
     }
 
+    pub fn set_tag(&self, name: &str, value: &Value, conn: &Connection) -> Result<User> {
+        User::_set_tag(self.id, name, value, conn)
+    }
+
+    pub fn _set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<User> {
+        let mut patch_set = HashMap::new();
+        patch_set.insert(name.into(), value.clone());
+        User::patch_tags(id, &patch_set, conn)
+    }
+
     pub fn patch_tags(
         id: i64,
         tags: &HashMap<String, Value>,
@@ -205,15 +215,12 @@ impl User {
 const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
     |row: &Row| -> rusqlite::Result<User> {
         let osm_data: String = row.get(1)?;
-        let osm_data: OsmUser = serde_json::from_str(&osm_data).unwrap();
-
         let tags: String = row.get(2)?;
-        let tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(User {
             id: row.get(0)?,
-            osm_data,
-            tags,
+            osm_data: serde_json::from_str(&osm_data).unwrap(),
+            tags: serde_json::from_str(&tags).unwrap(),
             created_at: row.get(3)?,
             updated_at: row.get(4)?,
             deleted_at: row.get(5)?,

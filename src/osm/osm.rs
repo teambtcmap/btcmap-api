@@ -65,7 +65,7 @@ struct OsmUserResponse {
     user: OsmUser,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct OsmUser {
     pub id: i64,
     pub display_name: String,
@@ -80,32 +80,32 @@ pub struct OsmUser {
     pub blocks: Blocks,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ContributorTerms {
     pub agreed: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Img {
     pub href: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Changesets {
     pub count: i32,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Traces {
     pub count: i32,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Blocks {
     received: BlocksReceived,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct BlocksReceived {
     count: i32,
     active: i32,
@@ -149,6 +149,7 @@ async fn _get_user(res: Response) -> Result<Option<OsmUser>> {
     } else {
         match res.status() {
             StatusCode::NOT_FOUND => return Ok(None),
+            StatusCode::GONE => return Ok(None),
             _ => Err(Error::OsmApi(format!(
                 "Unexpected response status: {}",
                 res.status()

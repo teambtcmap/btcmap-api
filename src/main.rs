@@ -10,8 +10,6 @@ use command::generate_element_categories;
 use command::generate_reports;
 use command::import_countries;
 use command::server;
-use command::sync;
-use command::sync_users;
 use discord::DiscordLayer;
 pub use error::Error;
 mod auth;
@@ -36,6 +34,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
 mod lint;
+mod sync;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -82,13 +81,13 @@ async fn main() -> ExitCode {
             }
         }
         "sync" => {
-            if let Err(e) = sync::run(db).await {
+            if let Err(e) = command::sync::run(db).await {
                 error!(?e, "Failed to sync elements");
                 return ExitCode::FAILURE;
             }
         }
         "sync-users" => {
-            if let Err(e) = sync_users::run(db).await {
+            if let Err(e) = sync::users::run(db).await {
                 error!(?e, "Failed to sync users");
                 return ExitCode::FAILURE;
             }

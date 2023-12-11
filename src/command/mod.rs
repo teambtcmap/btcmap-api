@@ -9,4 +9,3 @@ pub mod import_countries;
 pub mod lint;
 pub mod server;
 pub mod sync;
-pub mod sync_users;
