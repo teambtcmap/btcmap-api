@@ -11,14 +11,4 @@ case "$1" in
             && rsync -v target/x86_64-unknown-linux-musl/release/btcmap-api btcmap-api:/usr/local/bin/btcmap-api \
             && ssh btcmap-api 'systemctl restart btcmap-api.service'
         ;;
-
-    db)
-        sqlite3 ~/.local/share/btcmap/btcmap.db
-        ;;
-
-    analyze-logs)
-        ssh btcmap-api 'journalctl --unit btcmap-api.service --since "24 hours ago" --output json --output-fields=MESSAGE | jq -r ".MESSAGE" > /tmp/btcmap-api-log' \
-	    && rsync -v btcmap-api:/tmp/btcmap-api-log /tmp/btcmap-api-log \
-	    && cargo run analyze-logs < /tmp/btcmap-api-log | jq
-	;;
 esac
