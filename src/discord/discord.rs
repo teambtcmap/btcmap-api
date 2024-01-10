@@ -26,7 +26,7 @@ where
                 event.record(&mut visitor);
                 if let Ok(url) = env::var("DISCORD_WEBHOOK_URL") {
                     tokio::runtime::Handle::current()
-                        .spawn_blocking(move || send_discord_message(message, &url));
+                        .spawn(async move { send_discord_message(message, &url).await });
                 }
             }
 
@@ -38,7 +38,7 @@ where
                 event.record(&mut visitor);
                 if let Ok(url) = env::var("DISCORD_ADMIN_CHANNEL_WEBHOOK_URL") {
                     tokio::runtime::Handle::current()
-                        .spawn_blocking(move || send_discord_message(message, &url));
+                        .spawn(async move { send_discord_message(message, &url).await });
                 }
             }
         }
@@ -63,17 +63,18 @@ impl<'a> Visit for DiscordMessageVisitor<'a> {
     }
 }
 
-fn send_discord_message(message: String, webhook_url: &str) {
+async fn send_discord_message(message: String, webhook_url: &str) {
     let mut args = HashMap::new();
     args.insert("username", "btcmap.org".to_string());
     args.insert("content", message);
 
     info!("Sending discord message");
 
-    let response = reqwest::blocking::Client::new()
+    let response = reqwest::Client::new()
         .post(webhook_url)
         .json(&args)
-        .send();
+        .send()
+        .await;
 
     match response {
         Ok(response) => {
