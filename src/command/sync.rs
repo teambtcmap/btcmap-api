@@ -1,3 +1,4 @@
+use crate::discord;
 use crate::element::Element;
 use crate::event::Event;
 use crate::lint;
@@ -77,7 +78,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     let message = format!(
                         "Overpass lied about element {element_type}:{osm_id} being deleted"
                     );
-                    error!(element_type, osm_id, discord_message = message, message,);
+                    error!(element_type, osm_id, message);
+                    discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
                     Err(Error::OverpassApi(message.into()))?
                 }
             }
@@ -94,9 +96,9 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 element_name = name,
                 element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
                 user_name = fresh_element.user,
-                discord_message = message,
                 message,
             );
+            discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
 
             info!(cached_element.id, "Marking element as deleted");
             cached_element.set_deleted_at(Some(OffsetDateTime::now_utc()), &tx)?;
@@ -145,9 +147,9 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         element_url =
                             format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
                         user_name = user_display_name,
-                        discord_message = message,
                         message,
                     );
+                    discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
 
                     info!("Updating osm_json");
                     cached_element.set_overpass_data(&fresh_element, &tx)?;
@@ -208,9 +210,9 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     element_android_icon = android_icon,
                     element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
                     user_name = user_display_name,
-                    discord_message = message,
                     message,
                 );
+                discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
             }
         }
     }

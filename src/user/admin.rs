@@ -1,4 +1,4 @@
-use crate::{auth::AuthService, user::UserRepo, Error};
+use crate::{auth::AuthService, discord, user::UserRepo, Error};
 use actix_web::{
     patch,
     web::{Data, Json, Path},
@@ -23,14 +23,14 @@ async fn patch_tags(
             "User with id = {id} doesn't exist"
         )))?;
     repo.patch_tags(*id, &args).await?;
-    warn!(
-        admin_channel_message = format!(
-            "User {} patched tags for user https://api.btcmap.org/v2/users/{} {}",
-            token.user_name,
-            id,
-            serde_json::to_string_pretty(&args).unwrap(),
-        )
+    let log_message = format!(
+        "User {} patched tags for user https://api.btcmap.org/v2/users/{} {}",
+        token.user_name,
+        id,
+        serde_json::to_string_pretty(&args).unwrap(),
     );
+    warn!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(HttpResponse::Ok())
 }
 

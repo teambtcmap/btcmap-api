@@ -1,7 +1,7 @@
 use crate::{
     area::{Area, AreaRepo},
     auth::AuthService,
-    Error,
+    discord, Error,
 };
 use actix_web::{
     delete, patch, post,
@@ -74,13 +74,13 @@ async fn post(
         ))?
     }
     let area = repo.insert(&args.tags).await?;
-    warn!(
-        admin_channel_message = format!(
-            "{} created a new area: https://api.btcmap.org/v2/areas/{}",
-            token.user_name,
-            area.tags["url_alias"].as_str().unwrap(),
-        )
+    let log_message = format!(
+        "{} created a new area: https://api.btcmap.org/v2/areas/{}",
+        token.user_name,
+        area.tags["url_alias"].as_str().unwrap(),
     );
+    warn!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(area.into())
 }
 
@@ -108,13 +108,13 @@ async fn patch(
         id,
     )))?;
     let area = repo.patch_tags(area.id, &args.tags).await?;
-    warn!(
-        admin_channel_message = format!(
-            "{} updated area https://api.btcmap.org/v2/areas/{}",
-            token.user_name,
-            area.tags["url_alias"].as_str().unwrap()
-        )
+    let log_message = format!(
+        "{} updated area https://api.btcmap.org/v2/areas/{}",
+        token.user_name,
+        area.tags["url_alias"].as_str().unwrap(),
     );
+    warn!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(area.into())
 }
 
@@ -138,13 +138,13 @@ async fn delete(
     let area = repo
         .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
         .await?;
-    warn!(
-        admin_channel_message = format!(
-            "User {} deleted area https://api.btcmap.org/v2/areas/{}",
-            token.user_name,
-            area.tags["url_alias"].as_str().unwrap(),
-        )
+    let log_message = format!(
+        "User {} deleted area https://api.btcmap.org/v2/areas/{}",
+        token.user_name,
+        area.tags["url_alias"].as_str().unwrap(),
     );
+    warn!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(area.into())
 }
 

@@ -1,5 +1,5 @@
 use super::Token;
-use crate::Error;
+use crate::{discord, Error};
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
@@ -30,16 +30,13 @@ impl AuthService {
 
     pub async fn check(&self, req: &HttpRequest) -> Result<Token, Error> {
         let headers = req.headers().clone();
-        self.pool
-            .get()
-            .await
-            .unwrap()
-            .interact(move |conn| get_admin_token(&conn, &headers))
-            .await?
+        let guard = self.pool.get().await.unwrap();
+        let conn = guard.lock().unwrap();
+        get_admin_token(&conn, &headers).await
     }
 }
 
-pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Error> {
+pub async fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Error> {
     let auth_header = headers
         .get("Authorization")
         .map(|it| it.to_str().unwrap_or(""))
@@ -62,7 +59,9 @@ pub fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Er
             return Ok(token);
         }
         None => {
-            warn!(admin_channel_message = "Someone tried and failed to access admin API");
+            let log_message = "Someone tried and failed to access admin API";
+            warn!(log_message);
+            discord::send_message_to_channel(log_message, discord::CHANNEL_API).await;
             Err(Error::HttpUnauthorized("Invalid token".into()))?
         }
     }

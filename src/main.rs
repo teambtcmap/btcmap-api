@@ -10,7 +10,6 @@ use command::generate_element_categories;
 use command::generate_reports;
 use command::import_countries;
 use command::server;
-use discord::DiscordLayer;
 pub use error::Error;
 mod auth;
 mod command;
@@ -47,7 +46,6 @@ async fn main() -> ExitCode {
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
         .with(Layer::new().json())
-        .with(DiscordLayer)
         .init();
 
     let mut db = match command::db::open_connection() {

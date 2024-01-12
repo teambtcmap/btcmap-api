@@ -1,5 +1,7 @@
 use super::Element;
-use crate::{auth::AuthService, element::ElementRepo, osm::overpass::OverpassElement, Error};
+use crate::{
+    auth::AuthService, discord, element::ElementRepo, osm::overpass::OverpassElement, Error,
+};
 use actix_web::{
     patch, post,
     web::{Data, Form, Json, Path},
@@ -91,13 +93,13 @@ async fn patch(
         "There is no element with id = {id}"
     )))?;
     let element = repo.patch_tags(element.id, &args.tags).await?;
-    warn!(
-        admin_channel_message = format!(
-            "{} updated element https://api.btcmap.org/v2/elements/{}",
-            token.user_name,
-            element.overpass_data.btcmap_id(),
-        )
+    let log_message = format!(
+        "{} updated element https://api.btcmap.org/v2/elements/{}",
+        token.user_name,
+        element.overpass_data.btcmap_id(),
     );
+    warn!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(element.into())
 }
 
@@ -137,12 +139,12 @@ async fn post_tags(
     } else {
         repo.remove_tag(element.id, &args.name).await?
     };
-    warn!(
-        admin_channel_message = format!(
-            "WARNING: {} used DEPRECATED API to set {} = {}",
-            token.user_name, args.name, args.value,
-        )
+    let log_message = format!(
+        "WARNING: {} used DEPRECATED API to set {} = {}",
+        token.user_name, args.name, args.value,
     );
+    warn!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(element.into())
 }
 
@@ -171,14 +173,14 @@ async fn patch_tags(
             id,
         )))?;
     let element = repo.patch_tags(element.id, &args).await?;
-    warn!(
-        admin_channel_message = format!(
-            "{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
-            token.user_name,
-            id,
-            serde_json::to_string_pretty(&args).unwrap(),
-        )
+    let log_message = format!(
+        "{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
+        token.user_name,
+        id,
+        serde_json::to_string_pretty(&args).unwrap(),
     );
+    warn!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(element.into())
 }
 
