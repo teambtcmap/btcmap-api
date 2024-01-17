@@ -27,25 +27,7 @@ pub struct AreaView {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<AreaView> for Area {
-    fn into(self) -> AreaView {
-        AreaView {
-            id: self.id,
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
-        }
-    }
-}
-
-impl Into<Json<AreaView>> for Area {
-    fn into(self) -> Json<AreaView> {
-        Json(self.into())
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 struct PostArgs {
     tags: Map<String, Value>,
 }
@@ -148,6 +130,24 @@ async fn delete(
     Ok(area.into())
 }
 
+impl Into<AreaView> for Area {
+    fn into(self) -> AreaView {
+        AreaView {
+            id: self.id,
+            tags: self.tags,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            deleted_at: self.deleted_at,
+        }
+    }
+}
+
+impl Into<Json<AreaView>> for Area {
+    fn into(self) -> Json<AreaView> {
+        Json(self.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::area::admin::{AreaView, PatchArgs, PostArgs};
@@ -183,8 +183,8 @@ mod tests {
     #[test]
     async fn post() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let token = state.auth.mock_token(user.id, "test").await.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
