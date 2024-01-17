@@ -1,6 +1,5 @@
 use crate::area::Area;
-use crate::osm::overpass;
-use crate::osm::overpass::OverpassElement;
+use crate::element::Element;
 use crate::report::Report;
 use crate::Result;
 use geo::Contains;
@@ -21,14 +20,14 @@ pub async fn run(mut conn: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
 
-    let existing_reports = Report::select_updated_since(&today.to_string(), None, &conn)?;
+    let today_reports = Report::select_updated_since(&today.to_string(), None, &conn)?;
 
-    if !existing_reports.is_empty() {
-        info!("Found existing reports, aborting");
+    if !today_reports.is_empty() {
+        info!("Found existing reports for today, aborting");
         return Ok(());
     }
 
-    let elements = overpass::query_bitcoin_merchants().await?;
+    let elements = Element::select_all(Some(i64::MAX), &conn)?;
 
     let areas: Vec<Area> = Area::select_all(None, &conn)?
         .into_iter()
@@ -37,6 +36,8 @@ pub async fn run(mut conn: Connection) -> Result<()> {
 
     let tx = conn.transaction()?;
 
+    let mut new_reports = 0;
+
     for area in areas {
         info!(area.id, "Generating report");
 
@@ -44,10 +45,11 @@ pub async fn run(mut conn: Connection) -> Result<()> {
             info!(area.id, elements = elements.len(), "Processing area");
             let report_tags = generate_report_tags(&elements.iter().collect::<Vec<_>>())?;
             insert_report(area.id, &report_tags, &tx).await?;
+            new_reports = new_reports + 1;
             continue;
         }
 
-        let mut area_elements: Vec<&OverpassElement> = vec![];
+        let mut area_elements: Vec<&Element> = vec![];
         let geo_json = area.tags.get("geo_json").unwrap_or(&Value::Null);
 
         if geo_json.is_null() {
@@ -89,22 +91,22 @@ pub async fn run(mut conn: Connection) -> Result<()> {
                         geojson::Value::MultiPolygon(_) => {
                             let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
 
-                            if multi_poly.contains(&element.coord()) {
-                                area_elements.push(element);
+                            if multi_poly.contains(&element.overpass_data.coord()) {
+                                area_elements.push(&element);
                             }
                         }
                         geojson::Value::Polygon(_) => {
                             let poly: Polygon = (&geometry.value).try_into().unwrap();
 
-                            if poly.contains(&element.coord()) {
-                                area_elements.push(element);
+                            if poly.contains(&element.overpass_data.coord()) {
+                                area_elements.push(&element);
                             }
                         }
                         geojson::Value::LineString(_) => {
                             let line_string: LineString = (&geometry.value).try_into().unwrap();
 
-                            if line_string.contains(&element.coord()) {
-                                area_elements.push(element);
+                            if line_string.contains(&element.overpass_data.coord()) {
+                                area_elements.push(&element);
                             }
                         }
                         _ => continue,
@@ -116,14 +118,16 @@ pub async fn run(mut conn: Connection) -> Result<()> {
         info!(area.id, elements = area_elements.len(), "Processing area");
         let report_tags = generate_report_tags(&area_elements)?;
         insert_report(area.id, &report_tags, &tx).await?;
+        new_reports = new_reports + 1;
     }
 
     tx.commit()?;
+    info!(new_reports);
 
     Ok(())
 }
 
-fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String, Value>> {
+fn generate_report_tags(elements: &[&Element]) -> Result<HashMap<String, Value>> {
     info!("Generating report tags");
 
     let atms: Vec<_> = elements
@@ -151,11 +155,14 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String,
         .filter(|it| it.tag("payment:bitcoin") == "yes")
         .collect();
 
-    let up_to_date_elements: Vec<_> = elements.iter().filter(|it| it.up_to_date()).collect();
+    let up_to_date_elements: Vec<_> = elements
+        .iter()
+        .filter(|it| it.overpass_data.up_to_date())
+        .collect();
 
     let outdated_elements: Vec<_> = elements
         .iter()
-        .filter(|it| !it.up_to_date())
+        .filter(|it| !it.overpass_data.up_to_date())
         .copied()
         .collect();
 
@@ -201,7 +208,11 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String,
 
     let verification_dates: Vec<i64> = elements
         .iter()
-        .filter_map(|it| it.verification_date().map(|it| it.unix_timestamp()))
+        .filter_map(|it| {
+            it.overpass_data
+                .verification_date()
+                .map(|it| it.unix_timestamp())
+        })
         .filter_map(|it| {
             if it > now.unix_timestamp() {
                 None
@@ -246,7 +257,7 @@ async fn insert_report(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test::mock_state;
+    use crate::{osm::overpass::OverpassElement, test::mock_state};
     use serde_json::{json, Map};
     use time::{macros::date, Duration};
     use tokio::test;
@@ -348,6 +359,22 @@ mod test {
             today_plus_year.to_string().into(),
         );
 
+        let element_1 = Element {
+            id: 1,
+            overpass_data: element_1,
+            tags: HashMap::new(),
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+            deleted_at: None,
+        };
+        let element_2 = Element {
+            id: 2,
+            overpass_data: element_2,
+            tags: HashMap::new(),
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+            deleted_at: None,
+        };
         let report_tags = super::generate_report_tags(&vec![&element_1, &element_2])?;
 
         assert_eq!(2, report_tags["total_elements"].as_i64().unwrap());
