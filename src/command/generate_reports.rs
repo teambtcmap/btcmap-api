@@ -9,8 +9,9 @@ use geo::Polygon;
 use geojson::GeoJson;
 use geojson::Geometry;
 use rusqlite::Connection;
+use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use time::format_description::well_known::Iso8601;
 use time::OffsetDateTime;
 use tracing::error;
@@ -27,7 +28,10 @@ pub async fn run(mut conn: Connection) -> Result<()> {
         return Ok(());
     }
 
-    let elements = Element::select_all(Some(i64::MAX), &conn)?;
+    let elements: Vec<Element> = Element::select_all(None, &conn)?
+        .into_iter()
+        .filter(|it| it.deleted_at.is_none())
+        .collect();
 
     let areas: Vec<Area> = Area::select_all(None, &conn)?
         .into_iter()
@@ -39,7 +43,11 @@ pub async fn run(mut conn: Connection) -> Result<()> {
     let mut new_reports = 0;
 
     for area in areas {
-        info!(area.id, "Generating report");
+        info!(
+            area.id,
+            area_url_alias = area.tags.get("url_alias").map(|it| it.as_str()),
+            "Generating report",
+        );
 
         if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
             info!(area.id, elements = elements.len(), "Processing area");
@@ -115,10 +123,30 @@ pub async fn run(mut conn: Connection) -> Result<()> {
             }
         }
 
-        info!(area.id, elements = area_elements.len(), "Processing area");
-        let report_tags = generate_report_tags(&area_elements)?;
-        insert_report(area.id, &report_tags, &tx).await?;
-        new_reports = new_reports + 1;
+        info!(
+            area.id,
+            area_url_alias = area.tags.get("url_alias").map(|it| it.as_str()),
+            elements = area_elements.len(),
+            "Processing area",
+        );
+        let new_report_tags = generate_report_tags(&area_elements)?;
+        let prev_report = Report::select_latest_by_area_id(area.id, &tx)?;
+
+        match prev_report {
+            None => {
+                info!(area.id, "There is no report history");
+                insert_report(area.id, &new_report_tags, &tx).await?;
+                new_reports = new_reports + 1;
+            }
+            Some(latest_report) => {
+                if &new_report_tags != &latest_report.tags {
+                    info!("Tags changed");
+                    log_diff(&latest_report.tags, &new_report_tags)?;
+                    insert_report(area.id, &new_report_tags, &tx).await?;
+                    new_reports = new_reports + 1;
+                }
+            }
+        }
     }
 
     tx.commit()?;
@@ -127,32 +155,56 @@ pub async fn run(mut conn: Connection) -> Result<()> {
     Ok(())
 }
 
-fn generate_report_tags(elements: &[&Element]) -> Result<HashMap<String, Value>> {
+fn log_diff(map_1: &Map<String, Value>, map_2: &Map<String, Value>) -> Result<()> {
+    let mut keys: HashSet<&String> = HashSet::new();
+
+    for key in map_1.keys() {
+        keys.insert(key);
+    }
+
+    for key in map_2.keys() {
+        keys.insert(key);
+    }
+
+    for key in keys {
+        if map_1.get(key) != map_2.get(key) {
+            info!(
+                key,
+                value_1 = serde_json::to_string(&map_1.get(key))?,
+                value_2 = serde_json::to_string(&map_2.get(key))?,
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn generate_report_tags(elements: &[&Element]) -> Result<Map<String, Value>> {
     info!("Generating report tags");
 
     let atms: Vec<_> = elements
         .iter()
-        .filter(|it| it.tag("amenity") == "atm")
+        .filter(|it| it.overpass_data.tag("amenity") == "atm")
         .collect();
 
     let onchain_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.tag("payment:onchain") == "yes")
+        .filter(|it| it.overpass_data.tag("payment:onchain") == "yes")
         .collect();
 
     let lightning_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.tag("payment:lightning") == "yes")
+        .filter(|it| it.overpass_data.tag("payment:lightning") == "yes")
         .collect();
 
     let lightning_contactless_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.tag("payment:lightning_contactless") == "yes")
+        .filter(|it| it.overpass_data.tag("payment:lightning_contactless") == "yes")
         .collect();
 
     let legacy_elements: Vec<_> = elements
         .iter()
-        .filter(|it| it.tag("payment:bitcoin") == "yes")
+        .filter(|it| it.overpass_data.tag("payment:bitcoin") == "yes")
         .collect();
 
     let up_to_date_elements: Vec<_> = elements
@@ -177,7 +229,7 @@ fn generate_report_tags(elements: &[&Element]) -> Result<HashMap<String, Value>>
         _ => 1,
     };
 
-    let mut tags: HashMap<String, Value> = HashMap::new();
+    let mut tags: Map<String, Value> = Map::new();
     tags.insert("total_elements".into(), elements.len().into());
     tags.insert("total_atms".into(), atms.len().into());
     tags.insert(
@@ -242,11 +294,7 @@ fn generate_report_tags(elements: &[&Element]) -> Result<HashMap<String, Value>>
     Ok(tags)
 }
 
-async fn insert_report(
-    area_id: i64,
-    tags: &HashMap<String, Value>,
-    conn: &Connection,
-) -> Result<()> {
+async fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<()> {
     let date = OffsetDateTime::now_utc().date();
     info!(area_id, ?date, ?tags, "Inserting new report");
     Report::insert(area_id, &date, &tags, conn)?;
@@ -259,6 +307,7 @@ mod test {
     use super::*;
     use crate::{osm::overpass::OverpassElement, test::mock_state};
     use serde_json::{json, Map};
+    use std::collections::HashMap;
     use time::{macros::date, Duration};
     use tokio::test;
 
@@ -271,7 +320,7 @@ mod test {
         for _ in 1..100 {
             state
                 .report_repo
-                .insert(1, &date!(2023 - 11 - 12), &HashMap::new())
+                .insert(1, &date!(2023 - 11 - 12), &Map::new())
                 .await?;
         }
         Ok(())

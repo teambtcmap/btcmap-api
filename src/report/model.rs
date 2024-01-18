@@ -5,8 +5,8 @@ use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Row;
+use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::sync::Arc;
 use time::macros::format_description;
 use time::Date;
@@ -17,12 +17,13 @@ pub struct ReportRepo {
     pool: Arc<Pool>,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Report {
     pub id: i64,
     pub area_id: i64,
     pub area_url_alias: String,
     pub date: Date,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
@@ -38,7 +39,7 @@ impl ReportRepo {
         &self,
         area_id: i64,
         date: &Date,
-        tags: &HashMap<String, Value>,
+        tags: &Map<String, Value>,
     ) -> Result<Report> {
         let date = date.clone();
         let tags = tags.clone();
@@ -80,7 +81,16 @@ impl ReportRepo {
     }
 
     #[cfg(test)]
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Report> {
+    pub async fn select_latest_by_area_id(&self, area_id: i64) -> Result<Option<Report>> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Report::select_latest_by_area_id(area_id, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn patch_tags(&self, id: i64, tags: &Map<String, Value>) -> Result<Report> {
         let tags = tags.clone();
         self.pool
             .get()
@@ -104,7 +114,7 @@ impl Report {
     pub fn insert(
         area_id: i64,
         date: &Date,
-        tags: &HashMap<String, Value>,
+        tags: &Map<String, Value>,
         conn: &Connection,
     ) -> Result<Report> {
         let query = r#"
@@ -211,8 +221,31 @@ impl Report {
             .optional()?)
     }
 
+    pub fn select_latest_by_area_id(area_id: i64, conn: &Connection) -> Result<Option<Report>> {
+        let query = r#"
+            SELECT
+                r.rowid,
+                r.area_id,
+                json_extract(a.tags, '$.url_alias'),
+                r.date,
+                r.tags,
+                r.created_at,
+                r.updated_at,
+                r.deleted_at
+            FROM report r
+            LEFT JOIN area a ON a.rowid = r.area_id
+            WHERE r.area_id = :area_id
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT 1
+        "#;
+        debug!(query);
+        Ok(conn
+            .query_row(query, named_params! { ":area_id": area_id }, mapper())
+            .optional()?)
+    }
+
     #[cfg(test)]
-    pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Report> {
+    pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Report> {
         let query = r#"
             UPDATE report
             SET tags = json_patch(tags, :tags)
@@ -266,7 +299,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
         let date: String = row.get(3)?;
 
         let tags: String = row.get(4)?;
-        let tags: HashMap<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
+        let tags: Map<String, Value> = serde_json::from_str(&tags).unwrap_or_default();
 
         Ok(Report {
             id: row.get(0)?,
@@ -285,7 +318,6 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 mod test {
     use crate::{test::mock_state, Result};
     use serde_json::Map;
-    use std::collections::HashMap;
     use time::{macros::datetime, OffsetDateTime};
     use tokio::test;
 
@@ -297,7 +329,7 @@ mod test {
         state.area_repo.insert(&area_tags).await?;
         state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         let reports = state
             .report_repo
@@ -315,15 +347,15 @@ mod test {
         state.area_repo.insert(&area_tags).await?;
         state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         let reports = state
             .report_repo
@@ -341,7 +373,7 @@ mod test {
         state.area_repo.insert(&area_tags).await?;
         let report_1 = state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         state
             .report_repo
@@ -349,7 +381,7 @@ mod test {
             .await?;
         let report_2 = state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         state
             .report_repo
@@ -357,7 +389,7 @@ mod test {
             .await?;
         let report_3 = state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         state
             .report_repo
@@ -382,9 +414,38 @@ mod test {
         state.area_repo.insert(&area_tags).await?;
         state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         assert!(state.report_repo.select_by_id(1).await?.is_some());
+        Ok(())
+    }
+
+    #[test]
+    async fn select_latest_by_area_id() -> Result<()> {
+        let state = mock_state().await;
+        let mut area_tags = Map::new();
+        area_tags.insert("url_alias".into(), "test".into());
+        let area = state.area_repo.insert(&area_tags).await?;
+        state
+            .report_repo
+            .insert(
+                area.id,
+                &OffsetDateTime::now_utc().date().previous_day().unwrap(),
+                &Map::new(),
+            )
+            .await?;
+        let latest_report = state
+            .report_repo
+            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
+            .await?;
+        assert_eq!(
+            latest_report,
+            state
+                .report_repo
+                .select_latest_by_area_id(area.id)
+                .await?
+                .unwrap(),
+        );
         Ok(())
     }
 
@@ -398,11 +459,11 @@ mod test {
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
         let tag_2_value = "test";
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
         state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         let report = state.report_repo.select_by_id(1).await?.unwrap();
         assert!(report.tags.is_empty());
