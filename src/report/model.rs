@@ -55,7 +55,7 @@ impl ReportRepo {
         self.pool
             .get()
             .await?
-            .interact(move |conn| Report::_select_all(limit, conn))
+            .interact(move |conn| Report::select_all(limit, conn))
             .await?
     }
 
@@ -108,6 +108,25 @@ impl ReportRepo {
             .interact(move |conn| Report::_set_updated_at(id, &updated_at, conn))
             .await?
     }
+
+    #[cfg(test)]
+    pub async fn set_deleted_at(&self, id: i64, deleted_at: &OffsetDateTime) -> Result<Report> {
+        let deleted_at = deleted_at.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Report::set_deleted_at(id, &deleted_at, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn delete_permanently(&self, id: i64) -> Result<()> {
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| Report::delete_permanently(id, conn))
+            .await?
+    }
 }
 
 impl Report {
@@ -142,8 +161,7 @@ impl Report {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
-    #[cfg(test)]
-    pub fn _select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Report>> {
+    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Report>> {
         let query = r#"
             SELECT
                 r.rowid,
@@ -292,6 +310,38 @@ impl Report {
         Ok(Report::select_by_id(id, &conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
+
+    #[cfg(test)]
+    pub fn set_deleted_at(
+        id: i64,
+        deleted_at: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<Report> {
+        let query = format!(
+            r#"
+                UPDATE report
+                SET deleted_at = :deleted_at
+                WHERE id = :id
+            "#
+        );
+        debug!(query);
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":deleted_at": deleted_at.format(&time::format_description::well_known::Rfc3339)?,
+            },
+        )?;
+        Ok(Report::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+    }
+
+    pub fn delete_permanently(id: i64, conn: &Connection) -> Result<()> {
+        let query = "DELETE FROM report WHERE id = :id";
+        debug!(query);
+        conn.execute(&query, named_params! { ":id": id })?;
+        Ok(())
+    }
 }
 
 const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
@@ -318,7 +368,8 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 mod test {
     use crate::{test::mock_state, Result};
     use serde_json::Map;
-    use time::{macros::datetime, OffsetDateTime};
+    use std::ops::Add;
+    use time::{macros::datetime, Duration, OffsetDateTime};
     use tokio::test;
 
     #[test]
@@ -474,6 +525,49 @@ mod test {
         state.report_repo.patch_tags(1, &tags).await?;
         let report = state.report_repo.select_by_id(1).await?.unwrap();
         assert_eq!(2, report.tags.len());
+        Ok(())
+    }
+
+    #[test]
+    async fn set_deleted_at() -> Result<()> {
+        let state = mock_state().await;
+        let mut area_tags = Map::new();
+        area_tags.insert("url_alias".into(), "test".into());
+        state.area_repo.insert(&area_tags).await?;
+        let report = state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
+            .await?;
+        let new_deleted_at = OffsetDateTime::now_utc().add(Duration::days(1));
+        state
+            .report_repo
+            .set_deleted_at(report.id, &new_deleted_at)
+            .await?;
+        assert_eq!(
+            new_deleted_at,
+            state
+                .report_repo
+                .select_by_id(report.id)
+                .await?
+                .unwrap()
+                .deleted_at
+                .unwrap(),
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_permanently() -> Result<()> {
+        let state = mock_state().await;
+        let mut area_tags = Map::new();
+        area_tags.insert("url_alias".into(), "test".into());
+        state.area_repo.insert(&area_tags).await?;
+        let report = state
+            .report_repo
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
+            .await?;
+        state.report_repo.delete_permanently(report.id).await?;
+        assert_eq!(None, state.report_repo.select_by_id(report.id).await?);
         Ok(())
     }
 }

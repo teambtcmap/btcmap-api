@@ -3,6 +3,7 @@
 extern crate core;
 use command::add_area;
 use command::analyze_logs;
+use command::compress_reports;
 use command::db;
 use command::fix_tags;
 use command::generate_android_icons;
@@ -142,6 +143,12 @@ async fn main() -> ExitCode {
         "fix-tags" => {
             if let Err(e) = fix_tags::run(&db).await {
                 error!(?e, "Failed to fix tags");
+                return ExitCode::FAILURE;
+            }
+        }
+        "compress-reports" => {
+            if let Err(e) = compress_reports::run(&db) {
+                error!(?e, "Failed to compress reports");
                 return ExitCode::FAILURE;
             }
         }
