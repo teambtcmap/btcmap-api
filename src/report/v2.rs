@@ -6,6 +6,8 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use actix_web::web::Redirect;
+use actix_web::Either;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
@@ -66,7 +68,16 @@ impl Into<Json<GetItem>> for Report {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<GetItem>>, Error> {
+async fn get(
+    args: Query<GetArgs>,
+    repo: Data<ReportRepo>,
+) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
+    if args.limit.is_none() && args.updated_since.is_none() {
+        return Ok(Either::Right(
+            Redirect::to("https://static.btcmap.org/api/v2/reports.json").permanent(),
+        ));
+    }
+
     if args.compress.unwrap_or(false) {
         let res: Vec<GetItem> = match &args.updated_since {
             Some(updated_since) => repo
@@ -112,9 +123,9 @@ async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<Ge
 
         compressed_res.sort_by_key(|it| it.updated_at);
 
-        Ok(Json(compressed_res))
+        Ok(Either::Left(Json(compressed_res)))
     } else {
-        Ok(Json(match &args.updated_since {
+        Ok(Either::Left(Json(match &args.updated_since {
             Some(updated_since) => repo
                 .select_updated_since(updated_since, args.limit)
                 .await?
@@ -134,7 +145,7 @@ async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<Ge
                 .into_iter()
                 .map(|it| it.into())
                 .collect(),
-        }))
+        })))
     }
 }
 
@@ -170,7 +181,7 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get().uri("/?limit=1").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
         Ok(())
@@ -192,7 +203,7 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get().uri("/?limit=100").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
         Ok(())

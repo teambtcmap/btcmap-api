@@ -7,6 +7,8 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use actix_web::web::Redirect;
+use actix_web::Either;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -61,8 +63,14 @@ impl Into<Json<GetItem>> for Element {
 pub async fn get(
     args: Query<GetArgs>,
     repo: Data<ElementRepo>,
-) -> Result<Json<Vec<GetItem>>, Error> {
-    Ok(Json(match &args.updated_since {
+) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
+    if args.limit.is_none() && args.updated_since.is_none() {
+        return Ok(Either::Right(
+            Redirect::to("https://static.btcmap.org/api/v2/elements.json").permanent(),
+        ));
+    }
+
+    Ok(Either::Left(Json(match &args.updated_since {
         Some(updated_since) => repo
             .select_updated_since(&updated_since, args.limit)
             .await?
@@ -75,7 +83,7 @@ pub async fn get(
             .into_iter()
             .map(|it| it.into())
             .collect(),
-    }))
+    })))
 }
 
 #[get("{id}")]
@@ -115,7 +123,7 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get().uri("/?limit=1").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
         Ok(())
@@ -131,7 +139,7 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get().uri("/?limit=100").to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], element.into());
@@ -176,7 +184,7 @@ mod test {
         )
         .await;
         let req = TestRequest::get()
-            .uri("/?updated_since=2022-01-10T00:00:00Z")
+            .uri("/?updated_since=2022-01-10T00:00:00Z&limit=100")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);
