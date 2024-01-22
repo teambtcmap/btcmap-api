@@ -100,7 +100,7 @@ mod tests {
     #[actix_web::test]
     async fn valid_token() -> Result<()> {
         let state = mock_state().await;
-        state.auth.mock_token("test1").await;
+        state.auth.mock_token("test").await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
