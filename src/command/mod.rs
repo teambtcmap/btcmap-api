@@ -8,5 +8,4 @@ pub mod generate_element_categories;
 pub mod generate_reports;
 pub mod import_countries;
 pub mod lint;
-pub mod server;
 pub mod sync;

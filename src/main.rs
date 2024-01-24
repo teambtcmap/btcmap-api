@@ -10,7 +10,7 @@ use command::generate_android_icons;
 use command::generate_element_categories;
 use command::generate_reports;
 use command::import_countries;
-use command::server;
+mod server;
 pub use error::Error;
 mod auth;
 mod command;
