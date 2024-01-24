@@ -42,7 +42,10 @@ pub fn pool() -> Result<Pool> {
             conn.pragma_update(None, "journal_mode", "WAL").unwrap();
             conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
             conn.pragma_update(None, "foreign_keys", "ON").unwrap();
-            conn.pragma_update(None, "cache_size", 25000).unwrap();
+            // > The default suggested cache size is -2000, which means the cache size is limited to 2048000 bytes of memory
+            // Source: https://www.sqlite.org/pragma.html#pragma_cache_size
+            // The default page size is 4096 bytes, cache_size sets the number of pages
+            // conn.pragma_update(None, "cache_size", 25000).unwrap();
             Ok(())
         })))
         .build()?)
