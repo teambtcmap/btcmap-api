@@ -141,6 +141,10 @@ impl OverpassElement {
             icon_id = "factory"
         }
 
+        if landuse == "cemetery" {
+            icon_id = "church"
+        }
+
         if building == "commercial" {
             icon_id = "business"
         }
