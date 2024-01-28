@@ -162,14 +162,6 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String,
     let up_to_date_percent: f64 = up_to_date_elements.len() as f64 / elements.len() as f64 * 100.0;
     let up_to_date_percent: i64 = up_to_date_percent as i64;
 
-    let grade = match up_to_date_percent {
-        95..101 => 5,
-        75..95 => 4,
-        50..75 => 3,
-        25..50 => 2,
-        _ => 1,
-    };
-
     let mut tags: HashMap<String, Value> = HashMap::new();
     tags.insert("total_elements".into(), elements.len().into());
     tags.insert("total_atms".into(), atms.len().into());
@@ -195,7 +187,6 @@ fn generate_report_tags(elements: &[&OverpassElement]) -> Result<HashMap<String,
         "up_to_date_percent".into(),
         (up_to_date_percent as usize).into(),
     );
-    tags.insert("grade".into(), grade.into());
 
     let now = OffsetDateTime::now_utc();
 

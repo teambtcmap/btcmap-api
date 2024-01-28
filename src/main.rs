@@ -1,5 +1,3 @@
-#![feature(exclusive_range_pattern)]
-
 extern crate core;
 use command::add_area;
 use command::analyze_logs;

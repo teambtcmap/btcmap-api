@@ -10,8 +10,11 @@ use crate::Error;
 use crate::Result;
 use rusqlite::Connection;
 use rusqlite::Transaction;
+use serde_json::Value;
 use std::collections::HashSet;
+use std::ops::Add;
 use std::time::SystemTime;
+use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::error;
 use tracing::info;
@@ -86,7 +89,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
             insert_user_if_not_exists(fresh_element.uid, &tx).await?;
 
-            Event::insert(fresh_element.uid, cached_element.id, "delete", &tx)?;
+            let event = Event::insert(fresh_element.uid, cached_element.id, "delete", &tx)?;
+            on_new_event(&event, &tx).await?;
 
             let message = format!(
                 "User {} removed https://www.openstreetmap.org/{element_type}/{osm_id}",
@@ -131,12 +135,13 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     }
 
                     if fresh_element.changeset != cached_element.overpass_data.changeset {
-                        Event::insert(
+                        let event = Event::insert(
                             user_id.unwrap().try_into().unwrap(),
                             cached_element.id,
                             "update",
                             &tx,
                         )?;
+                        on_new_event(&event, &tx).await?;
                     } else {
                         warn!("Changeset ID is identical, skipped user event generation");
                     }
@@ -186,12 +191,13 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
                 let element = Element::insert(&fresh_element, &tx)?;
 
-                Event::insert(
+                let event = Event::insert(
                     user_id.unwrap().try_into().unwrap(),
                     element.id,
                     "create",
                     &tx,
                 )?;
+                on_new_event(&event, &tx).await?;
 
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
@@ -218,6 +224,58 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
     }
 
     tx.commit()?;
+    Ok(())
+}
+
+async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
+    let user = User::select_by_id(event.user_id, &conn)?.unwrap();
+
+    if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {
+        info!(user.osm_data.id, "This user is missing from OSM, skipping");
+        return Ok(());
+    }
+
+    let hour_ago = OffsetDateTime::now_utc()
+        .add(time::Duration::hours(-1))
+        .format(&Rfc3339)?;
+
+    if user.tags.contains_key("osm:sync:date") {
+        let last_sync_date = user.tags["osm:sync:date"].as_str().unwrap();
+        if last_sync_date > hour_ago.as_str() {
+            info!(
+                event.user_id,
+                last_sync_date, "Last sync date is fresh enough, skipping"
+            );
+            return Ok(());
+        }
+    }
+
+    match osm::get_user(user.osm_data.id).await {
+        Ok(new_osm_data) => match new_osm_data {
+            Some(new_osm_data) => {
+                if new_osm_data != user.osm_data {
+                    info!(
+                        old_osm_data = serde_json::to_string(&user.osm_data)?,
+                        new_osm_data = serde_json::to_string(&new_osm_data)?,
+                        "User data changed",
+                    );
+                    User::set_osm_data(user.id, &new_osm_data, &conn)?;
+                } else {
+                    info!("User data didn't change")
+                }
+
+                let now = OffsetDateTime::now_utc();
+                let now: String = now.format(&Rfc3339)?;
+                user.set_tag("osm:sync:date", &Value::String(now), &conn)?;
+            }
+            None => {
+                warn!(user.osm_data.id, "User no longer exists on OSM");
+                user.set_tag("osm:missing", &Value::Bool(true), &conn)?;
+            }
+        },
+        Err(e) => error!("Failed to fetch user {} {}", user.osm_data.id, e),
+    }
+
     Ok(())
 }
 
