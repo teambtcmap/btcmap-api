@@ -36,7 +36,7 @@ pub async fn run() -> Result<()> {
 
     let tile_rate_limit_conf = GovernorConfigBuilder::default()
         .per_millisecond(500)
-        .burst_size(100)
+        .burst_size(1000)
         .key_extractor(get_key_extractor())
         .finish()
         .unwrap();

@@ -1,0 +1,2 @@
+ALTER TABLE token DROP COLUMN user_id;
+ALTER TABLE token ADD COLUMN owner TEXT;

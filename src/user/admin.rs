@@ -25,7 +25,7 @@ async fn patch_tags(
     repo.patch_tags(*id, &args).await?;
     let log_message = format!(
         "User {} patched tags for user https://api.btcmap.org/v2/users/{} {}",
-        token.user_name,
+        token.owner,
         id,
         serde_json::to_string_pretty(&args).unwrap(),
     );
@@ -48,9 +48,8 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state().await;
-        let user_id = 1;
-        state.user_repo.insert(user_id, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let token = state.auth.mock_token("test").await.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
@@ -59,7 +58,7 @@ mod test {
         )
         .await;
         let req = TestRequest::patch()
-            .uri(&format!("/{user_id}/tags"))
+            .uri(&format!("/{}/tags", user.id))
             .append_header(("Authorization", format!("Bearer {token}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();

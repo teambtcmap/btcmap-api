@@ -27,25 +27,7 @@ pub struct AreaView {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<AreaView> for Area {
-    fn into(self) -> AreaView {
-        AreaView {
-            id: self.id,
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
-        }
-    }
-}
-
-impl Into<Json<AreaView>> for Area {
-    fn into(self) -> Json<AreaView> {
-        Json(self.into())
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 struct PostArgs {
     tags: Map<String, Value>,
 }
@@ -76,7 +58,7 @@ async fn post(
     let area = repo.insert(&args.tags).await?;
     let log_message = format!(
         "{} created a new area: https://api.btcmap.org/v2/areas/{}",
-        token.user_name,
+        token.owner,
         area.tags["url_alias"].as_str().unwrap(),
     );
     warn!(log_message);
@@ -110,7 +92,7 @@ async fn patch(
     let area = repo.patch_tags(area.id, &args.tags).await?;
     let log_message = format!(
         "{} updated area https://api.btcmap.org/v2/areas/{}",
-        token.user_name,
+        token.owner,
         area.tags["url_alias"].as_str().unwrap(),
     );
     warn!(log_message);
@@ -140,7 +122,7 @@ async fn delete(
         .await?;
     let log_message = format!(
         "User {} deleted area https://api.btcmap.org/v2/areas/{}",
-        token.user_name,
+        token.owner,
         area.tags["url_alias"].as_str().unwrap(),
     );
     warn!(log_message);
@@ -148,11 +130,28 @@ async fn delete(
     Ok(area.into())
 }
 
+impl Into<AreaView> for Area {
+    fn into(self) -> AreaView {
+        AreaView {
+            id: self.id,
+            tags: self.tags,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            deleted_at: self.deleted_at,
+        }
+    }
+}
+
+impl Into<Json<AreaView>> for Area {
+    fn into(self) -> Json<AreaView> {
+        Json(self.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::area::admin::{AreaView, PatchArgs, PostArgs};
     use crate::area::{Area, AreaRepo};
-    use crate::osm::osm::OsmUser;
     use crate::test::{mock_state, mock_tags};
     use crate::Result;
     use actix_web::test::TestRequest;
@@ -183,8 +182,7 @@ mod tests {
     #[test]
     async fn post() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let token = state.auth.mock_token("test").await.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
@@ -230,8 +228,7 @@ mod tests {
     #[test]
     async fn patch() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let token = state.auth.mock_token("test").await.secret;
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -298,8 +295,7 @@ mod tests {
     #[test]
     async fn delete() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let token = state.auth.mock_token("test").await.secret;
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));

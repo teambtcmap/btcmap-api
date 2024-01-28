@@ -16,13 +16,13 @@ impl AuthService {
     }
 
     #[cfg(test)]
-    pub async fn mock_token(&self, user_id: i64, secret: &str) -> Token {
+    pub async fn mock_token(&self, secret: &str) -> Token {
         let secret = secret.to_string();
         self.pool
             .get()
             .await
             .unwrap()
-            .interact(move |conn| Token::insert(user_id, &secret, conn))
+            .interact(move |conn| Token::insert("test", &secret, conn))
             .await
             .unwrap()
             .unwrap()
@@ -70,7 +70,6 @@ pub async fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Tok
 #[cfg(test)]
 mod tests {
     use crate::auth::AuthService;
-    use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
     use crate::{Error, Result};
     use actix_web::test::{self, TestRequest};
@@ -85,8 +84,7 @@ mod tests {
     #[actix_web::test]
     async fn no_header() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        state.auth.mock_token(1, "test").await;
+        state.auth.mock_token("test").await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))
@@ -102,8 +100,7 @@ mod tests {
     #[actix_web::test]
     async fn valid_token() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        state.auth.mock_token(1, "test").await;
+        state.auth.mock_token("test").await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.auth))

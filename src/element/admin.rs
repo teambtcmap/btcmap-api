@@ -95,7 +95,7 @@ async fn patch(
     let element = repo.patch_tags(element.id, &args.tags).await?;
     let log_message = format!(
         "{} updated element https://api.btcmap.org/v2/elements/{}",
-        token.user_name,
+        token.owner,
         element.overpass_data.btcmap_id(),
     );
     warn!(log_message);
@@ -141,7 +141,7 @@ async fn post_tags(
     };
     let log_message = format!(
         "WARNING: {} used DEPRECATED API to set {} = {}",
-        token.user_name, args.name, args.value,
+        token.owner, args.name, args.value,
     );
     warn!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
@@ -175,7 +175,7 @@ async fn patch_tags(
     let element = repo.patch_tags(element.id, &args).await?;
     let log_message = format!(
         "{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
-        token.user_name,
+        token.owner,
         id,
         serde_json::to_string_pretty(&args).unwrap(),
     );
@@ -188,7 +188,6 @@ async fn patch_tags(
 mod test {
     use crate::element::admin::{PatchArgs, PostTagsArgs};
     use crate::element::ElementRepo;
-    use crate::osm::osm::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::Result;
@@ -221,8 +220,7 @@ mod test {
     #[test]
     async fn patch() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let token = state.auth.mock_token("test").await.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
@@ -260,8 +258,7 @@ mod test {
     #[test]
     async fn post_tags() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let token = state.auth.mock_token("test").await.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
@@ -286,8 +283,7 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token(1, "test").await.secret;
+        let token = state.auth.mock_token("test").await.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()

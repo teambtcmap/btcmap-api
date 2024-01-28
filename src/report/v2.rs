@@ -6,8 +6,11 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use actix_web::web::Redirect;
+use actix_web::Either;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
 use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
@@ -26,7 +29,7 @@ pub struct GetItem {
     pub id: i64,
     pub area_id: String,
     pub date: String,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -65,7 +68,16 @@ impl Into<Json<GetItem>> for Report {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<GetItem>>, Error> {
+async fn get(
+    args: Query<GetArgs>,
+    repo: Data<ReportRepo>,
+) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
+    if args.limit.is_none() && args.updated_since.is_none() {
+        return Ok(Either::Right(
+            Redirect::to("https://static.btcmap.org/api/v2/reports.json").permanent(),
+        ));
+    }
+
     if args.compress.unwrap_or(false) {
         let res: Vec<GetItem> = match &args.updated_since {
             Some(updated_since) => repo
@@ -111,9 +123,9 @@ async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<Ge
 
         compressed_res.sort_by_key(|it| it.updated_at);
 
-        Ok(Json(compressed_res))
+        Ok(Either::Left(Json(compressed_res)))
     } else {
-        Ok(Json(match &args.updated_since {
+        Ok(Either::Left(Json(match &args.updated_since {
             Some(updated_since) => repo
                 .select_updated_since(updated_since, args.limit)
                 .await?
@@ -133,7 +145,7 @@ async fn get(args: Query<GetArgs>, repo: Data<ReportRepo>) -> Result<Json<Vec<Ge
                 .into_iter()
                 .map(|it| it.into())
                 .collect(),
-        }))
+        })))
     }
 }
 
@@ -157,7 +169,6 @@ mod test {
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use serde_json::{Map, Value};
-    use std::collections::HashMap;
     use time::macros::{date, datetime};
     use time::OffsetDateTime;
 
@@ -170,7 +181,7 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get().uri("/?limit=1").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 0);
         Ok(())
@@ -184,7 +195,7 @@ mod test {
         state.area_repo.insert(&area_tags).await?;
         state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         let app = test::init_service(
             App::new()
@@ -192,7 +203,7 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/").to_request();
+        let req = TestRequest::get().uri("/?limit=100").to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 1);
         Ok(())
@@ -206,15 +217,15 @@ mod test {
         state.area_repo.insert(&area_tags).await?;
         state
             .report_repo
-            .insert(1, &date!(2023 - 05 - 06), &HashMap::new())
+            .insert(1, &date!(2023 - 05 - 06), &Map::new())
             .await?;
         state
             .report_repo
-            .insert(1, &date!(2023 - 05 - 07), &HashMap::new())
+            .insert(1, &date!(2023 - 05 - 07), &Map::new())
             .await?;
         state
             .report_repo
-            .insert(1, &date!(2023 - 05 - 08), &HashMap::new())
+            .insert(1, &date!(2023 - 05 - 08), &Map::new())
             .await?;
         let app = test::init_service(
             App::new()
@@ -236,7 +247,7 @@ mod test {
         state.area_repo.insert(&area_tags).await?;
         let report_1 = state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         state
             .report_repo
@@ -244,7 +255,7 @@ mod test {
             .await?;
         let report_2 = state
             .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &HashMap::new())
+            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
             .await?;
         state
             .report_repo
