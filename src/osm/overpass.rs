@@ -4,7 +4,10 @@ use crate::{Error, Result};
 use geo::{coord, Coord};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
+use time::{
+    format_description::well_known::Iso8601, macros::format_description, Date, Duration,
+    OffsetDateTime,
+};
 use tracing::info;
 
 static API_URL: &str = "https://overpass-api.de/api/interpreter";
@@ -72,19 +75,26 @@ impl OverpassElement {
         let survey_date = self.tag("survey:date");
         let check_date = self.tag("check_date");
         let bitcoin_check_date = self.tag("check_date:currency:XBT");
+        let source_date = self.tag("source:date");
 
         let mut most_recent_date = "";
+        let format = format_description!("[year]-[month]-[day]");
 
-        if survey_date > most_recent_date {
+        if Date::parse(survey_date, format).is_ok() && survey_date > most_recent_date {
             most_recent_date = survey_date;
         }
 
-        if check_date > most_recent_date {
+        if Date::parse(check_date, format).is_ok() && check_date > most_recent_date {
             most_recent_date = check_date;
         }
 
-        if bitcoin_check_date > most_recent_date {
+        if Date::parse(bitcoin_check_date, format).is_ok() && bitcoin_check_date > most_recent_date
+        {
             most_recent_date = bitcoin_check_date;
+        }
+
+        if Date::parse(source_date, format).is_ok() && source_date > most_recent_date {
+            most_recent_date = source_date
         }
 
         OffsetDateTime::parse(
