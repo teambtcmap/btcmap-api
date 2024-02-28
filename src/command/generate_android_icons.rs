@@ -78,6 +78,7 @@ impl OverpassElement {
         let highway = self.tag("highway");
         let aerialway = self.tag("aerialway");
         let barrier = self.tag("barrier");
+        let military = self.tag("military");
 
         let mut icon_id: &str = "question_mark";
 
@@ -1559,6 +1560,10 @@ impl OverpassElement {
 
         if barrier == "lift_gate" {
             icon_id = "gate"
+        }
+
+        if military == "range" {
+            icon_id = "radar"
         }
 
         if amenity == "fast_food" && cuisine == "ice_cream" {
