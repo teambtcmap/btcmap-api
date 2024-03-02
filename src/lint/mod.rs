@@ -1,3 +1,5 @@
+use std::cmp::max;
+
 use crate::{element::Element, Result};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -13,7 +15,7 @@ pub struct Report {
 #[derive(Serialize)]
 pub struct ReportIssue {
     pub r#type: String,
-    pub severity: u8,
+    pub severity: i64,
     pub description: String,
     pub osm_url: String,
 }
@@ -21,7 +23,7 @@ pub struct ReportIssue {
 #[derive(Serialize, Deserialize)]
 pub struct Issue {
     pub r#type: String,
-    pub severity: u8,
+    pub severity: i64,
     pub description: String,
 }
 
@@ -196,7 +198,7 @@ fn get_out_of_date_issue(element: &Element) -> Option<Issue> {
     if element.overpass_data.verification_date().is_some() && !element.overpass_data.up_to_date() {
         return Some(Issue {
             r#type: "out_of_date".into(),
-            severity: 1,
+            severity: max(element.overpass_data.days_since_verified().unwrap_or(1) - 365, 1),
             description: "Out of date".into(),
         });
     }

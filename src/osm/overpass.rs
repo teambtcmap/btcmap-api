@@ -1,12 +1,11 @@
-use std::{collections::HashMap, ops::Sub};
+use std::collections::HashMap;
 
 use crate::{Error, Result};
 use geo::{coord, Coord};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use time::{
-    format_description::well_known::Iso8601, macros::format_description, Date, Duration,
-    OffsetDateTime,
+    format_description::well_known::Iso8601, macros::format_description, Date, OffsetDateTime,
 };
 use tracing::info;
 
@@ -63,12 +62,15 @@ impl OverpassElement {
     }
 
     pub fn up_to_date(&self) -> bool {
-        let verification_date = self
-            .verification_date()
-            .map(|it| it.to_string().to_string())
-            .unwrap_or(String::new());
-        let year_ago = OffsetDateTime::now_utc().date().sub(Duration::days(365));
-        verification_date.as_str() > year_ago.to_string().as_str()
+        return match self.days_since_verified() {
+            Some(days) => days < 365,
+            None => false,
+        };
+    }
+
+    pub fn days_since_verified(&self) -> Option<i64> {
+        self.verification_date()
+            .map(|it| (OffsetDateTime::now_utc() - it).whole_days())
     }
 
     pub fn verification_date(&self) -> Option<OffsetDateTime> {
