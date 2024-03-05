@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::{cmp::max, thread::sleep, time::Duration};
 
 use crate::{element::Element, Result};
 use rusqlite::Connection;
@@ -34,20 +34,24 @@ pub fn generate_issues(conn: &Connection) -> Result<()> {
         .collect();
     for element in elements {
         generate_element_issues(&element, conn)?;
+        sleep(Duration::from_millis(1));
     }
     Ok(())
 }
 
 pub fn generate_element_issues(element: &Element, conn: &Connection) -> Result<()> {
     let issues = get_issues(&element);
+    // No current issues, no saved issues, nothing to do here
     if issues.is_empty() && !element.tags.contains_key("issues") {
         return Ok(());
     }
+    // No current issues found but an element has some old issues which need to be deleted
     if issues.is_empty() && element.tags.contains_key("issues") {
         element.remove_tag("issues", conn)?;
         return Ok(());
     }
     let issues = serde_json::to_value(&issues)?;
+    // We should avoid toucing the elements if the issues didn't change
     if element.tag("issues") != &issues {
         element.set_tag("issues", &issues, conn)?;
     }
@@ -103,6 +107,10 @@ fn get_issues(element: &Element) -> Vec<Issue> {
     };
     if let Some(issue) = get_out_of_date_issue(element) {
         res.push(issue);
+    } else {
+        if let Some(issue) = get_soon_out_of_date_issue(element) {
+            res.push(issue);
+        };
     };
     res
 }
@@ -198,8 +206,32 @@ fn get_out_of_date_issue(element: &Element) -> Option<Issue> {
     if element.overpass_data.verification_date().is_some() && !element.overpass_data.up_to_date() {
         return Some(Issue {
             r#type: "out_of_date".into(),
-            severity: max(element.overpass_data.days_since_verified().unwrap_or(1) - 365, 1),
+            severity: max(
+                element.overpass_data.days_since_verified().unwrap_or(1) - 365,
+                1,
+            ),
             description: "Out of date".into(),
+        });
+    }
+
+    None
+}
+
+fn get_soon_out_of_date_issue(element: &Element) -> Option<Issue> {
+    if element.overpass_data.verification_date().is_some()
+        && element
+            .overpass_data
+            .days_since_verified()
+            .map(|it| it > 365 - 90 && it < 365)
+            .is_some_and(|it| it)
+    {
+        return Some(Issue {
+            r#type: "out_of_date_soon".into(),
+            severity: max(
+                element.overpass_data.days_since_verified().unwrap_or(1) - 365 + 90,
+                1,
+            ),
+            description: "Soon to be outdated".into(),
         });
     }
 
