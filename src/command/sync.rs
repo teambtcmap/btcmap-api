@@ -157,7 +157,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
 
                     info!("Updating osm_json");
-                    cached_element.set_overpass_data(&fresh_element, &tx)?;
+                    let updated_element = cached_element.set_overpass_data(&fresh_element, &tx)?;
 
                     let new_android_icon = fresh_element.generate_android_icon();
                     let old_android_icon = cached_element
@@ -174,7 +174,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         )?;
                     }
 
-                    lint::generate_element_issues(&cached_element, &tx)?;
+                    lint::generate_element_issues(&updated_element, &tx)?;
                 }
 
                 if cached_element.deleted_at.is_some() {
