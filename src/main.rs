@@ -31,6 +31,7 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
+mod boost;
 mod lint;
 mod sync;
 
@@ -147,6 +148,23 @@ async fn main() -> ExitCode {
         "compress-reports" => {
             if let Err(e) = compress_reports::run(&db) {
                 error!(?e, "Failed to compress reports");
+                return ExitCode::FAILURE;
+            }
+        }
+        "boost" => {
+            if let Err(e) = boost::run(
+                args.get(2).unwrap_or(&String::new()),
+                args.get(3)
+                    .unwrap_or(&String::new())
+                    .parse::<i64>()
+                    .unwrap(),
+                args.get(4)
+                    .unwrap_or(&String::new())
+                    .parse::<i64>()
+                    .unwrap(),
+                &db,
+            ) {
+                error!(?e, "Failed to boost element");
                 return ExitCode::FAILURE;
             }
         }
