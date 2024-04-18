@@ -1,4 +1,6 @@
+use crate::area::Area;
 use crate::discord;
+use crate::element::find_areas;
 use crate::element::Element;
 use crate::event::Event;
 use crate::lint;
@@ -54,6 +56,12 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
     let fresh_element_ids: HashSet<String> = fresh_elements
         .iter()
         .map(|it| format!("{}:{}", it.r#type, it.id,))
+        .collect();
+
+    info!("Loading areas");
+    let areas: Vec<Area> = Area::select_all(None, &tx)?
+        .into_iter()
+        .filter(|it| it.deleted_at == None)
         .collect();
 
     // First, let's check if any of the cached elements no longer accept bitcoins
@@ -157,7 +165,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
 
                     info!("Updating osm_json");
-                    let mut updated_element = cached_element.set_overpass_data(&fresh_element, &tx)?;
+                    let mut updated_element =
+                        cached_element.set_overpass_data(&fresh_element, &tx)?;
 
                     let new_android_icon = updated_element.overpass_data.generate_android_icon();
                     let old_android_icon = cached_element
@@ -175,6 +184,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     }
 
                     lint::generate_element_issues(&updated_element, &tx)?;
+                    find_areas::find_and_save(&updated_element, &areas, &tx)?;
                 }
 
                 if cached_element.deleted_at.is_some() {
@@ -208,6 +218,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 info!(category, android_icon);
 
                 lint::generate_element_issues(&element, &tx)?;
+                find_areas::find_and_save(&element, &areas, &tx)?;
 
                 let message = format!("User {user_display_name} added https://www.openstreetmap.org/{element_type}/{osm_id}");
                 info!(

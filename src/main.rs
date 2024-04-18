@@ -168,6 +168,12 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        "find-areas" => {
+            if let Err(e) = element::find_areas::run(&db) {
+                error!(?e, "Failed to find areas");
+                return ExitCode::FAILURE;
+            }
+        }
         first_arg => {
             error!(command = first_arg, "Unknown command");
             return ExitCode::FAILURE;
