@@ -3,3 +3,4 @@ pub use model::Area;
 pub use model::AreaRepo;
 pub mod admin;
 pub mod v2;
+pub mod v3;

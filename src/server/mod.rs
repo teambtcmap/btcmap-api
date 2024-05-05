@@ -143,6 +143,13 @@ pub async fn run() -> Result<()> {
                         scope("events")
                             .service(event::v3::get)
                             .service(event::v3::get_by_id),
+                    )
+                    .service(
+                        scope("areas")
+                            .service(area::admin::post)
+                            .service(area::admin::patch)
+                            .service(area::admin::delete)
+                            .service(area::v3::get),
                     ),
             )
             .service(
