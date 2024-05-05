@@ -191,10 +191,10 @@ mod test {
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::Result;
+    use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::{test, App};
-    use reqwest::StatusCode;
     use serde_json::{json, Map, Value};
 
     #[test]

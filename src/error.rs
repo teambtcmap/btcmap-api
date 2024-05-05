@@ -1,5 +1,6 @@
-use actix_web::{error::QueryPayloadError, HttpRequest, HttpResponse, ResponseError};
-use reqwest::StatusCode;
+use actix_web::{
+    error::QueryPayloadError, http::StatusCode, HttpRequest, HttpResponse, ResponseError,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 

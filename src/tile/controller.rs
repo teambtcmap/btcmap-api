@@ -1,6 +1,5 @@
 use crate::Error;
-use actix_web::{get, web::Query, HttpResponse, Responder};
-use reqwest::StatusCode;
+use actix_web::{get, http::StatusCode, web::Query, HttpResponse, Responder};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

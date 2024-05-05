@@ -10,6 +10,7 @@ use crate::{event, tile};
 use crate::{report, Result};
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
 use actix_web::dev::{Service, ServiceRequest};
+use actix_web::http::header::HeaderValue;
 use actix_web::web::scope;
 use actix_web::web::QueryConfig;
 use actix_web::{
@@ -18,7 +19,6 @@ use actix_web::{
     App, HttpServer,
 };
 use futures_util::future::FutureExt;
-use http::HeaderValue;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use tracing::info;

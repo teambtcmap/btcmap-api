@@ -154,10 +154,10 @@ mod tests {
     use crate::area::{Area, AreaRepo};
     use crate::test::{mock_state, mock_tags};
     use crate::Result;
+    use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
-    use http::StatusCode;
     use serde_json::{json, Map, Value};
 
     #[test]
