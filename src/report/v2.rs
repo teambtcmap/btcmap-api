@@ -19,7 +19,9 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct GetArgs {
-    updated_since: Option<String>,
+    #[serde(default)]
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_since: Option<OffsetDateTime>,
     limit: Option<i64>,
     compress: Option<bool>,
 }
@@ -90,8 +92,6 @@ async fn get(
                 .select_updated_since(
                     &OffsetDateTime::now_utc()
                         .checked_sub(Duration::days(7))
-                        .unwrap()
-                        .format(&Rfc3339)
                         .unwrap(),
                     args.limit,
                 )
@@ -136,8 +136,6 @@ async fn get(
                 .select_updated_since(
                     &OffsetDateTime::now_utc()
                         .checked_sub(Duration::days(7))
-                        .unwrap()
-                        .format(&Rfc3339)
                         .unwrap(),
                     args.limit,
                 )
@@ -268,7 +266,7 @@ mod test {
         )
         .await;
         let req = TestRequest::get()
-            .uri("/?updated_since=2022-01-10")
+            .uri("/?updated_since=2022-01-10T00:00:00Z")
             .to_request();
         let res: Vec<GetItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 1);

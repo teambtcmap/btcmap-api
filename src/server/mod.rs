@@ -150,6 +150,11 @@ pub async fn run() -> Result<()> {
                             .service(area::admin::patch)
                             .service(area::admin::delete)
                             .service(area::v3::get),
+                    )
+                    .service(
+                        scope("reports")
+                            .service(report::v3::get)
+                            .service(report::v3::get_by_id),
                     ),
             )
             .service(

@@ -21,7 +21,7 @@ pub async fn run(mut conn: Connection) -> Result<()> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
 
-    let today_reports = Report::select_updated_since(&today.to_string(), None, &conn)?;
+    let today_reports = Report::select_by_date(&today, None, &conn)?;
 
     if !today_reports.is_empty() {
         info!("Found existing reports for today, aborting");

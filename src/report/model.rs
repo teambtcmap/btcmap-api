@@ -8,6 +8,7 @@ use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
 use std::sync::Arc;
+use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
@@ -61,10 +62,10 @@ impl ReportRepo {
 
     pub async fn select_updated_since(
         &self,
-        updated_since: &str,
+        updated_since: &OffsetDateTime,
         limit: Option<i64>,
     ) -> Result<Vec<Report>> {
-        let updated_since = updated_since.to_string();
+        let updated_since = updated_since.clone();
         self.pool
             .get()
             .await?
@@ -188,7 +189,7 @@ impl Report {
     }
 
     pub fn select_updated_since(
-        updated_since: &str,
+        updated_since: &OffsetDateTime,
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Report>> {
@@ -212,7 +213,44 @@ impl Report {
         Ok(conn
             .prepare(query)?
             .query_map(
-                named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(i64::MAX) },
+                named_params! {
+                    ":updated_since": updated_since.format(&Rfc3339)?,
+                    ":limit": limit.unwrap_or(i64::MAX),
+                },
+                mapper(),
+            )?
+            .collect::<Result<Vec<Report>, _>>()?)
+    }
+
+    pub fn select_by_date(
+        date: &Date,
+        limit: Option<i64>,
+        conn: &Connection,
+    ) -> Result<Vec<Report>> {
+        let query = r#"
+            SELECT
+                r.rowid,
+                r.area_id,
+                json_extract(a.tags, '$.url_alias'),
+                r.date,
+                r.tags,
+                r.created_at,
+                r.updated_at,
+                r.deleted_at
+            FROM report r
+            LEFT JOIN area a ON a.rowid = r.area_id
+            WHERE r.date = :date
+            ORDER BY r.updated_at, r.rowid
+            LIMIT :limit
+        "#;
+
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! {
+                    ":date": date.to_string(),
+                    ":limit": limit.unwrap_or(i64::MAX),
+                },
                 mapper(),
             )?
             .collect::<Result<Vec<Report>, _>>()?)
@@ -384,7 +422,7 @@ mod test {
             .await?;
         let reports = state
             .report_repo
-            .select_updated_since("2000-01-01", None)
+            .select_updated_since(&datetime!(2000-01-01 00:00 UTC), None)
             .await?;
         assert_eq!(1, reports.len());
         Ok(())
@@ -410,7 +448,7 @@ mod test {
             .await?;
         let reports = state
             .report_repo
-            .select_updated_since("2000-01-01", None)
+            .select_updated_since(&datetime!(2000-01-01 00:00 UTC), None)
             .await?;
         assert_eq!(3, reports.len());
         Ok(())
@@ -450,7 +488,7 @@ mod test {
             2,
             state
                 .report_repo
-                .select_updated_since("2020-01-01T00:00:00Z", None)
+                .select_updated_since(&datetime!(2020-01-01 00:00 UTC), None)
                 .await?
                 .len()
         );
