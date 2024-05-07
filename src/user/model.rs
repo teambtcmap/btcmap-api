@@ -1,9 +1,11 @@
 use crate::{osm::osm::OsmUser, Error, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::{collections::HashMap, sync::Arc};
-use time::OffsetDateTime;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+#[cfg(test)]
+use tracing::debug;
 
 pub struct UserRepo {
     pool: Arc<Pool>,
@@ -12,7 +14,7 @@ pub struct UserRepo {
 pub struct User {
     pub id: i64,
     pub osm_data: OsmUser,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
@@ -21,6 +23,13 @@ pub struct User {
 impl UserRepo {
     pub fn new(pool: &Arc<Pool>) -> Self {
         Self { pool: pool.clone() }
+    }
+
+    #[cfg(test)]
+    pub fn mock() -> Self {
+        Self {
+            pool: Arc::new(crate::test::mock_pool()),
+        }
     }
 
     #[cfg(test)]
@@ -43,10 +52,10 @@ impl UserRepo {
 
     pub async fn select_updated_since(
         &self,
-        updated_since: &str,
+        updated_since: &OffsetDateTime,
         limit: Option<i64>,
     ) -> Result<Vec<User>> {
-        let updated_since = updated_since.to_string();
+        let updated_since = updated_since.clone();
         self.pool
             .get()
             .await?
@@ -68,6 +77,16 @@ impl UserRepo {
             .get()
             .await?
             .interact(move |conn| User::patch_tags(id, &tags, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<User> {
+        let updated_at = updated_at.clone();
+        self.pool
+            .get()
+            .await?
+            .interact(move |conn| User::_set_updated_at(id, &updated_at, conn))
             .await?
     }
 }
@@ -120,7 +139,7 @@ impl User {
     }
 
     pub fn select_updated_since(
-        updated_since: &str,
+        updated_since: &OffsetDateTime,
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<User>> {
@@ -141,7 +160,10 @@ impl User {
         Ok(conn
             .prepare(query)?
             .query_map(
-                named_params! { ":updated_since": updated_since, ":limit": limit.unwrap_or(i64::MAX) },
+                named_params! {
+                    ":updated_since": updated_since.format(&Rfc3339)?,
+                    ":limit": limit.unwrap_or(i64::MAX)
+                },
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
@@ -210,6 +232,31 @@ impl User {
 
         Ok(())
     }
+
+    #[cfg(test)]
+    pub fn _set_updated_at(
+        id: i64,
+        updated_at: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<User> {
+        let query = format!(
+            r#"
+                UPDATE user
+                SET updated_at = :updated_at
+                WHERE rowid = :id
+            "#
+        );
+        debug!(query);
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":updated_at": updated_at.format(&Rfc3339)?,
+            },
+        )?;
+        Ok(User::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+    }
 }
 
 const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
@@ -232,6 +279,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
 mod test {
     use crate::{osm::osm::OsmUser, test::mock_conn, user::User, Result};
     use std::collections::HashMap;
+    use time::macros::datetime;
 
     #[test]
     fn insert() -> Result<()> {
@@ -270,7 +318,7 @@ mod test {
         )?;
         assert_eq!(
             2,
-            User::select_updated_since("2020-01-01T00:00:00Z", None, &conn)?.len()
+            User::select_updated_since(&datetime!(2020-01-01 00:00:00 UTC), None, &conn)?.len()
         );
         Ok(())
     }

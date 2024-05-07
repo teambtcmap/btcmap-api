@@ -155,6 +155,12 @@ pub async fn run() -> Result<()> {
                         scope("reports")
                             .service(report::v3::get)
                             .service(report::v3::get_by_id),
+                    )
+                    .service(
+                        scope("users")
+                            .service(user::admin::patch_tags)
+                            .service(user::v3::get)
+                            .service(user::v3::get_by_id),
                     ),
             )
             .service(
