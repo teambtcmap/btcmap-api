@@ -30,6 +30,10 @@ pub struct GetItem {
     pub r#type: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<HashMap<String, Value>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub created_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
     #[serde(default)]
@@ -65,12 +69,18 @@ impl Into<GetItem> for Event {
         } else {
             None
         };
+        let created_at = if self.deleted_at.is_none() {
+            Some(self.created_at)
+        } else {
+            None
+        };
         GetItem {
             id: self.id,
             user_id,
             element_id,
             r#type,
             tags,
+            created_at,
             updated_at: self.updated_at,
             deleted_at: self.deleted_at,
         }
