@@ -13,6 +13,7 @@ use crate::Result;
 use rusqlite::Connection;
 use rusqlite::Transaction;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Add;
 use std::time::SystemTime;
@@ -98,6 +99,13 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
             insert_user_if_not_exists(fresh_element.uid, &tx).await?;
 
             let event = Event::insert(fresh_element.uid, cached_element.id, "delete", &tx)?;
+
+            let mut event_tags: HashMap<String, Value> = HashMap::new();
+            event_tags.insert("element_osm_type".into(), cached_element.overpass_data.r#type.clone().into());
+            event_tags.insert("element_osm_id".into(), cached_element.overpass_data.id.into());
+            event_tags.insert("element_name".into(), name.into());
+            let event = event.patch_tags(&event_tags, &tx)?;
+
             on_new_event(&event, &tx).await?;
 
             let message = format!(

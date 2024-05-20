@@ -229,7 +229,6 @@ impl Event {
             .optional()?)
     }
 
-    #[cfg(test)]
     pub fn patch_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
         Event::_patch_tags(self.id, tags, conn)
     }
