@@ -354,6 +354,10 @@ impl OverpassElement {
             icon_id = "camping";
         }
 
+        if tourism == "camp_pitch" {
+            icon_id = "camping";
+        }
+
         if tourism == "gallery" {
             icon_id = "palette";
         }
@@ -810,7 +814,7 @@ impl OverpassElement {
             icon_id = "local_atm"
         }
 
-        if amenity == "cafe" {
+        if amenity == "cafe" || (amenity.contains(";") && amenity.contains("cafe")) {
             icon_id = "local_cafe"
         }
 
@@ -1199,6 +1203,10 @@ impl OverpassElement {
         }
 
         if leisure == "playground" {
+            icon_id = "toys"
+        }
+
+        if leisure == "indoor_play" {
             icon_id = "toys"
         }
 
