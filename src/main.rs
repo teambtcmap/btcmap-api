@@ -34,6 +34,7 @@ mod area;
 mod boost;
 mod lint;
 mod sync;
+mod vacuum;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -171,6 +172,12 @@ async fn main() -> ExitCode {
         "find-areas" => {
             if let Err(e) = element::find_areas::run(&db) {
                 error!(?e, "Failed to find areas");
+                return ExitCode::FAILURE;
+            }
+        }
+        "vacuum" => {
+            if let Err(e) = vacuum::vacuum_areas(&db) {
+                error!(?e, "Failed to vacuum database");
                 return ExitCode::FAILURE;
             }
         }

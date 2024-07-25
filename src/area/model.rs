@@ -231,6 +231,30 @@ impl Area {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
+    pub fn remove_tag(&self, name: &str, conn: &Connection) -> Result<Area> {
+        Area::_remove_tag(self.id, name, conn)
+    }
+
+    fn _remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Area> {
+        let query = format!(
+            r#"
+                UPDATE {TABLE}
+                SET {COL_TAGS} = json_remove({COL_TAGS}, :name)
+                WHERE {COL_ROWID} = :id
+            "#
+        );
+        debug!(query);
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":name": format!("$.{name}"),
+            },
+        )?;
+        Ok(Area::select_by_id(id, &conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+    }
+
     #[cfg(test)]
     pub fn __set_updated_at(&self, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Area> {
         Area::_set_updated_at(self.id, updated_at, conn)
