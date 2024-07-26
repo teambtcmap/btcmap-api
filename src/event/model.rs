@@ -45,12 +45,11 @@ impl EventRepo {
             .await?
     }
 
-    #[cfg(test)]
-    pub async fn _select_all(&self, limit: Option<i64>) -> Result<Vec<Event>> {
+    pub async fn select_all(&self, sort_order: Option<String>, limit: Option<i64>) -> Result<Vec<Event>> {
         self.pool
             .get()
             .await?
-            .interact(move |conn| Event::select_all(limit, conn))
+            .interact(move |conn| Event::select_all(sort_order, limit, conn))
             .await?
     }
 
@@ -135,8 +134,8 @@ impl Event {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
-    #[cfg(test)]
-    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Event>> {
+    pub fn select_all(sort_order: Option<String>, limit: Option<i64>, conn: &Connection) -> Result<Vec<Event>> {
+        let sort_order = sort_order.unwrap_or("ASC".into());
         let query = format!(
             r#"
                 SELECT
@@ -152,7 +151,7 @@ impl Event {
                     ev.{COL_DELETED_AT}
                 FROM {TABLE} ev
                 LEFT JOIN element el on el.rowid = ev.{COL_ELEMENT_ID}
-                ORDER BY ev.{COL_UPDATED_AT}, ev.{COL_ROWID}
+                ORDER BY ev.{COL_UPDATED_AT} {sort_order}, ev.{COL_ROWID} {sort_order}
                 LIMIT :limit
             "#
         );
@@ -343,7 +342,7 @@ mod test {
                 Event::insert(user.id, element.id, "", &conn)?,
                 Event::insert(user.id, element.id, "", &conn)?,
             ],
-            Event::select_all(None, &conn)?
+            Event::select_all(None, None, &conn)?
         );
         Ok(())
     }
