@@ -141,7 +141,11 @@ pub async fn run() -> Result<()> {
             .service(
                 scope("v3")
                     .wrap(Governor::new(&rate_limit_conf))
-                    .service(scope("elements").service(element::v3::get))
+                    .service(
+                        scope("elements")
+                            .service(element::v3::get)
+                            .service(element::v3::get_by_id),
+                    )
                     .service(
                         scope("events")
                             .service(event::v3::get)

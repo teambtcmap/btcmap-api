@@ -5,11 +5,14 @@ use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
+use actix_web::web::Path;
 use actix_web::web::Query;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -74,6 +77,19 @@ pub async fn get(
             .map(|it| it.into())
             .collect(),
     ))
+}
+
+#[get("{id}")]
+pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
+    let id_clone = id.clone();
+    pool.get()
+        .await?
+        .interact(move |conn| Element::select_by_id_or_osm_id(&id_clone, conn))
+        .await??
+        .ok_or(Error::HttpNotFound(format!(
+            "Element with id {id} doesn't exist"
+        )))
+        .map(|it| it.into())
 }
 
 #[cfg(test)]

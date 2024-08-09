@@ -3,8 +3,9 @@ use crate::{osm::overpass::OverpassElement, Error};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::time::sleep;
 use tracing::{debug, info};
@@ -209,6 +210,18 @@ impl Element {
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn select_by_id_or_osm_id(id: &str, conn: &Connection) -> Result<Option<Element>> {
+        match id.parse::<i64>() {
+            Ok(id) => Element::select_by_id(id, conn),
+            Err(_) => {
+                let parts: Vec<_> = id.split(':').collect();
+                let osm_type = parts[0];
+                let osm_id = parts[1].parse::<i64>().unwrap();
+                Element::select_by_osm_type_and_id(osm_type, osm_id, conn)
+            }
+        }
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Element>> {
@@ -451,14 +464,11 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
-    use serde_json::json;
-    use time::{macros::datetime, OffsetDateTime};
-
-    use crate::{osm::overpass::OverpassElement, test::mock_conn, Result};
-
     use super::Element;
+    use crate::{osm::overpass::OverpassElement, test::mock_conn, Result};
+    use serde_json::json;
+    use std::collections::HashMap;
+    use time::{macros::datetime, OffsetDateTime};
 
     #[test]
     fn insert() -> Result<()> {

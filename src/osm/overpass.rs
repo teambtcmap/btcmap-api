@@ -33,7 +33,9 @@ struct Osm3s {
 pub struct OverpassElement {
     pub r#type: String,
     pub id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lat: Option<f64>, // for nodes only
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lon: Option<f64>, // for nodes only
     pub timestamp: Option<String>,
     pub version: Option<i64>,
@@ -41,9 +43,13 @@ pub struct OverpassElement {
     pub user: Option<String>,
     pub uid: Option<i64>,
     pub tags: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bounds: Option<Bounds>,  // for ways and relations only
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub nodes: Option<Value>,    // for ways only
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub geometry: Option<Value>, // for ways only
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub members: Option<Value>,  // for relations only
 }
 
