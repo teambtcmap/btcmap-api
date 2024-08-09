@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use crate::{Error, Result};
 use geo::{coord, Coord};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use time::{
     format_description::well_known::Iso8601, macros::format_description, Date, OffsetDateTime,
 };

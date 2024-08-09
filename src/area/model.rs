@@ -1,17 +1,18 @@
 use crate::{Error, Result};
 use deadpool_sqlite::Pool;
+use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tracing::debug;
+use tracing::{debug, error, info};
 
 #[derive(Clone)]
 pub struct AreaRepo {
     pool: Arc<Pool>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Area {
     pub id: i64,
     pub tags: Map<String, Value>,
@@ -25,6 +26,7 @@ impl AreaRepo {
         Self { pool: pool.clone() }
     }
 
+    #[cfg(test)]
     pub async fn insert(&self, tags: &Map<String, Value>) -> Result<Area> {
         let tags = tags.clone();
         self.pool
@@ -55,6 +57,7 @@ impl AreaRepo {
             .await?
     }
 
+    #[cfg(test)]
     pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
         self.pool
             .get()
@@ -72,6 +75,7 @@ impl AreaRepo {
             .await?
     }
 
+    #[cfg(test)]
     pub async fn patch_tags(&self, id: i64, tags: &Map<String, Value>) -> Result<Area> {
         let tags = tags.clone();
         self.pool
@@ -91,6 +95,7 @@ impl AreaRepo {
             .await?
     }
 
+    #[cfg(test)]
     pub async fn set_deleted_at(
         &self,
         id: i64,
@@ -130,6 +135,7 @@ impl Area {
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Area>> {
+        let start = Instant::now();
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
@@ -139,13 +145,22 @@ impl Area {
             "#
         );
         debug!(query);
-        Ok(conn
+        let res = conn
             .prepare(&query)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(i64::MAX) },
                 Self::mapper(),
             )?
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect::<Result<Vec<_>, _>>()?;
+        let time_ms = start.elapsed().as_millis();
+        info!(
+            count = res.len(),
+            time_ms,
+            "Loaded all areas ({}) in {} ms",
+            res.len(),
+            time_ms,
+        );
+        Ok(res)
     }
 
     pub fn select_updated_since(
@@ -173,6 +188,24 @@ impl Area {
                 Self::mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub async fn select_by_id_or_alias_async(
+        id_or_alias: &str,
+        pool: &Pool,
+    ) -> Result<Option<Area>> {
+        let id_or_alias = id_or_alias.to_string();
+        pool.get()
+            .await?
+            .interact(move |conn| Area::select_by_id_or_alias(&id_or_alias, conn))
+            .await?
+    }
+
+    pub fn select_by_id_or_alias(id_or_alias: &str, conn: &Connection) -> Result<Option<Area>> {
+        match id_or_alias.parse::<i64>() {
+            Ok(id) => Area::select_by_id(id, conn),
+            Err(_) => Area::select_by_url_alias(id_or_alias, conn),
+        }
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Area>> {
@@ -285,7 +318,7 @@ impl Area {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
-    pub fn __set_deleted_at(
+    pub fn set_deleted_at(
         &self,
         deleted_at: Option<OffsetDateTime>,
         conn: &Connection,
@@ -332,6 +365,70 @@ impl Area {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
+    pub fn name(&self) -> String {
+        self.tags
+            .get("name")
+            .unwrap_or(&Value::String("".into()))
+            .as_str()
+            .unwrap()
+            .into()
+    }
+
+    pub fn alias(&self) -> String {
+        self.tags
+            .get("url_alias")
+            .unwrap_or(&Value::String("".into()))
+            .as_str()
+            .unwrap()
+            .into()
+    }
+
+    pub fn geo_json(&self) -> Option<GeoJson> {
+        let geo_json = self.tags.get("geo_json").unwrap_or(&Value::Null);
+
+        if !geo_json.is_object() {
+            error!(self.id, "geo_json is missing or not an object");
+            return None;
+        }
+
+        let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json).unwrap().parse();
+
+        match geo_json {
+            Ok(geo_json) => Some(geo_json),
+            Err(e) => {
+                error!(self.id, error = e.to_string(), "Failed to parse geo_json");
+                None
+            }
+        }
+    }
+
+    pub fn geo_json_geometries(&self) -> Vec<Geometry> {
+        let geo_json = match self.geo_json() {
+            Some(geo_json) => geo_json,
+            None => return vec![],
+        };
+
+        let mut geometries: Vec<Geometry> = vec![];
+
+        match geo_json {
+            GeoJson::FeatureCollection(v) => {
+                for feature in v.features {
+                    if let Some(v) = feature.geometry {
+                        geometries.push(v);
+                    }
+                }
+            }
+            GeoJson::Feature(v) => {
+                if let Some(v) = v.geometry {
+                    geometries.push(v);
+                }
+            }
+            GeoJson::Geometry(v) => geometries.push(v),
+        };
+
+        return geometries;
+    }
+
     const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
         |row: &Row| -> rusqlite::Result<Area> {
             let tags: String = row.get(1)?;
@@ -349,6 +446,7 @@ impl Area {
 #[cfg(test)]
 mod test {
     use crate::{
+        area::Area,
         test::{mock_state, mock_tags},
         Result,
     };
@@ -360,9 +458,9 @@ mod test {
     async fn insert() -> Result<()> {
         let state = mock_state().await;
         let tags = mock_tags();
-        let res = state.area_repo.insert(&tags).await?;
+        let res = Area::insert(&tags, &state.conn)?;
         assert_eq!(tags, res.tags);
-        assert_eq!(res, state.area_repo.select_by_id(res.id).await?.unwrap());
+        assert_eq!(res, Area::select_by_id(res.id, &state.conn)?.unwrap());
         Ok(())
     }
 
@@ -371,9 +469,9 @@ mod test {
         let state = mock_state().await;
         assert_eq!(
             vec![
-                state.area_repo.insert(&Map::new()).await?,
-                state.area_repo.insert(&Map::new()).await?,
-                state.area_repo.insert(&Map::new()).await?,
+                Area::insert(&Map::new(), &state.conn)?,
+                Area::insert(&Map::new(), &state.conn)?,
+                Area::insert(&Map::new(), &state.conn)?,
             ],
             state.area_repo.select_all(None).await?,
         );
@@ -383,17 +481,17 @@ mod test {
     #[test]
     async fn select_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let _area_1 = state.area_repo.insert(&mock_tags()).await?;
+        let _area_1 = Area::insert(&mock_tags(), &state.conn)?;
         let _area_1 = state
             .area_repo
             .set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC))
             .await?;
-        let area_2 = state.area_repo.insert(&mock_tags()).await?;
+        let area_2 = Area::insert(&mock_tags(), &state.conn)?;
         let area_2 = state
             .area_repo
             .set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC))
             .await?;
-        let area_3 = state.area_repo.insert(&mock_tags()).await?;
+        let area_3 = Area::insert(&mock_tags(), &state.conn)?;
         let area_3 = state
             .area_repo
             .set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC))

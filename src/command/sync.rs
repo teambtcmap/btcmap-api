@@ -1,6 +1,5 @@
-use crate::area::Area;
 use crate::discord;
-use crate::element::find_areas;
+use crate::element;
 use crate::element::Element;
 use crate::event::Event;
 use crate::lint;
@@ -59,12 +58,6 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
         .map(|it| format!("{}:{}", it.r#type, it.id,))
         .collect();
 
-    info!("Loading areas");
-    let areas: Vec<Area> = Area::select_all(None, &tx)?
-        .into_iter()
-        .filter(|it| it.deleted_at == None)
-        .collect();
-
     // First, let's check if any of the cached elements no longer accept bitcoins
     for cached_element in &cached_elements {
         if !fresh_element_ids.contains(&cached_element.overpass_data.btcmap_id())
@@ -101,9 +94,19 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
             let event = Event::insert(fresh_element.uid, cached_element.id, "delete", &tx)?;
 
             let mut event_tags: HashMap<String, Value> = HashMap::new();
-            event_tags.insert("element_osm_type".into(), cached_element.overpass_data.r#type.clone().into());
-            event_tags.insert("element_osm_id".into(), cached_element.overpass_data.id.into());
+            event_tags.insert(
+                "element_osm_type".into(),
+                cached_element.overpass_data.r#type.clone().into(),
+            );
+            event_tags.insert(
+                "element_osm_id".into(),
+                cached_element.overpass_data.id.into(),
+            );
             event_tags.insert("element_name".into(), name.into());
+            if cached_element.tags.contains_key("areas") {
+                event_tags.insert("areas".into(), cached_element.tags["areas"].clone());
+            }
+
             let event = event.patch_tags(&event_tags, &tx)?;
 
             on_new_event(&event, &tx).await?;
@@ -192,7 +195,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     }
 
                     lint::generate_element_issues(&updated_element, &tx)?;
-                    find_areas::find_and_save(&updated_element, &areas, &tx)?;
+                    element::service::update_areas_tag(&vec![updated_element], &tx)?;
                 }
 
                 if cached_element.deleted_at.is_some() {
@@ -226,7 +229,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 info!(category, android_icon);
 
                 lint::generate_element_issues(&element, &tx)?;
-                find_areas::find_and_save(&element, &areas, &tx)?;
+                element::service::update_areas_tag(&vec![element], &tx)?;
 
                 let message = format!("User {user_display_name} added https://www.openstreetmap.org/{element_type}/{osm_id}");
                 info!(

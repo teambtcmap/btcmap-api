@@ -2,126 +2,46 @@ use crate::area::Area;
 use crate::element::Element;
 use crate::report::Report;
 use crate::Result;
-use geo::Contains;
-use geo::LineString;
-use geo::MultiPolygon;
-use geo::Polygon;
-use geojson::GeoJson;
-use geojson::Geometry;
 use rusqlite::Connection;
 use serde_json::Map;
 use serde_json::Value;
 use std::collections::HashSet;
 use time::format_description::well_known::Iso8601;
 use time::OffsetDateTime;
-use tracing::error;
 use tracing::info;
 
-pub async fn run(mut conn: Connection) -> Result<()> {
+pub fn run(conn: &mut Connection) -> Result<()> {
+    let sp = conn.savepoint()?;
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
 
-    let today_reports = Report::select_by_date(&today, None, &conn)?;
+    let today_reports = Report::select_by_date(&today, None, &sp)?;
 
     if !today_reports.is_empty() {
         info!("Found existing reports for today, aborting");
         return Ok(());
     }
 
-    let elements: Vec<Element> = Element::select_all(None, &conn)?
+    let all_elements: Vec<Element> = Element::select_all(None, &sp)?
         .into_iter()
         .filter(|it| it.deleted_at.is_none())
         .collect();
 
-    let areas: Vec<Area> = Area::select_all(None, &conn)?
+    let all_areas: Vec<Area> = Area::select_all(None, &sp)?
         .into_iter()
         .filter(|it| it.deleted_at == None)
         .collect();
 
-    let tx = conn.transaction()?;
-
     let mut new_reports = 0;
 
-    for area in areas {
+    for area in all_areas {
         info!(
             area.id,
             area_url_alias = area.tags.get("url_alias").map(|it| it.as_str()),
             "Generating report",
         );
 
-        if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
-            info!(area.id, elements = elements.len(), "Processing area");
-            let report_tags = generate_report_tags(&elements.iter().collect::<Vec<_>>())?;
-            insert_report(area.id, &report_tags, &tx).await?;
-            new_reports = new_reports + 1;
-            continue;
-        }
-
-        let mut area_elements: Vec<&Element> = vec![];
-        let geo_json = area.tags.get("geo_json").unwrap_or(&Value::Null);
-
-        if geo_json.is_null() {
-            continue;
-        }
-
-        if geo_json.is_object() {
-            let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json)?.parse();
-
-            let geo_json = match geo_json {
-                Ok(geo_json) => geo_json,
-                Err(e) => {
-                    error!(?e, "Failed to parse GeoJSON");
-                    continue;
-                }
-            };
-
-            let mut geometries: Vec<&Geometry> = vec![];
-
-            match &geo_json {
-                GeoJson::FeatureCollection(v) => {
-                    for feature in &v.features {
-                        if let Some(v) = &feature.geometry {
-                            geometries.push(v);
-                        }
-                    }
-                }
-                GeoJson::Feature(v) => {
-                    if let Some(v) = &v.geometry {
-                        geometries.push(v);
-                    }
-                }
-                GeoJson::Geometry(v) => geometries.push(v),
-            };
-
-            for element in &elements {
-                for geometry in &geometries {
-                    match &geometry.value {
-                        geojson::Value::MultiPolygon(_) => {
-                            let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
-
-                            if multi_poly.contains(&element.overpass_data.coord()) {
-                                area_elements.push(&element);
-                            }
-                        }
-                        geojson::Value::Polygon(_) => {
-                            let poly: Polygon = (&geometry.value).try_into().unwrap();
-
-                            if poly.contains(&element.overpass_data.coord()) {
-                                area_elements.push(&element);
-                            }
-                        }
-                        geojson::Value::LineString(_) => {
-                            let line_string: LineString = (&geometry.value).try_into().unwrap();
-
-                            if line_string.contains(&element.overpass_data.coord()) {
-                                area_elements.push(&element);
-                            }
-                        }
-                        _ => continue,
-                    }
-                }
-            }
-        }
+        let area_elements = crate::element::service::filter_by_area(&all_elements, &area)?;
 
         info!(
             area.id,
@@ -130,26 +50,26 @@ pub async fn run(mut conn: Connection) -> Result<()> {
             "Processing area",
         );
         let new_report_tags = generate_report_tags(&area_elements)?;
-        let prev_report = Report::select_latest_by_area_id(area.id, &tx)?;
+        let prev_report = Report::select_latest_by_area_id(area.id, &sp)?;
 
         match prev_report {
             None => {
                 info!(area.id, "There is no report history");
-                insert_report(area.id, &new_report_tags, &tx).await?;
+                insert_report(area.id, &new_report_tags, &sp)?;
                 new_reports = new_reports + 1;
             }
             Some(latest_report) => {
                 if &new_report_tags != &latest_report.tags {
                     info!("Tags changed");
                     log_diff(&latest_report.tags, &new_report_tags)?;
-                    insert_report(area.id, &new_report_tags, &tx).await?;
+                    insert_report(area.id, &new_report_tags, &sp)?;
                     new_reports = new_reports + 1;
                 }
             }
         }
     }
 
-    tx.commit()?;
+    sp.commit()?;
     info!(new_reports);
 
     Ok(())
@@ -179,7 +99,7 @@ fn log_diff(map_1: &Map<String, Value>, map_2: &Map<String, Value>) -> Result<()
     Ok(())
 }
 
-fn generate_report_tags(elements: &[&Element]) -> Result<Map<String, Value>> {
+fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
     info!("Generating report tags");
 
     let atms: Vec<_> = elements
@@ -215,7 +135,6 @@ fn generate_report_tags(elements: &[&Element]) -> Result<Map<String, Value>> {
     let outdated_elements: Vec<_> = elements
         .iter()
         .filter(|it| !it.overpass_data.up_to_date())
-        .copied()
         .collect();
 
     let up_to_date_percent: f64 = up_to_date_elements.len() as f64 / elements.len() as f64 * 100.0;
@@ -285,7 +204,7 @@ fn generate_report_tags(elements: &[&Element]) -> Result<Map<String, Value>> {
     Ok(tags)
 }
 
-async fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<()> {
+fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<()> {
     let date = OffsetDateTime::now_utc().date();
     info!(area_id, ?date, ?tags, "Inserting new report");
     Report::insert(area_id, &date, &tags, conn)?;
@@ -415,7 +334,7 @@ mod test {
             updated_at: OffsetDateTime::now_utc(),
             deleted_at: None,
         };
-        let report_tags = super::generate_report_tags(&vec![&element_1, &element_2])?;
+        let report_tags = super::generate_report_tags(&vec![element_1, element_2])?;
 
         assert_eq!(2, report_tags["total_elements"].as_i64().unwrap());
         assert_eq!(

@@ -3,15 +3,17 @@ use crate::{osm::overpass::OverpassElement, Error};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
+use std::time::{Duration, Instant};
 use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tracing::debug;
+use tokio::time::sleep;
+use tracing::{debug, info};
 
 pub struct ElementRepo {
     pool: Arc<Pool>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Element {
     pub id: i64,
     pub overpass_data: OverpassElement,
@@ -29,7 +31,7 @@ impl ElementRepo {
     #[cfg(test)]
     pub fn mock() -> Self {
         Self {
-            pool: Arc::new(crate::test::mock_pool()),
+            pool: Arc::new(crate::test::mock_db().1),
         }
     }
 
@@ -95,6 +97,7 @@ impl ElementRepo {
     }
 
     pub async fn set_tag(&self, id: i64, name: &str, value: &Value) -> Result<Element> {
+        sleep(Duration::from_millis(10)).await;
         let name = name.to_string();
         let value = value.clone();
         self.pool
@@ -105,6 +108,7 @@ impl ElementRepo {
     }
 
     pub async fn remove_tag(&self, id: i64, name: &str) -> Result<Element> {
+        sleep(Duration::from_millis(10)).await;
         let name = name.to_string();
         self.pool
             .get()
@@ -151,6 +155,7 @@ impl Element {
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
+        let start = Instant::now();
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS} 
@@ -160,13 +165,23 @@ impl Element {
             "#
         );
         debug!(query);
-        Ok(conn
+        let res = conn
             .prepare(&query)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
             )?
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let time_ms = start.elapsed().as_millis();
+        info!(
+            count = res.len(),
+            time_ms,
+            "Loaded all elements ({}) in {} ms",
+            res.len(),
+            time_ms,
+        );
+        Ok(res)
     }
 
     pub fn select_updated_since(
@@ -335,6 +350,7 @@ impl Element {
                 ":name": format!("$.{name}"),
             },
         )?;
+        info!("Removed {name} tag from element {id}");
         Ok(Element::select_by_id(id, &conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }

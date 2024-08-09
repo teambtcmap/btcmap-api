@@ -45,7 +45,11 @@ impl EventRepo {
             .await?
     }
 
-    pub async fn select_all(&self, sort_order: Option<String>, limit: Option<i64>) -> Result<Vec<Event>> {
+    pub async fn select_all(
+        &self,
+        sort_order: Option<String>,
+        limit: Option<i64>,
+    ) -> Result<Vec<Event>> {
         self.pool
             .get()
             .await?
@@ -134,7 +138,11 @@ impl Event {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
-    pub fn select_all(sort_order: Option<String>, limit: Option<i64>, conn: &Connection) -> Result<Vec<Event>> {
+    pub fn select_all(
+        sort_order: Option<String>,
+        limit: Option<i64>,
+        conn: &Connection,
+    ) -> Result<Vec<Event>> {
         let sort_order = sort_order.unwrap_or("ASC".into());
         let query = format!(
             r#"

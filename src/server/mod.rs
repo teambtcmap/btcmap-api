@@ -43,11 +43,13 @@ pub async fn run() -> Result<()> {
 
     HttpServer::new(move || {
         let auth_service = AuthService::new(&pool);
+
         let area_repo = AreaRepo::new(&pool);
         let element_repo = ElementRepo::new(&pool);
         let event_repo = EventRepo::new(&pool);
         let report_repo = ReportRepo::new(&pool);
         let user_repo = UserRepo::new(&pool);
+
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -87,6 +89,7 @@ pub async fn run() -> Result<()> {
             })
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
+            .app_data(Data::new(pool.clone()))
             .app_data(Data::new(auth_service))
             .app_data(Data::new(area_repo))
             .app_data(Data::new(element_repo))

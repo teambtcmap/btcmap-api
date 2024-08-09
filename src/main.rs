@@ -49,7 +49,7 @@ async fn main() -> ExitCode {
         .with(Layer::new().json())
         .init();
 
-    let mut db = match command::db::open_connection() {
+    let mut conn = match command::db::open_connection() {
         Ok(v) => v,
         Err(e) => {
             error!(?e, "Failed to open database connection");
@@ -59,17 +59,9 @@ async fn main() -> ExitCode {
 
     let args: Vec<String> = env::args().collect();
 
-    let command = match args.get(1) {
-        Some(v) => v,
-        None => {
-            error!("No actions passed");
-            return ExitCode::FAILURE;
-        }
-    };
-
-    match command.as_str() {
+    match args.get(1).unwrap_or(&"".into()).as_str() {
         "server" => {
-            if let Err(e) = db::migrate(&mut db) {
+            if let Err(e) = db::migrate(&mut conn) {
                 error!(?e, "Failed to open database connection");
                 return ExitCode::FAILURE;
             }
@@ -80,43 +72,43 @@ async fn main() -> ExitCode {
             }
         }
         "sync" => {
-            if let Err(e) = command::sync::run(db).await {
+            if let Err(e) = command::sync::run(conn).await {
                 error!(?e, "Failed to sync elements");
                 return ExitCode::FAILURE;
             }
         }
         "sync-users" => {
-            if let Err(e) = sync::users::run(db).await {
+            if let Err(e) = sync::users::run(conn).await {
                 error!(?e, "Failed to sync users");
                 return ExitCode::FAILURE;
             }
         }
         "generate-report" => {
-            if let Err(e) = generate_reports::run(db).await {
+            if let Err(e) = generate_reports::run(&mut conn) {
                 error!(?e, "Failed to generate reports");
                 return ExitCode::FAILURE;
             }
         }
         "generate-reports" => {
-            if let Err(e) = generate_reports::run(db).await {
+            if let Err(e) = generate_reports::run(&mut conn) {
                 error!(?e, "Failed to generate reports");
                 return ExitCode::FAILURE;
             }
         }
         "generate-android-icons" => {
-            if let Err(e) = generate_android_icons::run(&db).await {
+            if let Err(e) = generate_android_icons::run(&conn).await {
                 error!(?e, "Failed to generate Android icons");
                 return ExitCode::FAILURE;
             }
         }
         "generate-element-categories" => {
-            if let Err(e) = generate_element_categories::run(&db).await {
+            if let Err(e) = generate_element_categories::run(&conn).await {
                 error!(?e, "Failed to generate element categories");
                 return ExitCode::FAILURE;
             }
         }
         "lint" => {
-            if let Err(e) = command::lint::run(db) {
+            if let Err(e) = command::lint::run(conn) {
                 error!(?e, "Failed to run linter");
                 return ExitCode::FAILURE;
             }
@@ -128,26 +120,27 @@ async fn main() -> ExitCode {
             }
         }
         "add-area" => {
-            if let Err(e) = add_area::run(&db).await {
+            if let Err(e) = add_area::run(&conn).await {
                 error!(?e, "Failed to add area");
                 return ExitCode::FAILURE;
             }
         }
         "import-countries" => {
-            if let Err(e) = import_countries::run(args.get(2).unwrap_or(&"".into()), &mut db).await
+            if let Err(e) =
+                import_countries::run(args.get(2).unwrap_or(&"".into()), &mut conn).await
             {
                 error!(?e, "Failed to import countries");
                 return ExitCode::FAILURE;
             }
         }
         "fix-tags" => {
-            if let Err(e) = fix_tags::run(&db).await {
+            if let Err(e) = fix_tags::run(&conn).await {
                 error!(?e, "Failed to fix tags");
                 return ExitCode::FAILURE;
             }
         }
         "compress-reports" => {
-            if let Err(e) = compress_reports::run(&db) {
+            if let Err(e) = compress_reports::run(&conn) {
                 error!(?e, "Failed to compress reports");
                 return ExitCode::FAILURE;
             }
@@ -163,20 +156,26 @@ async fn main() -> ExitCode {
                     .unwrap_or(&String::new())
                     .parse::<i64>()
                     .unwrap(),
-                &db,
+                &conn,
             ) {
                 error!(?e, "Failed to boost element");
                 return ExitCode::FAILURE;
             }
         }
-        "find-areas" => {
-            if let Err(e) = element::find_areas::run(&db) {
-                error!(?e, "Failed to find areas");
+        "update-areas-tag" => {
+            if let Err(e) = command::update_areas_tag::run(args) {
+                error!(?e, "Failed to add areas tag");
+                return ExitCode::FAILURE;
+            }
+        }
+        "remove-areas-tag" => {
+            if let Err(e) = command::remove_areas_tag::run(args) {
+                error!(?e, "Failed to remove areas tag");
                 return ExitCode::FAILURE;
             }
         }
         "vacuum" => {
-            if let Err(e) = vacuum::vacuum_areas(&db) {
+            if let Err(e) = vacuum::vacuum_areas(&conn) {
                 error!(?e, "Failed to vacuum database");
                 return ExitCode::FAILURE;
             }

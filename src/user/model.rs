@@ -28,7 +28,7 @@ impl UserRepo {
     #[cfg(test)]
     pub fn mock() -> Self {
         Self {
-            pool: Arc::new(crate::test::mock_pool()),
+            pool: Arc::new(crate::test::mock_db().1),
         }
     }
 

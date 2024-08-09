@@ -4,7 +4,7 @@ use crate::{
 };
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
     sync::{
@@ -22,14 +22,11 @@ pub fn mock_conn() -> Connection {
 static MEM_DB_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 pub async fn mock_state() -> State {
-    let pool = Arc::new(mock_pool());
-    pool.get()
-        .await
-        .unwrap()
-        .interact(|conn| db::migrate(conn).unwrap())
-        .await
-        .unwrap();
+    let mut db = mock_db();
+    let pool = Arc::new(db.1);
+    db::migrate(&mut db.0).unwrap();
     State {
+        conn: db.0,
         pool: pool.clone(),
         auth: AuthService::new(&pool),
         area_repo: AreaRepo::new(&pool),
@@ -40,20 +37,25 @@ pub async fn mock_state() -> State {
     }
 }
 
-pub fn mock_pool() -> Pool {
+pub fn mock_db() -> (Connection, Pool) {
     let uri = format!(
         "file::testdb_{}:?mode=memory&cache=shared",
         MEM_DB_COUNTER.fetch_add(1, Ordering::Relaxed)
     );
-    Config::new(uri)
-        .builder(Runtime::Tokio1)
-        .unwrap()
-        .max_size(8)
-        .build()
-        .unwrap()
+    let conn = Connection::open(uri.clone()).unwrap();
+    (
+        conn,
+        Config::new(uri)
+            .builder(Runtime::Tokio1)
+            .unwrap()
+            .max_size(8)
+            .build()
+            .unwrap(),
+    )
 }
 
 pub struct State {
+    pub conn: Connection,
     pub pool: Arc<Pool>,
     pub auth: AuthService,
     pub area_repo: AreaRepo,
@@ -80,4 +82,45 @@ pub fn mock_osm_tags(kv_pairs: &[&str]) -> HashMap<String, String> {
         res.insert(chunk[0].into(), chunk[1].into());
     }
     res
+}
+
+pub fn phuket_geo_json() -> Value {
+    json!(
+        {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                  "coordinates": [
+                    [
+                      [
+                        98.2181205776469,
+                        8.20412838698085
+                      ],
+                      [
+                        98.2181205776469,
+                        7.74024270965898
+                      ],
+                      [
+                        98.4806081271079,
+                        7.74024270965898
+                      ],
+                      [
+                        98.4806081271079,
+                        8.20412838698085
+                      ],
+                      [
+                        98.2181205776469,
+                        8.20412838698085
+                      ]
+                    ]
+                  ],
+                  "type": "Polygon"
+                }
+              }
+            ]
+          }
+    )
 }

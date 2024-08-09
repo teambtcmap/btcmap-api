@@ -1,5 +1,5 @@
 use crate::{
-    area::{Area, AreaRepo},
+    area::{self, Area},
     auth::AuthService,
     discord, Error,
 };
@@ -8,8 +8,10 @@ use actix_web::{
     web::{Data, Json, Path},
     HttpRequest,
 };
+use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::sync::Arc;
 use time::OffsetDateTime;
 use tracing::warn;
 
@@ -37,29 +39,18 @@ async fn post(
     req: HttpRequest,
     args: Json<PostArgs>,
     auth: Data<AuthService>,
-    repo: Data<AreaRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
-    let url_alias = &args
-        .tags
-        .get("url_alias")
-        .ok_or(Error::HttpBadRequest(
-            "Mandatory tag is missing: url_alias".into(),
-        ))?
-        .as_str()
-        .ok_or(Error::HttpBadRequest(
-            "This tag should be a string: url_alias".into(),
-        ))?;
-    if repo.select_by_url_alias(url_alias).await?.is_some() {
-        Err(Error::HttpConflict(
-            "This url_alias is already in use".into(),
-        ))?
-    }
-    let area = repo.insert(&args.tags).await?;
+    let area = pool
+        .get()
+        .await?
+        .interact(move |conn| area::service::insert(&args.tags, conn))
+        .await??;
     let log_message = format!(
-        "{} created a new area: https://api.btcmap.org/v2/areas/{}",
+        "{} created a new area: https://api.btcmap.org/v3/areas/{}",
         token.owner,
-        area.tags["url_alias"].as_str().unwrap(),
+        area.id,
     );
     warn!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
@@ -71,62 +62,61 @@ struct PatchArgs {
     tags: Map<String, Value>,
 }
 
-#[patch("{id}")]
+#[patch("{id_or_alias}")]
 async fn patch(
     req: HttpRequest,
-    id: Path<String>,
+    id_or_alias: Path<String>,
     args: Json<PatchArgs>,
     auth: Data<AuthService>,
-    repo: Data<AreaRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
-    let int_id = id.parse::<i64>();
-    let area = match int_id {
-        Ok(id) => repo.select_by_id(id).await,
-        Err(_) => repo.select_by_url_alias(&id).await,
-    }?
-    .ok_or(Error::HttpNotFound(format!(
-        "There is no area with id or url_alias = {}",
-        id,
-    )))?;
-    let area = repo.patch_tags(area.id, &args.tags).await?;
+    let area = Area::select_by_id_or_alias_async(&id_or_alias, &pool)
+        .await?
+        .ok_or(Error::HttpNotFound(format!(
+            "There is no area with id or alias = {}",
+            id_or_alias,
+        )))?;
+    let area = pool
+        .get()
+        .await?
+        .interact(move |conn| area::service::patch_tags(area.id, &args.tags, conn))
+        .await??;
     let log_message = format!(
-        "{} updated area https://api.btcmap.org/v2/areas/{}",
+        "{} updated area https://api.btcmap.org/v3/areas/{}",
         token.owner,
-        area.tags["url_alias"].as_str().unwrap(),
+        area.id,
     );
     warn!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(area.into())
 }
 
-#[delete("{id}")]
+#[delete("{id_or_alias}")]
 async fn delete(
     req: HttpRequest,
-    id: Path<String>,
+    id_or_alias: Path<String>,
     auth: Data<AuthService>,
-    repo: Data<AreaRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
-    let int_id = id.parse::<i64>();
-    let area = match int_id {
-        Ok(id) => repo.select_by_id(id).await,
-        Err(_) => repo.select_by_url_alias(&id).await,
-    }?
-    .ok_or(Error::HttpNotFound(format!(
-        "There is no area with id or url_alias = {}",
-        id,
-    )))?;
-    let area = repo
-        .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
-        .await?;
+    let area = Area::select_by_id_or_alias_async(&id_or_alias, &pool)
+        .await?
+        .ok_or(Error::HttpNotFound(format!(
+            "There is no area with id or alias = {}",
+            id_or_alias,
+        )))?;
+    let area = pool
+        .get()
+        .await?
+        .interact(move |conn| area::service::soft_delete(area.id, conn))
+        .await??;
     let log_message = format!(
-        "User {} deleted area https://api.btcmap.org/v2/areas/{}",
+        "{} deleted area https://api.btcmap.org/v3/areas/{}",
         token.owner,
-        area.tags["url_alias"].as_str().unwrap(),
+        area.id,
     );
     warn!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(area.into())
 }
 
@@ -149,10 +139,11 @@ impl Into<Json<AreaView>> for Area {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use crate::area::admin::{AreaView, PatchArgs, PostArgs};
-    use crate::area::{Area, AreaRepo};
-    use crate::test::{mock_state, mock_tags};
+    use crate::area::Area;
+    use crate::osm::overpass::OverpassElement;
+    use crate::test::{mock_state, mock_tags, phuket_geo_json};
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -161,12 +152,12 @@ mod tests {
     use serde_json::{json, Map, Value};
 
     #[test]
-    async fn post_unauthorized() -> Result<()> {
+    async fn post_should_return_401_if_unauthorized() -> Result<()> {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.auth))
-                .app_data(Data::new(state.area_repo))
                 .service(scope("/").service(super::post)),
         )
         .await;
@@ -180,19 +171,20 @@ mod tests {
     }
 
     #[test]
-    async fn post() -> Result<()> {
+    async fn post_should_create_area() -> Result<()> {
         let state = mock_state().await;
         let token = state.auth.mock_token("test").await.secret;
         let app = test::init_service(
             App::new()
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.auth))
-                .app_data(Data::new(state.area_repo.clone()))
                 .service(scope("/").service(super::post)),
         )
         .await;
         let mut tags = mock_tags();
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
+        tags.insert("geo_json".into(), phuket_geo_json());
         let req = TestRequest::post()
             .uri("/")
             .append_header(("Authorization", format!("Bearer {token}")))
@@ -206,13 +198,13 @@ mod tests {
     }
 
     #[test]
-    async fn patch_unauthorized() -> Result<()> {
+    async fn patch_should_return_401_if_unauthorized() -> Result<()> {
         let state = mock_state().await;
         state.area_repo.insert(&Map::new()).await?;
         let app = test::init_service(
             App::new()
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.auth))
-                .app_data(Data::new(state.area_repo))
                 .service(super::patch),
         )
         .await;
@@ -226,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    async fn patch() -> Result<()> {
+    async fn patch_should_update_area() -> Result<()> {
         let state = mock_state().await;
         let token = state.auth.mock_token("test").await.secret;
         let url_alias = "test";
@@ -235,8 +227,8 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.auth))
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::patch),
         )
         .await;
@@ -271,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    async fn delete_unauthorized() -> Result<()> {
+    async fn delete_should_return_401_if_unauthorized() -> Result<()> {
         let state = mock_state().await;
         let url_alias = "test";
         let mut tags = Map::new();
@@ -279,8 +271,8 @@ mod tests {
         state.area_repo.insert(&tags).await?;
         let app = test::init_service(
             App::new()
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.auth))
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::delete),
         )
         .await;
@@ -293,17 +285,45 @@ mod tests {
     }
 
     #[test]
-    async fn delete() -> Result<()> {
+    async fn delete_should_soft_delete_area() -> Result<()> {
         let state = mock_state().await;
+
         let token = state.auth.mock_token("test").await.secret;
+
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
+        tags.insert("geo_json".into(), phuket_geo_json());
         state.area_repo.insert(&tags).await?;
+
+        let area_element = state
+            .element_repo
+            .insert(&OverpassElement {
+                lat: Some(7.979623499157051),
+                lon: Some(98.33448362485439),
+                ..OverpassElement::mock(1)
+            })
+            .await?;
+        let area_element = state
+            .element_repo
+            .set_tag(area_element.id, "areas", &json!([{"name":"test"}]))
+            .await?;
+
+        assert!(
+            area_element
+                .tags
+                .get("areas")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len()
+                == 1
+        );
+
         let app = test::init_service(
             App::new()
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.auth))
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
                 .service(super::delete),
         )
         .await;
@@ -313,9 +333,14 @@ mod tests {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
+
         let area: Option<Area> = state.area_repo.select_by_url_alias(&url_alias).await?;
         assert!(area.is_some());
-        assert!(area.unwrap().deleted_at != None);
+        assert!(area.unwrap().deleted_at.is_some());
+
+        let area_element = state.area_repo.select_by_id(1).await?.unwrap();
+        assert!(area_element.tags.get("areas").is_none());
+
         Ok(())
     }
 }
