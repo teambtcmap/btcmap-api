@@ -12,6 +12,7 @@ struct OsmElementResponse {
     elements: Vec<OsmElement>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct OsmElement {
     pub r#type: String,

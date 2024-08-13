@@ -2,6 +2,7 @@ use crate::Result;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use tracing::debug;
 
+#[allow(dead_code)]
 pub struct Token {
     pub id: i64,
     pub owner: String,
