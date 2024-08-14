@@ -49,8 +49,7 @@ async fn post(
         .await??;
     let log_message = format!(
         "{} created a new area: https://api.btcmap.org/v3/areas/{}",
-        token.owner,
-        area.id,
+        token.owner, area.id,
     );
     warn!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
@@ -84,8 +83,7 @@ async fn patch(
         .await??;
     let log_message = format!(
         "{} updated area https://api.btcmap.org/v3/areas/{}",
-        token.owner,
-        area.id,
+        token.owner, area.id,
     );
     warn!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
@@ -113,8 +111,7 @@ async fn delete(
         .await??;
     let log_message = format!(
         "{} deleted area https://api.btcmap.org/v3/areas/{}",
-        token.owner,
-        area.id,
+        token.owner, area.id,
     );
     warn!(log_message);
     Ok(area.into())
