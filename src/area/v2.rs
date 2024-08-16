@@ -8,10 +8,12 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::web::Redirect;
 use actix_web::Either;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -59,28 +61,24 @@ impl Into<Json<GetItem>> for Area {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    repo: Data<AreaRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
             Redirect::to("https://static.btcmap.org/api/v2/areas.json").permanent(),
         ));
     }
-
-    Ok(Either::Left(Json(match &args.updated_since {
-        Some(updated_since) => repo
-            .select_updated_since(updated_since, args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-        None => repo
-            .select_all(args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    })))
+    let areas = pool
+        .get()
+        .await?
+        .interact(move |conn| match &args.updated_since {
+            Some(updated_since) => Area::select_updated_since(updated_since, args.limit, conn),
+            None => Area::select_all(args.limit, conn),
+        })
+        .await??;
+    Ok(Either::Left(Json(
+        areas.into_iter().map(|it| it.into()).collect(),
+    )))
 }
 
 #[get("{url_alias}")]
@@ -110,7 +108,7 @@ mod tests {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -128,7 +126,7 @@ mod tests {
         Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -148,7 +146,7 @@ mod tests {
         Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

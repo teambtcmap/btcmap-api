@@ -26,14 +26,6 @@ impl AreaRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Area>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_all(limit, conn))
-            .await?
-    }
-
     pub async fn select_updated_since(
         &self,
         updated_since: &OffsetDateTime,
@@ -433,14 +425,14 @@ mod test {
 
     #[test]
     async fn select_all() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         assert_eq!(
             vec![
-                Area::insert(&Map::new(), &state.conn)?,
-                Area::insert(&Map::new(), &state.conn)?,
-                Area::insert(&Map::new(), &state.conn)?,
+                Area::insert(&Map::new(), &conn)?,
+                Area::insert(&Map::new(), &conn)?,
+                Area::insert(&Map::new(), &conn)?,
             ],
-            state.area_repo.select_all(None).await?,
+            Area::select_all(None, &conn)?,
         );
         Ok(())
     }
