@@ -82,6 +82,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<G
 
 #[cfg(test)]
 mod test {
+    use crate::area::Area;
     use crate::element::ElementRepo;
     use crate::error::{self, ApiError};
     use crate::test::mock_state;
@@ -147,7 +148,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let state = mock_state().await;
-        let area = state.area_repo.insert(&Map::new()).await?;
+        let area = Area::insert(&Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.area_repo))
@@ -165,9 +166,9 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        let area_1 = state.area_repo.insert(&Map::new()).await?;
-        let area_2 = state.area_repo.insert(&Map::new()).await?;
-        let _area_3 = state.area_repo.insert(&Map::new()).await?;
+        let area_1 = Area::insert(&Map::new(), &state.conn)?;
+        let area_2 = Area::insert(&Map::new(), &state.conn)?;
+        let _area_3 = Area::insert(&Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.area_repo))
@@ -185,12 +186,12 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let area_1 = state.area_repo.insert(&Map::new()).await?;
+        let area_1 = Area::insert(&Map::new(), &state.conn)?;
         state
             .area_repo
             .set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC))
             .await?;
-        let area_2 = state.area_repo.insert(&Map::new()).await?;
+        let area_2 = Area::insert(&Map::new(), &state.conn)?;
         let area_2 = state
             .area_repo
             .set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC))

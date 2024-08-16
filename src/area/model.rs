@@ -26,16 +26,6 @@ impl AreaRepo {
         Self { pool: pool.clone() }
     }
 
-    #[cfg(test)]
-    pub async fn insert(&self, tags: &Map<String, Value>) -> Result<Area> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::insert(&tags, conn))
-            .await?
-    }
-
     pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Area>> {
         self.pool
             .get()
@@ -76,35 +66,12 @@ impl AreaRepo {
     }
 
     #[cfg(test)]
-    pub async fn patch_tags(&self, id: i64, tags: &Map<String, Value>) -> Result<Area> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_patch_tags(id, &tags, conn))
-            .await?
-    }
-
-    #[cfg(test)]
     pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Area> {
         let updated_at = updated_at.clone();
         self.pool
             .get()
             .await?
             .interact(move |conn| Area::_set_updated_at(id, &updated_at, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_deleted_at(
-        &self,
-        id: i64,
-        deleted_at: Option<OffsetDateTime>,
-    ) -> Result<Area> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_set_deleted_at(id, deleted_at, conn))
             .await?
     }
 }
@@ -447,7 +414,7 @@ impl Area {
 mod test {
     use crate::{
         area::Area,
-        test::{mock_state, mock_tags},
+        test::{mock_conn, mock_state, mock_tags},
         Result,
     };
     use serde_json::{json, Map};
@@ -508,23 +475,20 @@ mod test {
 
     #[test]
     async fn select_by_id() -> Result<()> {
-        let state = mock_state().await;
-        let area = state.area_repo.insert(&Map::new()).await?;
-        assert_eq!(area, state.area_repo.select_by_id(area.id).await?.unwrap());
+        let conn = mock_conn();
+        let area = Area::insert(&Map::new(), &conn)?;
+        assert_eq!(area, Area::select_by_id(area.id, &conn)?.unwrap());
         Ok(())
     }
 
     #[test]
     async fn select_by_url_alias() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let url_alias = json!("url_alias_value");
         let mut tags = Map::new();
         tags.insert("url_alias".into(), url_alias.clone());
-        state.area_repo.insert(&tags).await?;
-        let area = state
-            .area_repo
-            .select_by_url_alias(url_alias.as_str().unwrap())
-            .await?;
+        Area::insert(&tags, &conn)?;
+        let area = Area::select_by_url_alias(url_alias.as_str().unwrap(), &conn)?;
         assert!(area.is_some());
         let area = area.unwrap();
         assert_eq!(url_alias, area.tags["url_alias"]);
@@ -533,17 +497,17 @@ mod test {
 
     #[test]
     async fn patch_tags() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let tag_1_name = "tag_1_name";
         let tag_1_value = json!("tag_1_value");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
-        let area = state.area_repo.insert(&tags).await?;
+        let area = Area::insert(&tags, &conn)?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         tags.insert(tag_2_name.into(), tag_2_value.clone());
-        let area = state.area_repo.patch_tags(area.id, &tags).await?;
+        let area = Area::_patch_tags(area.id, &tags, &conn)?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         assert_eq!(tag_2_value, area.tags[tag_2_name]);
         Ok(())
@@ -551,14 +515,11 @@ mod test {
 
     #[test]
     async fn set_deleted_at() -> Result<()> {
-        let state = mock_state().await;
-        let area = state.area_repo.insert(&Map::new()).await?;
-        let area = state
-            .area_repo
-            .set_deleted_at(area.id, Some(OffsetDateTime::now_utc()))
-            .await?;
+        let conn = mock_conn();
+        let area = Area::insert(&Map::new(), &conn)?;
+        let area = Area::_set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
         assert!(area.deleted_at.is_some());
-        let area = state.area_repo.set_deleted_at(area.id, None).await?;
+        let area = Area::_set_deleted_at(area.id, None, &conn)?;
         assert!(area.deleted_at.is_none());
         Ok(())
     }

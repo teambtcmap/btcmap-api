@@ -125,7 +125,7 @@ mod tests {
         let state = mock_state().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&tags).await?;
+        Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
@@ -143,9 +143,9 @@ mod tests {
         let state = mock_state().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&tags).await?;
-        state.area_repo.insert(&tags).await?;
-        state.area_repo.insert(&tags).await?;
+        Area::insert(&tags, &state.conn)?;
+        Area::insert(&tags, &state.conn)?;
+        Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(AreaRepo::new(&state.pool)))
@@ -164,7 +164,7 @@ mod tests {
         let area_url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
-        state.area_repo.insert(&tags).await?;
+        Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(AreaRepo::new(&state.pool)))

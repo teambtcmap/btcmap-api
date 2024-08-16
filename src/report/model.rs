@@ -404,7 +404,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 
 #[cfg(test)]
 mod test {
-    use crate::{test::mock_state, Result};
+    use crate::{area::Area, test::mock_state, Result};
     use serde_json::Map;
     use std::ops::Add;
     use time::{macros::datetime, Duration, OffsetDateTime};
@@ -415,7 +415,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -433,7 +433,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -459,7 +459,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         let report_1 = state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -500,7 +500,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -514,7 +514,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = state.area_repo.insert(&area_tags).await?;
+        let area = Area::insert(&area_tags, &state.conn)?;
         state
             .report_repo
             .insert(
@@ -543,7 +543,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
@@ -571,7 +571,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         let report = state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -599,7 +599,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         let report = state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())

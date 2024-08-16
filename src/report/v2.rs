@@ -160,6 +160,7 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<ReportRepo>) -> Result<Json<Get
 
 #[cfg(test)]
 mod test {
+    use crate::area::Area;
     use crate::report::v2::GetItem;
     use crate::test::mock_state;
     use crate::Result;
@@ -190,7 +191,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -212,7 +213,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         state
             .report_repo
             .insert(1, &date!(2023 - 05 - 06), &Map::new())
@@ -242,7 +243,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        state.area_repo.insert(&area_tags).await?;
+        Area::insert(&area_tags, &state.conn)?;
         let report_1 = state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())

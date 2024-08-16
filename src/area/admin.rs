@@ -197,7 +197,7 @@ mod test {
     #[test]
     async fn patch_should_return_401_if_unauthorized() -> Result<()> {
         let state = mock_state().await;
-        state.area_repo.insert(&Map::new()).await?;
+        Area::insert(&Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -221,7 +221,7 @@ mod test {
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        state.area_repo.insert(&tags).await?;
+        Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -265,7 +265,7 @@ mod test {
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        state.area_repo.insert(&tags).await?;
+        Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -291,7 +291,7 @@ mod test {
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
         tags.insert("geo_json".into(), phuket_geo_json());
-        state.area_repo.insert(&tags).await?;
+        Area::insert(&tags, &state.conn)?;
 
         let area_element = state
             .element_repo
