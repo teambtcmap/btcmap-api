@@ -444,6 +444,10 @@ impl Element {
     pub fn tag(&self, name: &str) -> &Value {
         self.tags.get(name).unwrap_or(&Value::Null)
     }
+
+    pub fn name(&self) -> String {
+        self.overpass_data.tag("name").into()
+    }
 }
 
 const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {

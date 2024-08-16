@@ -94,9 +94,10 @@ async fn patch(
     )))?;
     let element = repo.patch_tags(element.id, &args.tags).await?;
     let log_message = format!(
-        "{} updated element https://api.btcmap.org/v2/elements/{}",
+        "{} updated element {} https://api.btcmap.org/v3/elements/{}",
         token.owner,
-        element.overpass_data.btcmap_id(),
+        element.name(),
+        element.id,
     );
     warn!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
