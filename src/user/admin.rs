@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use tracing::warn;
 
 #[patch("{id}/tags")]
-async fn patch_tags(
+pub async fn patch_tags(
     req: HttpRequest,
     id: Path<i64>,
     args: Json<HashMap<String, Value>>,

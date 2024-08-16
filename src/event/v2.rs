@@ -64,7 +64,7 @@ impl Into<Json<GetItem>> for Event {
 }
 
 #[get("")]
-async fn get(
+pub async fn get(
     args: Query<GetArgs>,
     repo: Data<EventRepo>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {

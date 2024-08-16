@@ -11,7 +11,7 @@ pub struct GetArgs {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>) -> Result<impl Responder, Error> {
+pub async fn get(args: Query<GetArgs>) -> Result<impl Responder, Error> {
     let api_key = std::env::var("STADIA_API_KEY").unwrap();
     let url = format!(
         "https://tiles.stadiamaps.com/tiles/{}/{}/{}/{}@2x.png?api_key={}",

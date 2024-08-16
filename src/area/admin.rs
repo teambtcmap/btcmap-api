@@ -35,7 +35,7 @@ struct PostArgs {
 }
 
 #[post("")]
-async fn post(
+pub async fn post(
     req: HttpRequest,
     args: Json<PostArgs>,
     auth: Data<AuthService>,
@@ -62,7 +62,7 @@ struct PatchArgs {
 }
 
 #[patch("{id_or_alias}")]
-async fn patch(
+pub async fn patch(
     req: HttpRequest,
     id_or_alias: Path<String>,
     args: Json<PatchArgs>,
@@ -91,7 +91,7 @@ async fn patch(
 }
 
 #[delete("{id_or_alias}")]
-async fn delete(
+pub async fn delete(
     req: HttpRequest,
     id_or_alias: Path<String>,
     auth: Data<AuthService>,

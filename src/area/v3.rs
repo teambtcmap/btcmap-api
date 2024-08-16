@@ -57,7 +57,7 @@ impl Into<Json<GetItem>> for Area {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, repo: Data<AreaRepo>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, repo: Data<AreaRepo>) -> Result<Json<Vec<GetItem>>, Error> {
     Ok(Json(
         repo.select_updated_since(&args.updated_since, Some(args.limit))
             .await?
@@ -68,7 +68,7 @@ async fn get(args: Query<GetArgs>, repo: Data<AreaRepo>) -> Result<Json<Vec<GetI
 }
 
 #[get("{id}")]
-async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
     let id_clone = id.clone();
     pool.get()
         .await?

@@ -57,7 +57,7 @@ impl Into<Json<GetItem>> for Area {
 }
 
 #[get("")]
-async fn get(
+pub async fn get(
     args: Query<GetArgs>,
     repo: Data<AreaRepo>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
@@ -84,7 +84,7 @@ async fn get(
 }
 
 #[get("{url_alias}")]
-async fn get_by_url_alias(
+pub async fn get_by_url_alias(
     url_alias: Path<String>,
     repo: Data<AreaRepo>,
 ) -> Result<Json<GetItem>, Error> {

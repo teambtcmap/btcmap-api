@@ -64,7 +64,7 @@ impl Into<Json<GetItem>> for User {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, repo: Data<UserRepo>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, repo: Data<UserRepo>) -> Result<Json<Vec<GetItem>>, Error> {
     Ok(Json(
         repo.select_updated_since(&args.updated_since, Some(args.limit))
             .await?

@@ -12,8 +12,8 @@ strip = "symbols"
 
 [dependencies]
 
-# https://github.com/actix/actix-web/releases
-actix-web = { version = "4.5.1", default-features = false, features = ["macros", "compress-brotli"] }
+# https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
+actix-web = { version = "4.7.0", default-features = false, features = ["macros", "compress-brotli"] }
 
 # https://github.com/rusqlite/rusqlite/releases
 rusqlite = { version = "0.31.0", default-features = false, features = ["bundled", "time"] }

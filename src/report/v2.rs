@@ -70,7 +70,7 @@ impl Into<Json<GetItem>> for Report {
 }
 
 #[get("")]
-async fn get(
+pub async fn get(
     args: Query<GetArgs>,
     repo: Data<ReportRepo>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {

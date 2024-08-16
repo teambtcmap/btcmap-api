@@ -95,7 +95,7 @@ impl Into<Json<GetItem>> for Event {
 }
 
 #[get("")]
-async fn get(args: Query<GetArgs>, repo: Data<EventRepo>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, repo: Data<EventRepo>) -> Result<Json<Vec<GetItem>>, Error> {
     match &args.updated_since {
         Some(updated_since) => Ok(Json(
             repo.select_updated_since(&updated_since, Some(args.limit.unwrap_or(100)))

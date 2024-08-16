@@ -66,7 +66,7 @@ struct PatchArgs {
 }
 
 #[patch("{id}")]
-async fn patch(
+pub async fn patch(
     req: HttpRequest,
     id: Path<String>,
     args: Json<PatchArgs>,
@@ -111,7 +111,7 @@ struct PostTagsArgs {
 }
 
 #[post("{id}/tags")]
-async fn post_tags(
+pub async fn post_tags(
     req: HttpRequest,
     id: Path<String>,
     args: Form<PostTagsArgs>,
@@ -150,7 +150,7 @@ async fn post_tags(
 }
 
 #[patch("{id}/tags")]
-async fn patch_tags(
+pub async fn patch_tags(
     req: HttpRequest,
     id: Path<String>,
     args: Json<Map<String, Value>>,
