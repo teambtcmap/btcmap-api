@@ -26,44 +26,12 @@ impl AreaRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn select_updated_since(
-        &self,
-        updated_since: &OffsetDateTime,
-        limit: Option<i64>,
-    ) -> Result<Vec<Area>> {
-        let updated_since = updated_since.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_updated_since(&updated_since, limit, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn select_by_id(&self, id: i64) -> Result<Option<Area>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_by_id(id, conn))
-            .await?
-    }
-
     pub async fn select_by_url_alias(&self, url_alias: &str) -> Result<Option<Area>> {
         let url_alias = url_alias.to_string();
         self.pool
             .get()
             .await?
             .interact(move |conn| Area::select_by_url_alias(&url_alias, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Area> {
-        let updated_at = updated_at.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::_set_updated_at(id, &updated_at, conn))
             .await?
     }
 }
@@ -441,26 +409,17 @@ mod test {
     async fn select_updated_since() -> Result<()> {
         let state = mock_state().await;
         let _area_1 = Area::insert(&mock_tags(), &state.conn)?;
-        let _area_1 = state
-            .area_repo
-            .set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC))
-            .await?;
+        let _area_1 =
+            Area::_set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &state.conn)?;
         let area_2 = Area::insert(&mock_tags(), &state.conn)?;
-        let area_2 = state
-            .area_repo
-            .set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC))
-            .await?;
+        let area_2 =
+            Area::_set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &state.conn)?;
         let area_3 = Area::insert(&mock_tags(), &state.conn)?;
-        let area_3 = state
-            .area_repo
-            .set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC))
-            .await?;
+        let area_3 =
+            Area::_set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &state.conn)?;
         assert_eq!(
             vec![area_2, area_3],
-            state
-                .area_repo
-                .select_updated_since(&datetime!(2020-01-01 00:00 UTC), None)
-                .await?,
+            Area::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &state.conn)?,
         );
         Ok(())
     }

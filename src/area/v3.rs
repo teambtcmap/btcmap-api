@@ -1,5 +1,4 @@
 use crate::area::Area;
-use crate::area::AreaRepo;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -57,14 +56,15 @@ impl Into<Json<GetItem>> for Area {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, repo: Data<AreaRepo>) -> Result<Json<Vec<GetItem>>, Error> {
-    Ok(Json(
-        repo.select_updated_since(&args.updated_since, Some(args.limit))
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    ))
+pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec<GetItem>>, Error> {
+    let areas = pool
+        .get()
+        .await?
+        .interact(move |conn| {
+            Area::select_updated_since(&args.updated_since, Some(args.limit), conn)
+        })
+        .await??;
+    Ok(Json(areas.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
@@ -133,7 +133,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.area_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -151,7 +151,7 @@ mod test {
         let area = Area::insert(&Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.area_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -171,7 +171,7 @@ mod test {
         let _area_3 = Area::insert(&Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.area_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -187,18 +187,13 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
         let area_1 = Area::insert(&Map::new(), &state.conn)?;
-        state
-            .area_repo
-            .set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC))
-            .await?;
+        Area::_set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
         let area_2 = Area::insert(&Map::new(), &state.conn)?;
-        let area_2 = state
-            .area_repo
-            .set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC))
-            .await?;
+        let area_2 =
+            Area::_set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.area_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

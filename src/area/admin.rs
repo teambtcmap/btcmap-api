@@ -335,7 +335,7 @@ mod test {
         assert!(area.is_some());
         assert!(area.unwrap().deleted_at.is_some());
 
-        let area_element = state.area_repo.select_by_id(1).await?.unwrap();
+        let area_element = Area::select_by_id(1, &state.conn)?.unwrap();
         assert!(area_element.tags.get("areas").is_none());
 
         Ok(())
