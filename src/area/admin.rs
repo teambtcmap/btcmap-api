@@ -247,11 +247,7 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-        let area = state
-            .area_repo
-            .select_by_url_alias(&url_alias)
-            .await?
-            .unwrap();
+        let area = Area::select_by_url_alias(&url_alias, &state.conn)?.unwrap();
         assert!(area.tags["string"].is_string());
         assert!(area.tags["unsigned"].is_u64());
         assert!(area.tags["float"].is_f64());
@@ -331,7 +327,7 @@ mod test {
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
-        let area: Option<Area> = state.area_repo.select_by_url_alias(&url_alias).await?;
+        let area: Option<Area> = Area::select_by_url_alias(&url_alias, &state.conn)?;
         assert!(area.is_some());
         assert!(area.unwrap().deleted_at.is_some());
 

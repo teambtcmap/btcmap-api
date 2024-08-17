@@ -1,5 +1,5 @@
 use crate::{
-    area::AreaRepo, auth::AuthService, command::db, element::ElementRepo, event::model::EventRepo,
+    auth::AuthService, command::db, element::ElementRepo, event::model::EventRepo,
     report::model::ReportRepo, user::UserRepo,
 };
 use deadpool_sqlite::{Config, Pool, Runtime};
@@ -29,7 +29,6 @@ pub async fn mock_state() -> State {
         conn: db.0,
         pool: pool.clone(),
         auth: AuthService::new(&pool),
-        area_repo: AreaRepo::new(&pool),
         element_repo: ElementRepo::new(&pool),
         event_repo: EventRepo::new(&pool),
         report_repo: ReportRepo::new(&pool),
@@ -58,7 +57,6 @@ pub struct State {
     pub conn: Connection,
     pub pool: Arc<Pool>,
     pub auth: AuthService,
-    pub area_repo: AreaRepo,
     pub element_repo: ElementRepo,
     pub event_repo: EventRepo,
     pub report_repo: ReportRepo,

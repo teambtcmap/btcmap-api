@@ -1,5 +1,4 @@
 use crate::area::Area;
-use crate::area::AreaRepo;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -84,14 +83,18 @@ pub async fn get(
 #[get("{url_alias}")]
 pub async fn get_by_url_alias(
     url_alias: Path<String>,
-    repo: Data<AreaRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Json<GetItem>, Error> {
-    repo.select_by_url_alias(&url_alias)
+    let cloned_url_alias = url_alias.clone();
+    let area = pool
+        .get()
         .await?
-        .ok_or(Error::HttpNotFound(format!(
-            "Area with url_alias = {url_alias} doesn't exist"
-        )))
-        .map(|it| it.into())
+        .interact(move |conn| Area::select_by_url_alias(&cloned_url_alias, conn))
+        .await??;
+    area.ok_or(Error::HttpNotFound(format!(
+        "Area with url_alias = {url_alias} doesn't exist"
+    )))
+    .map(|it| it.into())
 }
 
 #[cfg(test)]
@@ -165,7 +168,7 @@ mod tests {
         Area::insert(&tags, &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(AreaRepo::new(&state.pool)))
+                .app_data(Data::new(state.pool))
                 .service(super::get_by_url_alias),
         )
         .await;

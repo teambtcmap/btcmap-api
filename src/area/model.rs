@@ -3,14 +3,9 @@ use deadpool_sqlite::Pool;
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, error, info};
-
-#[derive(Clone)]
-pub struct AreaRepo {
-    pool: Arc<Pool>,
-}
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Area {
@@ -19,21 +14,6 @@ pub struct Area {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
-}
-
-impl AreaRepo {
-    pub fn new(pool: &Arc<Pool>) -> Self {
-        Self { pool: pool.clone() }
-    }
-
-    pub async fn select_by_url_alias(&self, url_alias: &str) -> Result<Option<Area>> {
-        let url_alias = url_alias.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Area::select_by_url_alias(&url_alias, conn))
-            .await?
-    }
 }
 
 const TABLE: &str = "area";
