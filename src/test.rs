@@ -1,6 +1,6 @@
 use crate::{
-    auth::AuthService, command::db, element::ElementRepo, event::model::EventRepo,
-    report::model::ReportRepo, user::UserRepo,
+    command::db, element::ElementRepo, event::model::EventRepo, report::model::ReportRepo,
+    user::UserRepo,
 };
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
@@ -28,7 +28,6 @@ pub async fn mock_state() -> State {
     State {
         conn: db.0,
         pool: pool.clone(),
-        auth: AuthService::new(&pool),
         element_repo: ElementRepo::new(&pool),
         event_repo: EventRepo::new(&pool),
         report_repo: ReportRepo::new(&pool),
@@ -56,7 +55,6 @@ pub fn mock_db() -> (Connection, Pool) {
 pub struct State {
     pub conn: Connection,
     pub pool: Arc<Pool>,
-    pub auth: AuthService,
     pub element_repo: ElementRepo,
     pub event_repo: EventRepo,
     pub report_repo: ReportRepo,

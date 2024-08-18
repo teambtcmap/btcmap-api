@@ -1,5 +1,4 @@
 use super::db;
-use crate::auth::AuthService;
 use crate::element::ElementRepo;
 use crate::event::model::EventRepo;
 use crate::report::model::ReportRepo;
@@ -41,8 +40,6 @@ pub async fn run() -> Result<()> {
         .unwrap();
 
     HttpServer::new(move || {
-        let auth_service = AuthService::new(&pool);
-
         let element_repo = ElementRepo::new(&pool);
         let event_repo = EventRepo::new(&pool);
         let report_repo = ReportRepo::new(&pool);
@@ -88,7 +85,6 @@ pub async fn run() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(pool.clone()))
-            .app_data(Data::new(auth_service))
             .app_data(Data::new(element_repo))
             .app_data(Data::new(event_repo))
             .app_data(Data::new(report_repo))

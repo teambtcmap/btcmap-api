@@ -1,11 +1,17 @@
-use crate::{auth::AuthService, discord, user::UserRepo, Error};
+use crate::{
+    auth::{self},
+    discord,
+    user::UserRepo,
+    Error,
+};
 use actix_web::{
     patch,
     web::{Data, Json, Path},
     HttpRequest, HttpResponse, Responder,
 };
+use deadpool_sqlite::Pool;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tracing::warn;
 
 #[patch("{id}/tags")]
@@ -13,10 +19,10 @@ pub async fn patch_tags(
     req: HttpRequest,
     id: Path<i64>,
     args: Json<HashMap<String, Value>>,
-    auth: Data<AuthService>,
+    pool: Data<Arc<Pool>>,
     repo: Data<UserRepo>,
 ) -> Result<impl Responder, Error> {
-    let token = auth.check(&req).await?;
+    let token = auth::service::check(&req, &pool).await?;
     repo.select_by_id(*id)
         .await?
         .ok_or(Error::HttpNotFound(format!(
@@ -38,7 +44,7 @@ pub async fn patch_tags(
 mod test {
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
-    use crate::Result;
+    use crate::{auth, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -49,10 +55,10 @@ mod test {
     async fn patch_tags() -> Result<()> {
         let state = mock_state().await;
         let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let token = state.auth.mock_token("test").await.secret;
+        let token = auth::service::mock_token("test", &state.pool).await.secret;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.user_repo))
                 .service(super::patch_tags),
         )

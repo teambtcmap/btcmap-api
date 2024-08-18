@@ -1,6 +1,6 @@
 use crate::{
     area::{self, Area},
-    auth::AuthService,
+    auth::{self},
     discord, Error,
 };
 use actix_web::{
@@ -38,10 +38,9 @@ struct PostArgs {
 pub async fn post(
     req: HttpRequest,
     args: Json<PostArgs>,
-    auth: Data<AuthService>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
-    let token = auth.check(&req).await?;
+    let token = auth::service::check(&req, &pool).await?;
     let area = pool
         .get()
         .await?
@@ -66,10 +65,9 @@ pub async fn patch(
     req: HttpRequest,
     id_or_alias: Path<String>,
     args: Json<PatchArgs>,
-    auth: Data<AuthService>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
-    let token = auth.check(&req).await?;
+    let token = auth::service::check(&req, &pool).await?;
     let cloned_id_or_alias = id_or_alias.clone();
     let area = pool
         .get()
@@ -98,10 +96,9 @@ pub async fn patch(
 pub async fn delete(
     req: HttpRequest,
     id_or_alias: Path<String>,
-    auth: Data<AuthService>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
-    let token = auth.check(&req).await?;
+    let token = auth::service::check(&req, &pool).await?;
     let cloned_id_or_alias = id_or_alias.clone();
     let area = pool
         .get()
@@ -149,7 +146,7 @@ mod test {
     use crate::area::Area;
     use crate::osm::overpass::OverpassElement;
     use crate::test::{mock_state, mock_tags, phuket_geo_json};
-    use crate::Result;
+    use crate::{auth, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -162,7 +159,6 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.auth))
                 .service(scope("/").service(super::post)),
         )
         .await;
@@ -178,11 +174,10 @@ mod test {
     #[test]
     async fn post_should_create_area() -> Result<()> {
         let state = mock_state().await;
-        let token = state.auth.mock_token("test").await.secret;
+        let token = auth::service::mock_token("test", &state.pool).await.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.auth))
                 .service(scope("/").service(super::post)),
         )
         .await;
@@ -209,7 +204,6 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.auth))
                 .service(super::patch),
         )
         .await;
@@ -225,7 +219,7 @@ mod test {
     #[test]
     async fn patch_should_update_area() -> Result<()> {
         let state = mock_state().await;
-        let token = state.auth.mock_token("test").await.secret;
+        let token = auth::service::mock_token("test", &state.pool).await.secret;
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -233,7 +227,6 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.auth))
                 .service(super::patch),
         )
         .await;
@@ -273,7 +266,6 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.auth))
                 .service(super::delete),
         )
         .await;
@@ -289,7 +281,7 @@ mod test {
     async fn delete_should_soft_delete_area() -> Result<()> {
         let state = mock_state().await;
 
-        let token = state.auth.mock_token("test").await.secret;
+        let token = auth::service::mock_token("test", &state.pool).await.secret;
 
         let url_alias = "test";
         let mut tags = Map::new();
@@ -324,7 +316,6 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.auth))
                 .service(super::delete),
         )
         .await;

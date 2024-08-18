@@ -1,15 +1,20 @@
 use super::Element;
 use crate::{
-    auth::AuthService, discord, element::ElementRepo, osm::overpass::OverpassElement, Error,
+    auth::{self},
+    discord,
+    element::ElementRepo,
+    osm::overpass::OverpassElement,
+    Error,
 };
 use actix_web::{
     patch, post,
     web::{Data, Form, Json, Path},
     HttpRequest,
 };
+use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use time::OffsetDateTime;
 use tracing::warn;
 
@@ -70,10 +75,10 @@ pub async fn patch(
     req: HttpRequest,
     id: Path<String>,
     args: Json<PatchArgs>,
-    auth: Data<AuthService>,
+    pool: Data<Arc<Pool>>,
     repo: Data<ElementRepo>,
 ) -> Result<Json<ElementView>, Error> {
-    let token = auth.check(&req).await?;
+    let token = auth::service::check(&req, &pool).await?;
     let int_id = id.parse::<i64>();
     let element = match int_id {
         Ok(id) => repo.select_by_id(id).await,
@@ -115,10 +120,10 @@ pub async fn post_tags(
     req: HttpRequest,
     id: Path<String>,
     args: Form<PostTagsArgs>,
-    auth: Data<AuthService>,
+    pool: Data<Arc<Pool>>,
     repo: Data<ElementRepo>,
 ) -> Result<Json<ElementView>, Error> {
-    let token = auth.check(&req).await?;
+    let token = auth::service::check(&req, &pool).await?;
     let id_parts: Vec<&str> = id.split(":").collect();
     if id_parts.len() != 2 {
         Err(Error::HttpBadRequest("Invalid identifier".into()))?
@@ -154,10 +159,10 @@ pub async fn patch_tags(
     req: HttpRequest,
     id: Path<String>,
     args: Json<Map<String, Value>>,
-    auth: Data<AuthService>,
+    pool: Data<Arc<Pool>>,
     repo: Data<ElementRepo>,
 ) -> Result<Json<ElementView>, Error> {
-    let token = auth.check(&req).await?;
+    let token = auth::service::check(&req, &pool).await?;
     let id_parts: Vec<&str> = id.split(":").collect();
     if id_parts.len() != 2 {
         Err(Error::HttpBadRequest("Invalid identifier".into()))?
@@ -191,7 +196,7 @@ mod test {
     use crate::element::ElementRepo;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
-    use crate::Result;
+    use crate::{auth, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -204,7 +209,7 @@ mod test {
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.element_repo))
                 .service(super::patch),
         )
@@ -221,11 +226,11 @@ mod test {
     #[test]
     async fn patch() -> Result<()> {
         let state = mock_state().await;
-        let token = state.auth.mock_token("test").await.secret;
+        let token = auth::service::mock_token("test", &state.pool).await.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.pool.clone()))
                 .app_data(Data::new(ElementRepo::new(&state.pool)))
                 .service(super::patch),
         )
@@ -259,11 +264,11 @@ mod test {
     #[test]
     async fn post_tags() -> Result<()> {
         let state = mock_state().await;
-        let token = state.auth.mock_token("test").await.secret;
+        let token = auth::service::mock_token("test", &state.pool).await.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.element_repo))
                 .service(super::post_tags),
         )
@@ -284,11 +289,11 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state().await;
-        let token = state.auth.mock_token("test").await.secret;
+        let token = auth::service::mock_token("test", &state.pool).await.secret;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.pool))
                 .app_data(Data::new(state.element_repo))
                 .service(super::patch_tags),
         )

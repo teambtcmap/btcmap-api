@@ -3,37 +3,25 @@ use crate::{discord, Error};
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
-use std::sync::Arc;
 use tracing::warn;
 
-pub struct AuthService {
-    pool: Arc<Pool>,
+#[cfg(test)]
+pub async fn mock_token(secret: &str, pool: &Pool) -> Token {
+    let secret = secret.to_string();
+    pool.get()
+        .await
+        .unwrap()
+        .interact(move |conn| Token::insert("test", &secret, conn))
+        .await
+        .unwrap()
+        .unwrap()
 }
 
-impl AuthService {
-    pub fn new(pool: &Arc<Pool>) -> Self {
-        Self { pool: pool.clone() }
-    }
-
-    #[cfg(test)]
-    pub async fn mock_token(&self, secret: &str) -> Token {
-        let secret = secret.to_string();
-        self.pool
-            .get()
-            .await
-            .unwrap()
-            .interact(move |conn| Token::insert("test", &secret, conn))
-            .await
-            .unwrap()
-            .unwrap()
-    }
-
-    pub async fn check(&self, req: &HttpRequest) -> Result<Token, Error> {
-        let headers = req.headers().clone();
-        let guard = self.pool.get().await.unwrap();
-        let conn = guard.lock().unwrap();
-        get_admin_token(&conn, &headers).await
-    }
+pub async fn check(req: &HttpRequest, pool: &Pool) -> Result<Token, Error> {
+    let headers = req.headers().clone();
+    let guard = pool.get().await.unwrap();
+    let conn = guard.lock().unwrap();
+    get_admin_token(&conn, &headers).await
 }
 
 pub async fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Error> {
@@ -69,7 +57,6 @@ pub async fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Tok
 
 #[cfg(test)]
 mod tests {
-    use crate::auth::AuthService;
     use crate::test::mock_state;
     use crate::{Error, Result};
     use actix_web::test::{self, TestRequest};
@@ -80,14 +67,16 @@ mod tests {
         web::{scope, Data},
         App, Responder,
     };
+    use deadpool_sqlite::Pool;
+    use std::sync::Arc;
 
     #[actix_web::test]
     async fn no_header() -> Result<()> {
         let state = mock_state().await;
-        state.auth.mock_token("test").await;
+        super::mock_token("test", &state.pool).await.secret;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(get)),
         )
         .await;
@@ -100,10 +89,10 @@ mod tests {
     #[actix_web::test]
     async fn valid_token() -> Result<()> {
         let state = mock_state().await;
-        state.auth.mock_token("test").await;
+        super::mock_token("test", &state.pool).await.secret;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.auth))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(get)),
         )
         .await;
@@ -117,8 +106,8 @@ mod tests {
     }
 
     #[get("")]
-    async fn get(req: HttpRequest, auth: Data<AuthService>) -> Result<impl Responder, Error> {
-        auth.check(&req).await?;
+    async fn get(req: HttpRequest, pool: Data<Arc<Pool>>) -> Result<impl Responder, Error> {
+        super::check(&req, &pool).await?;
         Ok(Response::ok())
     }
 }
