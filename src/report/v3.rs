@@ -166,7 +166,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(&area_tags, &state.conn)?;
+        let area = Area::insert(area_tags, &state.conn)?;
         let report = state
             .report_repo
             .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -190,7 +190,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(&area_tags, &state.conn)?;
+        let area = Area::insert(area_tags, &state.conn)?;
         let report_1 = state
             .report_repo
             .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -222,7 +222,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(&area_tags, &state.conn)?;
+        let area = Area::insert(area_tags, &state.conn)?;
 
         let report_1 = state
             .report_repo

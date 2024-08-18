@@ -47,13 +47,13 @@ pub async fn run(path: &str, conn: &mut Connection) -> Result<()> {
             let reader = BufReader::new(file);
             let json: CountryJson = serde_json::from_reader(reader)?;
 
-            match Area::select_by_url_alias(&json.id, &tx)? {
+            match Area::select_by_alias(&json.id, &tx)? {
                 Some(area) => {
-                    area.patch_tags(&json.tags, &tx)?;
+                    Area::patch_tags(area.id, json.tags, &tx)?;
                     info!(json.id, "Patched tags for an existing area");
                 }
                 None => {
-                    Area::insert(&json.tags, &tx)?;
+                    Area::insert(json.tags, &tx)?;
                     info!(json.id, "Inserted area");
                 }
             }

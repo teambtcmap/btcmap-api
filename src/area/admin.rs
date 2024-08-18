@@ -45,7 +45,7 @@ pub async fn post(
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::insert(&args.tags, conn))
+        .interact(move |conn| area::service::insert(args.tags.clone(), conn))
         .await??;
     let log_message = format!(
         "{} created a new area: https://api.btcmap.org/v3/areas/{}",
@@ -70,8 +70,12 @@ pub async fn patch(
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
-    let area = Area::select_by_id_or_alias_async(&id_or_alias, &pool)
+    let cloned_id_or_alias = id_or_alias.clone();
+    let area = pool
+        .get()
         .await?
+        .interact(move |conn| Area::select_by_id_or_alias(&cloned_id_or_alias, &conn))
+        .await??
         .ok_or(Error::HttpNotFound(format!(
             "There is no area with id or alias = {}",
             id_or_alias,
@@ -79,7 +83,7 @@ pub async fn patch(
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::patch_tags(area.id, &args.tags, conn))
+        .interact(move |conn| area::service::patch_tags(area.id, args.tags.clone(), conn))
         .await??;
     let log_message = format!(
         "{} updated area https://api.btcmap.org/v3/areas/{}",
@@ -98,8 +102,12 @@ pub async fn delete(
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
     let token = auth.check(&req).await?;
-    let area = Area::select_by_id_or_alias_async(&id_or_alias, &pool)
+    let cloned_id_or_alias = id_or_alias.clone();
+    let area = pool
+        .get()
         .await?
+        .interact(move |conn| Area::select_by_id_or_alias(&cloned_id_or_alias, &conn))
+        .await??
         .ok_or(Error::HttpNotFound(format!(
             "There is no area with id or alias = {}",
             id_or_alias,
@@ -197,7 +205,7 @@ mod test {
     #[test]
     async fn patch_should_return_401_if_unauthorized() -> Result<()> {
         let state = mock_state().await;
-        Area::insert(&Map::new(), &state.conn)?;
+        Area::insert(Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -221,7 +229,7 @@ mod test {
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        Area::insert(&tags, &state.conn)?;
+        Area::insert(tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -247,7 +255,7 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-        let area = Area::select_by_url_alias(&url_alias, &state.conn)?.unwrap();
+        let area = Area::select_by_alias(&url_alias, &state.conn)?.unwrap();
         assert!(area.tags["string"].is_string());
         assert!(area.tags["unsigned"].is_u64());
         assert!(area.tags["float"].is_f64());
@@ -261,7 +269,7 @@ mod test {
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        Area::insert(&tags, &state.conn)?;
+        Area::insert(tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -287,7 +295,7 @@ mod test {
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
         tags.insert("geo_json".into(), phuket_geo_json());
-        Area::insert(&tags, &state.conn)?;
+        Area::insert(tags, &state.conn)?;
 
         let area_element = state
             .element_repo
@@ -327,7 +335,7 @@ mod test {
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
-        let area: Option<Area> = Area::select_by_url_alias(&url_alias, &state.conn)?;
+        let area: Option<Area> = Area::select_by_alias(&url_alias, &state.conn)?;
         assert!(area.is_some());
         assert!(area.unwrap().deleted_at.is_some());
 

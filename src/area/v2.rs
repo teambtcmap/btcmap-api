@@ -89,7 +89,7 @@ pub async fn get_by_url_alias(
     let area = pool
         .get()
         .await?
-        .interact(move |conn| Area::select_by_url_alias(&cloned_url_alias, conn))
+        .interact(move |conn| Area::select_by_alias(&cloned_url_alias, conn))
         .await??;
     area.ok_or(Error::HttpNotFound(format!(
         "Area with url_alias = {url_alias} doesn't exist"
@@ -126,7 +126,7 @@ mod tests {
         let state = mock_state().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        Area::insert(&tags, &state.conn)?;
+        Area::insert(tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -144,9 +144,9 @@ mod tests {
         let state = mock_state().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        Area::insert(&tags, &state.conn)?;
-        Area::insert(&tags, &state.conn)?;
-        Area::insert(&tags, &state.conn)?;
+        Area::insert(tags.clone(), &state.conn)?;
+        Area::insert(tags.clone(), &state.conn)?;
+        Area::insert(tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -165,7 +165,7 @@ mod tests {
         let area_url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
-        Area::insert(&tags, &state.conn)?;
+        Area::insert(tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))

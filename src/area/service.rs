@@ -8,7 +8,7 @@ use rusqlite::Connection;
 use serde_json::{Map, Value};
 use time::OffsetDateTime;
 
-pub fn insert(tags: &Map<String, Value>, conn: &mut Connection) -> Result<Area> {
+pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     let sp = conn.savepoint()?;
     let url_alias = tags
         .get("url_alias")
@@ -32,24 +32,24 @@ pub fn insert(tags: &Map<String, Value>, conn: &mut Connection) -> Result<Area> 
     if geo_json.is_err() {
         Err(Error::HttpConflict("Invalid geo_json".into()))?
     }
-    if Area::select_by_url_alias(url_alias, &sp)?.is_some() {
+    if Area::select_by_alias(url_alias, &sp)?.is_some() {
         Err(Error::HttpConflict(
             "This url_alias is already in use".into(),
         ))?
     }
-    let area = Area::insert(&tags, &sp)?;
+    let area = Area::insert(tags, &sp)?;
     let area_elements = element::service::find_in_area(&area, &sp)?;
     element::service::update_areas_tag(&area_elements, &sp)?;
     sp.commit()?;
     Ok(area)
 }
 
-pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &mut Connection) -> Result<Area> {
+pub fn patch_tags(id: i64, tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     let sp = conn.savepoint()?;
     let area = Area::select_by_id(id, &sp)?.unwrap();
     let area_elements = element::service::find_in_area(&area, &sp)?;
     element::service::update_areas_tag(&area_elements, &sp)?;
-    let area = Area::_patch_tags(id, tags, &sp)?;
+    let area = Area::patch_tags(id, tags, &sp)?;
     let area_elements = element::service::find_in_area(&area, &sp)?;
     element::service::update_areas_tag(&area_elements, &sp)?;
     sp.commit()?;
@@ -60,7 +60,7 @@ pub fn soft_delete(id: i64, conn: &mut Connection) -> Result<Area> {
     let sp = conn.savepoint()?;
     let area = Area::select_by_id(id, &sp)?.unwrap();
     let area_elements = element::service::find_in_area(&area, &sp)?;
-    let area = area.set_deleted_at(Some(OffsetDateTime::now_utc()), &sp)?;
+    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &sp)?;
     element::service::update_areas_tag(&area_elements, &sp)?;
     sp.commit()?;
     Ok(area)
@@ -82,7 +82,7 @@ mod test {
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
         tags.insert("geo_json".into(), phuket_geo_json());
-        let area = super::insert(&tags, &mut conn)?;
+        let area = super::insert(tags, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
         Ok(())
@@ -101,7 +101,7 @@ mod test {
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
         tags.insert("geo_json".into(), phuket_geo_json());
-        super::insert(&tags, &mut conn)?;
+        super::insert(tags, &mut conn)?;
         let db_area_element = Element::select_by_id(area_element.id, &conn)?.unwrap();
         assert_eq!(1, db_area_element.tag("areas").as_array().unwrap().len());
         Ok(())
@@ -114,14 +114,14 @@ mod test {
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
         tags.insert("geo_json".into(), phuket_geo_json());
-        let area = Area::insert(&tags, &mut conn)?;
+        let area = Area::insert(tags, &mut conn)?;
         let mut patch_tags = Map::new();
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
         patch_tags.insert(new_tag_name.into(), new_tag_value.clone());
         let new_alias = json!("test1");
         patch_tags.insert("url_alias".into(), new_alias.clone());
-        let area = super::patch_tags(area.id, &patch_tags, &mut conn)?;
+        let area = super::patch_tags(area.id, patch_tags, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
         assert_eq!(new_tag_value, db_area.tags[new_tag_name]);
@@ -144,8 +144,8 @@ mod test {
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
         tags.insert("geo_json".into(), phuket_geo_json());
-        let area = Area::insert(&tags, &mut conn)?;
-        let area = super::patch_tags(area.id, &Map::new(), &mut conn)?;
+        let area = Area::insert(tags, &mut conn)?;
+        let area = super::patch_tags(area.id, Map::new(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
         let db_area_element = Element::select_by_id(area_element.id, &conn)?.unwrap();
@@ -156,7 +156,7 @@ mod test {
     #[test]
     fn soft_delete() -> Result<()> {
         let mut conn = mock_conn();
-        let area = Area::insert(&Map::new(), &conn)?;
+        let area = Area::insert(Map::new(), &conn)?;
         super::soft_delete(area.id, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
@@ -177,7 +177,7 @@ mod test {
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
         tags.insert("geo_json".into(), phuket_geo_json());
-        let area = Area::insert(&tags, &mut conn)?;
+        let area = Area::insert(tags, &mut conn)?;
         super::soft_delete(area.id, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());

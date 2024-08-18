@@ -12,7 +12,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
                 let geo_json: Value = serde_json::from_str(&unescaped)?;
                 let mut patch_set = Map::new();
                 patch_set.insert("geo_json".into(), geo_json);
-                area.patch_tags(&patch_set, &conn)?;
+                Area::patch_tags(area.id, patch_set, &conn)?;
                 warn!(area.id, "Fixed geo_json tag");
             }
         }

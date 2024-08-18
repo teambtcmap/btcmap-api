@@ -226,7 +226,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
-        Area::insert(&area_tags, &state.conn)?;
+        Area::insert(area_tags, &state.conn)?;
         for _ in 1..100 {
             state
                 .report_repo

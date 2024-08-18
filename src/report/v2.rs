@@ -191,7 +191,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(&area_tags, &state.conn)?;
+        Area::insert(area_tags, &state.conn)?;
         state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
@@ -213,7 +213,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(&area_tags, &state.conn)?;
+        Area::insert(area_tags, &state.conn)?;
         state
             .report_repo
             .insert(1, &date!(2023 - 05 - 06), &Map::new())
@@ -243,7 +243,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(&area_tags, &state.conn)?;
+        Area::insert(area_tags, &state.conn)?;
         let report_1 = state
             .report_repo
             .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())

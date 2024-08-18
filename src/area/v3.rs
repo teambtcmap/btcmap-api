@@ -148,7 +148,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let state = mock_state().await;
-        let area = Area::insert(&Map::new(), &state.conn)?;
+        let area = Area::insert(Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -166,9 +166,9 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        let area_1 = Area::insert(&Map::new(), &state.conn)?;
-        let area_2 = Area::insert(&Map::new(), &state.conn)?;
-        let _area_3 = Area::insert(&Map::new(), &state.conn)?;
+        let area_1 = Area::insert(Map::new(), &state.conn)?;
+        let area_2 = Area::insert(Map::new(), &state.conn)?;
+        let _area_3 = Area::insert(Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -186,11 +186,11 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let area_1 = Area::insert(&Map::new(), &state.conn)?;
-        Area::_set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
-        let area_2 = Area::insert(&Map::new(), &state.conn)?;
+        let area_1 = Area::insert(Map::new(), &state.conn)?;
+        Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        let area_2 = Area::insert(Map::new(), &state.conn)?;
         let area_2 =
-            Area::_set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
+            Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))

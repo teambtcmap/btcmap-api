@@ -35,7 +35,7 @@ fn vacuum_area(area: &Area, conn: &Connection) -> Result<VacuumResult> {
 
         if value.is_null() {
             warn!(area_id = area.id, key, "Area tag is null");
-            Area::remove_tag(area, key, conn)?;
+            Area::remove_tag(area.id, key, conn)?;
             nulls_removed += 1;
         }
 
@@ -44,7 +44,7 @@ fn vacuum_area(area: &Area, conn: &Connection) -> Result<VacuumResult> {
 
             if value == "" {
                 warn!(area_id = area.id, key, value, "Area tag is useless string");
-                Area::remove_tag(area, key, conn)?;
+                Area::remove_tag(area.id, key, conn)?;
                 useless_strings_removed += 1;
             }
         }

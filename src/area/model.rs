@@ -1,13 +1,15 @@
 use crate::{Error, Result};
-use deadpool_sqlite::Pool;
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
-use std::time::Instant;
+use std::{
+    thread::sleep,
+    time::{Duration, Instant},
+};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, error, info};
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Area {
     pub id: i64,
     pub tags: Map<String, Value>,
@@ -17,15 +19,16 @@ pub struct Area {
 }
 
 const TABLE: &str = "area";
-const ALL_COLUMNS: &str = "rowid, tags, created_at, updated_at, deleted_at";
-const COL_ROWID: &str = "rowid";
+const ALL_COLUMNS: &str = "id, tags, created_at, updated_at, deleted_at";
+const COL_ID: &str = "id";
 const COL_TAGS: &str = "tags";
 const _COL_CREATED_AT: &str = "created_at";
 const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Area {
-    pub fn insert(tags: &Map<String, Value>, conn: &Connection) -> Result<Area> {
+    pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
+        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 INSERT INTO {TABLE} ({COL_TAGS}) 
@@ -33,12 +36,8 @@ impl Area {
             "#
         );
         debug!(query);
-        conn.execute(
-            &query,
-            named_params! { ":tags": serde_json::to_string(tags)? },
-        )?;
-        Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        conn.execute(&query, named_params! { ":tags": Value::from(tags) })?;
+        Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Area>> {
@@ -47,7 +46,7 @@ impl Area {
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
-                ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
+                ORDER BY {COL_UPDATED_AT}, {COL_ID}
                 LIMIT :limit
             "#
         );
@@ -56,14 +55,14 @@ impl Area {
             .prepare(&query)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(i64::MAX) },
-                Self::mapper(),
+                mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?;
         let time_ms = start.elapsed().as_millis();
         info!(
             count = res.len(),
             time_ms,
-            "Loaded all areas ({}) in {} ms",
+            "Loaded {} areas in {} ms",
             res.len(),
             time_ms,
         );
@@ -75,43 +74,42 @@ impl Area {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Area>> {
+        let start = Instant::now();
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
                 WHERE {COL_UPDATED_AT} > :updated_since
-                ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
+                ORDER BY {COL_UPDATED_AT}, {COL_ID}
                 LIMIT :limit
             "#
         );
         debug!(query);
-        Ok(conn
+        let res = conn
             .prepare(&query)?
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
                     ":limit": limit.unwrap_or(i64::MAX),
                 },
-                Self::mapper(),
+                mapper(),
             )?
-            .collect::<Result<Vec<_>, _>>()?)
-    }
-
-    pub async fn select_by_id_or_alias_async(
-        id_or_alias: &str,
-        pool: &Pool,
-    ) -> Result<Option<Area>> {
-        let id_or_alias = id_or_alias.to_string();
-        pool.get()
-            .await?
-            .interact(move |conn| Area::select_by_id_or_alias(&id_or_alias, conn))
-            .await?
+            .collect::<Result<Vec<_>, _>>()?;
+        let time_ms = start.elapsed().as_millis();
+        info!(
+            count = res.len(),
+            time_ms,
+            "Loaded {} areas in {} ms",
+            res.len(),
+            time_ms,
+        );
+        Ok(res)
     }
 
     pub fn select_by_id_or_alias(id_or_alias: &str, conn: &Connection) -> Result<Option<Area>> {
         match id_or_alias.parse::<i64>() {
             Ok(id) => Area::select_by_id(id, conn),
-            Err(_) => Area::select_by_url_alias(id_or_alias, conn),
+            Err(_) => Area::select_by_alias(id_or_alias, conn),
         }
     }
 
@@ -120,43 +118,36 @@ impl Area {
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
-                WHERE {COL_ROWID} = :id
+                WHERE {COL_ID} = :id
             "#
         );
         debug!(query);
         Ok(conn
-            .query_row(&query, named_params! { ":id": id }, Self::mapper())
+            .query_row(&query, named_params! { ":id": id }, mapper())
             .optional()?)
     }
 
-    pub fn select_by_url_alias(url_alias: &str, conn: &Connection) -> Result<Option<Area>> {
+    pub fn select_by_alias(alias: &str, conn: &Connection) -> Result<Option<Area>> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
-                WHERE json_extract({COL_TAGS}, '$.url_alias') = :url_alias
+                WHERE json_extract({COL_TAGS}, '$.url_alias') = :alias
             "#
         );
         debug!(query);
         Ok(conn
-            .query_row(
-                &query,
-                named_params! { ":url_alias": url_alias },
-                Self::mapper(),
-            )
+            .query_row(&query, named_params! { ":alias": alias }, mapper())
             .optional()?)
     }
 
-    pub fn patch_tags(&self, tags: &Map<String, Value>, conn: &Connection) -> Result<Area> {
-        Area::_patch_tags(self.id, tags, conn)
-    }
-
-    pub fn _patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Area> {
+    pub fn patch_tags(id: i64, tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
+        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE}
-                SET {COL_TAGS} = json_patch({COL_TAGS}, :tags)
-                WHERE {COL_ROWID} = :id
+                SET {COL_TAGS} = json_patch({COL_TAGS}, json(:tags))
+                WHERE {COL_ID} = :id
             "#
         );
         debug!(query);
@@ -164,23 +155,20 @@ impl Area {
             &query,
             named_params! {
                 ":id": id,
-                ":tags": serde_json::to_string(tags)?,
+                ":tags": Value::from(tags),
             },
         )?;
         Ok(Area::select_by_id(id, &conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
-    pub fn remove_tag(&self, name: &str, conn: &Connection) -> Result<Area> {
-        Area::_remove_tag(self.id, name, conn)
-    }
-
-    fn _remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Area> {
+    pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Area> {
+        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE}
                 SET {COL_TAGS} = json_remove({COL_TAGS}, :name)
-                WHERE {COL_ROWID} = :id
+                WHERE {COL_ID} = :id
             "#
         );
         debug!(query);
@@ -196,21 +184,13 @@ impl Area {
     }
 
     #[cfg(test)]
-    pub fn __set_updated_at(&self, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Area> {
-        Area::_set_updated_at(self.id, updated_at, conn)
-    }
-
-    #[cfg(test)]
-    pub fn _set_updated_at(
-        id: i64,
-        updated_at: &OffsetDateTime,
-        conn: &Connection,
-    ) -> Result<Area> {
+    pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Area> {
+        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE}
                 SET {COL_UPDATED_AT} = :updated_at
-                WHERE {COL_ROWID} = :id
+                WHERE {COL_ID} = :id
             "#
         );
         debug!(query);
@@ -226,25 +206,18 @@ impl Area {
     }
 
     pub fn set_deleted_at(
-        &self,
-        deleted_at: Option<OffsetDateTime>,
-        conn: &Connection,
-    ) -> Result<Area> {
-        Area::_set_deleted_at(self.id, deleted_at, conn)
-    }
-
-    pub fn _set_deleted_at(
         id: i64,
         deleted_at: Option<OffsetDateTime>,
         conn: &Connection,
     ) -> Result<Area> {
+        sleep(Duration::from_millis(10));
         match deleted_at {
             Some(deleted_at) => {
                 let query = format!(
                     r#"
                         UPDATE {TABLE}
                         SET {COL_DELETED_AT} = :deleted_at
-                        WHERE {COL_ROWID} = :id
+                        WHERE {COL_ID} = :id
                     "#
                 );
                 debug!(query);
@@ -261,7 +234,7 @@ impl Area {
                     r#"
                         UPDATE {TABLE}
                         SET {COL_DELETED_AT} = NULL
-                        WHERE {COL_ROWID} = :id
+                        WHERE {COL_ID} = :id
                     "#
                 );
                 debug!(query);
@@ -335,18 +308,18 @@ impl Area {
 
         return geometries;
     }
+}
 
-    const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
-        |row: &Row| -> rusqlite::Result<Area> {
-            let tags: String = row.get(1)?;
-            Ok(Area {
-                id: row.get(0)?,
-                tags: serde_json::from_str(&tags).unwrap(),
-                created_at: row.get(2)?,
-                updated_at: row.get(3)?,
-                deleted_at: row.get(4)?,
-            })
-        }
+const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
+    |row: &Row| -> rusqlite::Result<Area> {
+        let tags: String = row.get(1)?;
+        Ok(Area {
+            id: row.get(0)?,
+            tags: serde_json::from_str(&tags).unwrap(),
+            created_at: row.get(2)?,
+            updated_at: row.get(3)?,
+            deleted_at: row.get(4)?,
+        })
     }
 }
 
@@ -365,7 +338,7 @@ mod test {
     async fn insert() -> Result<()> {
         let state = mock_state().await;
         let tags = mock_tags();
-        let res = Area::insert(&tags, &state.conn)?;
+        let res = Area::insert(tags.clone(), &state.conn)?;
         assert_eq!(tags, res.tags);
         assert_eq!(res, Area::select_by_id(res.id, &state.conn)?.unwrap());
         Ok(())
@@ -376,9 +349,9 @@ mod test {
         let conn = mock_conn();
         assert_eq!(
             vec![
-                Area::insert(&Map::new(), &conn)?,
-                Area::insert(&Map::new(), &conn)?,
-                Area::insert(&Map::new(), &conn)?,
+                Area::insert(Map::new(), &conn)?,
+                Area::insert(Map::new(), &conn)?,
+                Area::insert(Map::new(), &conn)?,
             ],
             Area::select_all(None, &conn)?,
         );
@@ -388,15 +361,15 @@ mod test {
     #[test]
     async fn select_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let _area_1 = Area::insert(&mock_tags(), &state.conn)?;
+        let _area_1 = Area::insert(mock_tags(), &state.conn)?;
         let _area_1 =
-            Area::_set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &state.conn)?;
-        let area_2 = Area::insert(&mock_tags(), &state.conn)?;
+            Area::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &state.conn)?;
+        let area_2 = Area::insert(mock_tags(), &state.conn)?;
         let area_2 =
-            Area::_set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &state.conn)?;
-        let area_3 = Area::insert(&mock_tags(), &state.conn)?;
+            Area::set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &state.conn)?;
+        let area_3 = Area::insert(mock_tags(), &state.conn)?;
         let area_3 =
-            Area::_set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &state.conn)?;
+            Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &state.conn)?;
         assert_eq!(
             vec![area_2, area_3],
             Area::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &state.conn)?,
@@ -407,7 +380,7 @@ mod test {
     #[test]
     async fn select_by_id() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(&Map::new(), &conn)?;
+        let area = Area::insert(Map::new(), &conn)?;
         assert_eq!(area, Area::select_by_id(area.id, &conn)?.unwrap());
         Ok(())
     }
@@ -418,8 +391,8 @@ mod test {
         let url_alias = json!("url_alias_value");
         let mut tags = Map::new();
         tags.insert("url_alias".into(), url_alias.clone());
-        Area::insert(&tags, &conn)?;
-        let area = Area::select_by_url_alias(url_alias.as_str().unwrap(), &conn)?;
+        Area::insert(tags, &conn)?;
+        let area = Area::select_by_alias(url_alias.as_str().unwrap(), &conn)?;
         assert!(area.is_some());
         let area = area.unwrap();
         assert_eq!(url_alias, area.tags["url_alias"]);
@@ -435,10 +408,10 @@ mod test {
         let tag_2_value = json!("tag_2_value");
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
-        let area = Area::insert(&tags, &conn)?;
+        let area = Area::insert(tags.clone(), &conn)?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         tags.insert(tag_2_name.into(), tag_2_value.clone());
-        let area = Area::_patch_tags(area.id, &tags, &conn)?;
+        let area = Area::patch_tags(area.id, tags, &conn)?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         assert_eq!(tag_2_value, area.tags[tag_2_name]);
         Ok(())
@@ -447,10 +420,10 @@ mod test {
     #[test]
     async fn set_deleted_at() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(&Map::new(), &conn)?;
-        let area = Area::_set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
+        let area = Area::insert(Map::new(), &conn)?;
+        let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
         assert!(area.deleted_at.is_some());
-        let area = Area::_set_deleted_at(area.id, None, &conn)?;
+        let area = Area::set_deleted_at(area.id, None, &conn)?;
         assert!(area.deleted_at.is_none());
         Ok(())
     }
