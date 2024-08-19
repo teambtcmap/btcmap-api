@@ -1,16 +1,17 @@
 use crate::osm::osm::OsmUser;
 use crate::user::User;
-use crate::user::UserRepo;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -64,21 +65,24 @@ impl Into<Json<GetItem>> for User {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, repo: Data<UserRepo>) -> Result<Json<Vec<GetItem>>, Error> {
-    Ok(Json(
-        repo.select_updated_since(&args.updated_since, Some(args.limit))
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    ))
+pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec<GetItem>>, Error> {
+    let users = pool
+        .get()
+        .await?
+        .interact(move |conn| {
+            User::select_updated_since(&args.updated_since, Some(args.limit), conn)
+        })
+        .await??;
+    Ok(Json(users.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, repo: Data<UserRepo>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
-    repo.select_by_id(id)
+    pool.get()
         .await?
+        .interact(move |conn| User::select_by_id(id, conn))
+        .await??
         .map(|it| it.into())
         .ok_or(Error::HttpNotFound(format!(
             "User with id = {id} doesn't exist"
@@ -90,7 +94,7 @@ mod test {
     use crate::error::{self, ApiError};
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
-    use crate::user::UserRepo;
+    use crate::user::User;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data, QueryConfig};
@@ -103,7 +107,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(UserRepo::mock()))
+                .app_data(Data::new(mock_state().await.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -119,7 +123,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(UserRepo::mock()))
+                .app_data(Data::new(mock_state().await.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -137,7 +141,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -152,10 +156,10 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let state = mock_state().await;
-        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -170,12 +174,12 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        let user_1 = state.user_repo.insert(1, &OsmUser::mock()).await?;
-        let user_2 = state.user_repo.insert(2, &OsmUser::mock()).await?;
-        let _user_3 = state.user_repo.insert(3, &OsmUser::mock()).await?;
+        let user_1 = User::insert(1, &OsmUser::mock(), &state.conn)?;
+        let user_2 = User::insert(2, &OsmUser::mock(), &state.conn)?;
+        let _user_3 = User::insert(3, &OsmUser::mock(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -190,19 +194,14 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let user_1 = state.user_repo.insert(1, &OsmUser::mock()).await?;
-        state
-            .user_repo
-            .set_updated_at(user_1.id, &datetime!(2022-01-05 00:00 UTC))
-            .await?;
-        let user_2 = state.user_repo.insert(2, &OsmUser::mock()).await?;
-        let user_2 = state
-            .user_repo
-            .set_updated_at(user_2.id, &datetime!(2022-02-05 00:00 UTC))
-            .await?;
+        let user_1 = User::insert(1, &OsmUser::mock(), &state.conn)?;
+        User::_set_updated_at(user_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        let user_2 = User::insert(2, &OsmUser::mock(), &state.conn)?;
+        let user_2 =
+            User::_set_updated_at(user_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

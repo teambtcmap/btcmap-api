@@ -1,6 +1,5 @@
 use crate::osm::osm::OsmUser;
 use crate::user::User;
-use crate::user::UserRepo;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -9,10 +8,12 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::web::Redirect;
 use actix_web::Either;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -62,35 +63,33 @@ impl Into<Json<GetItem>> for User {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    repo: Data<UserRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
             Redirect::to("https://static.btcmap.org/api/v2/users.json").permanent(),
         ));
     }
-
-    Ok(Either::Left(Json(match &args.updated_since {
-        Some(updated_since) => repo
-            .select_updated_since(updated_since, args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-        None => repo
-            .select_all(args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    })))
+    let users = pool
+        .get()
+        .await?
+        .interact(move |conn| match &args.updated_since {
+            Some(updated_since) => User::select_updated_since(updated_since, args.limit, conn),
+            None => User::select_all(args.limit, conn),
+        })
+        .await??;
+    Ok(Either::Left(Json(
+        users.into_iter().map(|it| it.into()).collect(),
+    )))
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, repo: Data<UserRepo>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
-    repo.select_by_id(id)
+    pool.get()
         .await?
+        .interact(move |conn| User::select_by_id(id, conn))
+        .await??
         .map(|it| it.into())
         .ok_or(Error::HttpNotFound(format!(
             "User with id = {id} doesn't exist"
@@ -102,6 +101,7 @@ mod test {
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
     use crate::user::v2::GetItem;
+    use crate::user::User;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -113,7 +113,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -126,10 +126,10 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
+        User::insert(1, &OsmUser::mock(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -154,7 +154,7 @@ mod test {
         }).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -170,10 +170,10 @@ mod test {
     async fn get_by_id() -> Result<()> {
         let state = mock_state().await;
         let user_id = 1;
-        state.user_repo.insert(user_id, &OsmUser::mock()).await?;
+        User::insert(user_id, &OsmUser::mock(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.user_repo))
+                .app_data(Data::new(state.pool))
                 .service(super::get_by_id),
         )
         .await;

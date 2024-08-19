@@ -112,6 +112,7 @@ mod test {
     use crate::osm::osm::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
+    use crate::user::User;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -137,7 +138,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let state = mock_state().await;
-        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.event_repo.insert(user.id, element.id, "").await?;
         let app = test::init_service(
@@ -155,7 +156,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
+        User::insert(1, &OsmUser::mock(), &state.conn)?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.event_repo.insert(1, 1, "").await?;
         state.event_repo.insert(1, 1, "").await?;
@@ -175,7 +176,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        state.user_repo.insert(1, &OsmUser::mock()).await?;
+        User::insert(1, &OsmUser::mock(), &state.conn)?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
         let event_1 = state.event_repo.insert(1, 1, "").await?;
         state
@@ -205,7 +206,7 @@ mod test {
     async fn get_by_id() -> Result<()> {
         let state = mock_state().await;
         let event_id = 1;
-        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
         state.event_repo.insert(user.id, element.id, "").await?;
         let app = test::init_service(

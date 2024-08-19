@@ -1,15 +1,10 @@
 use crate::{osm::osm::OsmUser, Error, Result};
-use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 #[cfg(test)]
 use tracing::debug;
-
-pub struct UserRepo {
-    pool: Arc<Pool>,
-}
 
 pub struct User {
     pub id: i64,
@@ -18,77 +13,6 @@ pub struct User {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
-}
-
-impl UserRepo {
-    pub fn new(pool: &Arc<Pool>) -> Self {
-        Self { pool: pool.clone() }
-    }
-
-    #[cfg(test)]
-    pub fn mock() -> Self {
-        Self {
-            pool: Arc::new(crate::test::mock_db().1),
-        }
-    }
-
-    #[cfg(test)]
-    pub async fn insert(&self, id: i64, osm_data: &OsmUser) -> Result<User> {
-        let osm_data = osm_data.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| User::insert(id, &osm_data, conn))
-            .await?
-    }
-
-    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<User>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| User::select_all(limit, conn))
-            .await?
-    }
-
-    pub async fn select_updated_since(
-        &self,
-        updated_since: &OffsetDateTime,
-        limit: Option<i64>,
-    ) -> Result<Vec<User>> {
-        let updated_since = updated_since.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| User::select_updated_since(&updated_since, limit, conn))
-            .await?
-    }
-
-    pub async fn select_by_id(&self, id: i64) -> Result<Option<User>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| User::select_by_id(id, conn))
-            .await?
-    }
-
-    pub async fn patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<User> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| User::patch_tags(id, &tags, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<User> {
-        let updated_at = updated_at.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| User::_set_updated_at(id, &updated_at, conn))
-            .await?
-    }
 }
 
 impl User {

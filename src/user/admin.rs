@@ -1,7 +1,7 @@
 use crate::{
     auth::{self},
     discord,
-    user::UserRepo,
+    user::User,
     Error,
 };
 use actix_web::{
@@ -20,17 +20,23 @@ pub async fn patch_tags(
     id: Path<i64>,
     args: Json<HashMap<String, Value>>,
     pool: Data<Arc<Pool>>,
-    repo: Data<UserRepo>,
 ) -> Result<impl Responder, Error> {
     let token = auth::service::check(&req, &pool).await?;
-    repo.select_by_id(*id)
+    let id = id.into_inner();
+    pool.get()
         .await?
+        .interact(move |conn| User::select_by_id(id, conn))
+        .await??
         .ok_or(Error::HttpNotFound(format!(
             "User with id = {id} doesn't exist"
         )))?;
-    repo.patch_tags(*id, &args).await?;
+    let cloned_args = args.clone();
+    pool.get()
+        .await?
+        .interact(move |conn| User::patch_tags(id, &cloned_args, conn))
+        .await??;
     let log_message = format!(
-        "User {} patched tags for user https://api.btcmap.org/v2/users/{} {}",
+        "User {} patched tags for user https://api.btcmap.org/v3/users/{} {}",
         token.owner,
         id,
         serde_json::to_string_pretty(&args).unwrap(),
@@ -44,6 +50,7 @@ pub async fn patch_tags(
 mod test {
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
+    use crate::user::User;
     use crate::{auth, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -54,12 +61,11 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let state = mock_state().await;
-        let user = state.user_repo.insert(1, &OsmUser::mock()).await?;
+        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let token = auth::service::mock_token("test", &state.pool).await.secret;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.user_repo))
                 .service(super::patch_tags),
         )
         .await;
