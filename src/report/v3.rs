@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::Report;
 use crate::Error;
 use actix_web::get;
@@ -12,6 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]

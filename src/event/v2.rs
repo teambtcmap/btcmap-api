@@ -1,5 +1,4 @@
 use super::Event;
-use crate::event::model::EventRepo;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -8,10 +7,12 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::web::Redirect;
 use actix_web::Either;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
@@ -66,40 +67,39 @@ impl Into<Json<GetItem>> for Event {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    repo: Data<EventRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
             Redirect::to("https://static.btcmap.org/api/v2/events.json").permanent(),
         ));
     }
-
-    Ok(Either::Left(Json(match &args.updated_since {
-        Some(updated_since) => repo
-            .select_updated_since(updated_since, args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-        None => repo
-            .select_updated_since(
+    let events = pool
+        .get()
+        .await?
+        .interact(move |conn| match &args.updated_since {
+            Some(updated_since) => Event::select_updated_since(updated_since, args.limit, conn),
+            None => Event::select_updated_since(
                 &OffsetDateTime::now_utc()
                     .checked_sub(Duration::days(30))
                     .unwrap(),
                 args.limit,
-            )
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    })))
+                conn,
+            ),
+        })
+        .await??;
+    Ok(Either::Left(Json(
+        events.into_iter().map(|it| it.into()).collect(),
+    )))
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, repo: Data<EventRepo>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
-    repo.select_by_id(id)
+    pool.get()
         .await?
+        .interact(move |conn| Event::select_by_id(id, conn))
+        .await??
         .map(|it| it.into())
         .ok_or(Error::HttpNotFound(format!(
             "Event with id = {id} doesn't exist"
@@ -109,6 +109,7 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<EventRepo>) -> Result<Json<GetI
 #[cfg(test)]
 mod test {
     use crate::event::v2::GetItem;
+    use crate::event::Event;
     use crate::osm::osm::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
@@ -125,7 +126,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -140,10 +141,10 @@ mod test {
         let state = mock_state().await;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.event_repo.insert(user.id, element.id, "").await?;
+        Event::insert(user.id, element.id, "", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -158,12 +159,12 @@ mod test {
         let state = mock_state().await;
         User::insert(1, &OsmUser::mock(), &state.conn)?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.event_repo.insert(1, 1, "").await?;
-        state.event_repo.insert(1, 1, "").await?;
-        state.event_repo.insert(1, 1, "").await?;
+        Event::insert(1, 1, "", &state.conn)?;
+        Event::insert(1, 1, "", &state.conn)?;
+        Event::insert(1, 1, "", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -178,19 +179,13 @@ mod test {
         let state = mock_state().await;
         User::insert(1, &OsmUser::mock(), &state.conn)?;
         state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let event_1 = state.event_repo.insert(1, 1, "").await?;
-        state
-            .event_repo
-            .set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC))
-            .await?;
-        let event_2 = state.event_repo.insert(1, 1, "").await?;
-        state
-            .event_repo
-            .set_updated_at(event_2.id, &datetime!(2022-02-05 00:00:00 UTC))
-            .await?;
+        let event_1 = Event::insert(1, 1, "", &state.conn)?;
+        Event::set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC), &state.conn)?;
+        let event_2 = Event::insert(1, 1, "", &state.conn)?;
+        Event::set_updated_at(event_2.id, &datetime!(2022-02-05 00:00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -208,10 +203,10 @@ mod test {
         let event_id = 1;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.event_repo.insert(user.id, element.id, "").await?;
+        Event::insert(user.id, element.id, "", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(super::get_by_id),
         )
         .await;

@@ -1,22 +1,16 @@
 use crate::Error;
 use crate::Result;
-use deadpool_sqlite::Pool;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::debug;
 
-pub struct EventRepo {
-    pool: Arc<Pool>,
-}
-
-#[derive(PartialEq, Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Event {
     pub id: i64,
     pub user_id: i64,
@@ -28,74 +22,6 @@ pub struct Event {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
-}
-
-impl EventRepo {
-    pub fn new(pool: &Arc<Pool>) -> Self {
-        Self { pool: pool.clone() }
-    }
-
-    #[cfg(test)]
-    pub async fn insert(&self, user_id: i64, element_id: i64, r#type: &str) -> Result<Event> {
-        let r#type = r#type.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Event::insert(user_id, element_id, &r#type, conn))
-            .await?
-    }
-
-    pub async fn select_all(
-        &self,
-        sort_order: Option<String>,
-        limit: Option<i64>,
-    ) -> Result<Vec<Event>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Event::select_all(sort_order, limit, conn))
-            .await?
-    }
-
-    pub async fn select_updated_since(
-        &self,
-        updated_since: &OffsetDateTime,
-        limit: Option<i64>,
-    ) -> Result<Vec<Event>> {
-        let updated_since = updated_since.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Event::select_updated_since(&updated_since, limit, conn))
-            .await?
-    }
-
-    pub async fn select_by_id(&self, id: i64) -> Result<Option<Event>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Event::select_by_id(id, conn))
-            .await?
-    }
-
-    pub async fn _patch_tags(&self, id: i64, tags: &HashMap<String, Value>) -> Result<Event> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Event::_patch_tags(id, &tags, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Event> {
-        let updated_at = updated_at.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Event::_set_updated_at(id, &updated_at, conn))
-            .await?
-    }
 }
 
 const TABLE: &str = "event";
@@ -298,12 +224,7 @@ impl Event {
     }
 
     #[cfg(test)]
-    pub fn set_updated_at(&self, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Event> {
-        Event::_set_updated_at(self.id, updated_at, conn)
-    }
-
-    #[cfg(test)]
-    pub fn _set_updated_at(
+    pub fn set_updated_at(
         id: i64,
         updated_at: &OffsetDateTime,
         conn: &Connection,
@@ -397,15 +318,14 @@ mod test {
         let conn = mock_conn();
         let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        Event::insert(user.id, element.id, "", &conn)?
-            .set_updated_at(&datetime!(2020-01-01 00:00 UTC), &conn)?;
+        let event_1 = Event::insert(user.id, element.id, "", &conn)?;
+        let _event_1 = Event::set_updated_at(event_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
+        let event_2 = Event::insert(1, element.id, "", &conn)?;
+        let event_2 = Event::set_updated_at(event_2.id, &datetime!(2020-01-02 00:00 UTC), &conn)?;
+        let event_3 = Event::insert(1, element.id, "", &conn)?;
+        let event_3 = Event::set_updated_at(event_3.id, &datetime!(2020-01-03 00:00 UTC), &conn)?;
         assert_eq!(
-            vec![
-                Event::insert(1, element.id, "", &conn)?
-                    .set_updated_at(&datetime!(2020-01-02 00:00 UTC), &conn)?,
-                Event::insert(1, element.id, "", &conn)?
-                    .set_updated_at(&datetime!(2020-01-03 00:00 UTC), &conn)?,
-            ],
+            vec![event_2, event_3,],
             Event::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &conn,)?
         );
         Ok(())
@@ -453,8 +373,8 @@ mod test {
         let updated_at = OffsetDateTime::now_utc();
         let user = User::insert(1, &OsmUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let event =
-            Event::insert(user.id, element.id, "", &conn)?.set_updated_at(&updated_at, &conn)?;
+        let event = Event::insert(user.id, element.id, "", &conn)?;
+        let event = Event::set_updated_at(event.id, &updated_at, &conn)?;
         assert_eq!(
             updated_at,
             Event::select_by_id(event.id, &conn)?.unwrap().updated_at,

@@ -1,15 +1,16 @@
 use super::Event;
-use crate::event::model::EventRepo;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -95,30 +96,27 @@ impl Into<Json<GetItem>> for Event {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, repo: Data<EventRepo>) -> Result<Json<Vec<GetItem>>, Error> {
-    match &args.updated_since {
-        Some(updated_since) => Ok(Json(
-            repo.select_updated_since(&updated_since, Some(args.limit.unwrap_or(100)))
-                .await?
-                .into_iter()
-                .map(|it| it.into())
-                .collect(),
-        )),
-        None => Ok(Json(
-            repo.select_all(Some("DESC".into()), Some(args.limit.unwrap_or(100)))
-                .await?
-                .into_iter()
-                .map(|it| it.into())
-                .collect(),
-        )),
-    }
+pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec<GetItem>>, Error> {
+    let events = pool
+        .get()
+        .await?
+        .interact(move |conn| match args.updated_since {
+            Some(updated_since) => {
+                Event::select_updated_since(&updated_since, Some(args.limit.unwrap_or(100)), conn)
+            }
+            None => Event::select_all(Some("DESC".into()), Some(args.limit.unwrap_or(100)), conn),
+        })
+        .await??;
+    Ok(Json(events.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, repo: Data<EventRepo>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
-    repo.select_by_id(id)
+    pool.get()
         .await?
+        .interact(move |conn| Event::select_by_id(id, conn))
+        .await??
         .map(|it| it.into())
         .ok_or(Error::HttpNotFound(format!(
             "Event with id = {id} doesn't exist"
@@ -127,6 +125,7 @@ pub async fn get_by_id(id: Path<i64>, repo: Data<EventRepo>) -> Result<Json<GetI
 
 #[cfg(test)]
 mod test {
+    use crate::event::Event;
     use crate::osm::osm::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
@@ -142,7 +141,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -159,10 +158,10 @@ mod test {
         let state = mock_state().await;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let event = state.event_repo.insert(user.id, element.id, "").await?;
+        let event = Event::insert(user.id, element.id, "", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -179,12 +178,12 @@ mod test {
         let state = mock_state().await;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let event_1 = state.event_repo.insert(user.id, element.id, "").await?;
-        let event_2 = state.event_repo.insert(user.id, element.id, "").await?;
-        let _event_3 = state.event_repo.insert(user.id, element.id, "").await?;
+        let event_1 = Event::insert(user.id, element.id, "", &state.conn)?;
+        let event_2 = Event::insert(user.id, element.id, "", &state.conn)?;
+        let _event_3 = Event::insert(user.id, element.id, "", &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -201,19 +200,14 @@ mod test {
         let state = mock_state().await;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
         let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let event_1 = state.event_repo.insert(user.id, element.id, "").await?;
-        state
-            .event_repo
-            .set_updated_at(event_1.id, &datetime!(2022-01-05 00:00 UTC))
-            .await?;
-        let event_2 = state.event_repo.insert(user.id, element.id, "").await?;
-        let event_2 = state
-            .event_repo
-            .set_updated_at(event_2.id, &datetime!(2022-02-05 00:00 UTC))
-            .await?;
+        let event_1 = Event::insert(user.id, element.id, "", &state.conn)?;
+        Event::set_updated_at(event_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        let event_2 = Event::insert(user.id, element.id, "", &state.conn)?;
+        let event_2 =
+            Event::set_updated_at(event_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.event_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
