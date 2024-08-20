@@ -1,11 +1,13 @@
+use std::sync::Arc;
+
 use super::Report;
-use crate::report::model::ReportRepo;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
@@ -71,24 +73,24 @@ impl Into<Json<GetItem>> for Report {
 }
 
 #[get("")]
-pub async fn get(
-    args: Query<GetArgs>,
-    repo: Data<ReportRepo>,
-) -> Result<Json<Vec<GetItem>>, Error> {
-    Ok(Json(
-        repo.select_updated_since(&args.updated_since, Some(args.limit))
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    ))
+pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec<GetItem>>, Error> {
+    let reports = pool
+        .get()
+        .await?
+        .interact(move |conn| {
+            Report::select_updated_since(&args.updated_since, Some(args.limit), conn)
+        })
+        .await??;
+    Ok(Json(reports.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, repo: Data<ReportRepo>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
-    repo.select_by_id(id)
+    pool.get()
         .await?
+        .interact(move |conn| Report::select_by_id(id, conn))
+        .await??
         .map(|it| it.into())
         .ok_or(Error::HttpNotFound(format!(
             "Report with id = {id} doesn't exist"
@@ -100,6 +102,7 @@ mod test {
     use crate::area::Area;
     use crate::element::ElementRepo;
     use crate::error::{self, ApiError};
+    use crate::report::Report;
     use crate::test::mock_state;
     use crate::Result;
     use actix_web::test::TestRequest;
@@ -149,7 +152,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.report_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -167,13 +170,15 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         let area = Area::insert(area_tags, &state.conn)?;
-        let report = state
-            .report_repo
-            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
+        let report = Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.report_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -191,21 +196,27 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         let area = Area::insert(area_tags, &state.conn)?;
-        let report_1 = state
-            .report_repo
-            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        let report_2 = state
-            .report_repo
-            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        let _report_3 = state
-            .report_repo
-            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
+        let report_1 = Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        let report_2 = Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        let _report_3 = Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.report_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -224,25 +235,24 @@ mod test {
         area_tags.insert("url_alias".into(), "test".into());
         let area = Area::insert(area_tags, &state.conn)?;
 
-        let report_1 = state
-            .report_repo
-            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        state
-            .report_repo
-            .set_updated_at(report_1.id, &datetime!(2022-01-05 00:00 UTC))
-            .await?;
-        let report_2 = state
-            .report_repo
-            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        let report_2 = state
-            .report_repo
-            .set_updated_at(report_2.id, &datetime!(2022-02-05 00:00 UTC))
-            .await?;
+        let report_1 = Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        Report::_set_updated_at(report_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        let report_2 = Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        let report_2 =
+            Report::_set_updated_at(report_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.report_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

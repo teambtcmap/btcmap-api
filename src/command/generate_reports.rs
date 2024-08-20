@@ -228,10 +228,7 @@ mod test {
         area_tags.insert("url_alias".into(), json!("test"));
         Area::insert(area_tags, &state.conn)?;
         for _ in 1..100 {
-            state
-                .report_repo
-                .insert(1, &date!(2023 - 11 - 12), &Map::new())
-                .await?;
+            Report::insert(1, &date!(2023 - 11 - 12), &Map::new(), &state.conn)?;
         }
         Ok(())
     }

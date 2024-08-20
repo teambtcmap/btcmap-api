@@ -1,24 +1,18 @@
 use crate::Error;
 use crate::Result;
-use deadpool_sqlite::Pool;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
-use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
 use tracing::debug;
 
-pub struct ReportRepo {
-    pool: Arc<Pool>,
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Report {
     pub id: i64,
     pub area_id: i64,
@@ -28,106 +22,6 @@ pub struct Report {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
-}
-
-impl ReportRepo {
-    pub fn new(pool: &Arc<Pool>) -> Self {
-        Self { pool: pool.clone() }
-    }
-
-    #[cfg(test)]
-    pub async fn insert(
-        &self,
-        area_id: i64,
-        date: &Date,
-        tags: &Map<String, Value>,
-    ) -> Result<Report> {
-        let date = date.clone();
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::insert(area_id, &date, &tags, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn _select_all(&self, limit: Option<i64>) -> Result<Vec<Report>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::select_all(limit, conn))
-            .await?
-    }
-
-    pub async fn select_updated_since(
-        &self,
-        updated_since: &OffsetDateTime,
-        limit: Option<i64>,
-    ) -> Result<Vec<Report>> {
-        let updated_since = updated_since.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::select_updated_since(&updated_since, limit, conn))
-            .await?
-    }
-
-    pub async fn select_by_id(&self, id: i64) -> Result<Option<Report>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::select_by_id(id, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn select_latest_by_area_id(&self, area_id: i64) -> Result<Option<Report>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::select_latest_by_area_id(area_id, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn patch_tags(&self, id: i64, tags: &Map<String, Value>) -> Result<Report> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::patch_tags(id, &tags, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Report> {
-        let updated_at = updated_at.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::_set_updated_at(id, &updated_at, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_deleted_at(&self, id: i64, deleted_at: &OffsetDateTime) -> Result<Report> {
-        let deleted_at = deleted_at.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::set_deleted_at(id, &deleted_at, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn delete_permanently(&self, id: i64) -> Result<()> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Report::delete_permanently(id, conn))
-            .await?
-    }
 }
 
 impl Report {
@@ -404,7 +298,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 
 #[cfg(test)]
 mod test {
-    use crate::{area::Area, test::mock_state, Result};
+    use crate::{area::Area, report::Report, test::mock_state, Result};
     use serde_json::Map;
     use std::ops::Add;
     use time::{macros::datetime, Duration, OffsetDateTime};
@@ -416,14 +310,14 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(area_tags, &state.conn)?;
-        state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        let reports = state
-            .report_repo
-            .select_updated_since(&datetime!(2000-01-01 00:00 UTC), None)
-            .await?;
+        Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        let reports =
+            Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &state.conn)?;
         assert_eq!(1, reports.len());
         Ok(())
     }
@@ -434,22 +328,26 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(area_tags, &state.conn)?;
-        state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        let reports = state
-            .report_repo
-            .select_updated_since(&datetime!(2000-01-01 00:00 UTC), None)
-            .await?;
+        Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        let reports =
+            Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &state.conn)?;
         assert_eq!(3, reports.len());
         Ok(())
     }
@@ -460,37 +358,43 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(area_tags, &state.conn)?;
-        let report_1 = state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        state
-            .report_repo
-            .set_updated_at(report_1.id, &datetime!(2020-01-01 00:00:00 UTC))
-            .await?;
-        let report_2 = state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        state
-            .report_repo
-            .set_updated_at(report_2.id, &datetime!(2020-01-02 00:00:00 UTC))
-            .await?;
-        let report_3 = state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        state
-            .report_repo
-            .set_updated_at(report_3.id, &datetime!(2020-01-03 00:00:00 UTC))
-            .await?;
+        let report_1 = Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        Report::_set_updated_at(
+            report_1.id,
+            &datetime!(2020-01-01 00:00:00 UTC),
+            &state.conn,
+        )?;
+        let report_2 = Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        Report::_set_updated_at(
+            report_2.id,
+            &datetime!(2020-01-02 00:00:00 UTC),
+            &state.conn,
+        )?;
+        let report_3 = Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        Report::_set_updated_at(
+            report_3.id,
+            &datetime!(2020-01-03 00:00:00 UTC),
+            &state.conn,
+        )?;
         assert_eq!(
             2,
-            state
-                .report_repo
-                .select_updated_since(&datetime!(2020-01-01 00:00 UTC), None)
-                .await?
-                .len()
+            Report::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &state.conn)?
+                .len(),
         );
         Ok(())
     }
@@ -501,11 +405,13 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(area_tags, &state.conn)?;
-        state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        assert!(state.report_repo.select_by_id(1).await?.is_some());
+        Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        assert!(Report::select_by_id(1, &state.conn)?.is_some());
         Ok(())
     }
 
@@ -515,25 +421,21 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         let area = Area::insert(area_tags, &state.conn)?;
-        state
-            .report_repo
-            .insert(
-                area.id,
-                &OffsetDateTime::now_utc().date().previous_day().unwrap(),
-                &Map::new(),
-            )
-            .await?;
-        let latest_report = state
-            .report_repo
-            .insert(area.id, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
+        Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date().previous_day().unwrap(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        let latest_report = Report::insert(
+            area.id,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
         assert_eq!(
             latest_report,
-            state
-                .report_repo
-                .select_latest_by_area_id(area.id)
-                .await?
-                .unwrap(),
+            Report::select_latest_by_area_id(area.id, &state.conn)?.unwrap(),
         );
         Ok(())
     }
@@ -550,18 +452,20 @@ mod test {
         let tag_2_value = "test";
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
-        state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        let report = state.report_repo.select_by_id(1).await?.unwrap();
+        Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        let report = Report::select_by_id(1, &state.conn)?.unwrap();
         assert!(report.tags.is_empty());
-        state.report_repo.patch_tags(1, &tags).await?;
-        let report = state.report_repo.select_by_id(1).await?.unwrap();
+        Report::patch_tags(1, &tags, &state.conn)?;
+        let report = Report::select_by_id(1, &state.conn)?.unwrap();
         assert_eq!(1, report.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
-        state.report_repo.patch_tags(1, &tags).await?;
-        let report = state.report_repo.select_by_id(1).await?.unwrap();
+        Report::patch_tags(1, &tags, &state.conn)?;
+        let report = Report::select_by_id(1, &state.conn)?.unwrap();
         assert_eq!(2, report.tags.len());
         Ok(())
     }
@@ -572,21 +476,17 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(area_tags, &state.conn)?;
-        let report = state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
+        let report = Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
         let new_deleted_at = OffsetDateTime::now_utc().add(Duration::days(1));
-        state
-            .report_repo
-            .set_deleted_at(report.id, &new_deleted_at)
-            .await?;
+        Report::set_deleted_at(report.id, &new_deleted_at, &state.conn)?;
         assert_eq!(
             new_deleted_at,
-            state
-                .report_repo
-                .select_by_id(report.id)
-                .await?
+            Report::select_by_id(report.id, &state.conn)?
                 .unwrap()
                 .deleted_at
                 .unwrap(),
@@ -600,12 +500,14 @@ mod test {
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(area_tags, &state.conn)?;
-        let report = state
-            .report_repo
-            .insert(1, &OffsetDateTime::now_utc().date(), &Map::new())
-            .await?;
-        state.report_repo.delete_permanently(report.id).await?;
-        assert_eq!(None, state.report_repo.select_by_id(report.id).await?);
+        let report = Report::insert(
+            1,
+            &OffsetDateTime::now_utc().date(),
+            &Map::new(),
+            &state.conn,
+        )?;
+        Report::delete_permanently(report.id, &state.conn)?;
+        assert_eq!(None, Report::select_by_id(report.id, &state.conn)?);
         Ok(())
     }
 }

@@ -1,7 +1,6 @@
 use super::db;
 use crate::element::ElementRepo;
 use crate::event::model::EventRepo;
-use crate::report::model::ReportRepo;
 use crate::{area, element, error, user};
 use crate::{event, tile};
 use crate::{report, Result};
@@ -41,7 +40,6 @@ pub async fn run() -> Result<()> {
     HttpServer::new(move || {
         let element_repo = ElementRepo::new(&pool);
         let event_repo = EventRepo::new(&pool);
-        let report_repo = ReportRepo::new(&pool);
 
         App::new()
             .wrap_fn(|req, srv| {
@@ -85,7 +83,6 @@ pub async fn run() -> Result<()> {
             .app_data(Data::new(pool.clone()))
             .app_data(Data::new(element_repo))
             .app_data(Data::new(event_repo))
-            .app_data(Data::new(report_repo))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
                 scope("tiles")

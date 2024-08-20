@@ -1,6 +1,4 @@
-use crate::{
-    command::db, element::ElementRepo, event::model::EventRepo, report::model::ReportRepo,
-};
+use crate::{command::db, element::ElementRepo, event::model::EventRepo};
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
 use serde_json::{json, Map, Value};
@@ -29,7 +27,6 @@ pub async fn mock_state() -> State {
         pool: pool.clone(),
         element_repo: ElementRepo::new(&pool),
         event_repo: EventRepo::new(&pool),
-        report_repo: ReportRepo::new(&pool),
     }
 }
 
@@ -55,7 +52,6 @@ pub struct State {
     pub pool: Arc<Pool>,
     pub element_repo: ElementRepo,
     pub event_repo: EventRepo,
-    pub report_repo: ReportRepo,
 }
 
 pub fn mock_tags() -> Map<String, Value> {
