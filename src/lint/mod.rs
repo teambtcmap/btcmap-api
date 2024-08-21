@@ -46,13 +46,13 @@ pub fn generate_element_issues(element: &Element, conn: &Connection) -> Result<(
     }
     // No current issues found but an element has some old issues which need to be deleted
     if issues.is_empty() && element.tags.contains_key("issues") {
-        element.remove_tag("issues", conn)?;
+        Element::remove_tag(element.id, "issues", conn)?;
         return Ok(());
     }
     let issues = serde_json::to_value(&issues)?;
     // We should avoid toucing the elements if the issues didn't change
     if element.tag("issues") != &issues {
-        element.set_tag("issues", &issues, conn)?;
+        Element::set_tag(element.id, "issues", &issues, conn)?;
     }
     Ok(())
 }

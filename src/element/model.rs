@@ -1,20 +1,13 @@
 use crate::Result;
 use crate::{osm::overpass::OverpassElement, Error};
-use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tokio::time::sleep;
 use tracing::{debug, info};
 
-pub struct ElementRepo {
-    pool: Arc<Pool>,
-}
-
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Element {
     pub id: i64,
     pub overpass_data: OverpassElement,
@@ -22,111 +15,6 @@ pub struct Element {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
-}
-
-impl ElementRepo {
-    pub fn new(pool: &Arc<Pool>) -> Self {
-        Self { pool: pool.clone() }
-    }
-
-    #[cfg(test)]
-    pub fn mock() -> Self {
-        Self {
-            pool: Arc::new(crate::test::mock_db().1),
-        }
-    }
-
-    #[cfg(test)]
-    pub async fn insert(&self, overpass_data: &OverpassElement) -> Result<Element> {
-        let overpass_data = overpass_data.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::insert(&overpass_data, conn))
-            .await?
-    }
-
-    pub async fn select_all(&self, limit: Option<i64>) -> Result<Vec<Element>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::select_all(limit, conn))
-            .await?
-    }
-
-    pub async fn select_updated_since(
-        &self,
-        updated_since: &OffsetDateTime,
-        limit: Option<i64>,
-    ) -> Result<Vec<Element>> {
-        let updated_since = updated_since.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::select_updated_since(&updated_since, limit, conn))
-            .await?
-    }
-
-    pub async fn select_by_id(&self, id: i64) -> Result<Option<Element>> {
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::select_by_id(id, conn))
-            .await?
-    }
-
-    pub async fn select_by_osm_type_and_id(
-        &self,
-        r#type: &str,
-        id: i64,
-    ) -> Result<Option<Element>> {
-        let r#type = r#type.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::select_by_osm_type_and_id(&r#type, id, conn))
-            .await?
-    }
-
-    pub async fn patch_tags(&self, id: i64, tags: &Map<String, Value>) -> Result<Element> {
-        let tags = tags.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::_patch_tags(id, &tags, conn))
-            .await?
-    }
-
-    pub async fn set_tag(&self, id: i64, name: &str, value: &Value) -> Result<Element> {
-        sleep(Duration::from_millis(10)).await;
-        let name = name.to_string();
-        let value = value.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::_set_tag(id, &name, &value, conn))
-            .await?
-    }
-
-    pub async fn remove_tag(&self, id: i64, name: &str) -> Result<Element> {
-        sleep(Duration::from_millis(10)).await;
-        let name = name.to_string();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::_remove_tag(id, &name, conn))
-            .await?
-    }
-
-    #[cfg(test)]
-    pub async fn set_updated_at(&self, id: i64, updated_at: &OffsetDateTime) -> Result<Element> {
-        let updated_at = updated_at.clone();
-        self.pool
-            .get()
-            .await?
-            .interact(move |conn| Element::_set_updated_at(id, &updated_at, conn))
-            .await?
-    }
 }
 
 const TABLE: &str = "element";
@@ -264,30 +152,7 @@ impl Element {
             .optional()?)
     }
 
-    #[cfg(test)]
     pub fn patch_tags(
-        &self,
-        tags: &HashMap<String, Value>,
-        conn: &Connection,
-    ) -> crate::Result<Element> {
-        let query = format!(
-            r#"
-                UPDATE {TABLE} SET {COL_TAGS} = json_patch({COL_TAGS}, :tags) WHERE {COL_ROWID} = :id
-            "#
-        );
-        debug!(query);
-        conn.execute(
-            &query,
-            named_params! {
-                ":id": self.id,
-                ":tags": &serde_json::to_string(tags)?,
-            },
-        )?;
-        Ok(Element::select_by_id(self.id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
-    }
-
-    pub fn _patch_tags(
         id: i64,
         tags: &Map<String, Value>,
         conn: &Connection,
@@ -333,21 +198,13 @@ impl Element {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
-    pub fn set_tag(&self, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
-        Element::_set_tag(self.id, name, value, conn)
-    }
-
-    pub fn _set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
+    pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
         let mut patch_set = Map::new();
         patch_set.insert(name.into(), value.clone());
-        Element::_patch_tags(id, &patch_set, conn)
+        Element::patch_tags(id, &patch_set, conn)
     }
 
-    pub fn remove_tag(&self, name: &str, conn: &Connection) -> Result<Element> {
-        Element::_remove_tag(self.id, name, conn)
-    }
-
-    pub fn _remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Element> {
+    pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Element> {
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -470,8 +327,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
 mod test {
     use super::Element;
     use crate::{osm::overpass::OverpassElement, test::mock_conn, Result};
-    use serde_json::json;
-    use std::collections::HashMap;
+    use serde_json::{json, Map};
     use time::{macros::datetime, OffsetDateTime};
 
     #[test]
@@ -547,16 +403,16 @@ mod test {
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value_1.clone());
-        let element = element.patch_tags(&tags, &conn)?;
+        let element = Element::patch_tags(element.id, &tags, &conn)?;
         assert_eq!(&tag_1_value_1, element.tag(tag_1_name));
         tags.insert(tag_1_name.into(), tag_1_value_2.clone());
-        let element = element.patch_tags(&tags, &conn)?;
+        let element = Element::patch_tags(element.id, &tags, &conn)?;
         assert_eq!(&tag_1_value_2, element.tag(tag_1_name));
         tags.clear();
         tags.insert(tag_2_name.into(), tag_2_value.clone());
-        let element = element.patch_tags(&tags, &conn)?;
+        let element = Element::patch_tags(element.id, &tags, &conn)?;
         assert!(element.tags.contains_key(tag_1_name));
         assert_eq!(&tag_2_value, element.tag(tag_2_name));
         Ok(())
@@ -578,8 +434,8 @@ mod test {
         let conn = mock_conn();
         let tag_name = "foo";
         let tag_value = json!("bar");
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?
-            .set_tag(tag_name, &tag_value, &conn)?;
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = Element::set_tag(element.id, tag_name, &tag_value, &conn)?;
         assert_eq!(tag_value, element.tags[tag_name]);
         Ok(())
     }
@@ -588,9 +444,9 @@ mod test {
     fn remove_tag() -> Result<()> {
         let conn = mock_conn();
         let tag_name = "foo";
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?
-            .set_tag(tag_name, &"bar".into(), &conn)?
-            .remove_tag(tag_name, &conn)?;
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = Element::set_tag(element.id, tag_name, &"bar".into(), &conn)?;
+        let element = Element::remove_tag(element.id, tag_name, &conn)?;
         assert!(!element.tags.contains_key(tag_name));
         Ok(())
     }

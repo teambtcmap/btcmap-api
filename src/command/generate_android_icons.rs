@@ -23,7 +23,7 @@ pub async fn run(conn: &Connection) -> Result<()> {
 
         if old_icon != new_icon {
             info!(element.id, old_icon, new_icon, "Updating icon");
-            element.set_tag("icon:android", &new_icon.clone().into(), &conn)?;
+            Element::set_tag(element.id, "icon:android", &new_icon.clone().into(), &conn)?;
         }
 
         if new_icon == "question_mark" {

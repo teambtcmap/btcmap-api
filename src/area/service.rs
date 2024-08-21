@@ -139,7 +139,7 @@ mod test {
         };
         let area_element = Element::insert(&area_element, &conn)?;
         let area_element =
-            Element::_set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
+            Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
         let mut tags = Map::new();
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
@@ -172,7 +172,7 @@ mod test {
             ..OverpassElement::mock(1)
         };
         let area_element = Element::insert(&area_element, &conn)?;
-        Element::_set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
+        Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
         let mut tags = Map::new();
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());

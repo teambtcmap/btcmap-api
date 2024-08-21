@@ -29,7 +29,8 @@ pub fn run(osm_type: &str, osm_id: i64, days: i64, conn: &Connection) -> Result<
                 boost_expires.format(&Iso8601::DEFAULT)?
             );
 
-            element.set_tag(
+            Element::set_tag(
+                element.id,
                 "boost:expires",
                 &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),
                 &conn,

@@ -144,6 +144,7 @@ impl Into<Json<AreaView>> for Area {
 mod test {
     use crate::area::admin::{AreaView, PatchArgs, PostArgs};
     use crate::area::Area;
+    use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::test::{mock_state, mock_tags, phuket_geo_json};
     use crate::{auth, Result};
@@ -289,18 +290,20 @@ mod test {
         tags.insert("geo_json".into(), phuket_geo_json());
         Area::insert(tags, &state.conn)?;
 
-        let area_element = state
-            .element_repo
-            .insert(&OverpassElement {
+        let area_element = Element::insert(
+            &OverpassElement {
                 lat: Some(7.979623499157051),
                 lon: Some(98.33448362485439),
                 ..OverpassElement::mock(1)
-            })
-            .await?;
-        let area_element = state
-            .element_repo
-            .set_tag(area_element.id, "areas", &json!([{"name":"test"}]))
-            .await?;
+            },
+            &state.conn,
+        )?;
+        let area_element = Element::set_tag(
+            area_element.id,
+            "areas",
+            &json!([{"name":"test"}]),
+            &state.conn,
+        )?;
 
         assert!(
             area_element

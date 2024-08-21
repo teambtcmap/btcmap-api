@@ -1,5 +1,4 @@
 use crate::element::Element;
-use crate::element::ElementRepo;
 use crate::osm::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -9,10 +8,12 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::web::Redirect;
 use actix_web::Either;
+use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -62,42 +63,39 @@ impl Into<Json<GetItem>> for Element {
 #[get("")]
 pub async fn get(
     args: Query<GetArgs>,
-    repo: Data<ElementRepo>,
+    pool: Data<Arc<Pool>>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
             Redirect::to("https://static.btcmap.org/api/v2/elements.json").permanent(),
         ));
     }
-
-    Ok(Either::Left(Json(match &args.updated_since {
-        Some(updated_since) => repo
-            .select_updated_since(&updated_since, args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-        None => repo
-            .select_all(args.limit)
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    })))
+    let elements = pool
+        .get()
+        .await?
+        .interact(move |conn| match &args.updated_since {
+            Some(updated_since) => Element::select_updated_since(updated_since, args.limit, conn),
+            None => Element::select_all(args.limit, conn),
+        })
+        .await??;
+    Ok(Either::Left(Json(
+        elements.into_iter().map(|it| it.into()).collect(),
+    )))
 }
 
 #[get("{id}")]
-pub async fn get_by_osm_type_and_id(
-    id: Path<String>,
-    repo: Data<ElementRepo>,
-) -> Result<Json<GetItem>, Error> {
-    let id_parts: Vec<&str> = id.split(":").collect();
-    let r#type = id_parts[0];
+pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
+    let id = id.into_inner();
+    let id_parts: Vec<String> = id.split(":").map(|it| it.into()).collect();
+    let r#type = id_parts[0].clone();
     let id = id_parts[1]
         .parse::<i64>()
         .map_err(|_| Error::HttpBadRequest("Invalid ID".into()))?;
-    repo.select_by_osm_type_and_id(r#type, id)
+
+    pool.get()
         .await?
+        .interact(move |conn| Element::select_by_osm_type_and_id(&r#type, id, conn))
+        .await??
         .map(|it| it.into())
         .ok_or(Error::HttpNotFound(format!(
             "Element with id {id} doesn't exist"
@@ -119,7 +117,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -132,10 +130,10 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let state = mock_state().await;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -149,12 +147,12 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state.element_repo.insert(&OverpassElement::mock(2)).await?;
-        state.element_repo.insert(&OverpassElement::mock(3)).await?;
+        Element::insert(&OverpassElement::mock(1), &state.conn)?;
+        Element::insert(&OverpassElement::mock(2), &state.conn)?;
+        Element::insert(&OverpassElement::mock(3), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -167,19 +165,13 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let element_1 = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state
-            .element_repo
-            .set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC))
-            .await?;
-        let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
-        state
-            .element_repo
-            .set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC))
-            .await?;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &state.conn)?;
+        Element::_set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &state.conn)?;
+        Element::_set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -192,13 +184,13 @@ mod test {
     }
 
     #[test]
-    async fn get_by_osm_type_and_id() -> Result<()> {
+    async fn get_by_id() -> Result<()> {
         let state = mock_state().await;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
-                .service(super::get_by_osm_type_and_id),
+                .app_data(Data::new(state.pool))
+                .service(super::get_by_id),
         )
         .await;
         let req = TestRequest::get()

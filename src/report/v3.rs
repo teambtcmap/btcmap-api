@@ -99,7 +99,6 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetI
 #[cfg(test)]
 mod test {
     use crate::area::Area;
-    use crate::element::ElementRepo;
     use crate::error::{self, ApiError};
     use crate::report::Report;
     use crate::test::mock_state;
@@ -117,7 +116,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(ElementRepo::mock()))
+                .app_data(Data::new(mock_state().await.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -133,7 +132,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(ElementRepo::mock()))
+                .app_data(Data::new(mock_state().await.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

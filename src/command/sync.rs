@@ -187,7 +187,8 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
                     if new_android_icon != old_android_icon {
                         info!(old_android_icon, new_android_icon, "Updating Android icon");
-                        updated_element = updated_element.set_tag(
+                        updated_element = Element::set_tag(
+                            updated_element.id,
                             "icon:android",
                             &new_android_icon.clone().into(),
                             &tx,
@@ -223,8 +224,14 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
 
-                let element = element.set_tag("category", &category.clone().into(), &tx)?;
-                let element = element.set_tag("icon:android", &android_icon.clone().into(), &tx)?;
+                let element =
+                    Element::set_tag(element.id, "category", &category.clone().into(), &tx)?;
+                let element = Element::set_tag(
+                    element.id,
+                    "icon:android",
+                    &android_icon.clone().into(),
+                    &tx,
+                )?;
 
                 info!(category, android_icon);
 

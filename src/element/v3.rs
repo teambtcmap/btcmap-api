@@ -1,5 +1,4 @@
 use crate::element::Element;
-use crate::element::ElementRepo;
 use crate::osm::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -66,17 +65,15 @@ impl Into<Json<GetItem>> for Element {
 }
 
 #[get("")]
-pub async fn get(
-    args: Query<GetArgs>,
-    repo: Data<ElementRepo>,
-) -> Result<Json<Vec<GetItem>>, Error> {
-    Ok(Json(
-        repo.select_updated_since(&args.updated_since, Some(args.limit))
-            .await?
-            .into_iter()
-            .map(|it| it.into())
-            .collect(),
-    ))
+pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec<GetItem>>, Error> {
+    let elements = pool
+        .get()
+        .await?
+        .interact(move |conn| {
+            Element::select_updated_since(&args.updated_since, Some(args.limit), conn)
+        })
+        .await??;
+    Ok(Json(elements.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
@@ -94,7 +91,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<G
 
 #[cfg(test)]
 mod test {
-    use crate::element::ElementRepo;
+    use crate::element::Element;
     use crate::error::{self, ApiError};
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
@@ -110,7 +107,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(ElementRepo::mock()))
+                .app_data(Data::new(mock_state().await.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -126,7 +123,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(ElementRepo::mock()))
+                .app_data(mock_state().await.pool)
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -144,7 +141,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -159,10 +156,10 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let state = mock_state().await;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -177,12 +174,12 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        let element_1 = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
-        let _element_3 = state.element_repo.insert(&OverpassElement::mock(3)).await?;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &state.conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &state.conn)?;
+        let _element_3 = Element::insert(&OverpassElement::mock(3), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -197,19 +194,14 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let element_1 = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        state
-            .element_repo
-            .set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC))
-            .await?;
-        let element_2 = state.element_repo.insert(&OverpassElement::mock(2)).await?;
-        let element_2 = state
-            .element_repo
-            .set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC))
-            .await?;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &state.conn)?;
+        Element::_set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &state.conn)?;
+        let element_2 =
+            Element::_set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.element_repo))
+                .app_data(Data::new(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

@@ -27,7 +27,7 @@ pub fn remove_areas_tag(area: &Area, conn: &mut Connection) -> Result<()> {
         area.name(),
     );
     for area_element in area_elements {
-        area_element.remove_tag("areas", &sp)?;
+        Element::remove_tag(area_element.id, "areas", &sp)?;
     }
     sp.commit()?;
     Ok(())
@@ -96,7 +96,7 @@ pub fn update_areas_tag(elements: &Vec<Element>, conn: &Connection) -> Result<Ve
                 new = serde_json::to_string(&element_areas)?,
                 "Change detected, updating areas tag",
             );
-            element.set_tag("areas", &element_areas, conn)?
+            Element::set_tag(element.id, "areas", &element_areas, conn)?
         } else {
             info!(element = element.id, "No changes, skipping update");
             element.clone()

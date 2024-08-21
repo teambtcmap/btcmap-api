@@ -1,5 +1,4 @@
 use super::db;
-use crate::element::ElementRepo;
 use crate::{area, element, error, user};
 use crate::{event, tile};
 use crate::{report, Result};
@@ -37,8 +36,6 @@ pub async fn run() -> Result<()> {
         .unwrap();
 
     HttpServer::new(move || {
-        let element_repo = ElementRepo::new(&pool);
-
         App::new()
             .wrap_fn(|req, srv| {
                 let req_query_string = req.query_string().to_string();
@@ -79,7 +76,6 @@ pub async fn run() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(pool.clone()))
-            .app_data(Data::new(element_repo))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
                 scope("tiles")
@@ -92,10 +88,8 @@ pub async fn run() -> Result<()> {
                     .service(
                         scope("elements")
                             .service(element::admin::patch)
-                            .service(element::admin::post_tags)
-                            .service(element::admin::patch_tags)
                             .service(element::v2::get)
-                            .service(element::v2::get_by_osm_type_and_id),
+                            .service(element::v2::get_by_id),
                     )
                     .service(
                         scope("events")
@@ -160,10 +154,8 @@ pub async fn run() -> Result<()> {
                     .wrap(Governor::new(&rate_limit_conf))
                     .service(
                         scope("elements")
-                            .service(element::admin::post_tags)
-                            .service(element::admin::patch_tags)
                             .service(element::v2::get)
-                            .service(element::v2::get_by_osm_type_and_id),
+                            .service(element::v2::get_by_id),
                     )
                     .service(
                         scope("events")

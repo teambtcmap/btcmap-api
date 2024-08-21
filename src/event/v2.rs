@@ -108,6 +108,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetI
 
 #[cfg(test)]
 mod test {
+    use crate::element::Element;
     use crate::event::v2::GetItem;
     use crate::event::Event;
     use crate::osm::osm::OsmUser;
@@ -140,7 +141,7 @@ mod test {
     async fn get_one_row() -> Result<()> {
         let state = mock_state().await;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
         Event::insert(user.id, element.id, "", &state.conn)?;
         let app = test::init_service(
             App::new()
@@ -158,7 +159,7 @@ mod test {
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
         User::insert(1, &OsmUser::mock(), &state.conn)?;
-        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        Element::insert(&OverpassElement::mock(1), &state.conn)?;
         Event::insert(1, 1, "", &state.conn)?;
         Event::insert(1, 1, "", &state.conn)?;
         Event::insert(1, 1, "", &state.conn)?;
@@ -178,7 +179,7 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
         User::insert(1, &OsmUser::mock(), &state.conn)?;
-        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        Element::insert(&OverpassElement::mock(1), &state.conn)?;
         let event_1 = Event::insert(1, 1, "", &state.conn)?;
         Event::set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC), &state.conn)?;
         let event_2 = Event::insert(1, 1, "", &state.conn)?;
@@ -202,7 +203,7 @@ mod test {
         let state = mock_state().await;
         let event_id = 1;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
         Event::insert(user.id, element.id, "", &state.conn)?;
         let app = test::init_service(
             App::new()

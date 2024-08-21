@@ -2,13 +2,12 @@ use super::Element;
 use crate::{
     auth::{self},
     discord,
-    element::ElementRepo,
     osm::overpass::OverpassElement,
     Error,
 };
 use actix_web::{
-    patch, post,
-    web::{Data, Form, Json, Path},
+    patch,
+    web::{Data, Json, Path},
     HttpRequest,
 };
 use deadpool_sqlite::Pool;
@@ -76,28 +75,23 @@ pub async fn patch(
     id: Path<String>,
     args: Json<PatchArgs>,
     pool: Data<Arc<Pool>>,
-    repo: Data<ElementRepo>,
 ) -> Result<Json<ElementView>, Error> {
     let token = auth::service::check(&req, &pool).await?;
-    let int_id = id.parse::<i64>();
-    let element = match int_id {
-        Ok(id) => repo.select_by_id(id).await,
-        Err(_) => {
-            let id_parts: Vec<&str> = id.split(":").collect();
-            if id_parts.len() != 2 {
-                Err(Error::HttpBadRequest("Invalid identifier".into()))?
-            }
-            let r#type = id_parts[0];
-            let id = id_parts[1]
-                .parse::<i64>()
-                .map_err(|_| Error::HttpBadRequest("Invalid identifier".into()))?;
-            repo.select_by_osm_type_and_id(r#type, id).await
-        }
-    }?
-    .ok_or(Error::HttpNotFound(format!(
-        "There is no element with id = {id}"
-    )))?;
-    let element = repo.patch_tags(element.id, &args.tags).await?;
+    let cloned_id = id.clone();
+    let element = pool
+        .get()
+        .await?
+        .interact(move |conn| Element::select_by_id_or_osm_id(&cloned_id, &conn))
+        .await??
+        .ok_or(Error::HttpNotFound(format!(
+            "There is no area with id or alias = {}",
+            id,
+        )))?;
+    let element = pool
+        .get()
+        .await?
+        .interact(move |conn| Element::patch_tags(element.id, &args.tags.clone(), conn))
+        .await??;
     let log_message = format!(
         "{} updated element {} https://api.btcmap.org/v3/elements/{}",
         token.owner,
@@ -109,91 +103,10 @@ pub async fn patch(
     Ok(element.into())
 }
 
-#[derive(Serialize, Deserialize)]
-struct PostTagsArgs {
-    name: String,
-    value: String,
-}
-
-#[post("{id}/tags")]
-pub async fn post_tags(
-    req: HttpRequest,
-    id: Path<String>,
-    args: Form<PostTagsArgs>,
-    pool: Data<Arc<Pool>>,
-    repo: Data<ElementRepo>,
-) -> Result<Json<ElementView>, Error> {
-    let token = auth::service::check(&req, &pool).await?;
-    let id_parts: Vec<&str> = id.split(":").collect();
-    if id_parts.len() != 2 {
-        Err(Error::HttpBadRequest("Invalid identifier".into()))?
-    }
-    let r#type = id_parts[0];
-    let id = id_parts[1]
-        .parse::<i64>()
-        .map_err(|_| Error::HttpBadRequest("Invalid identifier".into()))?;
-    let element = repo
-        .select_by_osm_type_and_id(r#type, id)
-        .await?
-        .ok_or(Error::HttpNotFound(format!(
-            "There is no element with id = {}",
-            id,
-        )))?;
-    let element = if args.value.len() > 0 {
-        repo.set_tag(element.id, &args.name, &args.value.clone().into())
-            .await?
-    } else {
-        repo.remove_tag(element.id, &args.name).await?
-    };
-    let log_message = format!(
-        "WARNING: {} used DEPRECATED API to set {} = {}",
-        token.owner, args.name, args.value,
-    );
-    warn!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(element.into())
-}
-
-#[patch("{id}/tags")]
-pub async fn patch_tags(
-    req: HttpRequest,
-    id: Path<String>,
-    args: Json<Map<String, Value>>,
-    pool: Data<Arc<Pool>>,
-    repo: Data<ElementRepo>,
-) -> Result<Json<ElementView>, Error> {
-    let token = auth::service::check(&req, &pool).await?;
-    let id_parts: Vec<&str> = id.split(":").collect();
-    if id_parts.len() != 2 {
-        Err(Error::HttpBadRequest("Invalid identifier".into()))?
-    }
-    let r#type = id_parts[0];
-    let id = id_parts[1]
-        .parse::<i64>()
-        .map_err(|_| Error::HttpBadRequest("Invalid identifier".into()))?;
-    let element = repo
-        .select_by_osm_type_and_id(r#type, id)
-        .await?
-        .ok_or(Error::HttpNotFound(format!(
-            "There is no element with id = {}",
-            id,
-        )))?;
-    let element = repo.patch_tags(element.id, &args).await?;
-    let log_message = format!(
-        "{} patched tags for element https://api.btcmap.org/v2/elements/{} {}",
-        token.owner,
-        id,
-        serde_json::to_string_pretty(&args).unwrap(),
-    );
-    warn!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(element.into())
-}
-
 #[cfg(test)]
 mod test {
-    use crate::element::admin::{PatchArgs, PostTagsArgs};
-    use crate::element::ElementRepo;
+    use crate::element::admin::PatchArgs;
+    use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::{auth, Result};
@@ -201,16 +114,15 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::{test, App};
-    use serde_json::{json, Map, Value};
+    use serde_json::{Map, Value};
 
     #[test]
     async fn patch_unauthorized() -> Result<()> {
         let state = mock_state().await;
-        state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        Element::insert(&OverpassElement::mock(1), &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.element_repo))
                 .service(super::patch),
         )
         .await;
@@ -227,11 +139,10 @@ mod test {
     async fn patch() -> Result<()> {
         let state = mock_state().await;
         let token = auth::service::mock_token("test", &state.pool).await.secret;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
+        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool.clone()))
-                .app_data(Data::new(ElementRepo::new(&state.pool)))
+                .app_data(Data::new(state.pool))
                 .service(super::patch),
         )
         .await;
@@ -253,58 +164,11 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
-        let element = state.element_repo.select_by_id(element.id).await?.unwrap();
+        let element = Element::select_by_id(element.id, &state.conn)?.unwrap();
         assert!(element.tags["string"].is_string());
         assert!(element.tags["unsigned"].is_u64());
         assert!(element.tags["float"].is_f64());
         assert!(element.tags["bool"].is_boolean());
-        Ok(())
-    }
-
-    #[test]
-    async fn post_tags() -> Result<()> {
-        let state = mock_state().await;
-        let token = auth::service::mock_token("test", &state.pool).await.secret;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.element_repo))
-                .service(super::post_tags),
-        )
-        .await;
-        let req = TestRequest::post()
-            .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_form(PostTagsArgs {
-                name: "foo".into(),
-                value: "bar".into(),
-            })
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert!(res.status().is_success());
-        Ok(())
-    }
-
-    #[test]
-    async fn patch_tags() -> Result<()> {
-        let state = mock_state().await;
-        let token = auth::service::mock_token("test", &state.pool).await.secret;
-        let element = state.element_repo.insert(&OverpassElement::mock(1)).await?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.pool))
-                .app_data(Data::new(state.element_repo))
-                .service(super::patch_tags),
-        )
-        .await;
-        let req = TestRequest::patch()
-            .uri(&format!("/{}/tags", element.overpass_data.btcmap_id()))
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_json(json!({ "foo": "bar" }))
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::OK);
         Ok(())
     }
 }
