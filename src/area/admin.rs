@@ -81,7 +81,7 @@ pub async fn patch(
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::patch_tags(area.id, args.tags.clone(), conn))
+        .interact(move |conn| area::service::patch_tags(&area.id.to_string(), args.tags.clone(), conn))
         .await??;
     let log_message = format!(
         "{} updated area https://api.btcmap.org/v3/areas/{}",

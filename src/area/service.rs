@@ -9,6 +9,9 @@ use serde_json::{Map, Value};
 use time::OffsetDateTime;
 
 pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
+    if !tags.contains_key("geo_json") {
+        return Err(Error::HttpBadRequest("geo_json tag is missing".into()));
+    }
     let sp = conn.savepoint()?;
     let url_alias = tags
         .get("url_alias")
@@ -44,16 +47,45 @@ pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     Ok(area)
 }
 
-pub fn patch_tags(id: i64, tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
-    let sp = conn.savepoint()?;
-    let area = Area::select_by_id(id, &sp)?.unwrap();
-    let area_elements = element::service::find_in_area(&area, &sp)?;
-    element::service::update_areas_tag(&area_elements, &sp)?;
-    let area = Area::patch_tags(id, tags, &sp)?;
-    let area_elements = element::service::find_in_area(&area, &sp)?;
-    element::service::update_areas_tag(&area_elements, &sp)?;
-    sp.commit()?;
-    Ok(area)
+pub fn patch_tag(
+    id_or_alias: &str,
+    tag_name: &str,
+    tag_value: &Value,
+    conn: &mut Connection,
+) -> Result<Area> {
+    let mut tags = Map::new();
+    tags.insert(tag_name.to_string(), tag_value.clone());
+    patch_tags(id_or_alias, tags, conn)
+}
+
+pub fn patch_tags(
+    id_or_alias: &str,
+    tags: Map<String, Value>,
+    conn: &mut Connection,
+) -> Result<Area> {
+    let area = Area::select_by_id_or_alias(id_or_alias, conn)?.unwrap();
+    if tags.contains_key("geo_json") {
+        let sp = conn.savepoint()?;
+        let area_elements = element::service::find_in_area(&area, &sp)?;
+        element::service::update_areas_tag(&area_elements, &sp)?;
+        let area = Area::patch_tags(area.id, tags, &sp)?;
+        let area_elements = element::service::find_in_area(&area, &sp)?;
+        element::service::update_areas_tag(&area_elements, &sp)?;
+        sp.commit()?;
+        Ok(area)
+    } else {
+        Ok(Area::patch_tags(area.id, tags, conn)?)
+    }
+}
+
+pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection) -> Result<Area> {
+    if tag_name == "geo_json" {
+        return Err(Error::HttpBadRequest(
+            "geo_json tag can't be removed".into(),
+        ));
+    }
+    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
+    Ok(Area::remove_tag(area.id, tag_name, conn)?)
 }
 
 pub fn soft_delete(id: i64, conn: &mut Connection) -> Result<Area> {
@@ -121,7 +153,7 @@ mod test {
         patch_tags.insert(new_tag_name.into(), new_tag_value.clone());
         let new_alias = json!("test1");
         patch_tags.insert("url_alias".into(), new_alias.clone());
-        let area = super::patch_tags(area.id, patch_tags, &mut conn)?;
+        let area = super::patch_tags(&area.id.to_string(), patch_tags, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
         assert_eq!(new_tag_value, db_area.tags[new_tag_name]);
@@ -144,8 +176,8 @@ mod test {
         let url_alias = json!("test");
         tags.insert("url_alias".into(), url_alias.clone());
         tags.insert("geo_json".into(), phuket_geo_json());
-        let area = Area::insert(tags, &mut conn)?;
-        let area = super::patch_tags(area.id, Map::new(), &mut conn)?;
+        let area = Area::insert(tags.clone(), &mut conn)?;
+        let area = super::patch_tags(&area.id.to_string(), tags, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
         let db_area_element = Element::select_by_id(area_element.id, &conn)?.unwrap();

@@ -5,8 +5,8 @@ use crate::{report, Result};
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
 use actix_web::dev::{Service, ServiceRequest};
 use actix_web::http::header::HeaderValue;
-use actix_web::web::scope;
 use actix_web::web::QueryConfig;
+use actix_web::web::{scope, service};
 use actix_web::{
     middleware::{Compress, NormalizePath},
     web::Data,
@@ -77,6 +77,19 @@ pub async fn run() -> Result<()> {
             .wrap(Compress::default())
             .app_data(Data::new(pool.clone()))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
+            .service(
+                service("rpc").guard(actix_web::guard::Post()).finish(
+                    jsonrpc_v2::Server::new()
+                        .with_data(jsonrpc_v2::Data::new(pool.clone()))
+                        .with_method("createarea", area::rpc::create)
+                        .with_method("getarea", area::rpc::get)
+                        .with_method("setareatag", area::rpc::set_tag)
+                        .with_method("removeareatag", area::rpc::remove_tag)
+                        .with_method("removearea", area::rpc::remove)
+                        .finish()
+                        .into_actix_web_service(),
+                ),
+            )
             .service(
                 scope("tiles")
                     .wrap(Governor::new(&tile_rate_limit_conf))

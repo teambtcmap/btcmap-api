@@ -62,3 +62,6 @@ deadpool-sqlite = { version = "0.8.1", default-features = false, features = ["rt
 
 # https://github.com/AaronErhardt/actix-governor/releases
 actix-governor = { version = "0.5.0", default-features = false }
+
+# https://crates.io/crates/jsonrpc-v2
+jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-web-v4-integration", "easy-errors"] }
