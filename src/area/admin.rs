@@ -81,7 +81,9 @@ pub async fn patch(
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::patch_tags(&area.id.to_string(), args.tags.clone(), conn))
+        .interact(move |conn| {
+            area::service::patch_tags(&area.id.to_string(), args.tags.clone(), conn)
+        })
         .await??;
     let log_message = format!(
         "{} updated area https://api.btcmap.org/v3/areas/{}",
@@ -112,7 +114,7 @@ pub async fn delete(
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::soft_delete(area.id, conn))
+        .interact(move |conn| area::service::soft_delete(&area.id.to_string(), conn))
         .await??;
     let log_message = format!(
         "{} deleted area https://api.btcmap.org/v3/areas/{}",

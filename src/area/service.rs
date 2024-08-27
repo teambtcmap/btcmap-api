@@ -88,9 +88,9 @@ pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection)
     Ok(Area::remove_tag(area.id, tag_name, conn)?)
 }
 
-pub fn soft_delete(id: i64, conn: &mut Connection) -> Result<Area> {
+pub fn soft_delete(area_id_or_alias: &str, conn: &mut Connection) -> Result<Area> {
     let sp = conn.savepoint()?;
-    let area = Area::select_by_id(id, &sp)?.unwrap();
+    let area = Area::select_by_id_or_alias(area_id_or_alias, &sp)?.unwrap();
     let area_elements = element::service::find_in_area(&area, &sp)?;
     let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &sp)?;
     element::service::update_areas_tag(&area_elements, &sp)?;
@@ -189,7 +189,7 @@ mod test {
     fn soft_delete() -> Result<()> {
         let mut conn = mock_conn();
         let area = Area::insert(Map::new(), &conn)?;
-        super::soft_delete(area.id, &mut conn)?;
+        super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
         Ok(())
@@ -210,7 +210,7 @@ mod test {
         tags.insert("url_alias".into(), url_alias.clone());
         tags.insert("geo_json".into(), phuket_geo_json());
         let area = Area::insert(tags, &mut conn)?;
-        super::soft_delete(area.id, &mut conn)?;
+        super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
         assert!(db_area.tags.get("areas").is_none());

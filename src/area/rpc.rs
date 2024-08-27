@@ -145,7 +145,7 @@ pub async fn remove_tag(
 #[derive(Deserialize)]
 pub struct RemoveAreaArgs {
     pub token: String,
-    pub area_id: i64,
+    pub area_id_or_alias: String,
 }
 
 pub async fn remove(
@@ -161,7 +161,7 @@ pub async fn remove(
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::soft_delete(params.area_id, conn))
+        .interact(move |conn| area::service::soft_delete(&params.area_id_or_alias, conn))
         .await??;
     let log_message = format!(
         "{} removed area {} https://api.btcmap.org/v3/areas/{}",
