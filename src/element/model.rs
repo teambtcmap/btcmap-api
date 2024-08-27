@@ -1,19 +1,23 @@
 use crate::Result;
 use crate::{osm::overpass::OverpassElement, Error};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, info};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Element {
     pub id: i64,
     pub overpass_data: OverpassElement,
     pub tags: HashMap<String, Value>,
+    #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
     pub deleted_at: Option<OffsetDateTime>,
 }
 

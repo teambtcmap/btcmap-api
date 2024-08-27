@@ -81,6 +81,7 @@ pub async fn run() -> Result<()> {
                 service("rpc").guard(actix_web::guard::Post()).finish(
                     jsonrpc_v2::Server::new()
                         .with_data(jsonrpc_v2::Data::new(pool.clone()))
+                        .with_method("boostelement", element::rpc::boost)
                         .with_method("createarea", area::rpc::create)
                         .with_method("getarea", area::rpc::get)
                         .with_method("setareatag", area::rpc::set_tag)
