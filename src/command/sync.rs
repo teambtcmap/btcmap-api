@@ -2,7 +2,6 @@ use crate::discord;
 use crate::element;
 use crate::element::Element;
 use crate::event::Event;
-use crate::lint;
 use crate::osm::osm;
 use crate::osm::overpass::query_bitcoin_merchants;
 use crate::osm::overpass::OverpassElement;
@@ -195,7 +194,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                         )?;
                     }
 
-                    lint::generate_element_issues(&updated_element, &tx)?;
+                    element::service::generate_issues(vec![&updated_element], &tx)?;
                     element::service::update_areas_tag(&vec![updated_element], &tx)?;
                 }
 
@@ -235,7 +234,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
 
                 info!(category, android_icon);
 
-                lint::generate_element_issues(&element, &tx)?;
+                element::service::generate_issues(vec![&element], &tx)?;
                 element::service::update_areas_tag(&vec![element], &tx)?;
 
                 let message = format!("User {user_display_name} added https://www.openstreetmap.org/{element_type}/{osm_id}");

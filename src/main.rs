@@ -31,7 +31,6 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
-mod lint;
 mod sync;
 mod vacuum;
 
@@ -103,12 +102,6 @@ async fn main() -> ExitCode {
         "generate-element-categories" => {
             if let Err(e) = generate_element_categories::run(&conn).await {
                 error!(?e, "Failed to generate element categories");
-                return ExitCode::FAILURE;
-            }
-        }
-        "lint" => {
-            if let Err(e) = command::lint::run(conn) {
-                error!(?e, "Failed to run linter");
                 return ExitCode::FAILURE;
             }
         }
