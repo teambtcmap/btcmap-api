@@ -13,9 +13,30 @@ use time::OffsetDateTime;
 use tracing::info;
 
 #[derive(Deserialize)]
+pub struct GetElementArgs {
+    pub token: String,
+    pub id: String,
+}
+
+pub async fn get(Params(args): Params<GetElementArgs>, pool: Data<Arc<Pool>>) -> Result<Element> {
+    pool.get()
+        .await?
+        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .await??
+        .unwrap();
+    let element = pool
+        .get()
+        .await?
+        .interact(move |conn| Element::select_by_id_or_osm_id(&args.id, conn))
+        .await??
+        .unwrap();
+    Ok(element)
+}
+
+#[derive(Deserialize)]
 pub struct BoostElementArgs {
     pub token: String,
-    pub element_id: String,
+    pub id: String,
     pub days: i64,
 }
 
@@ -32,7 +53,7 @@ pub async fn boost(
     let element = pool
         .get()
         .await?
-        .interact(move |conn| _boost(&args.element_id, args.days, conn))
+        .interact(move |conn| _boost(&args.id, args.days, conn))
         .await??;
     let log_message = format!(
         "{} boosted element {} https://api.btcmap.org/v3/elements/{} for {} days",
