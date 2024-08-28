@@ -8,13 +8,13 @@ use std::sync::Arc;
 use tracing::info;
 
 #[derive(Deserialize)]
-pub struct CreateAreaArgs {
+pub struct CreateArgs {
     pub token: String,
     pub tags: Map<String, Value>,
 }
 
 pub async fn create(
-    Params(args): Params<CreateAreaArgs>,
+    Params(args): Params<CreateArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Area, Error> {
     let token = pool
@@ -40,12 +40,12 @@ pub async fn create(
 }
 
 #[derive(Deserialize)]
-pub struct GetAreaArgs {
+pub struct GetArgs {
     pub token: String,
-    pub area_id_or_alias: String,
+    pub id: String,
 }
 
-pub async fn get(Params(args): Params<GetAreaArgs>, pool: Data<Arc<Pool>>) -> Result<Area, Error> {
+pub async fn get(Params(args): Params<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Area, Error> {
     pool.get()
         .await?
         .interact(move |conn| Token::select_by_secret(&args.token, conn))
@@ -54,49 +54,42 @@ pub async fn get(Params(args): Params<GetAreaArgs>, pool: Data<Arc<Pool>>) -> Re
     let area = pool
         .get()
         .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&args.area_id_or_alias, conn))
+        .interact(move |conn| Area::select_by_id_or_alias(&args.id, conn))
         .await??
         .unwrap();
     Ok(area)
 }
 
 #[derive(Deserialize)]
-pub struct SetAreaTagArgs {
+pub struct SetTagArgs {
     pub token: String,
-    pub area_id_or_alias: String,
-    pub tag_name: String,
-    pub tag_value: Value,
+    pub id: String,
+    pub name: String,
+    pub value: Value,
 }
 
 pub async fn set_tag(
-    Params(params): Params<SetAreaTagArgs>,
+    Params(args): Params<SetTagArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Area, Error> {
     let token = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&params.token, conn))
+        .interact(move |conn| Token::select_by_secret(&args.token, conn))
         .await??
         .unwrap();
-    let cloned_tag_name = params.tag_name.clone();
-    let cloned_tag_value = params.tag_value.clone();
+    let cloned_name = args.name.clone();
+    let cloned_value = args.value.clone();
     let area = pool
         .get()
         .await?
-        .interact(move |conn| {
-            area::service::patch_tag(
-                &params.area_id_or_alias,
-                &cloned_tag_name,
-                &cloned_tag_value,
-                conn,
-            )
-        })
+        .interact(move |conn| area::service::patch_tag(&args.id, &cloned_name, &cloned_value, conn))
         .await??;
     let log_message = format!(
         "{} set tag {} = {} for area {} https://api.btcmap.org/v3/areas/{}",
         token.owner,
-        params.tag_name,
-        serde_json::to_string(&params.tag_value)?,
+        args.name,
+        serde_json::to_string(&args.value)?,
         area.name(),
         area.id,
     );
@@ -106,34 +99,32 @@ pub async fn set_tag(
 }
 
 #[derive(Deserialize)]
-pub struct RemoveAreaTagArgs {
+pub struct RemoveTagArgs {
     pub token: String,
-    pub area_id_or_alias: String,
-    pub tag_name: String,
+    pub id: String,
+    pub tag: String,
 }
 
 pub async fn remove_tag(
-    Params(params): Params<RemoveAreaTagArgs>,
+    Params(args): Params<RemoveTagArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Area, Error> {
     let token = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&params.token, conn))
+        .interact(move |conn| Token::select_by_secret(&args.token, conn))
         .await??
         .unwrap();
-    let cloned_tag_name = params.tag_name.clone();
+    let cloned_tag = args.tag.clone();
     let area = pool
         .get()
         .await?
-        .interact(move |conn| {
-            area::service::remove_tag(&params.area_id_or_alias, &cloned_tag_name, conn)
-        })
+        .interact(move |conn| area::service::remove_tag(&args.id, &cloned_tag, conn))
         .await??;
     let log_message = format!(
         "{} removed tag {} from area {} https://api.btcmap.org/v3/areas/{}",
         token.owner,
-        params.tag_name,
+        args.tag,
         area.name(),
         area.id,
     );
@@ -143,25 +134,25 @@ pub async fn remove_tag(
 }
 
 #[derive(Deserialize)]
-pub struct RemoveAreaArgs {
+pub struct RemoveArgs {
     pub token: String,
-    pub area_id_or_alias: String,
+    pub id: String,
 }
 
 pub async fn remove(
-    Params(params): Params<RemoveAreaArgs>,
+    Params(args): Params<RemoveArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Area, Error> {
     let token = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&params.token, conn))
+        .interact(move |conn| Token::select_by_secret(&args.token, conn))
         .await??
         .unwrap();
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::soft_delete(&params.area_id_or_alias, conn))
+        .interact(move |conn| area::service::soft_delete(&args.id, conn))
         .await??;
     let log_message = format!(
         "{} removed area {} https://api.btcmap.org/v3/areas/{}",

@@ -82,6 +82,8 @@ pub async fn run() -> Result<()> {
                     jsonrpc_v2::Server::new()
                         .with_data(jsonrpc_v2::Data::new(pool.clone()))
                         .with_method("getelement", element::rpc::get)
+                        .with_method("setelementtag", element::rpc::set_tag)
+                        .with_method("removeelementtag", element::rpc::remove_tag)
                         .with_method("boostelement", element::rpc::boost)
                         .with_method("createarea", area::rpc::create)
                         .with_method("getarea", area::rpc::get)
