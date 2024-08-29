@@ -30,7 +30,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
 mod review;
-mod sync;
 mod vacuum;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -71,12 +70,6 @@ async fn main() -> ExitCode {
         "sync" => {
             if let Err(e) = command::sync::run(conn).await {
                 error!(?e, "Failed to sync elements");
-                return ExitCode::FAILURE;
-            }
-        }
-        "sync-users" => {
-            if let Err(e) = sync::users::run(conn).await {
-                error!(?e, "Failed to sync users");
                 return ExitCode::FAILURE;
             }
         }
