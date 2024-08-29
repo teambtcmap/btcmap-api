@@ -90,6 +90,11 @@ pub async fn run() -> Result<()> {
                         .with_method("getarea", area::rpc::get)
                         .with_method("setareatag", area::rpc::set_tag)
                         .with_method("removeareatag", area::rpc::remove_tag)
+                        .with_method("gettrendingcountries", area::rpc::get_trending_countries)
+                        .with_method(
+                            "gettrendingcommunities",
+                            area::rpc::get_trending_communities,
+                        )
                         .with_method("removearea", area::rpc::remove)
                         .finish()
                         .into_actix_web_service(),
