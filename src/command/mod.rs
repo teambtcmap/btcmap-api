@@ -9,5 +9,4 @@ pub mod generate_reports;
 pub mod import_countries;
 pub mod remove_areas_tag;
 pub mod sync;
-pub mod trending_areas;
 pub mod update_areas_tag;

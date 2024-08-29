@@ -156,12 +156,6 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        "trending-areas" => {
-            if let Err(e) = command::trending_areas::run(args) {
-                error!(?e, "Failed to retrieve trending areas");
-                return ExitCode::FAILURE;
-            }
-        }
         first_arg => {
             error!(command = first_arg, "Unknown command");
             return ExitCode::FAILURE;
