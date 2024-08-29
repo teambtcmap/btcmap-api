@@ -56,32 +56,6 @@ impl Report {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
 
-    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Report>> {
-        let query = r#"
-            SELECT
-                r.rowid,
-                r.area_id,
-                json_extract(a.tags, '$.url_alias'),
-                r.date,
-                r.tags,
-                r.created_at,
-                r.updated_at,
-                r.deleted_at
-            FROM report r
-            LEFT JOIN area a ON a.rowid = r.area_id
-            ORDER BY r.updated_at, r.rowid
-            LIMIT :limit
-        "#;
-
-        Ok(conn
-            .prepare(query)?
-            .query_map(
-                named_params! { ":limit": limit.unwrap_or(i64::MAX) },
-                mapper(),
-            )?
-            .collect::<Result<Vec<Report>, _>>()?)
-    }
-
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
         limit: Option<i64>,
@@ -267,13 +241,6 @@ impl Report {
         Ok(Report::select_by_id(id, &conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
     }
-
-    pub fn delete_permanently(id: i64, conn: &Connection) -> Result<()> {
-        let query = "DELETE FROM report WHERE id = :id";
-        debug!(query);
-        conn.execute(&query, named_params! { ":id": id })?;
-        Ok(())
-    }
 }
 
 const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
@@ -319,36 +286,6 @@ mod test {
         let reports =
             Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &state.conn)?;
         assert_eq!(1, reports.len());
-        Ok(())
-    }
-
-    #[test]
-    async fn select_all() -> Result<()> {
-        let state = mock_state().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        let reports =
-            Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &state.conn)?;
-        assert_eq!(3, reports.len());
         Ok(())
     }
 
@@ -491,23 +428,6 @@ mod test {
                 .deleted_at
                 .unwrap(),
         );
-        Ok(())
-    }
-
-    #[test]
-    async fn delete_permanently() -> Result<()> {
-        let state = mock_state().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
-        let report = Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::delete_permanently(report.id, &state.conn)?;
-        assert_eq!(None, Report::select_by_id(report.id, &state.conn)?);
         Ok(())
     }
 }

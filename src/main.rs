@@ -1,11 +1,9 @@
 extern crate core;
-use command::compress_reports;
 use command::db;
 use command::fix_tags;
 use command::generate_android_icons;
 use command::generate_element_categories;
 use command::generate_reports;
-use command::import_countries;
 mod server;
 pub use error::Error;
 mod auth;
@@ -97,23 +95,9 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        "import-countries" => {
-            if let Err(e) =
-                import_countries::run(args.get(2).unwrap_or(&"".into()), &mut conn).await
-            {
-                error!(?e, "Failed to import countries");
-                return ExitCode::FAILURE;
-            }
-        }
         "fix-tags" => {
             if let Err(e) = fix_tags::run(&conn).await {
                 error!(?e, "Failed to fix tags");
-                return ExitCode::FAILURE;
-            }
-        }
-        "compress-reports" => {
-            if let Err(e) = compress_reports::run(&conn) {
-                error!(?e, "Failed to compress reports");
                 return ExitCode::FAILURE;
             }
         }
