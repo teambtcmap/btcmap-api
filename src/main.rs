@@ -1,6 +1,5 @@
 extern crate core;
 use command::db;
-use command::fix_tags;
 use command::generate_android_icons;
 use command::generate_element_categories;
 use command::generate_reports;
@@ -71,12 +70,6 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        "generate-report" => {
-            if let Err(e) = generate_reports::run(&mut conn) {
-                error!(?e, "Failed to generate reports");
-                return ExitCode::FAILURE;
-            }
-        }
         "generate-reports" => {
             if let Err(e) = generate_reports::run(&mut conn) {
                 error!(?e, "Failed to generate reports");
@@ -92,12 +85,6 @@ async fn main() -> ExitCode {
         "generate-element-categories" => {
             if let Err(e) = generate_element_categories::run(&conn).await {
                 error!(?e, "Failed to generate element categories");
-                return ExitCode::FAILURE;
-            }
-        }
-        "fix-tags" => {
-            if let Err(e) = fix_tags::run(&conn).await {
-                error!(?e, "Failed to fix tags");
                 return ExitCode::FAILURE;
             }
         }
