@@ -1,6 +1,4 @@
 extern crate core;
-use command::add_area;
-use command::analyze_logs;
 use command::compress_reports;
 use command::db;
 use command::fix_tags;
@@ -103,18 +101,6 @@ async fn main() -> ExitCode {
         "generate-element-categories" => {
             if let Err(e) = generate_element_categories::run(&conn).await {
                 error!(?e, "Failed to generate element categories");
-                return ExitCode::FAILURE;
-            }
-        }
-        "analyze-logs" => {
-            if let Err(e) = analyze_logs::run().await {
-                error!(?e, "Failed to analyze logs");
-                return ExitCode::FAILURE;
-            }
-        }
-        "add-area" => {
-            if let Err(e) = add_area::run(&conn).await {
-                error!(?e, "Failed to add area");
                 return ExitCode::FAILURE;
             }
         }

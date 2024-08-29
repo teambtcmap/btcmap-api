@@ -1,5 +1,3 @@
-pub mod add_area;
-pub mod analyze_logs;
 pub mod compress_reports;
 pub mod db;
 pub mod fix_tags;
