@@ -1,4 +1,5 @@
 use crate::discord;
+use crate::review::ElementReview;
 use crate::Result;
 use crate::{auth::Token, element::model::Element};
 use deadpool_sqlite::Pool;
@@ -164,4 +165,45 @@ fn _boost(id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {
         &conn,
     )?;
     Ok(element)
+}
+
+#[derive(Deserialize)]
+pub struct CreateReviewArgs {
+    pub token: String,
+    pub id: String,
+    pub review: String,
+}
+
+pub async fn create_review(
+    Params(args): Params<CreateReviewArgs>,
+    pool: Data<Arc<Pool>>,
+) -> Result<ElementReview> {
+    let token = pool
+        .get()
+        .await?
+        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .await??
+        .unwrap();
+    let element = pool
+        .get()
+        .await?
+        .interact(move |conn| Element::select_by_id_or_osm_id(&args.id, conn))
+        .await??
+        .unwrap();
+    let cloned_review = args.review.clone();
+    let review = pool
+        .get()
+        .await?
+        .interact(move |conn| ElementReview::insert(element.id, &cloned_review, conn))
+        .await??;
+    let log_message = format!(
+        "{} added review to element {}({}): {}",
+        token.owner,
+        element.name(),
+        element.id,
+        args.review,
+    );
+    info!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    Ok(review)
 }
