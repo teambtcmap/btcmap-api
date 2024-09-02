@@ -4,7 +4,8 @@ use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::time::Instant;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, info};
 
@@ -161,6 +162,7 @@ impl Element {
         tags: &Map<String, Value>,
         conn: &Connection,
     ) -> crate::Result<Element> {
+        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE} SET {COL_TAGS} = json_patch({COL_TAGS}, :tags) WHERE {COL_ROWID} = :id
@@ -209,6 +211,7 @@ impl Element {
     }
 
     pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Element> {
+        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE}

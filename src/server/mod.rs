@@ -1,5 +1,5 @@
 use super::db;
-use crate::{area, element, error, user};
+use crate::{area, element, error, rpc, user};
 use crate::{event, tile};
 use crate::{report, Result};
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
@@ -86,6 +86,7 @@ pub async fn run() -> Result<()> {
                         .with_method("removeelementtag", element::rpc::remove_tag)
                         .with_method("boostelement", element::rpc::boost)
                         .with_method("createelementreview", element::rpc::create_review)
+                        .with_method("generateelementissues", rpc::generate_element_issues::run)
                         .with_method("createarea", area::rpc::create)
                         .with_method("getarea", area::rpc::get)
                         .with_method("setareatag", area::rpc::set_tag)

@@ -28,6 +28,7 @@ use tracing_subscriber::EnvFilter;
 mod area;
 mod review;
 mod vacuum;
+mod rpc;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 

@@ -12,6 +12,7 @@ use serde_json::json;
 use serde_json::Value;
 use time::macros::format_description;
 use time::Date;
+use time::OffsetDateTime;
 use tracing::info;
 
 pub fn remove_areas_tag(area: &Area, conn: &mut Connection) -> Result<()> {
@@ -167,26 +168,42 @@ pub struct Issue {
     pub description: String,
 }
 
-pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<()> {
+pub struct GenerateIssuesResult {
+    pub started_at: OffsetDateTime,
+    pub finished_at: OffsetDateTime,
+    pub time_s: f64,
+    pub affected_elements: i64,
+}
+
+pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<GenerateIssuesResult> {
+    let started_at = OffsetDateTime::now_utc();
+    let mut affected_elements = 0;
     for element in elements {
         let issues = crate::element::service::get_issues(&element);
         // No current issues, no saved issues, nothing to do here
         if issues.is_empty() && !element.tags.contains_key("issues") {
-            return Ok(());
+            continue;
         }
         // No current issues found but an element has some old issues which need to be deleted
         if issues.is_empty() && element.tags.contains_key("issues") {
             Element::remove_tag(element.id, "issues", conn)?;
-            return Ok(());
+            affected_elements += 1;
+            continue;
         }
         let issues = serde_json::to_value(&issues)?;
         // We should avoid toucing the elements if the issues didn't change
         if element.tag("issues") != &issues {
             Element::set_tag(element.id, "issues", &issues, conn)?;
+            affected_elements += 1;
         }
     }
-
-    Ok(())
+    let finished_at = OffsetDateTime::now_utc();
+    Ok(GenerateIssuesResult{
+        started_at,
+        finished_at,
+        time_s: (finished_at - started_at).as_seconds_f64(),
+        affected_elements,
+    })
 }
 
 fn get_issues(element: &Element) -> Vec<Issue> {
