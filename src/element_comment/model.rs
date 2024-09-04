@@ -6,7 +6,7 @@ use time::OffsetDateTime;
 use tracing::debug;
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
-pub struct ElementReview {
+pub struct ElementComment {
     pub id: i64,
     pub element_id: i64,
     pub review: String,
@@ -18,7 +18,7 @@ pub struct ElementReview {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-const TABLE: &str = "element_review";
+const TABLE: &str = "element_comment";
 const ALL_COLUMNS: &str = "id, element_id, review, created_at, updated_at, deleted_at";
 const COL_ID: &str = "id";
 const COL_ELEMENT_ID: &str = "element_id";
@@ -27,8 +27,8 @@ const _COL_CREATED_AT: &str = "created_at";
 const _COL_UPDATED_AT: &str = "updated_at";
 const _COL_DELETED_AT: &str = "deleted_at ";
 
-impl ElementReview {
-    pub fn insert(element_id: i64, review: &str, conn: &Connection) -> Result<ElementReview> {
+impl ElementComment {
+    pub fn insert(element_id: i64, review: &str, conn: &Connection) -> Result<ElementComment> {
         sleep(Duration::from_millis(10));
         let query = format!(
             r#"
@@ -49,10 +49,10 @@ impl ElementReview {
                 ":review": review,
             },
         )?;
-        Ok(ElementReview::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
+        Ok(ElementComment::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<ElementReview>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<ElementComment>> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
@@ -67,9 +67,9 @@ impl ElementReview {
     }
 }
 
-const fn mapper() -> fn(&Row) -> rusqlite::Result<ElementReview> {
-    |row: &Row| -> rusqlite::Result<ElementReview> {
-        Ok(ElementReview {
+const fn mapper() -> fn(&Row) -> rusqlite::Result<ElementComment> {
+    |row: &Row| -> rusqlite::Result<ElementComment> {
+        Ok(ElementComment {
             id: row.get(0)?,
             element_id: row.get(1)?,
             review: row.get(2)?,
