@@ -7,50 +7,11 @@ use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::info;
-
-#[derive(Deserialize)]
-pub struct SetTagArgs {
-    pub token: String,
-    pub id: String,
-    pub name: String,
-    pub value: Value,
-}
-
-pub async fn set_tag(
-    Params(args): Params<SetTagArgs>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Area, Error> {
-    let token = pool
-        .get()
-        .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
-        .await??
-        .unwrap();
-    let cloned_name = args.name.clone();
-    let cloned_value = args.value.clone();
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| area::service::patch_tag(&args.id, &cloned_name, &cloned_value, conn))
-        .await??;
-    let log_message = format!(
-        "{} set tag {} = {} for area {} https://api.btcmap.org/v3/areas/{}",
-        token.owner,
-        args.name,
-        serde_json::to_string(&args.value)?,
-        area.name(),
-        area.id,
-    );
-    info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(area)
-}
 
 #[derive(Deserialize)]
 pub struct RemoveTagArgs {

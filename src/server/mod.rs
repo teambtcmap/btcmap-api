@@ -89,7 +89,7 @@ pub async fn run() -> Result<()> {
                         .with_method("generateelementissues", rpc::generate_element_issues::run)
                         .with_method("addarea", rpc::add_area::run)
                         .with_method("getarea", rpc::get_area::run)
-                        .with_method("setareatag", area::rpc::set_tag)
+                        .with_method("setareatag", rpc::set_area_tag::run)
                         .with_method("removeareatag", area::rpc::remove_tag)
                         .with_method("gettrendingcountries", area::rpc::get_trending_countries)
                         .with_method(
