@@ -87,7 +87,7 @@ pub async fn run() -> Result<()> {
                         .with_method("boostelement", rpc::boost_element::run)
                         .with_method("addelementcomment", rpc::add_element_comment::run)
                         .with_method("generateelementissues", rpc::generate_element_issues::run)
-                        .with_method("createarea", area::rpc::create)
+                        .with_method("addarea", rpc::add_area::run)
                         .with_method("getarea", area::rpc::get)
                         .with_method("setareatag", area::rpc::set_tag)
                         .with_method("removeareatag", area::rpc::remove_tag)
