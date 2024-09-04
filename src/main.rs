@@ -27,8 +27,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
 mod review;
-mod vacuum;
 mod rpc;
+mod vacuum;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 

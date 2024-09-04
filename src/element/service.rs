@@ -198,7 +198,7 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
         }
     }
     let finished_at = OffsetDateTime::now_utc();
-    Ok(GenerateIssuesResult{
+    Ok(GenerateIssuesResult {
         started_at,
         finished_at,
         time_s: (finished_at - started_at).as_seconds_f64(),
