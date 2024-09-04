@@ -1,5 +1,5 @@
 use super::db;
-use crate::{area, element, error, rpc, user};
+use crate::{area, element, element_comment, error, rpc, user};
 use crate::{event, tile};
 use crate::{report, Result};
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
@@ -147,6 +147,11 @@ pub async fn run() -> Result<()> {
                         scope("elements")
                             .service(element::v3::get)
                             .service(element::v3::get_by_id),
+                    )
+                    .service(
+                        scope("element-comments")
+                            .service(element_comment::v3::get)
+                            .service(element_comment::v3::get_by_id),
                     )
                     .service(
                         scope("events")
