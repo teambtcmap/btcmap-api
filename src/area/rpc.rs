@@ -14,41 +14,6 @@ use time::OffsetDateTime;
 use tracing::info;
 
 #[derive(Deserialize)]
-pub struct RemoveTagArgs {
-    pub token: String,
-    pub id: String,
-    pub tag: String,
-}
-
-pub async fn remove_tag(
-    Params(args): Params<RemoveTagArgs>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Area, Error> {
-    let token = pool
-        .get()
-        .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
-        .await??
-        .unwrap();
-    let cloned_tag = args.tag.clone();
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| area::service::remove_tag(&args.id, &cloned_tag, conn))
-        .await??;
-    let log_message = format!(
-        "{} removed tag {} from area {} https://api.btcmap.org/v3/areas/{}",
-        token.owner,
-        args.tag,
-        area.name(),
-        area.id,
-    );
-    info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(area)
-}
-
-#[derive(Deserialize)]
 pub struct GetTrendingAreasArgs {
     pub token: String,
     pub period_start: String,
