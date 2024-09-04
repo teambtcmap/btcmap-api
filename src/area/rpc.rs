@@ -15,27 +15,6 @@ use time::OffsetDateTime;
 use tracing::info;
 
 #[derive(Deserialize)]
-pub struct GetArgs {
-    pub token: String,
-    pub id: String,
-}
-
-pub async fn get(Params(args): Params<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Area, Error> {
-    pool.get()
-        .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
-        .await??
-        .unwrap();
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&args.id, conn))
-        .await??
-        .unwrap();
-    Ok(area)
-}
-
-#[derive(Deserialize)]
 pub struct SetTagArgs {
     pub token: String,
     pub id: String,

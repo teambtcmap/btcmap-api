@@ -1,4 +1,5 @@
-use crate::{area, discord, Error};
+use crate::Result;
+use crate::{area, discord};
 use crate::{area::Area, auth::Token};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
@@ -13,7 +14,7 @@ pub struct Args {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Area, Error> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Area> {
     let token = pool
         .get()
         .await?
