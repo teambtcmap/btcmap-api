@@ -1,6 +1,6 @@
-use super::Area;
+use crate::area::Area;
 use crate::Result;
-use crate::{area, auth::Token, discord, Error};
+use crate::{area, auth::Token, discord};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -8,15 +8,12 @@ use std::sync::Arc;
 use tracing::info;
 
 #[derive(Deserialize)]
-pub struct RemoveArgs {
+pub struct Args {
     pub token: String,
     pub id: String,
 }
 
-pub async fn remove(
-    Params(args): Params<RemoveArgs>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Area, Error> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Area> {
     let token = pool
         .get()
         .await?

@@ -5,5 +5,6 @@ pub mod generate_element_issues;
 pub mod get_area;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
+pub mod remove_area;
 pub mod remove_area_tag;
 pub mod set_area_tag;
