@@ -1,10 +1,14 @@
+use std::collections::HashMap;
+
 use super::Area;
 use crate::{
-    element::{self},
+    element::{self, Element},
+    event::Event,
     Error, Result,
 };
 use geojson::GeoJson;
 use rusqlite::Connection;
+use serde::Serialize;
 use serde_json::{Map, Value};
 use time::OffsetDateTime;
 
@@ -96,6 +100,89 @@ pub fn soft_delete(area_id_or_alias: &str, conn: &mut Connection) -> Result<Area
     element::service::update_areas_tag(&area_elements, &sp)?;
     sp.commit()?;
     Ok(area)
+}
+
+#[derive(Serialize)]
+pub struct TrendingArea {
+    pub id: i64,
+    pub name: String,
+    pub url: String,
+    pub events: i64,
+    pub created: i64,
+    pub updated: i64,
+    pub deleted: i64,
+}
+
+pub fn get_trending_areas(
+    r#type: &str,
+    period_start: &OffsetDateTime,
+    period_end: &OffsetDateTime,
+    conn: &Connection,
+) -> Result<Vec<TrendingArea>> {
+    let events = Event::select_created_between(&period_start, &period_end, &conn)?;
+    let areas: Vec<Area> = Area::select_all(None, &conn)?
+        .into_iter()
+        .filter(|it| it.deleted_at == None)
+        .collect();
+    let mut areas_to_events: HashMap<i64, Vec<&Event>> = HashMap::new();
+    for area in &areas {
+        areas_to_events.insert(area.id, vec![]);
+    }
+    for event in &events {
+        let element = Element::select_by_id(event.element_id, &conn)?.unwrap();
+        let element_area_ids: Vec<i64> = if element.deleted_at.is_none() {
+            element
+                .tag("areas")
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|it| it["id"].as_i64().unwrap())
+                .collect()
+        } else {
+            element::service::find_areas(&element, &areas)?
+                .iter()
+                .map(|it| it.id)
+                .collect()
+        };
+        for element_area_id in element_area_ids {
+            if !areas_to_events.contains_key(&element_area_id) {
+                areas_to_events.insert(element_area_id, vec![]);
+            }
+            let area_events = areas_to_events.get_mut(&element_area_id).unwrap();
+            area_events.push(event);
+        }
+    }
+    let mut trending_areas: Vec<_> = areas_to_events
+        .into_iter()
+        .map(|it| (Area::select_by_id(it.0, &conn).unwrap().unwrap(), it.1))
+        .collect();
+    trending_areas.sort_by(|x, y| y.1.len().cmp(&x.1.len()));
+    Ok(trending_areas
+        .into_iter()
+        .filter(|it| it.0.tags.contains_key("type") && it.0.tags["type"].as_str() == Some(r#type))
+        .map(|it| {
+            let mut created: Vec<&Event> = vec![];
+            let mut updated: Vec<&Event> = vec![];
+            let mut deleted: Vec<&Event> = vec![];
+            for event in &it.1 {
+                match event.r#type.as_str() {
+                    "create" => created.push(&event),
+                    "update" => updated.push(&event),
+                    "delete" => deleted.push(&event),
+                    _ => {}
+                }
+            }
+            TrendingArea {
+                id: it.0.id,
+                name: it.0.name(),
+                url: format!("https://btcmap.org/{}/{}", r#type, it.0.alias()),
+                events: it.1.len() as i64,
+                created: created.len() as i64,
+                updated: updated.len() as i64,
+                deleted: deleted.len() as i64,
+            }
+        })
+        .collect())
 }
 
 #[cfg(test)]
