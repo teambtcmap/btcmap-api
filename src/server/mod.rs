@@ -81,9 +81,9 @@ pub async fn run() -> Result<()> {
                 service("rpc").guard(actix_web::guard::Post()).finish(
                     jsonrpc_v2::Server::new()
                         .with_data(jsonrpc_v2::Data::new(pool.clone()))
-                        .with_method("getelement", element::rpc::get)
-                        .with_method("setelementtag", element::rpc::set_tag)
-                        .with_method("removeelementtag", element::rpc::remove_tag)
+                        .with_method("getelement", rpc::get_element::run)
+                        .with_method("setelementtag", rpc::set_element_tag::run)
+                        .with_method("removeelementtag", rpc::remove_element_tag::run)
                         .with_method("boostelement", rpc::boost_element::run)
                         .with_method("addelementcomment", rpc::add_element_comment::run)
                         .with_method("generateelementissues", rpc::generate_element_issues::run)
