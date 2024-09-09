@@ -6,9 +6,11 @@ use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Instant;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::debug;
+use tracing::info;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Event {
@@ -142,6 +144,7 @@ impl Event {
         period_end: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Vec<Event>> {
+        let start = Instant::now();
         let query = format!(
             r#"
                 SELECT
@@ -162,7 +165,7 @@ impl Event {
             "#
         );
         debug!(query);
-        Ok(conn
+        let res = conn
             .prepare(&query)?
             .query_map(
                 named_params! {
@@ -171,7 +174,16 @@ impl Event {
                 },
                 mapper(),
             )?
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect::<Result<Vec<_>, _>>()?;
+        let time_ms = start.elapsed().as_millis();
+        info!(
+            count = res.len(),
+            time_ms,
+            "Loaded {} events in {} ms",
+            res.len(),
+            time_ms,
+        );
+        Ok(res)
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Event>> {

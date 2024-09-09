@@ -82,6 +82,21 @@ pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<El
     Ok(area_elements)
 }
 
+pub fn filter_by_area_quick(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
+    let mut area_elements: Vec<Element> = vec![];
+    for element in all_elements {
+        if element.tag("areas").is_array() {
+            let element_areas = element.tag("areas").as_array().unwrap();
+            for element_area in element_areas {
+                if element_area["id"].as_i64().unwrap() == area.id {
+                    area_elements.push(element.clone());
+                }
+            }
+        }
+    }
+    Ok(area_elements)
+}
+
 pub fn update_areas_tag(elements: &Vec<Element>, conn: &Connection) -> Result<Vec<Element>> {
     let mut res: Vec<Element> = vec![];
 

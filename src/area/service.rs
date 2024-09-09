@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use super::Area;
 use crate::{
     element::{self, Element},
+    element_comment::ElementComment,
     event::Event,
     Error, Result,
 };
@@ -111,6 +112,7 @@ pub struct TrendingArea {
     pub created: i64,
     pub updated: i64,
     pub deleted: i64,
+    pub comments: i64,
 }
 
 pub fn get_trending_areas(
@@ -121,6 +123,10 @@ pub fn get_trending_areas(
 ) -> Result<Vec<TrendingArea>> {
     let events = Event::select_created_between(&period_start, &period_end, &conn)?;
     let areas: Vec<Area> = Area::select_all(None, &conn)?
+        .into_iter()
+        .filter(|it| it.deleted_at == None)
+        .collect();
+    let elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()
         .filter(|it| it.deleted_at == None)
         .collect();
@@ -152,12 +158,11 @@ pub fn get_trending_areas(
             area_events.push(event);
         }
     }
-    let mut trending_areas: Vec<_> = areas_to_events
+    let trending_areas: Vec<_> = areas_to_events
         .into_iter()
         .map(|it| (Area::select_by_id(it.0, &conn).unwrap().unwrap(), it.1))
         .collect();
-    trending_areas.sort_by(|x, y| y.1.len().cmp(&x.1.len()));
-    Ok(trending_areas
+    let mut res: Vec<TrendingArea> = trending_areas
         .into_iter()
         .filter(|it| it.0.tags.contains_key("type") && it.0.tags["type"].as_str() == Some(r#type))
         .map(|it| {
@@ -172,6 +177,11 @@ pub fn get_trending_areas(
                     _ => {}
                 }
             }
+            let comments: Vec<ElementComment> = get_comments(&it.0, &elements, conn)
+                .unwrap()
+                .into_iter()
+                .filter(|it| &it.created_at > period_start && &it.created_at < period_end)
+                .collect();
             TrendingArea {
                 id: it.0.id,
                 name: it.0.name(),
@@ -180,9 +190,31 @@ pub fn get_trending_areas(
                 created: created.len() as i64,
                 updated: updated.len() as i64,
                 deleted: deleted.len() as i64,
+                comments: comments.len() as i64,
             }
         })
-        .collect())
+        .filter(|it| it.events + it.comments != 0)
+        .collect();
+    res.sort_by(|a, b| {
+        (b.created + b.updated + b.deleted + b.comments)
+            .cmp(&(a.created + a.updated + a.deleted + a.comments))
+    });
+    Ok(res)
+}
+
+fn get_comments(
+    area: &Area,
+    all_elements: &Vec<Element>,
+    conn: &Connection,
+) -> Result<Vec<ElementComment>> {
+    let area_elements = element::service::filter_by_area_quick(&all_elements, area)?;
+    let mut comments: Vec<ElementComment> = vec![];
+    for element in area_elements {
+        for comment in ElementComment::select_by_element_id(element.id, conn)? {
+            comments.push(comment);
+        }
+    }
+    Ok(comments)
 }
 
 #[cfg(test)]
