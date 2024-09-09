@@ -4,6 +4,7 @@ pub mod boost_element;
 pub mod generate_element_issues;
 pub mod get_area;
 pub mod get_element;
+pub mod get_most_commented_countries;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
 pub mod remove_area;
