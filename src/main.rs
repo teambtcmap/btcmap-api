@@ -26,6 +26,7 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
+mod area_element;
 mod element_comment;
 mod rpc;
 mod vacuum;
