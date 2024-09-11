@@ -29,7 +29,7 @@ const COL_AREA_ID: &str = "area_id";
 const COL_ELEMENT_ID: &str = "element_id";
 const _COL_CREATED_AT: &str = "created_at";
 const COL_UPDATED_AT: &str = "updated_at";
-const _COL_DELETED_AT: &str = "deleted_at ";
+const COL_DELETED_AT: &str = "deleted_at ";
 
 impl AreaElement {
     pub fn insert(area_id: i64, element_id: i64, conn: &Connection) -> Result<AreaElement> {
@@ -149,6 +149,45 @@ impl AreaElement {
         Ok(conn
             .query_row(&query, named_params! { ":id": id }, mapper())
             .optional()?)
+    }
+
+    pub fn set_deleted_at(
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+        conn: &Connection,
+    ) -> Result<AreaElement> {
+        sleep(Duration::from_millis(10));
+        match deleted_at {
+            Some(deleted_at) => {
+                let query = format!(
+                    r#"
+                        UPDATE {TABLE}
+                        SET {COL_DELETED_AT} = :deleted_at
+                        WHERE {COL_ID} = :id
+                    "#
+                );
+                debug!(query);
+                conn.execute(
+                    &query,
+                    named_params! {
+                        ":id": id,
+                        ":deleted_at": deleted_at.format(&Rfc3339)?,
+                    },
+                )?;
+            }
+            None => {
+                let query = format!(
+                    r#"
+                        UPDATE {TABLE}
+                        SET {COL_DELETED_AT} = NULL
+                        WHERE {COL_ID} = :id
+                    "#
+                );
+                debug!(query);
+                conn.execute(&query, named_params! { ":id": id })?;
+            }
+        };
+        Ok(AreaElement::select_by_id(id, conn)?.unwrap())
     }
 }
 

@@ -98,6 +98,10 @@ pub async fn run() -> Result<()> {
                         )
                         .with_method("gettrendingcommunities", rpc::get_trending_communities::run)
                         .with_method("removearea", rpc::remove_area::run)
+                        .with_method(
+                            "generateareaselementsmapping",
+                            rpc::generate_areas_elements_mapping::run,
+                        )
                         .finish()
                         .into_actix_web_service(),
                 ),
