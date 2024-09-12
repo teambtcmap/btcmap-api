@@ -11,7 +11,7 @@ struct VacuumResult {
 pub fn vacuum_areas(conn: &Connection) -> Result<()> {
     let mut nulls_removed = 0;
     let mut useless_strings_removed = 0;
-    let areas: Vec<Area> = Area::select_all(None, &conn)?
+    let areas: Vec<Area> = Area::select_all(&conn)?
         .into_iter()
         .filter(|it| it.deleted_at == None)
         .collect();

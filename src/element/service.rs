@@ -88,7 +88,7 @@ pub fn generate_areas_mapping_old(
     conn: &Connection,
 ) -> Result<Vec<Element>> {
     let mut res: Vec<Element> = vec![];
-    let all_areas: Vec<Area> = Area::select_all(None, &conn)?;
+    let all_areas: Vec<Area> = Area::select_all(&conn)?;
     for element in elements {
         let element_areas = find_areas(element, &all_areas)?;
         let element_areas = areas_to_areas_tag(element_areas);

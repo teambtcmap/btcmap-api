@@ -72,7 +72,7 @@ pub async fn get(
         .await?
         .interact(move |conn| match &args.updated_since {
             Some(updated_since) => Area::select_updated_since(updated_since, args.limit, conn),
-            None => Area::select_all(args.limit, conn),
+            None => Area::select_all(conn),
         })
         .await??;
     Ok(Either::Left(Json(
@@ -162,7 +162,9 @@ mod tests {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/?limit=2").to_request();
+        let req = TestRequest::get()
+            .uri("/?updated_since=2020-01-01T00:00:00Z&limit=2")
+            .to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.as_array().unwrap().len(), 2);
         Ok(())

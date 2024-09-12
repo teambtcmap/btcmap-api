@@ -45,23 +45,19 @@ impl Area {
         Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
     }
 
-    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Area>> {
+    pub fn select_all(conn: &Connection) -> Result<Vec<Area>> {
         let start = Instant::now();
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
-                LIMIT :limit
             "#
         );
         debug!(query);
         let res = conn
             .prepare(&query)?
-            .query_map(
-                named_params! { ":limit": limit.unwrap_or(i64::MAX) },
-                mapper(),
-            )?
+            .query_map({}, mapper())?
             .collect::<Result<Vec<_>, _>>()?;
         let time_ms = start.elapsed().as_millis();
         info!(
@@ -393,7 +389,7 @@ mod test {
                 Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?,
                 Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?,
             ],
-            Area::select_all(None, &conn)?,
+            Area::select_all(&conn)?,
         );
         Ok(())
     }
