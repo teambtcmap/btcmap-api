@@ -154,6 +154,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use geojson::{Feature, GeoJson};
     use serde_json::{json, Map, Value};
 
     #[test]
@@ -203,7 +204,11 @@ mod test {
     #[test]
     async fn patch_should_return_401_if_unauthorized() -> Result<()> {
         let state = mock_state().await;
-        Area::insert(Map::new(), &state.conn)?;
+        Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -226,7 +231,7 @@ mod test {
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        Area::insert(tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -265,7 +270,7 @@ mod test {
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        Area::insert(tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -289,8 +294,11 @@ mod test {
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        tags.insert("geo_json".into(), phuket_geo_json());
-        Area::insert(tags, &state.conn)?;
+        Area::insert(
+            GeoJson::from_json_value(phuket_geo_json()).unwrap(),
+            tags,
+            &state.conn,
+        )?;
 
         let area_element = Element::insert(
             &OverpassElement {

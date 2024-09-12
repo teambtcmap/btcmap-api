@@ -89,6 +89,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data, QueryConfig};
     use actix_web::{test, App};
+    use geojson::{Feature, GeoJson};
     use http::StatusCode;
     use serde_json::Map;
     use time::macros::datetime;
@@ -145,7 +146,11 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let state = mock_state().await;
-        let area = Area::insert(Map::new(), &state.conn)?;
+        let area = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -163,9 +168,21 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let state = mock_state().await;
-        let area_1 = Area::insert(Map::new(), &state.conn)?;
-        let area_2 = Area::insert(Map::new(), &state.conn)?;
-        let _area_3 = Area::insert(Map::new(), &state.conn)?;
+        let area_1 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            &state.conn,
+        )?;
+        let area_2 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            &state.conn,
+        )?;
+        let _area_3 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -183,9 +200,17 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let area_1 = Area::insert(Map::new(), &state.conn)?;
+        let area_1 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            &state.conn,
+        )?;
         Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
-        let area_2 = Area::insert(Map::new(), &state.conn)?;
+        let area_2 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            &state.conn,
+        )?;
         let area_2 =
             Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(

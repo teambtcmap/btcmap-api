@@ -105,6 +105,7 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
+    use geojson::{Feature, GeoJson};
 
     #[test]
     async fn get_empty_table() -> Result<()> {
@@ -126,7 +127,7 @@ mod tests {
         let state = mock_state().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        Area::insert(tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -144,9 +145,17 @@ mod tests {
         let state = mock_state().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        Area::insert(tags.clone(), &state.conn)?;
-        Area::insert(tags.clone(), &state.conn)?;
-        Area::insert(tags, &state.conn)?;
+        Area::insert(
+            GeoJson::Feature(Feature::default()),
+            tags.clone(),
+            &state.conn,
+        )?;
+        Area::insert(
+            GeoJson::Feature(Feature::default()),
+            tags.clone(),
+            &state.conn,
+        )?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -165,7 +174,7 @@ mod tests {
         let area_url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
-        Area::insert(tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))

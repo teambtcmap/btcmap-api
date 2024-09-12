@@ -209,6 +209,7 @@ fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> 
 mod test {
     use super::*;
     use crate::{osm::overpass::OverpassElement, test::mock_state};
+    use geojson::{Feature, GeoJson};
     use serde_json::{json, Map};
     use std::collections::HashMap;
     use time::{macros::date, Duration};
@@ -219,7 +220,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         for _ in 1..100 {
             Report::insert(1, &date!(2023 - 11 - 12), &Map::new(), &state.conn)?;
         }

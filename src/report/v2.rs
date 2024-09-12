@@ -122,6 +122,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use geojson::{Feature, GeoJson};
     use serde_json::{Map, Value};
     use time::macros::{date, datetime};
     use time::OffsetDateTime;
@@ -146,7 +147,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         Report::insert(
             1,
             &OffsetDateTime::now_utc().date(),
@@ -170,7 +171,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         Report::insert(1, &date!(2023 - 05 - 06), &Map::new(), &state.conn)?;
         Report::insert(1, &date!(2023 - 05 - 07), &Map::new(), &state.conn)?;
         Report::insert(1, &date!(2023 - 05 - 08), &Map::new(), &state.conn)?;
@@ -191,7 +192,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         let report_1 = Report::insert(
             1,
             &OffsetDateTime::now_utc().date(),

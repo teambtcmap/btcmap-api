@@ -106,6 +106,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data, QueryConfig};
     use actix_web::{test, App};
+    use geojson::{Feature, GeoJson};
     use http::StatusCode;
     use serde_json::Map;
     use time::macros::datetime;
@@ -167,7 +168,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(area_tags, &state.conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         let report = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),
@@ -193,7 +194,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(area_tags, &state.conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         let report_1 = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),
@@ -231,7 +232,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(area_tags, &state.conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
 
         let report_1 = Report::insert(
             area.id,

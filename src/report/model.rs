@@ -266,6 +266,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 #[cfg(test)]
 mod test {
     use crate::{area::Area, report::Report, test::mock_state, Result};
+    use geojson::{Feature, GeoJson};
     use serde_json::Map;
     use std::ops::Add;
     use time::{macros::datetime, Duration, OffsetDateTime};
@@ -276,7 +277,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         Report::insert(
             1,
             &OffsetDateTime::now_utc().date(),
@@ -294,7 +295,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         let report_1 = Report::insert(
             1,
             &OffsetDateTime::now_utc().date(),
@@ -341,7 +342,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         Report::insert(
             1,
             &OffsetDateTime::now_utc().date(),
@@ -357,7 +358,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(area_tags, &state.conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date().previous_day().unwrap(),
@@ -382,7 +383,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
@@ -412,7 +413,7 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(area_tags, &state.conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
         let report = Report::insert(
             1,
             &OffsetDateTime::now_utc().date(),

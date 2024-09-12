@@ -27,8 +27,12 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Area {
-    pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
-        sleep(Duration::from_millis(10));
+    pub fn insert(
+        geo_json: GeoJson,
+        mut tags: Map<String, Value>,
+        conn: &Connection,
+    ) -> Result<Area> {
+        tags.insert("geo_json".into(), geo_json.into());
         let query = format!(
             r#"
                 INSERT INTO {TABLE} ({COL_TAGS}) 
@@ -36,6 +40,7 @@ impl Area {
             "#
         );
         debug!(query);
+        sleep(Duration::from_millis(10));
         conn.execute(&query, named_params! { ":tags": Value::from(tags) })?;
         Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
     }
@@ -356,6 +361,7 @@ mod test {
         test::{mock_conn, mock_state, mock_tags},
         Result,
     };
+    use geojson::{Feature, GeoJson};
     use serde_json::{json, Map};
     use time::{macros::datetime, OffsetDateTime};
     use tokio::test;
@@ -363,8 +369,16 @@ mod test {
     #[test]
     async fn insert() -> Result<()> {
         let state = mock_state().await;
-        let tags = mock_tags();
-        let res = Area::insert(tags.clone(), &state.conn)?;
+        let mut tags = mock_tags();
+        tags.insert(
+            "geo_json".into(),
+            GeoJson::Feature(Feature::default()).into(),
+        );
+        let res = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            tags.clone(),
+            &state.conn,
+        )?;
         assert_eq!(tags, res.tags);
         assert_eq!(res, Area::select_by_id(res.id, &state.conn)?.unwrap());
         Ok(())
@@ -375,9 +389,9 @@ mod test {
         let conn = mock_conn();
         assert_eq!(
             vec![
-                Area::insert(Map::new(), &conn)?,
-                Area::insert(Map::new(), &conn)?,
-                Area::insert(Map::new(), &conn)?,
+                Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?,
+                Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?,
+                Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?,
             ],
             Area::select_all(None, &conn)?,
         );
@@ -387,13 +401,25 @@ mod test {
     #[test]
     async fn select_updated_since() -> Result<()> {
         let state = mock_state().await;
-        let _area_1 = Area::insert(mock_tags(), &state.conn)?;
+        let _area_1 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            mock_tags(),
+            &state.conn,
+        )?;
         let _area_1 =
             Area::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &state.conn)?;
-        let area_2 = Area::insert(mock_tags(), &state.conn)?;
+        let area_2 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            mock_tags(),
+            &state.conn,
+        )?;
         let area_2 =
             Area::set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &state.conn)?;
-        let area_3 = Area::insert(mock_tags(), &state.conn)?;
+        let area_3 = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            mock_tags(),
+            &state.conn,
+        )?;
         let area_3 =
             Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &state.conn)?;
         assert_eq!(
@@ -406,7 +432,7 @@ mod test {
     #[test]
     async fn select_by_id() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(Map::new(), &conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?;
         assert_eq!(area, Area::select_by_id(area.id, &conn)?.unwrap());
         Ok(())
     }
@@ -417,7 +443,7 @@ mod test {
         let url_alias = json!("url_alias_value");
         let mut tags = Map::new();
         tags.insert("url_alias".into(), url_alias.clone());
-        Area::insert(tags, &conn)?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, &conn)?;
         let area = Area::select_by_alias(url_alias.as_str().unwrap(), &conn)?;
         assert!(area.is_some());
         let area = area.unwrap();
@@ -434,7 +460,7 @@ mod test {
         let tag_2_value = json!("tag_2_value");
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
-        let area = Area::insert(tags.clone(), &conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), tags.clone(), &conn)?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         tags.insert(tag_2_name.into(), tag_2_value.clone());
         let area = Area::patch_tags(area.id, tags, &conn)?;
@@ -446,7 +472,7 @@ mod test {
     #[test]
     async fn set_deleted_at() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(Map::new(), &conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?;
         let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
         assert!(area.deleted_at.is_some());
         let area = Area::set_deleted_at(area.id, None, &conn)?;
