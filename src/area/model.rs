@@ -73,6 +73,32 @@ impl Area {
         Ok(res)
     }
 
+    pub fn select_all_except_deleted(conn: &Connection) -> Result<Vec<Area>> {
+        let start = Instant::now();
+        let query = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE {COL_DELETED_AT} IS NULL
+                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+            "#
+        );
+        debug!(query);
+        let res = conn
+            .prepare(&query)?
+            .query_map({}, mapper())?
+            .collect::<Result<Vec<_>, _>>()?;
+        let time_ms = start.elapsed().as_millis();
+        info!(
+            count = res.len(),
+            time_ms,
+            "Loaded {} areas in {} ms",
+            res.len(),
+            time_ms,
+        );
+        Ok(res)
+    }
+
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
         limit: Option<i64>,

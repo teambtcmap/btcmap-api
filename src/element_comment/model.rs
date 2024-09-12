@@ -26,7 +26,7 @@ const ALL_COLUMNS: &str = "id, element_id, comment, created_at, updated_at, dele
 const COL_ID: &str = "id";
 const COL_ELEMENT_ID: &str = "element_id";
 const COL_COMMENT: &str = "comment";
-const _COL_CREATED_AT: &str = "created_at";
+const COL_CREATED_AT: &str = "created_at";
 const COL_UPDATED_AT: &str = "updated_at";
 const _COL_DELETED_AT: &str = "deleted_at ";
 
@@ -92,12 +92,17 @@ impl ElementComment {
         Ok(res)
     }
 
-    pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementComment>> {
+    pub fn select_created_between(
+        period_start: &OffsetDateTime,
+        period_end: &OffsetDateTime,
+        conn: &Connection,
+    ) -> Result<Vec<ElementComment>> {
+        let start = Instant::now();
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
-                WHERE {COL_ELEMENT_ID} = :element_id
+                WHERE {COL_CREATED_AT} > :period_start AND {COL_CREATED_AT} < :period_end
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
             "#
         );
@@ -106,13 +111,44 @@ impl ElementComment {
             .prepare(&query)?
             .query_map(
                 named_params! {
-                    ":element_id": element_id,
+                    ":period_start": period_start.format(&Rfc3339)?,
+                    ":period_end": period_end.format(&Rfc3339)?,
                 },
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?;
+        let time_ms = start.elapsed().as_millis();
+        info!(
+            count = res.len(),
+            time_ms,
+            "Loaded {} element comments in {} ms",
+            res.len(),
+            time_ms,
+        );
         Ok(res)
     }
+
+    // pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementComment>> {
+    //     let query = format!(
+    //         r#"
+    //             SELECT {ALL_COLUMNS}
+    //             FROM {TABLE}
+    //             WHERE {COL_ELEMENT_ID} = :element_id
+    //             ORDER BY {COL_UPDATED_AT}, {COL_ID}
+    //         "#
+    //     );
+    //     debug!(query);
+    //     let res = conn
+    //         .prepare(&query)?
+    //         .query_map(
+    //             named_params! {
+    //                 ":element_id": element_id,
+    //             },
+    //             mapper(),
+    //         )?
+    //         .collect::<Result<Vec<_>, _>>()?;
+    //     Ok(res)
+    // }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<ElementComment>> {
         let query = format!(

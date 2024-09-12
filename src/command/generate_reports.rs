@@ -22,15 +22,8 @@ pub fn run(conn: &mut Connection) -> Result<()> {
         return Ok(());
     }
 
-    let all_elements: Vec<Element> = Element::select_all(None, &sp)?
-        .into_iter()
-        .filter(|it| it.deleted_at.is_none())
-        .collect();
-
-    let all_areas: Vec<Area> = Area::select_all(None, &sp)?
-        .into_iter()
-        .filter(|it| it.deleted_at == None)
-        .collect();
+    let all_areas = Area::select_all_except_deleted(&sp)?;
+    let all_elements = Element::select_all_except_deleted(&sp)?;
 
     let mut new_reports = 0;
 

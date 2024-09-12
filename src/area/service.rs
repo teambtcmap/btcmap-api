@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::Area;
 use crate::{
+    area_element::model::AreaElement,
     element::{self, Element},
     element_comment::ElementComment,
     event::Event,
@@ -122,34 +123,13 @@ pub fn get_trending_areas(
     conn: &Connection,
 ) -> Result<Vec<TrendingArea>> {
     let events = Event::select_created_between(&period_start, &period_end, &conn)?;
-    let areas: Vec<Area> = Area::select_all(None, &conn)?
-        .into_iter()
-        .filter(|it| it.deleted_at == None)
-        .collect();
-    let elements: Vec<Element> = Element::select_all(None, &conn)?
-        .into_iter()
-        .filter(|it| it.deleted_at == None)
-        .collect();
     let mut areas_to_events: HashMap<i64, Vec<&Event>> = HashMap::new();
-    for area in &areas {
-        areas_to_events.insert(area.id, vec![]);
-    }
     for event in &events {
         let element = Element::select_by_id(event.element_id, &conn)?.unwrap();
-        let element_area_ids: Vec<i64> = if element.deleted_at.is_none() {
-            element
-                .tag("areas")
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|it| it["id"].as_i64().unwrap())
-                .collect()
-        } else {
-            element::service::find_areas(&element, &areas)?
-                .iter()
-                .map(|it| it.id)
-                .collect()
-        };
+        let element_area_ids: Vec<i64> = AreaElement::select_by_element_id(element.id, conn)?
+            .into_iter()
+            .map(|it| it.area_id)
+            .collect();
         for element_area_id in element_area_ids {
             if !areas_to_events.contains_key(&element_area_id) {
                 areas_to_events.insert(element_area_id, vec![]);
@@ -158,18 +138,45 @@ pub fn get_trending_areas(
             area_events.push(event);
         }
     }
-    let trending_areas: Vec<_> = areas_to_events
+    let comments = ElementComment::select_created_between(&period_start, &period_end, &conn)?;
+    let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
+    for comment in &comments {
+        let element = Element::select_by_id(comment.element_id, &conn)?.unwrap();
+        let element_area_ids: Vec<i64> = AreaElement::select_by_element_id(element.id, conn)?
+            .into_iter()
+            .map(|it| it.area_id)
+            .collect();
+        for element_area_id in element_area_ids {
+            if !areas_to_comments.contains_key(&element_area_id) {
+                areas_to_comments.insert(element_area_id, vec![]);
+            }
+            let area_comments = areas_to_comments.get_mut(&element_area_id).unwrap();
+            area_comments.push(comment);
+        }
+    }
+    let mut areas: HashSet<i64> = HashSet::new();
+    for (area_id, _) in &areas_to_events {
+        areas.insert(*area_id);
+    }
+    for (area_id, _) in &areas_to_comments {
+        areas.insert(*area_id);
+    }
+    let areas: Vec<_> = areas
         .into_iter()
-        .map(|it| (Area::select_by_id(it.0, &conn).unwrap().unwrap(), it.1))
+        .map(|it| Area::select_by_id(it, &conn).unwrap().unwrap())
         .collect();
-    let mut res: Vec<TrendingArea> = trending_areas
+    let mut res: Vec<TrendingArea> = areas
         .into_iter()
-        .filter(|it| it.0.tags.contains_key("type") && it.0.tags["type"].as_str() == Some(r#type))
+        .filter(|it| it.tags.contains_key("type") && it.tags["type"].as_str() == Some(r#type))
         .map(|it| {
+            if !areas_to_events.contains_key(&it.id) {
+                areas_to_events.insert(it.id, vec![]);
+            }
+            let events = areas_to_events.get(&it.id).unwrap();
             let mut created: Vec<&Event> = vec![];
             let mut updated: Vec<&Event> = vec![];
             let mut deleted: Vec<&Event> = vec![];
-            for event in &it.1 {
+            for event in events {
                 match event.r#type.as_str() {
                     "create" => created.push(&event),
                     "update" => updated.push(&event),
@@ -177,16 +184,15 @@ pub fn get_trending_areas(
                     _ => {}
                 }
             }
-            let comments: Vec<ElementComment> = get_comments(&it.0, &elements, conn)
-                .unwrap()
-                .into_iter()
-                .filter(|it| &it.created_at > period_start && &it.created_at < period_end)
-                .collect();
+            if !areas_to_comments.contains_key(&it.id) {
+                areas_to_comments.insert(it.id, vec![]);
+            }
+            let comments = areas_to_comments.get(&it.id).unwrap();
             TrendingArea {
-                id: it.0.id,
-                name: it.0.name(),
-                url: format!("https://btcmap.org/{}/{}", r#type, it.0.alias()),
-                events: it.1.len() as i64,
+                id: it.id,
+                name: it.name(),
+                url: format!("https://btcmap.org/{}/{}", r#type, it.alias()),
+                events: events.len() as i64,
                 created: created.len() as i64,
                 updated: updated.len() as i64,
                 deleted: deleted.len() as i64,
@@ -202,20 +208,16 @@ pub fn get_trending_areas(
     Ok(res)
 }
 
-fn get_comments(
-    area: &Area,
-    all_elements: &Vec<Element>,
-    conn: &Connection,
-) -> Result<Vec<ElementComment>> {
-    let area_elements = element::service::filter_by_area_quick(&all_elements, area)?;
-    let mut comments: Vec<ElementComment> = vec![];
-    for element in area_elements {
-        for comment in ElementComment::select_by_element_id(element.id, conn)? {
-            comments.push(comment);
-        }
-    }
-    Ok(comments)
-}
+// fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment>> {
+//     let area_elements = AreaElement::select_by_area_id(area.id, conn)?;
+//     let mut comments: Vec<ElementComment> = vec![];
+//     for area_element in area_elements {
+//         for comment in ElementComment::select_by_element_id(area_element.element_id, conn)? {
+//             comments.push(comment);
+//         }
+//     }
+//     Ok(comments)
+// }
 
 #[cfg(test)]
 mod test {
