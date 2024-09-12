@@ -1,5 +1,6 @@
 use super::Element;
 use crate::area::Area;
+use crate::area_element;
 use crate::Result;
 use geo::Contains;
 use geo::LineString;
@@ -82,18 +83,15 @@ pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<El
     Ok(area_elements)
 }
 
-pub fn update_areas_tag(elements: &Vec<Element>, conn: &Connection) -> Result<Vec<Element>> {
+pub fn generate_areas_mapping_old(
+    elements: &Vec<Element>,
+    conn: &Connection,
+) -> Result<Vec<Element>> {
     let mut res: Vec<Element> = vec![];
-
-    let all_areas: Vec<Area> = Area::select_all(None, &conn)?
-        .into_iter()
-        .filter(|it| it.deleted_at == None)
-        .collect();
-
+    let all_areas: Vec<Area> = Area::select_all(None, &conn)?;
     for element in elements {
         let element_areas = find_areas(element, &all_areas)?;
         let element_areas = areas_to_areas_tag(element_areas);
-
         let element = if element.tag("areas") != &element_areas {
             info!(
                 element = element.id,
@@ -106,10 +104,9 @@ pub fn update_areas_tag(elements: &Vec<Element>, conn: &Connection) -> Result<Ve
             info!(element = element.id, "No changes, skipping update");
             element.clone()
         };
-
+        area_element::service::generate_areas_mapping(&element, &all_areas, conn)?;
         res.push(element);
     }
-
     Ok(res)
 }
 

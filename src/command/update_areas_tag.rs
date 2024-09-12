@@ -11,6 +11,6 @@ pub fn run(args: Vec<String>) -> Result<()> {
     let area = Area::select_by_id_or_alias(area_id_or_alias, &conn)?.unwrap();
     info!(area.id, area_name = area.name(), area_alias = area.alias());
     let area_elements = element::service::find_in_area(&area, &conn)?;
-    element::service::update_areas_tag(&area_elements, &conn)?;
+    element::service::generate_areas_mapping_old(&area_elements, &conn)?;
     Ok(())
 }

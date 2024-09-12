@@ -1,5 +1,3 @@
-use std::collections::{HashMap, HashSet};
-
 use super::Area;
 use crate::{
     area_element::model::AreaElement,
@@ -12,13 +10,13 @@ use geojson::GeoJson;
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Map, Value};
+use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
 
-pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
+pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     if !tags.contains_key("geo_json") {
         return Err(Error::HttpBadRequest("geo_json tag is missing".into()));
     }
-    let sp = conn.savepoint()?;
     let url_alias = tags
         .get("url_alias")
         .ok_or(Error::HttpBadRequest(
@@ -41,15 +39,14 @@ pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     if geo_json.is_err() {
         Err(Error::HttpConflict("Invalid geo_json".into()))?
     }
-    if Area::select_by_alias(url_alias, &sp)?.is_some() {
+    if Area::select_by_alias(url_alias, &conn)?.is_some() {
         Err(Error::HttpConflict(
             "This url_alias is already in use".into(),
         ))?
     }
-    let area = Area::insert(tags, &sp)?;
-    let area_elements = element::service::find_in_area(&area, &sp)?;
-    element::service::update_areas_tag(&area_elements, &sp)?;
-    sp.commit()?;
+    let area = Area::insert(tags, &conn)?;
+    let area_elements = element::service::find_in_area(&area, conn)?;
+    element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
 }
 
@@ -64,20 +61,14 @@ pub fn patch_tag(
     patch_tags(id_or_alias, tags, conn)
 }
 
-pub fn patch_tags(
-    id_or_alias: &str,
-    tags: Map<String, Value>,
-    conn: &mut Connection,
-) -> Result<Area> {
+pub fn patch_tags(id_or_alias: &str, tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     let area = Area::select_by_id_or_alias(id_or_alias, conn)?.unwrap();
     if tags.contains_key("geo_json") {
-        let sp = conn.savepoint()?;
-        let area_elements = element::service::find_in_area(&area, &sp)?;
-        element::service::update_areas_tag(&area_elements, &sp)?;
-        let area = Area::patch_tags(area.id, tags, &sp)?;
-        let area_elements = element::service::find_in_area(&area, &sp)?;
-        element::service::update_areas_tag(&area_elements, &sp)?;
-        sp.commit()?;
+        let area_elements = element::service::find_in_area(&area, conn)?;
+        let area = Area::patch_tags(area.id, tags, conn)?;
+        element::service::generate_areas_mapping_old(&area_elements, conn)?;
+        let area_elements = element::service::find_in_area(&area, conn)?;
+        element::service::generate_areas_mapping_old(&area_elements, conn)?;
         Ok(area)
     } else {
         Ok(Area::patch_tags(area.id, tags, conn)?)
@@ -94,13 +85,11 @@ pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection)
     Ok(Area::remove_tag(area.id, tag_name, conn)?)
 }
 
-pub fn soft_delete(area_id_or_alias: &str, conn: &mut Connection) -> Result<Area> {
-    let sp = conn.savepoint()?;
-    let area = Area::select_by_id_or_alias(area_id_or_alias, &sp)?.unwrap();
-    let area_elements = element::service::find_in_area(&area, &sp)?;
-    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &sp)?;
-    element::service::update_areas_tag(&area_elements, &sp)?;
-    sp.commit()?;
+pub fn soft_delete(area_id_or_alias: &str, conn: &Connection) -> Result<Area> {
+    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
+    let area_elements = element::service::find_in_area(&area, conn)?;
+    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?;
+    element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
 }
 

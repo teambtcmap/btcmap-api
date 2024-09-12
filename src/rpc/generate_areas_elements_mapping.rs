@@ -1,9 +1,9 @@
 use crate::{
     area::Area,
-    area_element::model::AreaElement,
+    area_element::{self},
     auth::Token,
     discord,
-    element::{self, Element},
+    element::Element,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -11,7 +11,6 @@ use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use time::OffsetDateTime;
 use tracing::info;
 
 #[derive(Deserialize)]
@@ -64,31 +63,9 @@ fn generate_areas_elements_mapping(
             break;
         }
         let element = element.unwrap();
-        let element_areas = element::service::find_areas(&element, &areas)?;
-        let old_mappings = AreaElement::select_by_element_id(element_id, conn)?;
-        let mut old_area_ids: Vec<i64> = old_mappings.into_iter().map(|it| it.area_id).collect();
-        let mut new_area_ids: Vec<i64> = element_areas.into_iter().map(|it| it.id).collect();
-        old_area_ids.sort();
-        new_area_ids.sort();
-        let sp = conn.savepoint()?;
-        if new_area_ids != old_area_ids {
-            for old_area_id in &old_area_ids {
-                if !new_area_ids.contains(&old_area_id) {
-                    AreaElement::set_deleted_at(
-                        *old_area_id,
-                        Some(OffsetDateTime::now_utc()),
-                        &sp,
-                    )?;
-                }
-            }
-            for new_area_id in new_area_ids {
-                if !old_area_ids.contains(&new_area_id) {
-                    AreaElement::insert(new_area_id, element_id, &sp)?;
-                }
-            }
+        if area_element::service::generate_areas_mapping(&element, &areas, conn)?.has_changes {
             elements_affected += 1;
         }
-        sp.commit()?;
         elements_processed += 1;
     }
     Ok(Res {
