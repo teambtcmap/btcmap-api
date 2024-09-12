@@ -1,5 +1,6 @@
+use super::model::RpcArea;
 use crate::{
-    area::{self, Area},
+    area::{self},
     auth::Token,
     discord, Result,
 };
@@ -16,7 +17,7 @@ pub struct Args {
     pub tag: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Area> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     let token = pool
         .get()
         .await?
@@ -38,5 +39,5 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Ar
     );
     info!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(area)
+    Ok(area.into())
 }

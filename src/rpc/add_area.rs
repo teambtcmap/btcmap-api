@@ -1,6 +1,7 @@
+use super::model::RpcArea;
+use crate::auth::Token;
 use crate::Result;
 use crate::{area, discord};
-use crate::{area::Area, auth::Token};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -14,7 +15,7 @@ pub struct Args {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Area> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     let token = pool
         .get()
         .await?
@@ -34,5 +35,5 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Ar
     );
     info!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(area)
+    Ok(area.into())
 }

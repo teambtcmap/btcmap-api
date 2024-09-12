@@ -1,7 +1,6 @@
 use crate::{Error, Result};
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
-use serde::Serialize;
 use serde_json::{Map, Value};
 use std::{
     thread::sleep,
@@ -10,15 +9,12 @@ use std::{
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, error, info};
 
-#[derive(Debug, Eq, PartialEq, Serialize)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Area {
     pub id: i64,
     pub tags: Map<String, Value>,
-    #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
     pub deleted_at: Option<OffsetDateTime>,
 }
 

@@ -1,3 +1,4 @@
+use super::model::RpcArea;
 use crate::{area::Area, auth::Token, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
@@ -10,7 +11,7 @@ pub struct Args {
     pub id: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Area> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     pool.get()
         .await?
         .interact(move |conn| Token::select_by_secret(&args.token, conn))
@@ -22,5 +23,5 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Ar
         .interact(move |conn| Area::select_by_id_or_alias(&args.id, conn))
         .await??
         .unwrap();
-    Ok(area)
+    Ok(area.into())
 }
