@@ -1,5 +1,5 @@
 use super::db;
-use crate::{area, element, element_comment, error, feed, rpc, user};
+use crate::{area, area_element, element, element_comment, error, feed, rpc, user};
 use crate::{event, tile};
 use crate::{report, Result};
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
@@ -186,6 +186,11 @@ pub async fn run() -> Result<()> {
                             .service(user::admin::patch_tags)
                             .service(user::v3::get)
                             .service(user::v3::get_by_id),
+                    )
+                    .service(
+                        scope("area-elements")
+                            .service(area_element::v3::get)
+                            .service(area_element::v3::get_by_id),
                     ),
             )
             .service(
