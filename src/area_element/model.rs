@@ -89,27 +89,27 @@ impl AreaElement {
     //     Ok(res)
     // }
 
-    // pub fn select_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
-    //     let query = format!(
-    //         r#"
-    //             SELECT {ALL_COLUMNS}
-    //             FROM {TABLE}
-    //             WHERE {COL_AREA_ID} = :area_id
-    //             ORDER BY {COL_UPDATED_AT}, {COL_ID}
-    //         "#
-    //     );
-    //     debug!(query);
-    //     let res = conn
-    //         .prepare(&query)?
-    //         .query_map(
-    //             named_params! {
-    //                 ":area_id": area_id,
-    //             },
-    //             mapper(),
-    //         )?
-    //         .collect::<Result<Vec<_>, _>>()?;
-    //     Ok(res)
-    // }
+    pub fn select_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
+        let query = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE {COL_AREA_ID} = :area_id
+                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+            "#
+        );
+        debug!(query);
+        let res = conn
+            .prepare(&query)?
+            .query_map(
+                named_params! {
+                    ":area_id": area_id,
+                },
+                mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(res)
+    }
 
     pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
         let query = format!(

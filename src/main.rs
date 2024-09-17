@@ -28,6 +28,7 @@ use tracing_subscriber::EnvFilter;
 mod area;
 mod area_element;
 mod element_comment;
+mod feed;
 mod rpc;
 mod vacuum;
 

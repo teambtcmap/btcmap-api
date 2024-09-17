@@ -101,6 +101,43 @@ impl Event {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    pub fn select_by_type(
+        r#type: &str,
+        sort_order: Option<String>,
+        limit: Option<i64>,
+        conn: &Connection,
+    ) -> Result<Vec<Event>> {
+        let sort_order = sort_order.unwrap_or("ASC".into());
+        let query = format!(
+            r#"
+                SELECT
+                    ev.{COL_ROWID},
+                    ev.{COL_USER_ID},
+                    ev.{COL_ELEMENT_ID},
+                    json_extract(el.overpass_data, '$.type'),
+                    json_extract(el.overpass_data, '$.id'),
+                    ev.{COL_TYPE},
+                    ev.{COL_TAGS},
+                    ev.{COL_CREATED_AT},
+                    ev.{COL_UPDATED_AT},
+                    ev.{COL_DELETED_AT}
+                FROM {TABLE} ev
+                LEFT JOIN element el on el.rowid = ev.{COL_ELEMENT_ID}
+                WHERE ev.{COL_TYPE} = :type
+                ORDER BY ev.{COL_UPDATED_AT} {sort_order}, ev.{COL_ROWID} {sort_order}
+                LIMIT :limit
+            "#
+        );
+        debug!(query);
+        Ok(conn
+            .prepare(&query)?
+            .query_map(
+                named_params! { ":type": r#type, ":limit": limit.unwrap_or(i64::MAX) },
+                mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
         limit: Option<i64>,

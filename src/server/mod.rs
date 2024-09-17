@@ -1,5 +1,5 @@
 use super::db;
-use crate::{area, element, element_comment, error, rpc, user};
+use crate::{area, element, element_comment, error, feed, rpc, user};
 use crate::{event, tile};
 use crate::{report, Result};
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
@@ -110,6 +110,11 @@ pub async fn run() -> Result<()> {
                 scope("tiles")
                     .wrap(Governor::new(&tile_rate_limit_conf))
                     .service(tile::controller::get),
+            )
+            .service(
+                scope("feeds")
+                    .service(feed::atom::new_places)
+                    .service(feed::atom::new_places_for_area),
             )
             .service(
                 scope("v2")
