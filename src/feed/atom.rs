@@ -95,6 +95,7 @@ async fn new_places_for_area(area: Path<String>, pool: Data<Arc<Pool>>) -> Resul
 }
 
 fn events_to_atom_feed(feed_id: &str, feed_title: &str, events: Vec<(Event, Element)>) -> String {
+    let feed_title = xml_escape(feed_title.into());
     let mut res = String::new();
     res.push_str(r#"<?xml version="1.0" encoding="utf-8"?>"#);
     res.push_str(r#"<feed xmlns="http://www.w3.org/2005/Atom">"#);
@@ -119,7 +120,7 @@ fn event_to_atom_entry(event: (Event, Element)) -> String {
     let event_id = event.0.id;
     let event_created_at = event.0.created_at.format(&Rfc3339).unwrap();
     let element_id = event.1.overpass_data.btcmap_id();
-    let title = format!("{}", event.1.name());
+    let title = format!("{}", xml_escape(event.1.name()));
     let summary = format!("Check BTC Map for more details");
     format!(
         r#"
@@ -134,4 +135,12 @@ fn event_to_atom_entry(event: (Event, Element)) -> String {
         "#
     )
     .into()
+}
+
+fn xml_escape(str: String) -> String {
+    str.replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace(r#"""#, "&quot;")
+        .replace(r#"\"#, "&apos;")
+        .replace("&", "&amp;")
 }
