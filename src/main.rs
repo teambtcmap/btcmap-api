@@ -30,6 +30,7 @@ mod area_element;
 mod element_comment;
 mod feed;
 mod rpc;
+mod sync;
 mod vacuum;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -68,7 +69,7 @@ async fn main() -> ExitCode {
             }
         }
         "sync" => {
-            if let Err(e) = command::sync::run(conn).await {
+            if let Err(e) = command::sync::run(&mut conn).await {
                 error!(?e, "Failed to sync elements");
                 return ExitCode::FAILURE;
             }

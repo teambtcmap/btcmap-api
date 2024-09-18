@@ -5,129 +5,48 @@ use crate::event::Event;
 use crate::osm::osm;
 use crate::osm::overpass::query_bitcoin_merchants;
 use crate::osm::overpass::OverpassElement;
+use crate::sync;
 use crate::user::User;
-use crate::Error;
 use crate::Result;
 use rusqlite::Connection;
 use rusqlite::Transaction;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::ops::Add;
-use std::time::SystemTime;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-pub async fn run(db: Connection) -> Result<()> {
-    info!(db_path = ?db.path().unwrap(), "Starting sync");
-
-    let query_elements_start = SystemTime::now();
+pub async fn run(conn: &mut Connection) -> Result<()> {
     let elements = query_bitcoin_merchants().await?;
-    let query_elements_duration = SystemTime::now()
-        .duration_since(query_elements_start)
-        .unwrap();
-
-    let process_elements_start = SystemTime::now();
-    process_elements(elements, db).await?;
-    let process_elements_duration = SystemTime::now()
-        .duration_since(process_elements_start)
-        .unwrap();
-
-    info!(
-        query_elements_duration_seconds = query_elements_duration.as_secs_f64(),
-        process_elements_duration_seconds = process_elements_duration.as_secs_f64(),
-        "Finished sync",
-    );
-
+    let res = merge_overpass_elements(elements, conn).await?;
+    info!(res.elements_deleted);
     Ok(())
 }
 
-async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connection) -> Result<()> {
-    let tx: Transaction = db.transaction()?;
+pub struct MergeResult {
+    pub elements_deleted: usize,
+}
 
-    let cached_elements = Element::select_all(None, &tx)?;
-
-    info!(db_path = ?tx.path().unwrap(), elements = cached_elements.len(), "Loaded all elements from database");
-
-    let fresh_element_ids: HashSet<String> = fresh_elements
-        .iter()
-        .map(|it| format!("{}:{}", it.r#type, it.id,))
-        .collect();
-
-    // First, let's check if any of the cached elements no longer accept bitcoins
-    for cached_element in &cached_elements {
-        if !fresh_element_ids.contains(&cached_element.overpass_data.btcmap_id())
-            && cached_element.deleted_at.is_none()
-        {
-            warn!(
-                cached_element.id,
-                "Cached element was deleted from Overpass or no longer accepts Bitcoin",
-            );
-            let osm_id = cached_element.overpass_data.id;
-            let element_type = &cached_element.overpass_data.r#type;
-            let name = cached_element.overpass_data.tag("name");
-
-            let fresh_element = match osm::get_element(element_type, osm_id).await? {
-                Some(fresh_element) => fresh_element,
-                None => Err(Error::OsmApi(format!(
-                    "Failed to fetch element {element_type}:{osm_id} from OSM"
-                )))?,
-            };
-
-            if fresh_element.visible.unwrap_or(true) {
-                if fresh_element.tag("currency:XBT", "no") == "yes" {
-                    let message = format!(
-                        "Overpass lied about element {element_type}:{osm_id} being deleted"
-                    );
-                    error!(element_type, osm_id, message);
-                    discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
-                    Err(Error::OverpassApi(message.into()))?
-                }
-            }
-
-            insert_user_if_not_exists(fresh_element.uid, &tx).await?;
-
-            let event = Event::insert(fresh_element.uid, cached_element.id, "delete", &tx)?;
-
-            let mut event_tags: HashMap<String, Value> = HashMap::new();
-            event_tags.insert(
-                "element_osm_type".into(),
-                cached_element.overpass_data.r#type.clone().into(),
-            );
-            event_tags.insert(
-                "element_osm_id".into(),
-                cached_element.overpass_data.id.into(),
-            );
-            event_tags.insert("element_name".into(), name.into());
-            if cached_element.tags.contains_key("areas") {
-                event_tags.insert("areas".into(), cached_element.tags["areas"].clone());
-            }
-
-            let event = event.patch_tags(&event_tags, &tx)?;
-
-            on_new_event(&event, &tx).await?;
-
-            let message = format!(
-                "User {} removed https://www.openstreetmap.org/{element_type}/{osm_id}",
-                fresh_element.user
-            );
-            info!(
-                element_name = name,
-                element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
-                user_name = fresh_element.user,
-                message,
-            );
-            discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
-
-            info!(cached_element.id, "Marking element as deleted");
-            cached_element.set_deleted_at(Some(OffsetDateTime::now_utc()), &tx)?;
-        }
+async fn merge_overpass_elements(
+    fresh_overpass_elements: Vec<OverpassElement>,
+    conn: &mut Connection,
+) -> Result<MergeResult> {
+    let deleted_element_events = sync::sync_deleted_elements(
+        &fresh_overpass_elements
+            .iter()
+            .map(|it| it.btcmap_id())
+            .collect(),
+        conn,
+    )
+    .await?;
+    for event in &deleted_element_events {
+        on_new_event(&event, conn).await?;
     }
-
-    for fresh_element in fresh_elements {
+    let tx: Transaction = conn.transaction()?;
+    let cached_elements = Element::select_all(None, &tx)?;
+    for fresh_element in fresh_overpass_elements {
         let element_type = &fresh_element.r#type;
         let osm_id = fresh_element.id;
         let btcmap_id = fresh_element.btcmap_id();
@@ -149,7 +68,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                     );
 
                     if let Some(user_id) = user_id {
-                        insert_user_if_not_exists(user_id, &tx).await?;
+                        sync::insert_user_if_not_exists(user_id, &tx).await?;
                     }
 
                     if fresh_element.changeset != cached_element.overpass_data.changeset {
@@ -207,7 +126,7 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
                 info!(btcmap_id, "Element does not exist, inserting");
 
                 if let Some(user_id) = user_id {
-                    insert_user_if_not_exists(user_id, &tx).await?;
+                    sync::insert_user_if_not_exists(user_id, &tx).await?;
                 }
 
                 let element = Element::insert(&fresh_element, &tx)?;
@@ -252,7 +171,9 @@ async fn process_elements(fresh_elements: Vec<OverpassElement>, mut db: Connecti
     }
 
     tx.commit()?;
-    Ok(())
+    Ok(MergeResult {
+        elements_deleted: deleted_element_events.len(),
+    })
 }
 
 async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
@@ -304,25 +225,14 @@ async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
         Err(e) => error!("Failed to fetch user {} {}", user.osm_data.id, e),
     }
 
-    Ok(())
-}
-
-pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()> {
-    let db_user = User::select_by_id(user_id, conn)?;
-
-    if db_user.is_some() {
-        info!(user_id, "User already exists");
-        return Ok(());
+    if event.r#type == "delete" {
+        let message = format!(
+            "User {} removed https://www.openstreetmap.org/{}/{}",
+            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
+        );
+        info!(message);
+        discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
     }
-
-    let user = osm::get_user(user_id).await?;
-
-    match user {
-        Some(user) => User::insert(user_id, &user, &conn)?,
-        None => Err(Error::OsmApi(format!(
-            "User with id = {user_id} doesn't exist on OSM"
-        )))?,
-    };
 
     Ok(())
 }

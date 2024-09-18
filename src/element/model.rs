@@ -98,7 +98,7 @@ impl Element {
         info!(
             count = res.len(),
             time_ms,
-            "Loaded all elements ({}) in {} ms",
+            "Loaded all elements except deleted ({}) in {} ms",
             res.len(),
             time_ms,
         );

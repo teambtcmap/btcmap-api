@@ -1,0 +1,170 @@
+use crate::element::Element;
+use crate::event::Event;
+use crate::osm::osm::{self, OsmElement};
+use crate::user::User;
+use crate::{discord, Error, Result};
+use rusqlite::Connection;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use time::OffsetDateTime;
+use tracing::{error, info};
+
+/// Match fresh Overpass elements with the existing cached elements. Every
+/// cached element which isn't present in Overpass list will be marked as
+/// deleted.
+///
+/// # Failure
+///
+/// Will return `Err` in many cases!
+pub async fn sync_deleted_elements(
+    fresh_overpass_element_ids: &HashSet<String>,
+    conn: &mut Connection,
+) -> Result<Vec<Event>> {
+    let absent_elements: Vec<Element> = Element::select_all_except_deleted(conn)?
+        .into_iter()
+        .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
+        .collect();
+    let mut res = vec![];
+    for absent_element in absent_elements {
+        let fresh_osm_element = confirm_deleted(
+            &absent_element.overpass_data.r#type,
+            absent_element.overpass_data.id,
+        )
+        .await?;
+        insert_user_if_not_exists(fresh_osm_element.uid, conn).await?;
+        res.push(mark_element_as_deleted(
+            &absent_element,
+            &fresh_osm_element,
+            conn,
+        )?);
+    }
+    Ok(res)
+}
+
+fn mark_element_as_deleted(
+    element: &Element,
+    fresh_osm_element: &OsmElement,
+    conn: &mut Connection,
+) -> Result<Event> {
+    let mut event_tags: HashMap<String, Value> = HashMap::new();
+    event_tags.insert(
+        "element_osm_type".into(),
+        element.overpass_data.r#type.clone().into(),
+    );
+    event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
+    event_tags.insert("element_name".into(), element.name().into());
+    if element.tags.contains_key("areas") {
+        event_tags.insert("areas".into(), element.tags["areas"].clone());
+    }
+    let sp = conn.savepoint()?;
+    element.set_deleted_at(Some(OffsetDateTime::now_utc()), &sp)?;
+    let event = Event::insert(fresh_osm_element.uid, element.id, "delete", &sp)?;
+    let event = event.patch_tags(&event_tags, &sp)?;
+    sp.commit()?;
+    Ok(event)
+}
+
+async fn confirm_deleted(osm_type: &str, osm_id: i64) -> Result<OsmElement> {
+    let osm_element = match osm::get_element(osm_type, osm_id).await? {
+        Some(v) => v,
+        None => Err(Error::OsmApi(format!(
+            "Failed to fetch element {}:{} from OSM",
+            osm_type, osm_id,
+        )))?,
+    };
+    if osm_element.visible.unwrap_or(true) {
+        if osm_element.tag("currency:XBT", "no") == "yes" {
+            let message = format!(
+                "Overpass lied about element {}:{} being deleted",
+                osm_type, osm_id,
+            );
+            error!(message);
+            discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
+            Err(Error::OverpassApi(message.into()))?
+        }
+    }
+    Ok(osm_element)
+}
+
+pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()> {
+    if User::select_by_id(user_id, conn)?.is_some() {
+        info!(user_id, "User already exists");
+        return Ok(());
+    }
+    match osm::get_user(user_id).await? {
+        Some(user) => User::insert(user_id, &user, &conn)?,
+        None => Err(Error::OsmApi(format!(
+            "User with id = {user_id} doesn't exist on OSM"
+        )))?,
+    };
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        element::Element,
+        osm::{osm::OsmUser, overpass::OverpassElement},
+        test::mock_state,
+        user::User,
+        Result,
+    };
+    use actix_web::test;
+
+    #[test]
+    #[ignore = "relies on external service"]
+    async fn sync_deleted_elements() -> Result<()> {
+        let mut state = mock_state().await;
+        let _element_1 = Element::insert(&OverpassElement::mock(1), &state.conn)?;
+        let _element_2 = Element::insert(&OverpassElement::mock(2), &state.conn)?;
+        let element_3 = Element::insert(&OverpassElement::mock(2702291726), &state.conn)?;
+        let res = super::sync_deleted_elements(
+            &vec!["node:1".to_string(), "node:2".to_string()]
+                .into_iter()
+                .collect(),
+            &mut state.conn,
+        )
+        .await;
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.len() == 1);
+        let res = res.first().unwrap();
+        assert_eq!(
+            element_3.overpass_data.btcmap_id(),
+            format!("{}:{}", res.element_osm_type, res.element_osm_id),
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "relies on external service"]
+    async fn confirm_deleted() -> Result<()> {
+        assert!(super::confirm_deleted("node", 2702291726).await.is_ok());
+        assert!(super::confirm_deleted("node", 12181429828).await.is_err());
+        Ok(())
+    }
+
+    #[test]
+    async fn insert_user_if_not_exists_when_cached() -> Result<()> {
+        let state = mock_state().await;
+        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
+        assert!(super::insert_user_if_not_exists(user.id, &state.conn)
+            .await
+            .is_ok());
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "relies on external service"]
+    async fn insert_user_if_not_exists_when_exists_on_osm() -> Result<()> {
+        let state = mock_state().await;
+        let btc_map_user_id = 18545877;
+        assert!(
+            super::insert_user_if_not_exists(btc_map_user_id, &state.conn)
+                .await
+                .is_ok()
+        );
+        assert!(User::select_by_id(btc_map_user_id, &state.conn)?.is_some());
+        Ok(())
+    }
+}
