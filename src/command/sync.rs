@@ -47,12 +47,8 @@ async fn merge_overpass_elements(
     let tx: Transaction = conn.transaction()?;
     let cached_elements = Element::select_all(None, &tx)?;
     for fresh_element in fresh_overpass_elements {
-        let element_type = &fresh_element.r#type;
-        let osm_id = fresh_element.id;
         let btcmap_id = fresh_element.btcmap_id();
-        let name = fresh_element.tag("name");
         let user_id = fresh_element.uid;
-        let user_display_name = &fresh_element.user.clone().unwrap_or_default();
 
         match cached_elements
             .iter()
@@ -82,16 +78,6 @@ async fn merge_overpass_elements(
                     } else {
                         warn!("Changeset ID is identical, skipped user event generation");
                     }
-
-                    let message = format!("User {user_display_name} updated https://www.openstreetmap.org/{element_type}/{osm_id}");
-                    info!(
-                        element_name = name,
-                        element_url =
-                            format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
-                        user_name = user_display_name,
-                        message,
-                    );
-                    discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
 
                     info!("Updating osm_json");
                     let mut updated_element =
@@ -155,17 +141,6 @@ async fn merge_overpass_elements(
 
                 element::service::generate_issues(vec![&element], &tx)?;
                 element::service::generate_areas_mapping_old(&vec![element], &tx)?;
-
-                let message = format!("User {user_display_name} added https://www.openstreetmap.org/{element_type}/{osm_id}");
-                info!(
-                    element_name = name,
-                    element_category = category,
-                    element_android_icon = android_icon,
-                    element_url = format!("https://www.openstreetmap.org/{element_type}/{osm_id}"),
-                    user_name = user_display_name,
-                    message,
-                );
-                discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
             }
         }
     }
@@ -178,6 +153,24 @@ async fn merge_overpass_elements(
 
 async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
     let user = User::select_by_id(event.user_id, &conn)?.unwrap();
+
+    let message = match event.r#type.as_str() {
+        "create" => format!(
+            "{} added https://www.openstreetmap.org/{}/{}",
+            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
+        ),
+        "update" => format!(
+            "{} updated https://www.openstreetmap.org/{}/{}",
+            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
+        ),
+        "delete" => format!(
+            "{} removed https://www.openstreetmap.org/{}/{}",
+            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
+        ),
+        _ => "".into(),
+    };
+    info!(message);
+    discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {
         info!(user.osm_data.id, "This user is missing from OSM, skipping");
@@ -223,15 +216,6 @@ async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
             }
         },
         Err(e) => error!("Failed to fetch user {} {}", user.osm_data.id, e),
-    }
-
-    if event.r#type == "delete" {
-        let message = format!(
-            "User {} removed https://www.openstreetmap.org/{}/{}",
-            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
-        );
-        info!(message);
-        discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
     }
 
     Ok(())
