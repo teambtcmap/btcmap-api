@@ -26,6 +26,7 @@ async fn merge_overpass_elements(
     fresh_overpass_elements: Vec<OverpassElement>,
     conn: &mut Connection,
 ) -> Result<MergeResult> {
+    // stage 1: find and process deleted elements
     let deleted_element_events = sync::sync_deleted_elements(
         &fresh_overpass_elements
             .iter()
@@ -37,9 +38,11 @@ async fn merge_overpass_elements(
     for event in &deleted_element_events {
         event::service::on_new_event(&event, conn).await?;
     }
+
+    // stage 2: find and process updated elements
     let tx: Transaction = conn.transaction()?;
     let cached_elements = Element::select_all(None, &tx)?;
-    for fresh_element in fresh_overpass_elements {
+    for fresh_element in &fresh_overpass_elements {
         let btcmap_id = fresh_element.btcmap_id();
         let user_id = fresh_element.uid;
 
@@ -48,7 +51,7 @@ async fn merge_overpass_elements(
             .find(|it| it.overpass_data.btcmap_id() == btcmap_id)
         {
             Some(cached_element) => {
-                if fresh_element != cached_element.overpass_data {
+                if *fresh_element != cached_element.overpass_data {
                     info!(
                         btcmap_id,
                         old_json = serde_json::to_string(&cached_element.overpass_data)?,
@@ -101,6 +104,23 @@ async fn merge_overpass_elements(
                     cached_element.set_deleted_at(None, &tx)?;
                 }
             }
+            None => {}
+        }
+    }
+    tx.commit()?;
+
+    // stage 3: find and process new elements
+    let tx: Transaction = conn.transaction()?;
+    let cached_elements = Element::select_all(None, &tx)?;
+    for fresh_element in &fresh_overpass_elements {
+        let btcmap_id = fresh_element.btcmap_id();
+        let user_id = fresh_element.uid;
+
+        match cached_elements
+            .iter()
+            .find(|it| it.overpass_data.btcmap_id() == btcmap_id)
+        {
+            Some(_) => {}
             None => {
                 info!(btcmap_id, "Element does not exist, inserting");
 
@@ -137,8 +157,8 @@ async fn merge_overpass_elements(
             }
         }
     }
-
     tx.commit()?;
+
     Ok(MergeResult {
         elements_deleted: deleted_element_events.len(),
     })
