@@ -114,7 +114,9 @@ pub async fn run() -> Result<()> {
             .service(
                 scope("feeds")
                     .service(feed::atom::new_places)
-                    .service(feed::atom::new_places_for_area),
+                    .service(feed::atom::new_places_for_area)
+                    .service(feed::atom::new_comments)
+                    .service(feed::atom::new_comments_for_area),
             )
             .service(
                 scope("v2")

@@ -92,6 +92,28 @@ impl ElementComment {
         Ok(res)
     }
 
+    pub fn select_latest(limit: i64, conn: &Connection) -> Result<Vec<ElementComment>> {
+        let query = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                ORDER BY {COL_UPDATED_AT} DESC, {COL_ID} DESC
+                LIMIT :limit
+            "#
+        );
+        debug!(query);
+        let res = conn
+            .prepare(&query)?
+            .query_map(
+                named_params! {
+                    ":limit": limit,
+                },
+                mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(res)
+    }
+
     pub fn select_created_between(
         period_start: &OffsetDateTime,
         period_end: &OffsetDateTime,
@@ -128,27 +150,27 @@ impl ElementComment {
         Ok(res)
     }
 
-    // pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementComment>> {
-    //     let query = format!(
-    //         r#"
-    //             SELECT {ALL_COLUMNS}
-    //             FROM {TABLE}
-    //             WHERE {COL_ELEMENT_ID} = :element_id
-    //             ORDER BY {COL_UPDATED_AT}, {COL_ID}
-    //         "#
-    //     );
-    //     debug!(query);
-    //     let res = conn
-    //         .prepare(&query)?
-    //         .query_map(
-    //             named_params! {
-    //                 ":element_id": element_id,
-    //             },
-    //             mapper(),
-    //         )?
-    //         .collect::<Result<Vec<_>, _>>()?;
-    //     Ok(res)
-    // }
+    pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementComment>> {
+        let query = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE {COL_ELEMENT_ID} = :element_id
+                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+            "#
+        );
+        debug!(query);
+        let res = conn
+            .prepare(&query)?
+            .query_map(
+                named_params! {
+                    ":element_id": element_id,
+                },
+                mapper(),
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(res)
+    }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<ElementComment>> {
         let query = format!(

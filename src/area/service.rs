@@ -197,16 +197,16 @@ pub fn get_trending_areas(
     Ok(res)
 }
 
-// fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment>> {
-//     let area_elements = AreaElement::select_by_area_id(area.id, conn)?;
-//     let mut comments: Vec<ElementComment> = vec![];
-//     for area_element in area_elements {
-//         for comment in ElementComment::select_by_element_id(area_element.element_id, conn)? {
-//             comments.push(comment);
-//         }
-//     }
-//     Ok(comments)
-// }
+pub fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment>> {
+    let area_elements = AreaElement::select_by_area_id(area.id, conn)?;
+    let mut comments: Vec<ElementComment> = vec![];
+    for area_element in area_elements {
+        for comment in ElementComment::select_by_element_id(area_element.element_id, conn)? {
+            comments.push(comment);
+        }
+    }
+    Ok(comments)
+}
 
 #[cfg(test)]
 mod test {
