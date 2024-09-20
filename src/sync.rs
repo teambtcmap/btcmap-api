@@ -39,6 +39,9 @@ pub async fn sync_deleted_elements(
             conn,
         )?);
     }
+    for event in &res {
+        event::service::on_new_event(&event, conn).await?;
+    }
     Ok(res)
 }
 
@@ -170,6 +173,61 @@ pub async fn sync_updated_elements(
                 }
             }
             None => {}
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+pub async fn sync_new_elements(
+    fresh_overpass_elements: &Vec<OverpassElement>,
+    conn: &mut Connection,
+) -> Result<()> {
+    let tx: Transaction = conn.transaction()?;
+    let cached_elements = Element::select_all(None, &tx)?;
+    for fresh_element in fresh_overpass_elements {
+        let btcmap_id = fresh_element.btcmap_id();
+        let user_id = fresh_element.uid;
+
+        match cached_elements
+            .iter()
+            .find(|it| it.overpass_data.btcmap_id() == btcmap_id)
+        {
+            Some(_) => {}
+            None => {
+                info!(btcmap_id, "Element does not exist, inserting");
+
+                if let Some(user_id) = user_id {
+                    insert_user_if_not_exists(user_id, &tx).await?;
+                }
+
+                let element = Element::insert(&fresh_element, &tx)?;
+
+                let event = Event::insert(
+                    user_id.unwrap().try_into().unwrap(),
+                    element.id,
+                    "create",
+                    &tx,
+                )?;
+                event::service::on_new_event(&event, &tx).await?;
+
+                let category = element.overpass_data.generate_category();
+                let android_icon = element.overpass_data.generate_android_icon();
+
+                let element =
+                    Element::set_tag(element.id, "category", &category.clone().into(), &tx)?;
+                let element = Element::set_tag(
+                    element.id,
+                    "icon:android",
+                    &android_icon.clone().into(),
+                    &tx,
+                )?;
+
+                info!(category, android_icon);
+
+                element::service::generate_issues(vec![&element], &tx)?;
+                element::service::generate_areas_mapping_old(&vec![element], &tx)?;
+            }
         }
     }
     tx.commit()?;
