@@ -4,7 +4,7 @@ use crate::{
     discord, Error,
 };
 use actix_web::{
-    delete, patch, post,
+    delete, patch,
     web::{Data, Json, Path},
     HttpRequest,
 };
@@ -32,27 +32,6 @@ pub struct AreaView {
 #[derive(Serialize, Deserialize)]
 struct PostArgs {
     tags: Map<String, Value>,
-}
-
-#[post("")]
-pub async fn post(
-    req: HttpRequest,
-    args: Json<PostArgs>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Json<AreaView>, Error> {
-    let token = auth::service::check(&req, &pool).await?;
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| area::service::insert(args.tags.clone(), conn))
-        .await??;
-    let log_message = format!(
-        "{} created a new area: https://api.btcmap.org/v3/areas/{}",
-        token.owner, area.id,
-    );
-    warn!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(area.into())
 }
 
 #[derive(Serialize, Deserialize)]
@@ -144,62 +123,18 @@ impl Into<Json<AreaView>> for Area {
 
 #[cfg(test)]
 mod test {
-    use crate::area::admin::{AreaView, PatchArgs, PostArgs};
+    use crate::area::admin::PatchArgs;
     use crate::area::Area;
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
-    use crate::test::{mock_state, mock_tags, phuket_geo_json};
+    use crate::test::{mock_state, phuket_geo_json};
     use crate::{auth, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
-    use actix_web::web::{scope, Data};
+    use actix_web::web::Data;
     use actix_web::{test, App};
     use geojson::{Feature, GeoJson};
     use serde_json::{json, Map, Value};
-
-    #[test]
-    async fn post_should_return_401_if_unauthorized() -> Result<()> {
-        let state = mock_state().await;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.pool))
-                .service(scope("/").service(super::post)),
-        )
-        .await;
-        let req = TestRequest::post()
-            .uri("/")
-            .set_json(json!({"tags": {}}))
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-        Ok(())
-    }
-
-    #[test]
-    async fn post_should_create_area() -> Result<()> {
-        let state = mock_state().await;
-        let token = auth::service::mock_token("test", &state.pool).await.secret;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.pool))
-                .service(scope("/").service(super::post)),
-        )
-        .await;
-        let mut tags = mock_tags();
-        let url_alias = json!("test");
-        tags.insert("url_alias".into(), url_alias.clone());
-        tags.insert("geo_json".into(), phuket_geo_json());
-        let req = TestRequest::post()
-            .uri("/")
-            .append_header(("Authorization", format!("Bearer {token}")))
-            .set_json(PostArgs { tags: tags.clone() })
-            .to_request();
-        let res: AreaView = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(1, res.id);
-        assert_eq!(tags, res.tags);
-        assert!(res.deleted_at.is_none());
-        Ok(())
-    }
 
     #[test]
     async fn patch_should_return_401_if_unauthorized() -> Result<()> {
