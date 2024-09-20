@@ -9,11 +9,12 @@ use tracing::info;
 pub async fn run(conn: &mut Connection) -> Result<()> {
     let elements = query_bitcoin_merchants().await?;
     let res = merge_overpass_elements(elements, conn).await?;
-    info!(res.elements_deleted);
+    info!(res.elements_updated, res.elements_deleted);
     Ok(())
 }
 
 pub struct MergeResult {
+    pub elements_updated: usize,
     pub elements_deleted: usize,
 }
 
@@ -28,10 +29,12 @@ async fn merge_overpass_elements(
         .collect();
     let deleted_element_events = sync::sync_deleted_elements(&fresh_elemement_ids, conn).await?;
     // stage 2: find and process updated elements
-    sync::sync_updated_elements(&fresh_overpass_elements, conn).await?;
+    let updated_element_events =
+        sync::sync_updated_elements(&fresh_overpass_elements, conn).await?;
     // stage 3: find and process new elements
     sync::sync_new_elements(&fresh_overpass_elements, conn).await?;
     Ok(MergeResult {
+        elements_updated: updated_element_events.len(),
         elements_deleted: deleted_element_events.len(),
     })
 }

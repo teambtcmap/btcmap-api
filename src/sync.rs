@@ -90,93 +90,74 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64) -> Result<OsmElement> {
     Ok(osm_element)
 }
 
-pub async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()> {
-    if User::select_by_id(user_id, conn)?.is_some() {
-        info!(user_id, "User already exists");
-        return Ok(());
-    }
-    match osm::get_user(user_id).await? {
-        Some(user) => User::insert(user_id, &user, &conn)?,
-        None => Err(Error::OsmApi(format!(
-            "User with id = {user_id} doesn't exist on OSM"
-        )))?,
-    };
-    Ok(())
-}
-
 pub async fn sync_updated_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
     conn: &mut Connection,
-) -> Result<()> {
-    let tx: Transaction = conn.transaction()?;
-    let cached_elements = Element::select_all(None, &tx)?;
+) -> Result<Vec<Event>> {
+    let mut res = vec![];
+    let cached_elements = Element::select_all(None, conn)?;
     for fresh_element in fresh_overpass_elements {
         let btcmap_id = fresh_element.btcmap_id();
         let user_id = fresh_element.uid;
-
-        match cached_elements
+        let cached_element = cached_elements
             .iter()
-            .find(|it| it.overpass_data.btcmap_id() == btcmap_id)
-        {
-            Some(cached_element) => {
-                if *fresh_element != cached_element.overpass_data {
-                    info!(
-                        btcmap_id,
-                        old_json = serde_json::to_string(&cached_element.overpass_data)?,
-                        new_json = serde_json::to_string(&fresh_element)?,
-                        "Element JSON was updated",
-                    );
-
-                    if let Some(user_id) = user_id {
-                        insert_user_if_not_exists(user_id, &tx).await?;
-                    }
-
-                    if fresh_element.changeset != cached_element.overpass_data.changeset {
-                        let event = Event::insert(
-                            user_id.unwrap().try_into().unwrap(),
-                            cached_element.id,
-                            "update",
-                            &tx,
-                        )?;
-                        event::service::on_new_event(&event, &tx).await?;
-                    } else {
-                        warn!("Changeset ID is identical, skipped user event generation");
-                    }
-
-                    info!("Updating osm_json");
-                    let mut updated_element =
-                        cached_element.set_overpass_data(&fresh_element, &tx)?;
-
-                    let new_android_icon = updated_element.overpass_data.generate_android_icon();
-                    let old_android_icon = cached_element
-                        .tag("icon:android")
-                        .as_str()
-                        .unwrap_or_default();
-
-                    if new_android_icon != old_android_icon {
-                        info!(old_android_icon, new_android_icon, "Updating Android icon");
-                        updated_element = Element::set_tag(
-                            updated_element.id,
-                            "icon:android",
-                            &new_android_icon.clone().into(),
-                            &tx,
-                        )?;
-                    }
-
-                    element::service::generate_issues(vec![&updated_element], &tx)?;
-                    element::service::generate_areas_mapping_old(&vec![updated_element], &tx)?;
-                }
-
-                if cached_element.deleted_at.is_some() {
-                    info!(btcmap_id, "Bitcoin tags were re-added");
-                    cached_element.set_deleted_at(None, &tx)?;
-                }
-            }
-            None => {}
+            .find(|it| it.overpass_data.btcmap_id() == fresh_element.btcmap_id());
+        if cached_element.is_none() {
+            continue;
         }
+        let mut cached_element = cached_element.unwrap().clone();
+        if cached_element.deleted_at.is_some() {
+            info!(btcmap_id, "Bitcoin tags were re-added");
+            cached_element = cached_element.set_deleted_at(None, conn)?;
+        }
+        if *fresh_element == cached_element.overpass_data {
+            continue;
+        }
+        info!(
+            btcmap_id,
+            old_json = serde_json::to_string(&cached_element.overpass_data)?,
+            new_json = serde_json::to_string(&fresh_element)?,
+            "Element JSON was updated",
+        );
+        if let Some(user_id) = user_id {
+            insert_user_if_not_exists(user_id, conn).await?;
+        }
+        let sp = conn.savepoint()?;
+        if fresh_element.changeset != cached_element.overpass_data.changeset {
+            let event = Event::insert(
+                user_id.unwrap().try_into().unwrap(),
+                cached_element.id,
+                "update",
+                &sp,
+            )?;
+            res.push(event);
+        } else {
+            warn!("Changeset ID is identical, skipped user event generation");
+        }
+        info!("Updating osm_json");
+        let mut updated_element = cached_element.set_overpass_data(&fresh_element, &sp)?;
+        let new_android_icon = updated_element.overpass_data.generate_android_icon();
+        let old_android_icon = cached_element
+            .tag("icon:android")
+            .as_str()
+            .unwrap_or_default();
+        if new_android_icon != old_android_icon {
+            info!(old_android_icon, new_android_icon, "Updating Android icon");
+            updated_element = Element::set_tag(
+                updated_element.id,
+                "icon:android",
+                &new_android_icon.clone().into(),
+                &sp,
+            )?;
+        }
+        element::service::generate_issues(vec![&updated_element], &sp)?;
+        element::service::generate_areas_mapping_old(&vec![updated_element], &sp)?;
+        sp.commit()?;
     }
-    tx.commit()?;
-    Ok(())
+    for event in &res {
+        event::service::on_new_event(&event, conn).await?;
+    }
+    Ok(res)
 }
 
 pub async fn sync_new_elements(
@@ -231,6 +212,20 @@ pub async fn sync_new_elements(
         }
     }
     tx.commit()?;
+    Ok(())
+}
+
+async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()> {
+    if User::select_by_id(user_id, conn)?.is_some() {
+        info!(user_id, "User already exists");
+        return Ok(());
+    }
+    match osm::get_user(user_id).await? {
+        Some(user) => User::insert(user_id, &user, &conn)?,
+        None => Err(Error::OsmApi(format!(
+            "User with id = {user_id} doesn't exist on OSM"
+        )))?,
+    };
     Ok(())
 }
 
