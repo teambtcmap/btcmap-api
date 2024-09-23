@@ -65,7 +65,7 @@ async fn new_places_for_area(area: Path<String>, pool: Data<Arc<Pool>>) -> Resul
         .interact(move |conn| {
             Event::select_updated_since(
                 &OffsetDateTime::now_utc()
-                    .checked_sub(Duration::days(30))
+                    .checked_sub(Duration::days(180))
                     .unwrap(),
                 None,
                 conn,
