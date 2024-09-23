@@ -9,7 +9,7 @@ use std::{
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, error, info};
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 pub struct Area {
     pub id: i64,
     pub tags: Map<String, Value>,

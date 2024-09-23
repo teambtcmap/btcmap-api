@@ -5,91 +5,53 @@ use crate::Result;
 use rusqlite::Connection;
 use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use time::format_description::well_known::Iso8601;
 use time::OffsetDateTime;
 use tracing::info;
 
-pub fn run(conn: &mut Connection) -> Result<()> {
-    let sp = conn.savepoint()?;
+pub fn run(conn: &mut Connection) -> Result<usize> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
-
-    let today_reports = Report::select_by_date(&today, None, &sp)?;
-
+    let today_reports = Report::select_by_date(&today, None, &conn)?;
     if !today_reports.is_empty() {
         info!("Found existing reports for today, aborting");
-        return Ok(());
+        return Ok(0);
     }
-
-    let all_areas = Area::select_all_except_deleted(&sp)?;
-    let all_elements = Element::select_all_except_deleted(&sp)?;
-
-    let mut new_reports = 0;
-
+    let all_areas = Area::select_all_except_deleted(&conn)?;
+    let all_elements = Element::select_all_except_deleted(&conn)?;
+    let mut reports: HashMap<Area, Map<String, Value>> = HashMap::new();
     for area in all_areas {
-        info!(
-            area.id,
-            area_url_alias = area.tags.get("url_alias").map(|it| it.as_str()),
-            "Generating report",
-        );
-
         let area_elements = crate::element::service::filter_by_area(&all_elements, &area)?;
-
-        info!(
-            area.id,
-            area_url_alias = area.tags.get("url_alias").map(|it| it.as_str()),
-            elements = area_elements.len(),
-            "Processing area",
-        );
-        let new_report_tags = generate_report_tags(&area_elements)?;
-        let prev_report = Report::select_latest_by_area_id(area.id, &sp)?;
-
-        match prev_report {
-            None => {
-                info!(area.id, "There is no report history");
-                insert_report(area.id, &new_report_tags, &sp)?;
-                new_reports = new_reports + 1;
-            }
-            Some(latest_report) => {
-                if &new_report_tags != &latest_report.tags {
-                    info!("Tags changed");
-                    log_diff(&latest_report.tags, &new_report_tags)?;
-                    insert_report(area.id, &new_report_tags, &sp)?;
-                    new_reports = new_reports + 1;
-                }
-            }
+        if let Some(report) = generate_new_report_if_necessary(&area, area_elements, &conn)? {
+            reports.insert(area, report);
         }
     }
-
+    let sp = conn.savepoint()?;
+    for (area, report) in &reports {
+        insert_report(area.id, &report, &sp)?;
+    }
     sp.commit()?;
-    info!(new_reports);
-
-    Ok(())
+    Ok(reports.len())
 }
 
-fn log_diff(map_1: &Map<String, Value>, map_2: &Map<String, Value>) -> Result<()> {
-    let mut keys: HashSet<&String> = HashSet::new();
-
-    for key in map_1.keys() {
-        keys.insert(key);
-    }
-
-    for key in map_2.keys() {
-        keys.insert(key);
-    }
-
-    for key in keys {
-        if map_1.get(key) != map_2.get(key) {
-            info!(
-                key,
-                value_1 = serde_json::to_string(&map_1.get(key))?,
-                value_2 = serde_json::to_string(&map_2.get(key))?,
-            );
+fn generate_new_report_if_necessary(
+    area: &Area,
+    area_elements: Vec<Element>,
+    conn: &Connection,
+) -> Result<Option<Map<String, Value>>> {
+    let new_report_tags = generate_report_tags(&area_elements)?;
+    let prev_report = Report::select_latest_by_area_id(area.id, conn)?;
+    Ok(match prev_report {
+        None => Some(new_report_tags),
+        Some(latest_report) => {
+            if &new_report_tags != &latest_report.tags {
+                Some(new_report_tags)
+            } else {
+                None
+            }
         }
-    }
-
-    Ok(())
+    })
 }
 
 fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
