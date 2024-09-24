@@ -2,6 +2,7 @@ pub mod add_area;
 pub mod add_element_comment;
 pub mod boost_element;
 pub mod generate_areas_elements_mapping;
+pub mod generate_element_categories;
 pub mod generate_element_icons;
 pub mod generate_element_issues;
 pub mod generate_reports;

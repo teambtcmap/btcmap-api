@@ -104,6 +104,10 @@ pub async fn run() -> Result<()> {
                         )
                         .with_method("generatereports", rpc::generate_reports::run)
                         .with_method("generateelementicons", rpc::generate_element_icons::run)
+                        .with_method(
+                            "generateelementcategories",
+                            rpc::generate_element_categories::run,
+                        )
                         .finish()
                         .into_actix_web_service(),
                 ),

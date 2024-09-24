@@ -1,6 +1,5 @@
 extern crate core;
 use command::db;
-use command::generate_element_categories;
 use command::generate_reports;
 mod server;
 pub use error::Error;
@@ -16,7 +15,6 @@ mod report;
 mod test;
 mod tile;
 mod user;
-use rusqlite::Connection;
 use std::env;
 use std::process::ExitCode;
 use tracing::error;
@@ -76,12 +74,6 @@ async fn main() -> ExitCode {
         "generate-reports" => {
             if let Err(e) = generate_reports::run(&mut conn) {
                 error!(?e, "Failed to generate reports");
-                return ExitCode::FAILURE;
-            }
-        }
-        "generate-element-categories" => {
-            if let Err(e) = generate_element_categories::run(&conn).await {
-                error!(?e, "Failed to generate element categories");
                 return ExitCode::FAILURE;
             }
         }
