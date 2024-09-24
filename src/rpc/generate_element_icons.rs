@@ -1,48 +1,66 @@
-use crate::element::Element;
-use crate::osm::overpass::OverpassElement;
-use crate::Connection;
-use crate::Result;
+use crate::{auth::Token, discord, element::Element, osm::overpass::OverpassElement, Result};
+use deadpool_sqlite::Pool;
+use jsonrpc_v2::{Data, Params};
+use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::info;
 
-pub async fn run(conn: &Connection) -> Result<()> {
-    info!("Generating Android icons");
+#[derive(Deserialize)]
+pub struct Args {
+    token: String,
+    from_element_id: i64,
+    to_element_id: i64,
+}
 
-    let elements: Vec<Element> = Element::select_all(None, &conn)?
-        .into_iter()
-        .filter(|it| it.deleted_at.is_none())
-        .collect();
+#[derive(Serialize)]
+pub struct Res {
+    pub changes: i64,
+}
 
-    info!(elements = elements.len(), "Loaded elements from database");
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
+    let token = pool
+        .get()
+        .await?
+        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .await??
+        .unwrap();
+    let res = pool
+        .get()
+        .await?
+        .interact(move |conn| {
+            generate_element_icons(args.from_element_id, args.to_element_id, conn)
+        })
+        .await??;
+    let log_message = format!(
+        "{} generated element icons, potentially affecting element ids {}..{}",
+        token.owner, args.from_element_id, args.to_element_id,
+    );
+    info!(log_message);
+    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    Ok(res)
+}
 
-    let mut known = 0;
-    let mut unknown = 0;
-
-    for element in elements {
+fn generate_element_icons(
+    from_element_id: i64,
+    to_element_id: i64,
+    conn: &Connection,
+) -> Result<Res> {
+    let mut changes = 0;
+    for element_id in from_element_id..=to_element_id {
+        let element = Element::select_by_id(element_id, conn)?;
+        if element.is_none() {
+            break;
+        }
+        let element = element.unwrap();
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
-
         if old_icon != new_icon {
-            info!(element.id, old_icon, new_icon, "Updating icon");
             Element::set_tag(element.id, "icon:android", &new_icon.clone().into(), &conn)?;
-        }
-
-        if new_icon == "question_mark" {
-            unknown += 1;
-        } else {
-            known += 1;
+            changes += 1;
         }
     }
-
-    let coverage = known as f64 / (known as f64 + unknown as f64) * 100.0;
-
-    info!(
-        known,
-        unknown,
-        coverage = format!("{:.2}", coverage),
-        "Finished generating Android icons",
-    );
-
-    Ok(())
+    Ok(Res { changes })
 }
 
 impl OverpassElement {
@@ -1620,7 +1638,7 @@ mod test {
             },
             &conn,
         )?;
-        super::run(&conn).await?;
+        super::generate_element_icons(1, 100, &conn)?;
         let elements = Element::select_all(None, &conn)?;
         assert_eq!(
             "golf_course",

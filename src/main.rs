@@ -1,6 +1,5 @@
 extern crate core;
 use command::db;
-use command::generate_android_icons;
 use command::generate_element_categories;
 use command::generate_reports;
 mod server;
@@ -77,12 +76,6 @@ async fn main() -> ExitCode {
         "generate-reports" => {
             if let Err(e) = generate_reports::run(&mut conn) {
                 error!(?e, "Failed to generate reports");
-                return ExitCode::FAILURE;
-            }
-        }
-        "generate-android-icons" => {
-            if let Err(e) = generate_android_icons::run(&conn).await {
-                error!(?e, "Failed to generate Android icons");
                 return ExitCode::FAILURE;
             }
         }
