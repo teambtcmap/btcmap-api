@@ -102,6 +102,7 @@ pub async fn run() -> Result<()> {
                             "generateareaselementsmapping",
                             rpc::generate_areas_elements_mapping::run,
                         )
+                        .with_method("generatereports", rpc::generate_reports::run)
                         .finish()
                         .into_actix_web_service(),
                 ),
