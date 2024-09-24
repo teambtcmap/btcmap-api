@@ -1,5 +1,4 @@
 extern crate core;
-use command::db;
 use command::generate_reports;
 mod server;
 pub use error::Error;
@@ -24,6 +23,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
 mod area_element;
+mod db;
 mod element_comment;
 mod feed;
 mod rpc;
@@ -43,7 +43,7 @@ async fn main() -> ExitCode {
         .with(Layer::new().json())
         .init();
 
-    let mut conn = match command::db::open_connection() {
+    let mut conn = match db::open_connection() {
         Ok(v) => v,
         Err(e) => {
             error!(?e, "Failed to open database connection");

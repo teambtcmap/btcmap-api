@@ -1,4 +1,4 @@
-use crate::command::db;
+use crate::db;
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
 use serde_json::{json, Map, Value};

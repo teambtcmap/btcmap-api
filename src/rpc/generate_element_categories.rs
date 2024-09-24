@@ -100,15 +100,12 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
-    use rusqlite::Connection;
-
-    use crate::command::db;
-
+    use crate::db;
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::Result;
+    use rusqlite::Connection;
+    use std::collections::HashMap;
 
     #[actix_web::test]
     async fn run() -> Result<()> {
