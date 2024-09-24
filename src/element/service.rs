@@ -16,29 +16,6 @@ use time::Date;
 use time::OffsetDateTime;
 use tracing::info;
 
-pub fn remove_areas_tag(area: &Area, conn: &mut Connection) -> Result<()> {
-    let sp = conn.savepoint()?;
-    info!(
-        area.id,
-        alias = area.alias(),
-        "Removing areas tag from area {} ({})",
-        area.id,
-        area.name(),
-    );
-    let area_elements = find_in_area(area, &sp)?;
-    info!(
-        count = area_elements.len(),
-        "Found {} elements in {}",
-        area_elements.len(),
-        area.name(),
-    );
-    for area_element in area_elements {
-        Element::remove_tag(area_element.id, "areas", &sp)?;
-    }
-    sp.commit()?;
-    Ok(())
-}
-
 pub fn find_in_area(area: &Area, conn: &Connection) -> Result<Vec<Element>> {
     let all_elements: Vec<Element> = Element::select_all(None, &conn)?
         .into_iter()

@@ -77,18 +77,6 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        "update-areas-tag" => {
-            if let Err(e) = command::update_areas_tag::run(args) {
-                error!(?e, "Failed to add areas tag");
-                return ExitCode::FAILURE;
-            }
-        }
-        "remove-areas-tag" => {
-            if let Err(e) = command::remove_areas_tag::run(args) {
-                error!(?e, "Failed to remove areas tag");
-                return ExitCode::FAILURE;
-            }
-        }
         "vacuum" => {
             if let Err(e) = vacuum::vacuum_areas(&conn) {
                 error!(?e, "Failed to vacuum database");
