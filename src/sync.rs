@@ -5,10 +5,37 @@ use crate::osm::overpass::OverpassElement;
 use crate::user::User;
 use crate::{discord, Error, Result};
 use rusqlite::{Connection, Transaction};
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
 use tracing::{error, info, warn};
+
+#[derive(Serialize)]
+pub struct MergeResult {
+    pub elements_updated: usize,
+    pub elements_deleted: usize,
+}
+
+pub async fn merge_overpass_elements(
+    fresh_overpass_elements: Vec<OverpassElement>,
+    conn: &mut Connection,
+) -> Result<MergeResult> {
+    // stage 1: find and process deleted elements
+    let fresh_elemement_ids: HashSet<String> = fresh_overpass_elements
+        .iter()
+        .map(|it| it.btcmap_id())
+        .collect();
+    let deleted_element_events = sync_deleted_elements(&fresh_elemement_ids, conn).await?;
+    // stage 2: find and process updated elements
+    let updated_element_events = sync_updated_elements(&fresh_overpass_elements, conn).await?;
+    // stage 3: find and process new elements
+    sync_new_elements(&fresh_overpass_elements, conn).await?;
+    Ok(MergeResult {
+        elements_updated: updated_element_events.len(),
+        elements_deleted: deleted_element_events.len(),
+    })
+}
 
 /// Match fresh Overpass elements with the existing cached elements. Every
 /// cached element which isn't present in Overpass list will be marked as

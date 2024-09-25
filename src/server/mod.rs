@@ -108,6 +108,7 @@ pub async fn run() -> Result<()> {
                             "generateelementcategories",
                             rpc::generate_element_categories::run,
                         )
+                        .with_method("syncelements", rpc::sync_elements::run)
                         .finish()
                         .into_actix_web_service(),
                 ),
