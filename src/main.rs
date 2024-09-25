@@ -1,5 +1,4 @@
 extern crate core;
-use command::generate_reports;
 mod server;
 pub use error::Error;
 mod auth;
@@ -68,12 +67,6 @@ async fn main() -> ExitCode {
         "sync" => {
             if let Err(e) = command::sync::run(&mut conn).await {
                 error!(?e, "Failed to sync elements");
-                return ExitCode::FAILURE;
-            }
-        }
-        "generate-reports" => {
-            if let Err(e) = generate_reports::run(&mut conn) {
-                error!(?e, "Failed to generate reports");
                 return ExitCode::FAILURE;
             }
         }
