@@ -2,6 +2,10 @@ use crate::{osm::osm::OsmUser, Error, Result};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+#[cfg(not(test))]
+use std::thread::sleep;
+#[cfg(not(test))]
+use std::time::Duration;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 #[cfg(test)]
 use tracing::debug;
@@ -26,7 +30,8 @@ impl User {
                 :osm_data
             )
         "#;
-
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             query,
             named_params! {
@@ -131,6 +136,8 @@ impl User {
             SET tags = json_patch(tags, :tags)
             WHERE rowid = :id
         "#;
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
@@ -145,7 +152,8 @@ impl User {
             SET osm_data = json(:osm_data)
             WHERE rowid = :id
         "#;
-
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             query,
             named_params! {
@@ -171,6 +179,8 @@ impl User {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {

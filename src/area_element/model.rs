@@ -1,10 +1,11 @@
 use crate::Result;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
-use std::{
-    thread::sleep,
-    time::{Duration, Instant},
-};
+#[cfg(not(test))]
+use std::thread::sleep;
+#[cfg(not(test))]
+use std::time::Duration;
+use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, info};
 
@@ -32,7 +33,6 @@ const COL_DELETED_AT: &str = "deleted_at ";
 
 impl AreaElement {
     pub fn insert(area_id: i64, element_id: i64, conn: &Connection) -> Result<AreaElement> {
-        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 INSERT INTO {TABLE} (
@@ -45,6 +45,8 @@ impl AreaElement {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {
@@ -155,7 +157,6 @@ impl AreaElement {
         deleted_at: Option<OffsetDateTime>,
         conn: &Connection,
     ) -> Result<AreaElement> {
-        sleep(Duration::from_millis(10));
         match deleted_at {
             Some(deleted_at) => {
                 let query = format!(
@@ -166,6 +167,8 @@ impl AreaElement {
                     "#
                 );
                 debug!(query);
+                #[cfg(not(test))]
+                sleep(Duration::from_millis(10));
                 conn.execute(
                     &query,
                     named_params! {
@@ -183,6 +186,8 @@ impl AreaElement {
                     "#
                 );
                 debug!(query);
+                #[cfg(not(test))]
+                sleep(Duration::from_millis(10));
                 conn.execute(&query, named_params! { ":id": id })?;
             }
         };

@@ -6,6 +6,10 @@ use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Value;
 use std::collections::HashMap;
+#[cfg(not(test))]
+use std::thread::sleep;
+#[cfg(not(test))]
+use std::time::Duration;
 use std::time::Instant;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -54,6 +58,8 @@ impl Event {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {
@@ -261,6 +267,8 @@ impl Event {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {
@@ -286,6 +294,8 @@ impl Event {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {

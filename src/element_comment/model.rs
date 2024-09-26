@@ -1,10 +1,11 @@
 use crate::Result;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
-use std::{
-    thread::sleep,
-    time::{Duration, Instant},
-};
+#[cfg(not(test))]
+use std::thread::sleep;
+#[cfg(not(test))]
+use std::time::Duration;
+use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, info};
 
@@ -32,7 +33,6 @@ const _COL_DELETED_AT: &str = "deleted_at ";
 
 impl ElementComment {
     pub fn insert(element_id: i64, comment: &str, conn: &Connection) -> Result<ElementComment> {
-        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 INSERT INTO {TABLE} (
@@ -45,6 +45,8 @@ impl ElementComment {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {

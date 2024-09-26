@@ -2,10 +2,11 @@ use crate::{Error, Result};
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
-use std::{
-    thread::sleep,
-    time::{Duration, Instant},
-};
+#[cfg(not(test))]
+use std::thread::sleep;
+#[cfg(not(test))]
+use std::time::Duration;
+use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, error, info};
 
@@ -40,6 +41,7 @@ impl Area {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
         sleep(Duration::from_millis(10));
         conn.execute(&query, named_params! { ":tags": Value::from(tags) })?;
         Ok(Area::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
@@ -169,7 +171,6 @@ impl Area {
     }
 
     pub fn patch_tags(id: i64, tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
-        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -178,6 +179,8 @@ impl Area {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {
@@ -190,7 +193,6 @@ impl Area {
     }
 
     pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Area> {
-        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -199,6 +201,8 @@ impl Area {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {
@@ -212,7 +216,6 @@ impl Area {
 
     #[cfg(test)]
     pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Area> {
-        sleep(Duration::from_millis(10));
         let query = format!(
             r#"
                 UPDATE {TABLE}
@@ -221,6 +224,8 @@ impl Area {
             "#
         );
         debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {
@@ -237,7 +242,6 @@ impl Area {
         deleted_at: Option<OffsetDateTime>,
         conn: &Connection,
     ) -> Result<Area> {
-        sleep(Duration::from_millis(10));
         match deleted_at {
             Some(deleted_at) => {
                 let query = format!(
@@ -248,6 +252,8 @@ impl Area {
                     "#
                 );
                 debug!(query);
+                #[cfg(not(test))]
+                sleep(Duration::from_millis(10));
                 conn.execute(
                     &query,
                     named_params! {
@@ -265,6 +271,8 @@ impl Area {
                     "#
                 );
                 debug!(query);
+                #[cfg(not(test))]
+                sleep(Duration::from_millis(10));
                 conn.execute(&query, named_params! { ":id": id })?;
             }
         };
