@@ -44,7 +44,7 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
             "This url_alias is already in use".into(),
         ))?
     }
-    let area = Area::insert(geo_json.unwrap(), tags, &conn)?;
+    let area = Area::insert(geo_json.unwrap(), tags, &conn)?.unwrap();
     let area_elements = element::service::find_in_area(&area, conn)?;
     element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
@@ -65,13 +65,13 @@ pub fn patch_tags(id_or_alias: &str, tags: Map<String, Value>, conn: &Connection
     let area = Area::select_by_id_or_alias(id_or_alias, conn)?.unwrap();
     if tags.contains_key("geo_json") {
         let area_elements = element::service::find_in_area(&area, conn)?;
-        let area = Area::patch_tags(area.id, tags, conn)?;
+        let area = Area::patch_tags(area.id, tags, conn)?.unwrap();
         element::service::generate_areas_mapping_old(&area_elements, conn)?;
         let area_elements = element::service::find_in_area(&area, conn)?;
         element::service::generate_areas_mapping_old(&area_elements, conn)?;
         Ok(area)
     } else {
-        Ok(Area::patch_tags(area.id, tags, conn)?)
+        Ok(Area::patch_tags(area.id, tags, conn)?.unwrap())
     }
 }
 
@@ -82,13 +82,13 @@ pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection)
         ));
     }
     let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
-    Ok(Area::remove_tag(area.id, tag_name, conn)?)
+    Ok(Area::remove_tag(area.id, tag_name, conn)?.unwrap())
 }
 
 pub fn soft_delete(area_id_or_alias: &str, conn: &Connection) -> Result<Area> {
     let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
     let area_elements = element::service::find_in_area(&area, conn)?;
-    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?;
+    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?.unwrap();
     element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
 }
@@ -260,7 +260,8 @@ mod test {
             GeoJson::from_json_value(phuket_geo_json()).unwrap(),
             tags,
             &mut conn,
-        )?;
+        )?
+        .unwrap();
         let mut patch_tags = Map::new();
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
@@ -294,7 +295,8 @@ mod test {
             GeoJson::from_json_value(phuket_geo_json()).unwrap(),
             tags.clone(),
             &mut conn,
-        )?;
+        )?
+        .unwrap();
         let area = super::patch_tags(&area.id.to_string(), tags, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
@@ -306,7 +308,7 @@ mod test {
     #[test]
     fn soft_delete() -> Result<()> {
         let mut conn = mock_conn();
-        let area = Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?;
+        let area = Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?.unwrap();
         super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
@@ -330,7 +332,8 @@ mod test {
             GeoJson::from_json_value(phuket_geo_json()).unwrap(),
             tags,
             &mut conn,
-        )?;
+        )?
+        .unwrap();
         super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());

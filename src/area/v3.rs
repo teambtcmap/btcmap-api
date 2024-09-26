@@ -150,7 +150,8 @@ mod test {
             GeoJson::Feature(Feature::default()),
             Map::new(),
             &state.conn,
-        )?;
+        )?
+        .unwrap();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -172,17 +173,20 @@ mod test {
             GeoJson::Feature(Feature::default()),
             Map::new(),
             &state.conn,
-        )?;
+        )?
+        .unwrap();
         let area_2 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             &state.conn,
-        )?;
+        )?
+        .unwrap();
         let _area_3 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             &state.conn,
-        )?;
+        )?
+        .unwrap();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -204,15 +208,18 @@ mod test {
             GeoJson::Feature(Feature::default()),
             Map::new(),
             &state.conn,
-        )?;
+        )?
+        .unwrap();
         Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
         let area_2 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             &state.conn,
-        )?;
+        )?
+        .unwrap();
         let area_2 =
-            Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
+            Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?
+                .unwrap();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
