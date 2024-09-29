@@ -1,3 +1,4 @@
+pub mod add_admin;
 pub mod add_area;
 pub mod add_element_comment;
 pub mod boost_element;

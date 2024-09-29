@@ -11,8 +11,9 @@ pub async fn mock_token(secret: &str, pool: &Pool) -> Token {
     pool.get()
         .await
         .unwrap()
-        .interact(move |conn| Token::insert("test", &secret, conn))
+        .interact(move |conn| Token::insert("test", &secret, vec![], conn))
         .await
+        .unwrap()
         .unwrap()
         .unwrap()
 }

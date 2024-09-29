@@ -1,74 +1,97 @@
 use crate::Result;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
-use tracing::debug;
+use serde_json::Value;
+#[cfg(not(test))]
+use std::thread::sleep;
+#[cfg(not(test))]
+use std::time::Duration;
 
 #[allow(dead_code)]
 pub struct Token {
     pub id: i64,
     pub owner: String,
     pub secret: String,
+    pub allowed_methods: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
 }
 
-impl Token {
-    #[cfg(test)]
-    pub fn insert(owner: &str, secret: &str, conn: &Connection) -> Result<Token> {
-        use crate::Error;
+const TABLE: &str = "token";
+const ALL_COLUMNS: &str = "id, owner, secret, allowed_methods, created_at, updated_at, deleted_at";
+const _COL_ID: &str = "id";
+const COL_OWNER: &str = "owner";
+const COL_SECRET: &str = "secret";
+const COL_ALLOWED_METHODS: &str = "allowed_methods";
+const _COL_CREATED_AT: &str = "created_at";
+const _COL_UPDATED_AT: &str = "updated_at";
+const _COL_DELETED_AT: &str = "deleted_at";
 
+impl Token {
+    pub fn insert(
+        owner: &str,
+        secret: &str,
+        allowed_methods: Vec<String>,
+        conn: &Connection,
+    ) -> Result<Option<Token>> {
+        let allowed_methods =
+            Value::Array(allowed_methods.into_iter().map(|it| it.into()).collect());
         let query = format!(
             r#"
                 INSERT INTO token (
-                    owner,
-                    secret
+                    {COL_OWNER},
+                    {COL_SECRET},
+                    {COL_ALLOWED_METHODS}
                 ) VALUES (
                     :owner,
-                    :secret
+                    :secret,
+                    :allowed_methods
                 )
             "#
         );
-        debug!(query);
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
         conn.execute(
             &query,
             named_params! {
                 ":owner": owner,
                 ":secret": secret,
+                ":allowed_methods": allowed_methods,
             },
         )?;
-        Ok(Token::select_by_secret(secret, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Ok(Token::select_by_secret(secret, conn)?)
     }
 
     pub fn select_by_secret(secret: &str, conn: &Connection) -> Result<Option<Token>> {
         let query = format!(
             r#"
-                SELECT
-                    t.id,
-                    t.owner,
-                    t.secret,
-                    t.created_at,
-                    t.updated_at,
-                    t.deleted_at
-                FROM token t
-                WHERE secret = :secret
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE {COL_SECRET} = :secret
             "#
         );
-        debug!(query);
-        Ok(conn
+        let res = conn
             .query_row(&query, named_params! { ":secret": secret }, Self::mapper())
-            .optional()?)
+            .optional()?;
+        Ok(res)
     }
 
     const fn mapper() -> fn(&Row) -> rusqlite::Result<Token> {
         |row: &Row| -> rusqlite::Result<Token> {
+            let allowed_methods: Value = row.get(3)?;
             Ok(Token {
                 id: row.get(0)?,
                 owner: row.get(1)?,
                 secret: row.get(2)?,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
+                allowed_methods: allowed_methods
+                    .as_array()
+                    .unwrap()
+                    .into_iter()
+                    .map(|it| it.as_str().unwrap().into())
+                    .collect(),
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+                deleted_at: row.get(6)?,
             })
         }
     }

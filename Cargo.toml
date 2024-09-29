@@ -65,3 +65,11 @@ actix-governor = { version = "0.5.0", default-features = false }
 
 # https://crates.io/crates/jsonrpc-v2
 jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-web-v4-integration", "easy-errors"] }
+
+[dependencies.uuid]
+version = "1.10.0"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
