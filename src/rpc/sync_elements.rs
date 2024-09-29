@@ -22,7 +22,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Me
     let elements = overpass::query_bitcoin_merchants().await?;
     let mut conn = db::open_connection()?;
     let res = sync::merge_overpass_elements(elements, &mut conn).await?;
-    if res.elements_created + res.elements_updated + res.elements_deleted > 2 {
+    if res.elements_created + res.elements_updated + res.elements_deleted > 3 {
         let log_message = format!(
             "{} ran a sync with high number of changes (created: {}, updated: {}, deleted: {})",
             token.owner, res.elements_created, res.elements_updated, res.elements_deleted,
