@@ -1,4 +1,4 @@
-use crate::{auth::Token, discord, element::Element, osm::overpass::OverpassElement, Result};
+use crate::{admin::Admin, discord, element::Element, osm::overpass::OverpassElement, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -8,7 +8,7 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    token: String,
+    password: String,
     from_element_id: i64,
     to_element_id: i64,
 }
@@ -19,10 +19,10 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let res = pool
@@ -34,7 +34,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .await??;
     let log_message = format!(
         "{} generated element categories, potentially affecting element ids {}..{}",
-        token.owner, args.from_element_id, args.to_element_id,
+        admin.name, args.from_element_id, args.to_element_id,
     );
     info!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;

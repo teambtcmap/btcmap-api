@@ -1,6 +1,6 @@
 use crate::discord;
 use crate::Result;
-use crate::{auth::Token, element::model::Element};
+use crate::{admin::Admin, element::model::Element};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -9,16 +9,16 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
     pub id: String,
     pub tag: String,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let element = pool
@@ -35,7 +35,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
         .await??;
     let log_message = format!(
         "{} removed tag {} from element {} https://api.btcmap.org/v3/elements/{}",
-        token.owner,
+        admin.name,
         args.tag,
         element.name(),
         element.id,

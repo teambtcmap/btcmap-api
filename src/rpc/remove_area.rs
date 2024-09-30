@@ -1,6 +1,6 @@
 use super::model::RpcArea;
 use crate::Result;
-use crate::{area, auth::Token, discord};
+use crate::{admin::Admin, area, discord};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -9,15 +9,15 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
     pub id: String,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let area = pool
@@ -27,7 +27,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
         .await??;
     let log_message = format!(
         "{} removed area {} https://api.btcmap.org/v3/areas/{}",
-        token.owner,
+        admin.name,
         area.name(),
         area.id,
     );

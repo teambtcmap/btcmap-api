@@ -1,3 +1,3 @@
 pub mod model;
-pub use model::Token;
+pub use model::Admin;
 pub mod service;

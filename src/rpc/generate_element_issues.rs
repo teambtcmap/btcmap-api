@@ -1,5 +1,5 @@
 use crate::{
-    auth::Token,
+    admin::Admin,
     discord,
     element::{self, Element},
     Result,
@@ -13,7 +13,7 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
 }
 
 #[derive(Serialize)]
@@ -27,10 +27,10 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let elements: Vec<Element> = pool
@@ -49,7 +49,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .await??;
     let log_message = format!(
         "{} generated element issues, affecting {} elements",
-        token.owner, res.affected_elements,
+        admin.name, res.affected_elements,
     );
     info!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;

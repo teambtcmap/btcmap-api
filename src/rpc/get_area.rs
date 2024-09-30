@@ -1,5 +1,5 @@
 use super::model::RpcArea;
-use crate::{area::Area, auth::Token, Result};
+use crate::{admin::Admin, area::Area, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -7,14 +7,14 @@ use std::sync::Arc;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
     pub id: String,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     pool.get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let area = pool

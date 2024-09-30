@@ -1,6 +1,6 @@
 use crate::{
+    admin::{self},
     area::{self, Area},
-    auth::{self},
     discord, Error,
 };
 use actix_web::{
@@ -46,7 +46,7 @@ pub async fn patch(
     args: Json<PatchArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
-    let token = auth::service::check(&req, &pool).await?;
+    let admin = admin::service::check(&req, &pool).await?;
     let cloned_id_or_alias = id_or_alias.clone();
     let area = pool
         .get()
@@ -66,7 +66,7 @@ pub async fn patch(
         .await??;
     let log_message = format!(
         "{} updated area https://api.btcmap.org/v3/areas/{}",
-        token.owner, area.id,
+        admin.name, area.id,
     );
     warn!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
@@ -79,7 +79,7 @@ pub async fn delete(
     id_or_alias: Path<String>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<AreaView>, Error> {
-    let token = auth::service::check(&req, &pool).await?;
+    let admin = admin::service::check(&req, &pool).await?;
     let cloned_id_or_alias = id_or_alias.clone();
     let area = pool
         .get()
@@ -97,7 +97,7 @@ pub async fn delete(
         .await??;
     let log_message = format!(
         "{} deleted area https://api.btcmap.org/v3/areas/{}",
-        token.owner, area.id,
+        admin.name, area.id,
     );
     warn!(log_message);
     Ok(area.into())
@@ -128,7 +128,7 @@ mod test {
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::test::{mock_state, phuket_geo_json};
-    use crate::{auth, Result};
+    use crate::{admin, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -162,7 +162,9 @@ mod test {
     #[test]
     async fn patch_should_update_area() -> Result<()> {
         let state = mock_state().await;
-        let token = auth::service::mock_token("test", &state.pool).await.secret;
+        let admin_password = admin::service::mock_admin("test", &state.pool)
+            .await
+            .password;
         let url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(url_alias.into()));
@@ -186,7 +188,7 @@ mod test {
         let args: Value = serde_json::from_str(args)?;
         let req = TestRequest::patch()
             .uri(&format!("/{url_alias}"))
-            .append_header(("Authorization", format!("Bearer {token}")))
+            .append_header(("Authorization", format!("Bearer {admin_password}")))
             .set_json(args)
             .to_request();
         let res = test::call_service(&app, req).await;
@@ -224,7 +226,9 @@ mod test {
     async fn delete_should_soft_delete_area() -> Result<()> {
         let state = mock_state().await;
 
-        let token = auth::service::mock_token("test", &state.pool).await.secret;
+        let admin_password = admin::service::mock_admin("test", &state.pool)
+            .await
+            .password;
 
         let url_alias = "test";
         let mut tags = Map::new();
@@ -269,7 +273,7 @@ mod test {
         .await;
         let req = TestRequest::delete()
             .uri(&format!("/{url_alias}"))
-            .append_header(("Authorization", format!("Bearer {token}")))
+            .append_header(("Authorization", format!("Bearer {admin_password}")))
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);

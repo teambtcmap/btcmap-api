@@ -1,7 +1,7 @@
 use super::model::RpcArea;
 use crate::{
+    admin::Admin,
     area::{self},
-    auth::Token,
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -13,17 +13,17 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
     pub id: String,
     pub name: String,
     pub value: Value,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let cloned_name = args.name.clone();
@@ -35,7 +35,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
         .await??;
     let log_message = format!(
         "{} set tag {} = {} for area {} https://api.btcmap.org/v3/areas/{}",
-        token.owner,
+        admin.name,
         args.name,
         serde_json::to_string(&args.value)?,
         area.name(),

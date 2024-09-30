@@ -1,5 +1,5 @@
 use crate::osm::overpass;
-use crate::{auth::Token, sync::MergeResult};
+use crate::{admin::Admin, sync::MergeResult};
 use crate::{db, discord, sync, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
@@ -9,14 +9,14 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<MergeResult> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let elements = overpass::query_bitcoin_merchants().await?;
@@ -25,7 +25,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Me
     if res.elements_created + res.elements_updated + res.elements_deleted > 3 {
         let log_message = format!(
             "{} ran a sync with high number of changes (created: {}, updated: {}, deleted: {})",
-            token.owner, res.elements_created, res.elements_updated, res.elements_deleted,
+            admin.name, res.elements_created, res.elements_updated, res.elements_deleted,
         );
         info!(log_message);
         discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;

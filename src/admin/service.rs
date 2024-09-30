@@ -1,4 +1,5 @@
-use super::Token;
+use super::Admin;
+use crate::Result;
 use crate::{discord, Error};
 use actix_web::{http::header::HeaderMap, HttpRequest};
 use deadpool_sqlite::Pool;
@@ -6,26 +7,26 @@ use rusqlite::Connection;
 use tracing::warn;
 
 #[cfg(test)]
-pub async fn mock_token(secret: &str, pool: &Pool) -> Token {
-    let secret = secret.to_string();
+pub async fn mock_admin(password: &str, pool: &Pool) -> Admin {
+    let password = password.to_string();
     pool.get()
         .await
         .unwrap()
-        .interact(move |conn| Token::insert("test", &secret, vec![], conn))
+        .interact(move |conn| Admin::insert("test", &password, conn))
         .await
         .unwrap()
         .unwrap()
         .unwrap()
 }
 
-pub async fn check(req: &HttpRequest, pool: &Pool) -> Result<Token, Error> {
+pub async fn check(req: &HttpRequest, pool: &Pool) -> Result<Admin> {
     let headers = req.headers().clone();
     let guard = pool.get().await.unwrap();
     let conn = guard.lock().unwrap();
-    get_admin_token(&conn, &headers).await
+    get_admin(&conn, &headers).await
 }
 
-pub async fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Token, Error> {
+pub async fn get_admin(db: &Connection, headers: &HeaderMap) -> Result<Admin> {
     let auth_header = headers
         .get("Authorization")
         .map(|it| it.to_str().unwrap_or(""))
@@ -41,17 +42,17 @@ pub async fn get_admin_token(db: &Connection, headers: &HeaderMap) -> Result<Tok
             "Authorization header is invalid".into(),
         ))?
     }
-    let secret = auth_header_parts[1];
-    let token = Token::select_by_secret(secret, db)?;
-    match token {
-        Some(token) => {
-            return Ok(token);
+    let password = auth_header_parts[1];
+    let admin = Admin::select_by_password(password, db)?;
+    match admin {
+        Some(admin) => {
+            return Ok(admin);
         }
         None => {
             let log_message = "Someone tried and failed to access admin API";
             warn!(log_message);
             discord::send_message_to_channel(log_message, discord::CHANNEL_API).await;
-            Err(Error::HttpUnauthorized("Invalid token".into()))?
+            Err(Error::HttpUnauthorized("Invalid bearer token".into()))?
         }
     }
 }
@@ -74,7 +75,7 @@ mod tests {
     #[actix_web::test]
     async fn no_header() -> Result<()> {
         let state = mock_state().await;
-        super::mock_token("test", &state.pool).await.secret;
+        super::mock_admin("test", &state.pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -90,7 +91,7 @@ mod tests {
     #[actix_web::test]
     async fn valid_token() -> Result<()> {
         let state = mock_state().await;
-        super::mock_token("test", &state.pool).await.secret;
+        super::mock_admin("test", &state.pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))

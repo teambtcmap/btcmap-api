@@ -1,4 +1,4 @@
-use crate::{area::Area, auth::Token, discord, element::Element, report::Report, Result};
+use crate::{admin::Admin, area::Area, discord, element::Element, report::Report, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -10,7 +10,7 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
 }
 
 #[derive(Serialize)]
@@ -24,10 +24,10 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let started_at = OffsetDateTime::now_utc();
@@ -37,7 +37,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .interact(move |conn| generate_reports(conn))
         .await??;
     if res > 0 {
-        let log_message = format!("{} generated {} daily reports", token.owner, res,);
+        let log_message = format!("{} generated {} daily reports", admin.name, res);
         info!(log_message);
         discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     }

@@ -1,6 +1,6 @@
 use super::Element;
 use crate::{
-    auth::{self},
+    admin::{self},
     discord,
     osm::overpass::OverpassElement,
     Error,
@@ -76,7 +76,7 @@ pub async fn patch(
     args: Json<PatchArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Json<ElementView>, Error> {
-    let token = auth::service::check(&req, &pool).await?;
+    let admin = admin::service::check(&req, &pool).await?;
     let cloned_id = id.clone();
     let element = pool
         .get()
@@ -94,7 +94,7 @@ pub async fn patch(
         .await??;
     let log_message = format!(
         "{} updated element {} https://api.btcmap.org/v3/elements/{}",
-        token.owner,
+        admin.name,
         element.name(),
         element.id,
     );
@@ -109,7 +109,7 @@ mod test {
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
-    use crate::{auth, Result};
+    use crate::{admin, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -138,7 +138,9 @@ mod test {
     #[test]
     async fn patch() -> Result<()> {
         let state = mock_state().await;
-        let token = auth::service::mock_token("test", &state.pool).await.secret;
+        let admin_password = admin::service::mock_admin("test", &state.pool)
+            .await
+            .password;
         let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
         let app = test::init_service(
             App::new()
@@ -159,7 +161,7 @@ mod test {
         let args: Value = serde_json::from_str(args)?;
         let req = TestRequest::patch()
             .uri(&format!("/{}", element.overpass_data.btcmap_id()))
-            .append_header(("Authorization", format!("Bearer {token}")))
+            .append_header(("Authorization", format!("Bearer {admin_password}")))
             .set_json(args)
             .to_request();
         let res = test::call_service(&app, req).await;

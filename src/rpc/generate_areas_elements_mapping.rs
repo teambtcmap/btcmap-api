@@ -1,7 +1,7 @@
 use crate::{
+    admin::Admin,
     area::Area,
     area_element::{self},
-    auth::Token,
     discord,
     element::Element,
     Result,
@@ -15,7 +15,7 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    token: String,
+    password: String,
     from_element_id: i64,
     to_element_id: i64,
 }
@@ -27,10 +27,10 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let res = pool
@@ -42,7 +42,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .await??;
     let log_message = format!(
             "{} generated areas to elements mappings, potentially affecting element ids {}..{}. {} elements were processed and {} elements were affected",
-            token.owner, args.from_element_id, args.to_element_id, res.elements_processed, res.elements_affected
+            admin.name, args.from_element_id, args.to_element_id, res.elements_processed, res.elements_affected
         );
     info!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;

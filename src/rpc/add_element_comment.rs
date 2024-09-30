@@ -1,4 +1,4 @@
-use crate::{auth::Token, discord, element::Element, element_comment::ElementComment, Result};
+use crate::{admin::Admin, discord, element::Element, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -7,16 +7,16 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
     pub id: String,
     pub comment: String,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<ElementComment> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let element = pool
@@ -33,7 +33,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
         .await??;
     let log_message = format!(
         "{} added a comment to element {} ({}): {}",
-        token.owner,
+        admin.name,
         element.name(),
         element.id,
         args.comment,

@@ -1,6 +1,6 @@
 use crate::{
+    admin::Admin,
     area::{self, service::TrendingArea},
-    auth::Token,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -11,7 +11,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
     pub period_start: String,
     pub period_end: String,
 }
@@ -19,7 +19,7 @@ pub struct Args {
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<TrendingArea>> {
     pool.get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let period_start =

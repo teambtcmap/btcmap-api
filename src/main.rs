@@ -1,7 +1,7 @@
 extern crate core;
 mod server;
 pub use error::Error;
-mod auth;
+mod admin;
 mod command;
 mod discord;
 mod element;

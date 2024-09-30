@@ -1,5 +1,5 @@
 use crate::{
-    auth::{self},
+    admin::{self},
     discord,
     user::User,
     Error,
@@ -21,7 +21,7 @@ pub async fn patch_tags(
     args: Json<HashMap<String, Value>>,
     pool: Data<Arc<Pool>>,
 ) -> Result<impl Responder, Error> {
-    let token = auth::service::check(&req, &pool).await?;
+    let admin = admin::service::check(&req, &pool).await?;
     let id = id.into_inner();
     pool.get()
         .await?
@@ -37,7 +37,7 @@ pub async fn patch_tags(
         .await??;
     let log_message = format!(
         "User {} patched tags for user https://api.btcmap.org/v3/users/{} {}",
-        token.owner,
+        admin.name,
         id,
         serde_json::to_string_pretty(&args).unwrap(),
     );
@@ -51,7 +51,7 @@ mod test {
     use crate::osm::osm::OsmUser;
     use crate::test::mock_state;
     use crate::user::User;
-    use crate::{auth, Result};
+    use crate::{admin, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -62,7 +62,9 @@ mod test {
     async fn patch_tags() -> Result<()> {
         let state = mock_state().await;
         let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
-        let token = auth::service::mock_token("test", &state.pool).await.secret;
+        let admin_password = admin::service::mock_admin("test", &state.pool)
+            .await
+            .password;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -71,7 +73,7 @@ mod test {
         .await;
         let req = TestRequest::patch()
             .uri(&format!("/{}/tags", user.id))
-            .append_header(("Authorization", format!("Bearer {token}")))
+            .append_header(("Authorization", format!("Bearer {admin_password}")))
             .set_json(json!({ "foo": "bar" }))
             .to_request();
         let res = test::call_service(&app, req).await;

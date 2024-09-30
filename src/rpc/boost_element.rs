@@ -1,4 +1,4 @@
-use crate::{auth::Token, discord, element::Element, Result};
+use crate::{admin::Admin, discord, element::Element, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -10,16 +10,16 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Args {
-    pub token: String,
+    pub password: String,
     pub id: String,
     pub days: i64,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
-    let token = pool
+    let admin = pool
         .get()
         .await?
-        .interact(move |conn| Token::select_by_secret(&args.token, conn))
+        .interact(move |conn| Admin::select_by_password(&args.password, conn))
         .await??
         .unwrap();
     let element = pool
@@ -29,7 +29,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
         .await??;
     let log_message = format!(
         "{} boosted element {} https://api.btcmap.org/v3/elements/{} for {} days",
-        token.owner,
+        admin.name,
         element.name(),
         element.id,
         args.days,
