@@ -65,3 +65,6 @@ actix-governor = { version = "0.5.0", default-features = false }
 
 # https://crates.io/crates/jsonrpc-v2
 jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-web-v4-integration", "easy-errors"] }
+
+# https://docs.rs/crate/dirs
+dirs = { version = "5.0.1", default-features = false }

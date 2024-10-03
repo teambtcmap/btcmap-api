@@ -25,6 +25,7 @@ mod area_element;
 mod db;
 mod element_comment;
 mod feed;
+mod firewall;
 mod rpc;
 mod sync;
 mod vacuum;

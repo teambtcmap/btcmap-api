@@ -1,0 +1,179 @@
+use crate::Result;
+use actix_web::HttpRequest;
+use dirs::data_dir;
+use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use std::{fs::create_dir, path::PathBuf};
+use time::OffsetDateTime;
+
+#[allow(dead_code)]
+struct UsageLog {
+    id: i64,
+    date: String,
+    ip: String,
+    endpoint: String,
+    reqests: i64,
+    entities: i64,
+    time_ms: i64,
+}
+
+pub fn log_sync_api_request(
+    req: &HttpRequest,
+    endpoint_id: &str,
+    entities: i64,
+    time_ms: i64,
+) -> Result<()> {
+    let Some(addr) = req.peer_addr() else {
+        return Ok(());
+    };
+    let today = OffsetDateTime::now_utc().date().to_string();
+    let ip = addr.ip().to_string();
+    let conn = open_conn()?;
+    match select_usage_log(&today, &ip, endpoint_id, &conn)? {
+        Some(log) => update_usage_log(
+            log.id,
+            log.reqests + 1,
+            log.entities + entities,
+            log.time_ms + time_ms,
+            &conn,
+        ),
+        None => insert_usage_log(&today, &ip, endpoint_id, 1, entities, time_ms, &conn),
+    }?;
+    Ok(())
+}
+
+pub fn open_conn() -> Result<Connection> {
+    let conn = Connection::open(db_path()?)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS usage_log (
+            id INTEGER PRIMARY KEY NOT NULL,
+            date TEXT NOT NULL,
+            ip TEXT NOT NULL, 
+            endpoint TEXT NOT NULL, 
+            requests INTEGER NOT NULL, 
+            entities INTEGER NOT NULL,
+            time_ms INTEGER NOT NULL
+        ) STRICT;
+    "#,
+        [],
+    )?;
+    Ok(conn)
+}
+
+pub fn db_path() -> Result<PathBuf> {
+    let Some(data_dir) = data_dir() else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Can't find data directory",
+        ))?
+    };
+    let data_dir = data_dir.join("btcmap");
+    if !data_dir.exists() {
+        create_dir(&data_dir)?;
+    }
+    Ok(data_dir.join("firewall-v1.db"))
+}
+
+fn insert_usage_log(
+    date: &str,
+    ip: &str,
+    endpoint: &str,
+    requests: i64,
+    entities: i64,
+    time_ms: i64,
+    conn: &Connection,
+) -> Result<()> {
+    conn.execute(
+        r#"
+        INSERT INTO usage_log (
+            date, 
+            ip, 
+            endpoint, 
+            requests, 
+            entities, 
+            time_ms
+        ) VALUES (
+            :date, 
+            :ip, 
+            :endpoint, 
+            :requests, 
+            :entities, 
+            :time_ms
+         );
+         "#,
+        named_params! {
+            ":date": date,
+            ":ip": ip,
+            ":endpoint": endpoint,
+            ":requests": requests,
+            ":entities": entities,
+            ":time_ms": time_ms,
+        },
+    )?;
+    Ok(())
+}
+
+fn select_usage_log(
+    date: &str,
+    ip: &str,
+    endpoint: &str,
+    conn: &Connection,
+) -> Result<Option<UsageLog>> {
+    let mut stmt = conn.prepare(
+        r#"
+            SELECT id, date, ip, endpoint, requests, entities, time_ms 
+            FROM usage_log
+            WHERE date = :date AND ip = :ip and endpoint = :endpoint
+        "#,
+    )?;
+    let res = stmt
+        .query_row(
+            named_params! {
+                ":date": date,
+                ":ip": ip,
+                ":endpoint": endpoint,
+            },
+            mapper(),
+        )
+        .optional()?;
+    Ok(res)
+}
+
+fn update_usage_log(
+    id: i64,
+    requests: i64,
+    entities: i64,
+    time_ms: i64,
+    conn: &Connection,
+) -> Result<()> {
+    conn.execute(
+        r#"
+            UPDATE usage_log 
+            SET requests = :requests, entities = :entities, time_ms = :time_ms
+            WHERE id = :id;
+         "#,
+        named_params! {
+            ":id": id,
+            ":requests": requests,
+            ":entities": entities,
+            ":time_ms": time_ms,
+        },
+    )?;
+    Ok(())
+}
+
+const fn mapper() -> fn(&Row) -> rusqlite::Result<UsageLog> {
+    |row: &Row| -> rusqlite::Result<UsageLog> {
+        Ok(UsageLog {
+            id: row.get(0)?,
+            date: row.get(1)?,
+            ip: row.get(2)?,
+            endpoint: row.get(3)?,
+            reqests: row.get(4)?,
+            entities: row.get(5)?,
+            time_ms: row.get(6)?,
+        })
+    }
+}
