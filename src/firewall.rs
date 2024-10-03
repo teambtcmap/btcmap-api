@@ -22,13 +22,13 @@ pub fn log_sync_api_request(
     entities: i64,
     time_ms: i64,
 ) -> Result<()> {
-    let Some(addr) = req.peer_addr() else {
+    let conn_info = req.connection_info();
+    let Some(addr) = conn_info.realip_remote_addr() else {
         return Ok(());
     };
     let today = OffsetDateTime::now_utc().date().to_string();
-    let ip = addr.ip().to_string();
     let conn = open_conn()?;
-    match select_usage_log(&today, &ip, endpoint_id, &conn)? {
+    match select_usage_log(&today, &addr, endpoint_id, &conn)? {
         Some(log) => update_usage_log(
             log.id,
             log.reqests + 1,
@@ -36,7 +36,7 @@ pub fn log_sync_api_request(
             log.time_ms + time_ms,
             &conn,
         ),
-        None => insert_usage_log(&today, &ip, endpoint_id, 1, entities, time_ms, &conn),
+        None => insert_usage_log(&today, &addr, endpoint_id, 1, entities, time_ms, &conn),
     }?;
     Ok(())
 }
