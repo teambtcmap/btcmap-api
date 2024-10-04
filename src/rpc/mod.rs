@@ -1,4 +1,5 @@
 pub mod add_admin;
+pub mod add_allowed_action;
 pub mod add_area;
 pub mod add_element_comment;
 pub mod boost_element;
@@ -13,6 +14,7 @@ pub mod get_most_commented_countries;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
 pub mod model;
+pub mod remove_allowed_action;
 pub mod remove_area;
 pub mod remove_area_tag;
 pub mod remove_element_tag;
