@@ -47,16 +47,17 @@ pub fn open_conn() -> Result<Connection> {
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.execute(
         r#"
-        CREATE TABLE IF NOT EXISTS usage_log (
-            id INTEGER PRIMARY KEY NOT NULL,
-            date TEXT NOT NULL,
-            ip TEXT NOT NULL, 
-            endpoint TEXT NOT NULL, 
-            requests INTEGER NOT NULL, 
-            entities INTEGER NOT NULL,
-            time_ms INTEGER NOT NULL
-        ) STRICT;
-    "#,
+            CREATE TABLE IF NOT EXISTS usage_log (
+                id INTEGER PRIMARY KEY NOT NULL,
+                date TEXT NOT NULL,
+                ip TEXT NOT NULL, 
+                endpoint TEXT NOT NULL, 
+                requests INTEGER NOT NULL, 
+                entities INTEGER NOT NULL,
+                time_ms INTEGER NOT NULL
+            ) STRICT;
+            CREATE INDEX IF NOT EXISTS usage_log_date_ip_endpoint ON usage_log(date, ip, endpoint);
+        "#,
         [],
     )?;
     Ok(conn)
