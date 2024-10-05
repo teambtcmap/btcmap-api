@@ -1,9 +1,14 @@
-use crate::{admin::Admin, discord, Result};
+use crate::{
+    admin::{self, Admin},
+    discord, Result,
+};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::info;
+
+const NAME: &str = "add_allowed_action";
 
 #[derive(Deserialize)]
 pub struct Args {
@@ -19,12 +24,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let source_admin = pool
-        .get()
-        .await?
-        .interact(move |conn| Admin::select_by_password(&args.password, conn))
-        .await??
-        .unwrap();
+    let source_admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let target_admin = pool
         .get()
         .await?

@@ -19,6 +19,29 @@ pub async fn mock_admin(password: &str, pool: &Pool) -> Admin {
         .unwrap()
 }
 
+pub async fn check_rpc(password: &str, action: &str, pool: &Pool) -> Result<Admin> {
+    let password = password.to_string();
+    let admin = pool
+        .get()
+        .await?
+        .interact(move |conn| Admin::select_by_password(&password, conn))
+        .await??
+        .unwrap();
+    if !admin.allowed_actions.contains(&"all".into())
+        && !admin.allowed_actions.contains(&action.into())
+    {
+        let log_message = format!(
+            "{} tried to call action {} without proper permissions",
+            admin.name, action,
+        );
+        discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+        Err(Error::HttpUnauthorized(format!(
+            "You are not allowed to perform this action"
+        )))?
+    }
+    Ok(admin)
+}
+
 pub async fn check(req: &HttpRequest, pool: &Pool) -> Result<Admin> {
     let headers = req.headers().clone();
     let guard = pool.get().await.unwrap();

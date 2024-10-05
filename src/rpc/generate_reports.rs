@@ -1,4 +1,4 @@
-use crate::{admin::Admin, area::Area, discord, element::Element, report::Report, Result};
+use crate::{admin, area::Area, discord, element::Element, report::Report, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -7,6 +7,8 @@ use serde_json::{Map, Value};
 use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use tracing::info;
+
+const NAME: &str = "generate_reports";
 
 #[derive(Deserialize)]
 pub struct Args {
@@ -24,12 +26,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = pool
-        .get()
-        .await?
-        .interact(move |conn| Admin::select_by_password(&args.password, conn))
-        .await??
-        .unwrap();
+    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let started_at = OffsetDateTime::now_utc();
     let res = pool
         .get()

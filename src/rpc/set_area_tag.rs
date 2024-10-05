@@ -1,6 +1,6 @@
 use super::model::RpcArea;
 use crate::{
-    admin::Admin,
+    admin,
     area::{self},
     discord, Result,
 };
@@ -11,6 +11,8 @@ use serde_json::Value;
 use std::sync::Arc;
 use tracing::info;
 
+const NAME: &str = "set_area_tag";
+
 #[derive(Deserialize)]
 pub struct Args {
     pub password: String,
@@ -20,12 +22,7 @@ pub struct Args {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
-    let admin = pool
-        .get()
-        .await?
-        .interact(move |conn| Admin::select_by_password(&args.password, conn))
-        .await??
-        .unwrap();
+    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_name = args.name.clone();
     let cloned_value = args.value.clone();
     let area = pool

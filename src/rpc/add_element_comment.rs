@@ -1,9 +1,11 @@
-use crate::{admin::Admin, discord, element::Element, element_comment::ElementComment, Result};
+use crate::{admin, discord, element::Element, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing::info;
+
+const NAME: &str = "add_element_comment";
 
 #[derive(Deserialize)]
 pub struct Args {
@@ -13,12 +15,7 @@ pub struct Args {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<ElementComment> {
-    let admin = pool
-        .get()
-        .await?
-        .interact(move |conn| Admin::select_by_password(&args.password, conn))
-        .await??
-        .unwrap();
+    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let element = pool
         .get()
         .await?

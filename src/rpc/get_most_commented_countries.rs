@@ -1,10 +1,12 @@
-use crate::{admin::Admin, area::Area, element::Element, element_comment::ElementComment, Result};
+use crate::{admin, area::Area, element::Element, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+
+const NAME: &str = "get_most_commented_countries";
 
 #[derive(Deserialize)]
 pub struct Args {
@@ -21,11 +23,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Res>> {
-    pool.get()
-        .await?
-        .interact(move |conn| Admin::select_by_password(&args.password, conn))
-        .await??
-        .unwrap();
+    admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let period_start =
         OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_start), &Rfc3339).unwrap();
     let period_end =

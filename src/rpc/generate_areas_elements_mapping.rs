@@ -1,5 +1,5 @@
 use crate::{
-    admin::Admin,
+    admin,
     area::Area,
     area_element::{self},
     discord,
@@ -12,6 +12,8 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::info;
+
+const NAME: &str = "generate_areas_elements_mapping";
 
 #[derive(Deserialize)]
 pub struct Args {
@@ -27,12 +29,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = pool
-        .get()
-        .await?
-        .interact(move |conn| Admin::select_by_password(&args.password, conn))
-        .await??
-        .unwrap();
+    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let res = pool
         .get()
         .await?

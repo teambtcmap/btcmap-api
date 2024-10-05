@@ -1,6 +1,5 @@
 use crate::{
-    admin::Admin,
-    discord,
+    admin, discord,
     element::{self, Element},
     Result,
 };
@@ -10,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use time::OffsetDateTime;
 use tracing::info;
+
+const NAME: &str = "generate_element_issues";
 
 #[derive(Deserialize)]
 pub struct Args {
@@ -27,12 +28,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = pool
-        .get()
-        .await?
-        .interact(move |conn| Admin::select_by_password(&args.password, conn))
-        .await??
-        .unwrap();
+    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let elements: Vec<Element> = pool
         .get()
         .await?
