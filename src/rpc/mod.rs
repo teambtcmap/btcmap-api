@@ -13,6 +13,7 @@ pub mod get_element;
 pub mod get_most_commented_countries;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
+pub mod get_user_activity;
 pub mod model;
 pub mod remove_allowed_action;
 pub mod remove_area;

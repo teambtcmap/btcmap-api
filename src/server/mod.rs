@@ -112,6 +112,7 @@ pub async fn run() -> Result<()> {
                         .with_method("addadmin", rpc::add_admin::run)
                         .with_method("addallowedaction", rpc::add_allowed_action::run)
                         .with_method("removeallowedaction", rpc::remove_allowed_action::run)
+                        .with_method("getuseractivity", rpc::get_user_activity::run)
                         .finish()
                         .into_actix_web_service(),
                 ),

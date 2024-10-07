@@ -98,6 +98,13 @@ impl User {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    pub fn select_by_id_or_name(id_or_name: &str, conn: &Connection) -> Result<Option<User>> {
+        match id_or_name.parse::<i64>() {
+            Ok(id) => User::select_by_id(id, conn),
+            Err(_) => User::select_by_name(id_or_name, conn),
+        }
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<User>> {
         let query = r#"
             SELECT
@@ -114,6 +121,26 @@ impl User {
         Ok(conn
             .query_row(query, named_params! { ":id": id }, mapper())
             .optional()?)
+    }
+
+    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<User>> {
+        let query = format!(
+            r#"
+                SELECT                 
+                    rowid,
+                    osm_data,
+                    tags,
+                    created_at,
+                    updated_at,
+                    deleted_at
+                FROM user
+                WHERE json_extract(osm_data, '$.display_name') = :name
+            "#
+        );
+        let res = conn
+            .query_row(&query, named_params! { ":name": name }, mapper())
+            .optional()?;
+        Ok(res)
     }
 
     pub fn set_tag(&self, name: &str, value: &Value, conn: &Connection) -> Result<User> {

@@ -229,6 +229,34 @@ impl Event {
         Ok(res)
     }
 
+    pub fn select_by_user(id: i64, limit: i64, conn: &Connection) -> Result<Vec<Event>> {
+        let query = format!(
+            r#"
+                SELECT
+                    ev.{COL_ROWID},
+                    ev.{COL_USER_ID},
+                    ev.{COL_ELEMENT_ID},
+                    json_extract(el.overpass_data, '$.type'),
+                    json_extract(el.overpass_data, '$.id'),
+                    ev.{COL_TYPE},
+                    ev.{COL_TAGS},
+                    ev.{COL_CREATED_AT},
+                    ev.{COL_UPDATED_AT},
+                    ev.{COL_DELETED_AT}
+                FROM {TABLE} ev
+                LEFT JOIN element el on el.rowid = ev.{COL_ELEMENT_ID}
+                WHERE ev.{COL_USER_ID} = :id
+                ORDER BY ev.{COL_CREATED_AT} DESC
+                LIMIT :limit
+            "#
+        );
+        let res = conn
+            .prepare(&query)?
+            .query_map(named_params! {":id": id, ":limit": limit }, mapper())?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(res)
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Event>> {
         let query = format!(
             r#"
