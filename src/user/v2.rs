@@ -1,3 +1,4 @@
+use crate::firewall;
 use crate::osm::osm::OsmUser;
 use crate::user::User;
 use crate::Error;
@@ -8,12 +9,14 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::web::Redirect;
 use actix_web::Either;
+use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Instant;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -62,9 +65,11 @@ impl Into<Json<GetItem>> for User {
 
 #[get("")]
 pub async fn get(
+    req: HttpRequest,
     args: Query<GetArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
+    let started_at = Instant::now();
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
             Redirect::to("https://static.btcmap.org/api/v2/users.json").permanent(),
@@ -78,9 +83,11 @@ pub async fn get(
             None => User::select_all(args.limit, conn),
         })
         .await??;
-    Ok(Either::Left(Json(
-        users.into_iter().map(|it| it.into()).collect(),
-    )))
+    let users_len = users.len() as i64;
+    let res = Either::Left(Json(users.into_iter().map(|it| it.into()).collect()));
+    let time_ms = Instant::now().duration_since(started_at).as_millis() as i64;
+    firewall::log_sync_api_request(&req, "v2/users", users_len, time_ms)?;
+    Ok(res)
 }
 
 #[get("{id}")]
