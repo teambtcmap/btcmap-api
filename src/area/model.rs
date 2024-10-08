@@ -155,6 +155,12 @@ impl Area {
         Ok(res)
     }
 
+    pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Option<Area>> {
+        let mut patch_set = Map::new();
+        patch_set.insert(name.into(), value.clone());
+        Area::patch_tags(id, patch_set, conn)
+    }
+
     pub fn patch_tags(
         id: i64,
         tags: Map<String, Value>,

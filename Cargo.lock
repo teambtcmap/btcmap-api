@@ -356,6 +356,7 @@ version = "0.1.0"
 dependencies = [
  "actix-governor",
  "actix-web",
+ "base64",
  "deadpool-sqlite",
  "directories",
  "dirs",

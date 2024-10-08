@@ -68,3 +68,4 @@ jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-
 
 # https://docs.rs/crate/dirs
 dirs = { version = "5.0.1", default-features = false }
+base64 = "0.22.1"
