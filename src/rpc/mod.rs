@@ -19,6 +19,7 @@ pub mod remove_allowed_action;
 pub mod remove_area;
 pub mod remove_area_tag;
 pub mod remove_element_tag;
+pub mod search;
 pub mod set_area_tag;
 pub mod set_element_tag;
 pub mod sync_elements;

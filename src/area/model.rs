@@ -104,6 +104,22 @@ impl Area {
         Ok(res)
     }
 
+    pub fn select_by_search_query(search_query: &str, conn: &Connection) -> Result<Vec<Area>> {
+        let query = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE LOWER(json_extract({COL_TAGS}, '$.name')) LIKE '%' || UPPER(:query) || '%'
+                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+            "#
+        );
+        let res = conn
+            .prepare(&query)?
+            .query_map(named_params! { ":query": search_query }, mapper())?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(res)
+    }
+
     pub fn select_by_id_or_alias(id_or_alias: &str, conn: &Connection) -> Result<Option<Area>> {
         match id_or_alias.parse::<i64>() {
             Ok(id) => Area::select_by_id(id, conn),

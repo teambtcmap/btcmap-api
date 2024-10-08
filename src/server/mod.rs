@@ -113,6 +113,7 @@ pub async fn run() -> Result<()> {
                         .with_method("addallowedaction", rpc::add_allowed_action::run)
                         .with_method("removeallowedaction", rpc::remove_allowed_action::run)
                         .with_method("getuseractivity", rpc::get_user_activity::run)
+                        .with_method("search", rpc::search::run)
                         .finish()
                         .into_actix_web_service(),
                 ),
