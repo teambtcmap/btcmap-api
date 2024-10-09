@@ -115,6 +115,7 @@ pub async fn run() -> Result<()> {
                         .with_method("getuseractivity", rpc::get_user_activity::run)
                         .with_method("search", rpc::search::run)
                         .with_method("setareaicon", rpc::set_area_icon::run)
+                        .with_method("getboosts", rpc::get_boosts::run)
                         .finish()
                         .into_actix_web_service(),
                 ),

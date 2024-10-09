@@ -1,4 +1,4 @@
-use crate::{admin, discord, element::Element, Result};
+use crate::{admin, boost::Boost, discord, element::Element, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -22,7 +22,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
     let element = pool
         .get()
         .await?
-        .interact(move |conn| _boost(&args.id, args.days, conn))
+        .interact(move |conn| _boost(admin.id, &args.id, args.days, conn))
         .await??;
     let log_message = format!(
         "{} boosted element {} https://api.btcmap.org/v3/elements/{} for {} days",
@@ -36,7 +36,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
     Ok(element)
 }
 
-fn _boost(id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {
+fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {
     let element = Element::select_by_id_or_osm_id(id_or_osm_id, conn)?.unwrap();
     let boost_expires = element.tag("boost:expires");
     let boost_expires = match boost_expires {
@@ -57,5 +57,6 @@ fn _boost(id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {
         &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),
         &conn,
     )?;
+    Boost::insert(admin_id, element.id, days, conn)?;
     Ok(element)
 }

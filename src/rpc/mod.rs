@@ -9,6 +9,7 @@ pub mod generate_element_icons;
 pub mod generate_element_issues;
 pub mod generate_reports;
 pub mod get_area;
+pub mod get_boosts;
 pub mod get_element;
 pub mod get_most_commented_countries;
 pub mod get_trending_communities;

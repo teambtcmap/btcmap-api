@@ -22,6 +22,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod area;
 mod area_element;
+mod boost;
 mod db;
 mod element_comment;
 mod feed;
