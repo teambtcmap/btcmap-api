@@ -39,15 +39,7 @@ pub fn pool() -> Result<Pool> {
         .builder(Runtime::Tokio1)?
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let conn = conn.lock().unwrap();
-            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
-            conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
-            conn.pragma_update(None, "foreign_keys", "ON").unwrap();
-            conn.pragma_update(None, "busy_timeout", 10 * 60 * 1000)
-                .unwrap();
-            // > The default suggested cache size is -2000, which means the cache size is limited to 2048000 bytes of memory
-            // Source: https://www.sqlite.org/pragma.html#pragma_cache_size
-            // The default page size is 4096 bytes, cache_size sets the number of pages
-            // conn.pragma_update(None, "cache_size", 25000).unwrap();
+            init_pragmas(&conn);
             Ok(())
         })))
         .build()?)
@@ -55,8 +47,7 @@ pub fn pool() -> Result<Pool> {
 
 pub fn open_connection() -> Result<Connection> {
     let conn = Connection::open(get_file_path()?)?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    init_pragmas(&conn);
     Ok(conn)
 }
 
@@ -74,6 +65,18 @@ pub fn get_file_path() -> Result<PathBuf> {
     }
 
     Ok(project_dirs.data_dir().join("btcmap.db"))
+}
+
+fn init_pragmas(conn: &Connection) {
+    conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+    conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+    conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+    conn.pragma_update(None, "busy_timeout", 10 * 60 * 1000)
+        .unwrap();
+    // > The default suggested cache size is -2000, which means the cache size is limited to 2048000 bytes of memory
+    // Source: https://www.sqlite.org/pragma.html#pragma_cache_size
+    // The default page size is 4096 bytes, cache_size sets the number of pages
+    // conn.pragma_update(None, "cache_size", 25000).unwrap();
 }
 
 fn execute_migrations(migrations: &Vec<Migration>, db: &mut Connection) -> Result<()> {
