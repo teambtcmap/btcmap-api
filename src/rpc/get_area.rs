@@ -1,5 +1,5 @@
 use super::model::RpcArea;
-use crate::{admin, area::Area, Error, Result};
+use crate::{admin, area::Area, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -21,8 +21,6 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
         .await?
         .interact(move |conn| Area::select_by_id_or_alias(&cloned_id, conn))
         .await??;
-    area.map(|it| it.into()).ok_or(Error::HttpNotFound(format!(
-        "There is no area with id or alias = {}",
-        args.id
-    )))
+    area.map(|it| it.into())
+        .ok_or(format!("There is no area with id or alias = {}", args.id).into())
 }

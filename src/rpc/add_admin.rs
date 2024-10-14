@@ -11,7 +11,6 @@ use tracing::info;
 const NAME: &str = "add_admin";
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
 pub struct Args {
     pub password: String,
     pub new_admin_name: String,
@@ -21,7 +20,6 @@ pub struct Args {
 #[derive(Serialize)]
 pub struct Res {
     pub name: String,
-    pub password: String,
     pub allowed_actions: Vec<String>,
 }
 
@@ -32,7 +30,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .await?
         .interact(move |conn| Admin::insert(&args.new_admin_name, &args.new_admin_password, conn))
         .await??
-        .unwrap();
+        .ok_or("Failed to insert new admin user record")?;
     let log_message = format!(
         "{} added new admin user {} with the following allowed actions: {}",
         admin.name,
@@ -43,7 +41,6 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     Ok(Res {
         name: new_admin.name,
-        password: new_admin.password,
         allowed_actions: new_admin.allowed_actions,
     })
 }

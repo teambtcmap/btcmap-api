@@ -22,6 +22,9 @@ pub enum Error {
     HttpUnauthorized(String),
     HttpNotFound(String),
     HttpConflict(String),
+    Generic(String),
+    Parse(time::error::Parse),
+    Decode(base64::DecodeError),
 }
 
 impl Display for Error {
@@ -43,7 +46,28 @@ impl Display for Error {
             Error::HttpNotFound(err) => write!(f, "{}", err),
             Error::HttpConflict(err) => write!(f, "{}", err),
             Error::HttpUnauthorized(err) => write!(f, "{}", err),
+            Error::Generic(err) => write!(f, "{}", err),
+            Error::Parse(err) => write!(f, "{}", err),
+            Error::Decode(err) => write!(f, "{}", err),
         }
+    }
+}
+
+impl std::error::Error for Error {
+    fn description(&self) -> &str {
+        "TODO"
+    }
+}
+
+impl From<&str> for Error {
+    fn from(str: &str) -> Self {
+        Error::Generic(str.to_owned())
+    }
+}
+
+impl From<String> for Error {
+    fn from(str: String) -> Self {
+        Error::Generic(str)
     }
 }
 
@@ -104,6 +128,18 @@ impl From<deadpool_sqlite::ConfigError> for Error {
 impl From<deadpool_sqlite::BuildError> for Error {
     fn from(error: deadpool_sqlite::BuildError) -> Self {
         Error::DeadpoolBuild(error)
+    }
+}
+
+impl From<time::error::Parse> for Error {
+    fn from(error: time::error::Parse) -> Self {
+        Error::Parse(error)
+    }
+}
+
+impl From<base64::DecodeError> for Error {
+    fn from(error: base64::DecodeError) -> Self {
+        Error::Decode(error)
     }
 }
 

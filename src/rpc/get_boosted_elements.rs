@@ -6,7 +6,7 @@ use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
 use std::sync::Arc;
 
-const NAME: &str = "get_boosts";
+const NAME: &str = "get_boosted_elements";
 
 #[derive(Deserialize)]
 pub struct Args {

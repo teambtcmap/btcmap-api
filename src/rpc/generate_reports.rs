@@ -184,10 +184,7 @@ fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
         if let Ok(avg_verification_date) = avg_verification_date {
             tags.insert(
                 "avg_verification_date".into(),
-                avg_verification_date
-                    .format(&Iso8601::DEFAULT)
-                    .unwrap()
-                    .into(),
+                avg_verification_date.format(&Iso8601::DEFAULT)?.into(),
             );
         }
     }
@@ -301,8 +298,10 @@ mod test {
         let mut element_2: OverpassElement = serde_json::from_value(element_2)?;
 
         let today = OffsetDateTime::now_utc().date();
-        let today_plus_year = today.checked_add(Duration::days(356)).unwrap();
-        element_2.tags.as_mut().unwrap().insert(
+        let today_plus_year = today
+            .checked_add(Duration::days(356))
+            .ok_or("Date overflow")?;
+        element_2.tags.as_mut().ok_or("No tags")?.insert(
             "check_date:currency:XBT".into(),
             today_plus_year.to_string().into(),
         );
@@ -325,10 +324,17 @@ mod test {
         };
         let report_tags = super::generate_report_tags(&vec![element_1, element_2])?;
 
-        assert_eq!(2, report_tags["total_elements"].as_i64().unwrap());
+        assert_eq!(
+            2,
+            report_tags["total_elements"]
+                .as_i64()
+                .ok_or("Not a number")?
+        );
         assert_eq!(
             "2023-02-25T00:00:00.000000000Z",
-            report_tags["avg_verification_date"].as_str().unwrap(),
+            report_tags["avg_verification_date"]
+                .as_str()
+                .ok_or("Not a string")?,
         );
 
         Ok(())

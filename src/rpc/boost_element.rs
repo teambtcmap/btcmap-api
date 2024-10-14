@@ -37,7 +37,8 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
 }
 
 fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {
-    let element = Element::select_by_id_or_osm_id(id_or_osm_id, conn)?.unwrap();
+    let element = Element::select_by_id_or_osm_id(id_or_osm_id, conn)?
+        .ok_or(format!("There is no element with id = {}", id_or_osm_id))?;
     let boost_expires = element.tag("boost:expires");
     let boost_expires = match boost_expires {
         Value::String(v) => {

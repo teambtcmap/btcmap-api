@@ -19,14 +19,15 @@ pub struct Args {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let cloned_args_id = args.id.clone();
     let area = pool
         .get()
         .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&args.id, conn))
+        .interact(move |conn| Area::select_by_id_or_alias(&cloned_args_id, conn))
         .await??
-        .unwrap();
+        .ok_or(format!("There is no area with id or alias = {}", args.id))?;
     let file_name = format!("{}.{}", area.id, args.icon_ext);
-    let bytes = BASE64_STANDARD.decode(args.icon_base64).unwrap();
+    let bytes = BASE64_STANDARD.decode(args.icon_base64)?;
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
@@ -50,6 +51,6 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
             )
         })
         .await??
-        .unwrap();
+        .ok_or("Failed to update area tag")?;
     Ok(area.into())
 }

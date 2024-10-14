@@ -45,11 +45,9 @@ fn generate_element_icons(
 ) -> Result<Res> {
     let mut changes = 0;
     for element_id in from_element_id..=to_element_id {
-        let element = Element::select_by_id(element_id, conn)?;
-        if element.is_none() {
-            break;
-        }
-        let element = element.unwrap();
+        let Some(element) = Element::select_by_id(element_id, conn)? else {
+            continue;
+        };
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {

@@ -25,12 +25,13 @@ pub struct Res {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Res>> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let cloned_args_id = args.id.clone();
     let user = pool
         .get()
         .await?
-        .interact(move |conn| User::select_by_id_or_name(&args.id, conn))
+        .interact(move |conn| User::select_by_id_or_name(&cloned_args_id, conn))
         .await??
-        .unwrap();
+        .ok_or(format!("There is no user with id or name = {}", args.id))?;
     let events = pool
         .get()
         .await?
@@ -45,6 +46,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Ve
                 .map(|it| {
                     let cloned_id = it.element_id.clone();
                     (it, Element::select_by_id(cloned_id, conn).unwrap().unwrap())
+                    // TODO remove unwraps
                 })
                 .collect()
         })

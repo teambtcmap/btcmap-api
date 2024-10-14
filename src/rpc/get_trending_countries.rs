@@ -21,9 +21,8 @@ pub struct Args {
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<TrendingArea>> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let period_start =
-        OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_start), &Rfc3339).unwrap();
-    let period_end =
-        OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_end), &Rfc3339).unwrap();
+        OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_start), &Rfc3339)?;
+    let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_end), &Rfc3339)?;
     pool.get()
         .await?
         .interact(move |conn| {

@@ -18,12 +18,16 @@ pub struct Args {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let cloned_args_id = args.id.clone();
     let element = pool
         .get()
         .await?
-        .interact(move |conn| Element::select_by_id_or_osm_id(&args.id, conn))
+        .interact(move |conn| Element::select_by_id_or_osm_id(&cloned_args_id, conn))
         .await??
-        .unwrap();
+        .ok_or(format!(
+            "There is no element with id or osm_id = {}",
+            args.id,
+        ))?;
     let cloned_tag = args.tag.clone();
     let element = pool
         .get()

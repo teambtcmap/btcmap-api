@@ -10,7 +10,7 @@ use tracing::info;
 
 const NAME: &str = "set_element_tag";
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Args {
     pub password: String,
     pub id: String,
@@ -20,12 +20,16 @@ pub struct Args {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let cloned_args = args.clone();
     let element = pool
         .get()
         .await?
-        .interact(move |conn| Element::select_by_id_or_osm_id(&args.id, conn))
+        .interact(move |conn| Element::select_by_id_or_osm_id(&cloned_args.id, conn))
         .await??
-        .unwrap();
+        .ok_or(format!(
+            "There is no element with id or osm_id = {}",
+            args.id
+        ))?;
     let cloned_name = args.name.clone();
     let cloned_value = args.value.clone();
     let element = pool
