@@ -45,12 +45,13 @@ async fn main() -> Result<()> {
         .with(Layer::new().json())
         .init();
 
-    let mut conn = db::open_connection()?;
-    db::migrate(&mut conn)?;
-    drop(conn);
-
-    // All the worker threads are sharing a single connection pool
+    // All the worker threads share a single connection pool
     let pool = Arc::new(db::pool()?);
+
+    pool.get()
+        .await?
+        .interact(|mut conn| db::migrate(&mut conn))
+        .await??;
 
     let rate_limit_conf = GovernorConfigBuilder::default()
         .per_second(1)
