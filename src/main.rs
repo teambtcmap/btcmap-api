@@ -78,77 +78,43 @@ async fn main() -> Result<()> {
                 service("rpc").guard(actix_web::guard::Post()).finish(
                     jsonrpc_v2::Server::new()
                         .with_data(jsonrpc_v2::Data::new(pool.clone()))
-                        .with_method("getelement", rpc::get_element::run)
                         .with_method("get_element", rpc::get_element::run)
-                        .with_method("setelementtag", rpc::set_element_tag::run)
                         .with_method("set_element_tag", rpc::set_element_tag::run)
-                        .with_method("removeelementtag", rpc::remove_element_tag::run)
                         .with_method("remove_element_tag", rpc::remove_element_tag::run)
-                        .with_method("boostelement", rpc::boost_element::run)
                         .with_method("boost_element", rpc::boost_element::run)
-                        .with_method("addelementcomment", rpc::add_element_comment::run)
                         .with_method("add_element_comment", rpc::add_element_comment::run)
-                        .with_method("generateelementissues", rpc::generate_element_issues::run)
                         .with_method("generate_element_issues", rpc::generate_element_issues::run)
-                        .with_method("addarea", rpc::add_area::run)
                         .with_method("add_area", rpc::add_area::run)
-                        .with_method("getarea", rpc::get_area::run)
                         .with_method("get_area", rpc::get_area::run)
-                        .with_method("setareatag", rpc::set_area_tag::run)
                         .with_method("set_area_tag", rpc::set_area_tag::run)
-                        .with_method("removeareatag", rpc::remove_area_tag::run)
                         .with_method("remove_area_tag", rpc::remove_area_tag::run)
-                        .with_method("gettrendingcountries", rpc::get_trending_countries::run)
                         .with_method("get_trending_countries", rpc::get_trending_countries::run)
-                        .with_method(
-                            "getmostcommentedcountries",
-                            rpc::get_most_commented_countries::run,
-                        )
                         .with_method(
                             "get_most_commented_countries",
                             rpc::get_most_commented_countries::run,
                         )
-                        .with_method("gettrendingcommunities", rpc::get_trending_communities::run)
                         .with_method(
                             "get_trending_communities",
                             rpc::get_trending_communities::run,
                         )
-                        .with_method("removearea", rpc::remove_area::run)
                         .with_method("remove_area", rpc::remove_area::run)
-                        .with_method(
-                            "generateareaselementsmapping",
-                            rpc::generate_areas_elements_mapping::run,
-                        )
                         .with_method(
                             "generate_areas_elements_mapping",
                             rpc::generate_areas_elements_mapping::run,
                         )
-                        .with_method("generatereports", rpc::generate_reports::run)
                         .with_method("generate_reports", rpc::generate_reports::run)
-                        .with_method("generateelementicons", rpc::generate_element_icons::run)
                         .with_method("generate_element_icons", rpc::generate_element_icons::run)
-                        .with_method(
-                            "generateelementcategories",
-                            rpc::generate_element_categories::run,
-                        )
                         .with_method(
                             "generate_element_categories",
                             rpc::generate_element_categories::run,
                         )
-                        .with_method("syncelements", rpc::sync_elements::run)
                         .with_method("sync_elements", rpc::sync_elements::run)
-                        .with_method("addadmin", rpc::add_admin::run)
                         .with_method("add_admin", rpc::add_admin::run)
-                        .with_method("addadminaction", rpc::add_admin_action::run)
                         .with_method("add_admin_action", rpc::add_admin_action::run)
-                        .with_method("removeadminaction", rpc::remove_admin_action::run)
                         .with_method("remove_admin_action", rpc::remove_admin_action::run)
-                        .with_method("getuseractivity", rpc::get_user_activity::run)
                         .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("search", rpc::search::run)
-                        .with_method("setareaicon", rpc::set_area_icon::run)
                         .with_method("set_area_icon", rpc::set_area_icon::run)
-                        .with_method("getboostedelements", rpc::get_boosted_elements::run)
                         .with_method("get_boosted_elements", rpc::get_boosted_elements::run)
                         .finish()
                         .into_actix_web_service(),
