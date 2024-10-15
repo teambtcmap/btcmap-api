@@ -1,5 +1,5 @@
 use super::Event;
-use crate::firewall;
+use crate::log;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -96,7 +96,7 @@ pub async fn get(
     let events_len = events.len() as i64;
     let res = Either::Left(Json(events.into_iter().map(|it| it.into()).collect()));
     let time_ms = Instant::now().duration_since(started_at).as_millis() as i64;
-    firewall::log_sync_api_request(&req, "v2/events", events_len, time_ms)?;
+    log::log_sync_api_request(&req, "v2/events", events_len, time_ms)?;
     Ok(res)
 }
 

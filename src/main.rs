@@ -1,6 +1,6 @@
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
 use actix_web::dev::ServiceRequest;
-use actix_web::middleware::{Compress, NormalizePath};
+use actix_web::middleware::{from_fn, Compress, NormalizePath};
 use actix_web::{App, HttpServer};
 pub use error::Error;
 mod admin;
@@ -26,11 +26,12 @@ mod boost;
 mod db;
 mod element_comment;
 mod feed;
-mod firewall;
+mod log;
 mod rpc;
 mod sync;
 use actix_web::http::header::HeaderValue;
 use actix_web::web::{scope, service, Data, QueryConfig};
+mod ban;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -168,6 +169,7 @@ async fn main() -> Result<()> {
             .service(
                 scope("v2")
                     .wrap(Governor::new(&rate_limit_conf))
+                    .wrap(from_fn(ban::check_if_banned))
                     .service(
                         scope("elements")
                             .service(element::admin::patch)
