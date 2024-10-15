@@ -208,38 +208,6 @@ async fn main() -> Result<()> {
                             .service(area_element::v3::get_by_id),
                     ),
             )
-            .service(
-                scope("")
-                    .wrap(Governor::new(&rate_limit_conf))
-                    .service(
-                        scope("elements")
-                            .service(element::v2::get)
-                            .service(element::v2::get_by_id),
-                    )
-                    .service(
-                        scope("events")
-                            .service(event::v2::get)
-                            .service(event::v2::get_by_id),
-                    )
-                    .service(
-                        scope("users")
-                            .service(user::admin::patch_tags)
-                            .service(user::v2::get)
-                            .service(user::v2::get_by_id),
-                    )
-                    .service(
-                        scope("areas")
-                            .service(area::admin::patch)
-                            .service(area::admin::delete)
-                            .service(area::v2::get)
-                            .service(area::v2::get_by_url_alias),
-                    )
-                    .service(
-                        scope("reports")
-                            .service(report::v2::get)
-                            .service(report::v2::get_by_id),
-                    ),
-            )
     })
     .bind(("127.0.0.1", 8000))?
     .run()
