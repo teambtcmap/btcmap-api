@@ -1,10 +1,8 @@
-extern crate core;
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
 use actix_web::dev::ServiceRequest;
 use actix_web::middleware::{Compress, NormalizePath};
 use actix_web::{App, HttpServer};
 pub use error::Error;
-use time::OffsetDateTime;
 mod admin;
 mod discord;
 mod element;
@@ -18,7 +16,6 @@ mod tile;
 mod user;
 use std::env;
 use std::sync::Arc;
-use tracing::info;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -32,10 +29,8 @@ mod feed;
 mod firewall;
 mod rpc;
 mod sync;
-use actix_web::dev::Service;
 use actix_web::http::header::HeaderValue;
 use actix_web::web::{scope, service, Data, QueryConfig};
-use futures_util::future::FutureExt;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -73,42 +68,6 @@ async fn main() -> Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .wrap_fn(|req, srv| {
-                let req_query_string = req.query_string().to_string();
-                let req_method = req.method().as_str().to_string();
-                let req_path = req.path().to_string();
-                let req_version = format!("{:?}", req.version());
-                let req_time = OffsetDateTime::now_utc();
-                let req_ip = req
-                    .connection_info()
-                    .peer_addr()
-                    .unwrap_or_default()
-                    .to_string();
-                let req_real_ip = req
-                    .connection_info()
-                    .realip_remote_addr()
-                    .unwrap_or_default()
-                    .to_string();
-                srv.call(req).map(move |res| {
-                    if let Ok(res) = res.as_ref() {
-                        let res_status = res.status().as_u16();
-                        let res_time_sec = (OffsetDateTime::now_utc() - req_time).as_seconds_f64();
-                        if res_time_sec > 5.0 {
-                            info!(
-                                req_query_string,
-                                req_method,
-                                req_path,
-                                req_version,
-                                req_ip,
-                                req_real_ip,
-                                res_status,
-                                res_time_sec,
-                            );
-                        }
-                    }
-                    res
-                })
-            })
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(pool.clone()))
