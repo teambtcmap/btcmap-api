@@ -151,7 +151,6 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("users")
-                            .service(user::admin::patch_tags)
                             .service(user::v2::get)
                             .service(user::v2::get_by_id),
                     )
@@ -196,7 +195,6 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("users")
-                            .service(user::admin::patch_tags)
                             .service(user::v3::get)
                             .service(user::v3::get_by_id),
                     )
