@@ -69,11 +69,11 @@ pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
 
                 let now = OffsetDateTime::now_utc();
                 let now: String = now.format(&Rfc3339)?;
-                user.set_tag("osm:sync:date", &Value::String(now), &conn)?;
+                User::set_tag(user.id, "osm:sync:date", &Value::String(now), &conn)?;
             }
             None => {
                 warn!(user.osm_data.id, "User no longer exists on OSM");
-                user.set_tag("osm:missing", &Value::Bool(true), &conn)?;
+                User::set_tag(user.id, "osm:missing", &Value::Bool(true), &conn)?;
             }
         },
         Err(e) => error!("Failed to fetch user {} {}", user.osm_data.id, e),

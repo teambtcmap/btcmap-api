@@ -143,11 +143,7 @@ impl User {
         Ok(res)
     }
 
-    pub fn set_tag(&self, name: &str, value: &Value, conn: &Connection) -> Result<User> {
-        User::_set_tag(self.id, name, value, conn)
-    }
-
-    pub fn _set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<User> {
+    pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<User> {
         let mut patch_set = HashMap::new();
         patch_set.insert(name.into(), value.clone());
         User::patch_tags(id, &patch_set, conn)
@@ -171,6 +167,27 @@ impl User {
         )?;
         Ok(User::select_by_id(id, &conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+    }
+
+    pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<User>> {
+        let query = format!(
+            r#"
+                UPDATE user
+                SET tags = json_remove(tags, :name)
+                WHERE id = :id
+            "#
+        );
+        #[cfg(not(test))]
+        sleep(Duration::from_millis(10));
+        conn.execute(
+            &query,
+            named_params! {
+                ":id": id,
+                ":name": format!("$.{name}"),
+            },
+        )?;
+        let res = User::select_by_id(id, &conn)?;
+        Ok(res)
     }
 
     pub fn set_osm_data(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {
