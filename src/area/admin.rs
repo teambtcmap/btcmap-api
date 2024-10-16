@@ -1,10 +1,10 @@
 use crate::{
     admin::{self},
     area::{self, Area},
-    discord, Error,
+    Error,
 };
 use actix_web::{
-    delete, patch,
+    delete,
     web::{Data, Json, Path},
     HttpRequest,
 };
@@ -37,40 +37,6 @@ struct PostArgs {
 #[derive(Serialize, Deserialize)]
 struct PatchArgs {
     tags: Map<String, Value>,
-}
-
-#[patch("{id_or_alias}")]
-pub async fn patch(
-    req: HttpRequest,
-    id_or_alias: Path<String>,
-    args: Json<PatchArgs>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Json<AreaView>, Error> {
-    let admin = admin::service::check(&req, &pool).await?;
-    let cloned_id_or_alias = id_or_alias.clone();
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&cloned_id_or_alias, &conn))
-        .await??
-        .ok_or(Error::HttpNotFound(format!(
-            "There is no area with id or alias = {}",
-            id_or_alias,
-        )))?;
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            area::service::patch_tags(&area.id.to_string(), args.tags.clone(), conn)
-        })
-        .await??;
-    let log_message = format!(
-        "{} updated area https://api.btcmap.org/v3/areas/{}",
-        admin.name, area.id,
-    );
-    warn!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(area.into())
 }
 
 #[delete("{id_or_alias}")]
@@ -123,7 +89,6 @@ impl Into<Json<AreaView>> for Area {
 
 #[cfg(test)]
 mod test {
-    use crate::area::admin::PatchArgs;
     use crate::area::Area;
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
@@ -135,71 +100,6 @@ mod test {
     use actix_web::{test, App};
     use geojson::{Feature, GeoJson};
     use serde_json::{json, Map, Value};
-
-    #[test]
-    async fn patch_should_return_401_if_unauthorized() -> Result<()> {
-        let state = mock_state().await;
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            &state.conn,
-        )?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.pool))
-                .service(super::patch),
-        )
-        .await;
-        let req = TestRequest::patch()
-            .uri("/1")
-            .set_json(PatchArgs { tags: Map::new() })
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-        Ok(())
-    }
-
-    #[test]
-    async fn patch_should_update_area() -> Result<()> {
-        let state = mock_state().await;
-        let admin_password = admin::service::mock_admin("test", &state.pool)
-            .await
-            .password;
-        let url_alias = "test";
-        let mut tags = Map::new();
-        tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(state.pool))
-                .service(super::patch),
-        )
-        .await;
-        let args = r#"
-        {
-            "tags": {
-                "string": "bar",
-                "unsigned": 5,
-                "float": 12.34,
-                "bool": true
-            }
-        }
-        "#;
-        let args: Value = serde_json::from_str(args)?;
-        let req = TestRequest::patch()
-            .uri(&format!("/{url_alias}"))
-            .append_header(("Authorization", format!("Bearer {admin_password}")))
-            .set_json(args)
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::OK);
-        let area = Area::select_by_alias(&url_alias, &state.conn)?.unwrap();
-        assert!(area.tags["string"].is_string());
-        assert!(area.tags["unsigned"].is_u64());
-        assert!(area.tags["float"].is_f64());
-        assert!(area.tags["bool"].is_boolean());
-        Ok(())
-    }
 
     #[test]
     async fn delete_should_return_401_if_unauthorized() -> Result<()> {

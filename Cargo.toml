@@ -3,12 +3,11 @@ name = "btcmap-api"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-# Compiler settings and optimizations
 [profile.release]
-opt-level = "s"
-strip = "symbols"
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "abort"
 
 [dependencies]
 
