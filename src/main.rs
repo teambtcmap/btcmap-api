@@ -55,14 +55,14 @@ async fn main() -> Result<()> {
         .await??;
 
     let rate_limit_conf = GovernorConfigBuilder::default()
-        .per_second(1)
+        .seconds_per_request(1)
         .burst_size(30)
         .key_extractor(get_key_extractor())
         .finish()
         .unwrap();
 
     let tile_rate_limit_conf = GovernorConfigBuilder::default()
-        .per_millisecond(500)
+        .milliseconds_per_request(500)
         .burst_size(1000)
         .key_extractor(get_key_extractor())
         .finish()
