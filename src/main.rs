@@ -155,7 +155,6 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("areas")
-                            .service(area::admin::delete)
                             .service(area::v2::get)
                             .service(area::v2::get_by_url_alias),
                     )
@@ -185,7 +184,6 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("areas")
-                            .service(area::admin::delete)
                             .service(area::v3::get)
                             .service(area::v3::get_by_id),
                     )
