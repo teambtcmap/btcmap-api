@@ -140,7 +140,6 @@ async fn main() -> Result<()> {
                     .wrap(from_fn(ban::check_if_banned))
                     .service(
                         scope("elements")
-                            .service(element::admin::patch)
                             .service(element::v2::get)
                             .service(element::v2::get_by_id),
                     )
