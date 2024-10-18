@@ -29,9 +29,6 @@ serde_json = { version = "1.0.128", default-features = false }
 # https://github.com/time-rs/time/releases
 time = { version = "0.3.36", default-features = false, features = ["macros", "serde-well-known"] }
 
-# https://crates.io/crates/directories
-directories = { version = "5.0.1", default-features = false }
-
 # https://github.com/tokio-rs/tracing/releases
 tracing = { version = "0.1.40", default-features = false }
 

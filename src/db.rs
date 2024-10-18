@@ -3,7 +3,6 @@ use deadpool_sqlite::Config;
 use deadpool_sqlite::Hook;
 use deadpool_sqlite::Pool;
 use deadpool_sqlite::Runtime;
-use directories::ProjectDirs;
 use include_dir::include_dir;
 use include_dir::Dir;
 use rusqlite::Connection;
@@ -52,19 +51,14 @@ pub fn open_connection() -> Result<Connection> {
 }
 
 pub fn get_file_path() -> Result<PathBuf> {
-    let project_dirs = match ProjectDirs::from("org", "BTC Map", "BTC Map") {
-        Some(project_dirs) => project_dirs,
-        None => Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Can't find home directory",
-        ))?,
-    };
-
-    if !project_dirs.data_dir().exists() {
-        create_dir_all(project_dirs.data_dir())?;
+    #[allow(deprecated)]
+    let data_dir = std::env::home_dir()
+        .ok_or("Home directory does not exist")?
+        .join(".local/share/btcmap");
+    if !data_dir.exists() {
+        create_dir_all(&data_dir)?;
     }
-
-    Ok(project_dirs.data_dir().join("btcmap.db"))
+    Ok(data_dir.join("btcmap.db"))
 }
 
 fn init_pragmas(conn: &Connection) {
