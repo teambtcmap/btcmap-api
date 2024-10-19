@@ -36,8 +36,9 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
 #[cfg(test)]
 mod test {
     use crate::Result;
+    use actix_web::test;
 
-    #[tokio::test]
+    #[test]
     async fn should_return_401_if_unauthorized() -> Result<()> {
         //let state = mock_state().await;
         //let url_alias = "test";
@@ -58,7 +59,7 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test]
     async fn delete_should_soft_delete_area() -> Result<()> {
         //let state = mock_state().await;
         //let admin_password = admin::service::mock_admin("test", &state.pool)

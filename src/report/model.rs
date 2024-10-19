@@ -277,11 +277,11 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 #[cfg(test)]
 mod test {
     use crate::{area::Area, report::Report, test::mock_state, Result};
+    use actix_web::test;
     use geojson::{Feature, GeoJson};
     use serde_json::Map;
     use std::ops::Add;
     use time::{macros::datetime, Duration, OffsetDateTime};
-    use tokio::test;
 
     #[test]
     async fn insert() -> Result<()> {

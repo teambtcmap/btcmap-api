@@ -112,8 +112,6 @@ fn get_migrations() -> Result<Vec<Migration>> {
     Ok(res)
 }
 
-use std::path::PathBuf;
-
 #[cfg(test)]
 pub mod test {
     use rusqlite::Connection;

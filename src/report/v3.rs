@@ -103,11 +103,11 @@ mod test {
     use crate::report::Report;
     use crate::test::mock_state;
     use crate::Result;
+    use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data, QueryConfig};
     use actix_web::{test, App};
     use geojson::{Feature, GeoJson};
-    use http::StatusCode;
     use serde_json::Map;
     use time::macros::datetime;
     use time::OffsetDateTime;

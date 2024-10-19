@@ -359,10 +359,10 @@ mod test {
         test::{mock_conn, mock_state, mock_tags},
         Result,
     };
+    use actix_web::test;
     use geojson::{Feature, GeoJson};
     use serde_json::{json, Map};
     use time::{macros::datetime, OffsetDateTime};
-    use tokio::test;
 
     #[test]
     async fn insert() -> Result<()> {

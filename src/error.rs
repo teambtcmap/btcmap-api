@@ -8,7 +8,6 @@ use std::fmt::{Display, Formatter};
 pub enum Error {
     IO(std::io::Error),
     Rusqlite(rusqlite::Error),
-    Http(http::Error),
     Reqwest(reqwest::Error),
     SerdeJson(serde_json::Error),
     TimeFormat(time::error::Format),
@@ -32,7 +31,6 @@ impl Display for Error {
         match self {
             Error::IO(err) => err.fmt(f),
             Error::Rusqlite(err) => err.fmt(f),
-            Error::Http(err) => err.fmt(f),
             Error::Reqwest(err) => err.fmt(f),
             Error::SerdeJson(err) => err.fmt(f),
             Error::TimeFormat(err) => err.fmt(f),
@@ -80,12 +78,6 @@ impl From<std::io::Error> for Error {
 impl From<rusqlite::Error> for Error {
     fn from(error: rusqlite::Error) -> Self {
         Error::Rusqlite(error)
-    }
-}
-
-impl From<http::Error> for Error {
-    fn from(error: http::Error) -> Self {
-        Error::Http(error)
     }
 }
 

@@ -204,11 +204,11 @@ fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> 
 mod test {
     use super::*;
     use crate::{osm::overpass::OverpassElement, test::mock_state};
+    use actix_web::test;
     use geojson::{Feature, GeoJson};
     use serde_json::{json, Map};
     use std::collections::HashMap;
     use time::{macros::date, Duration};
-    use tokio::test;
 
     #[test]
     async fn insert_report() -> Result<()> {

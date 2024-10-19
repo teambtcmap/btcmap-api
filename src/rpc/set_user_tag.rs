@@ -57,8 +57,9 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
 #[cfg(test)]
 mod test {
     use crate::Result;
+    use actix_web::test;
 
-    #[tokio::test]
+    #[test]
     async fn patch_tags() -> Result<()> {
         //let state = mock_state().await;
         //let user = User::insert(1, &OsmUser::mock(), &state.conn)?;

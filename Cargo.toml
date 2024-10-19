@@ -11,56 +11,64 @@ panic = "abort"
 
 [dependencies]
 
+# This is the main dependency, providing a webserver and core infra
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
 actix-web = { version = "4.9.0", default-features = false, features = ["macros", "compress-brotli"] }
 
-# https://github.com/rusqlite/rusqlite/releases
-rusqlite = { version = "0.31.0", default-features = false, features = ["bundled", "time", "serde_json"] }
-
-# https://github.com/seanmonstar/reqwest/releases
-reqwest = { version = "0.12.8", default-features = false, features = ["rustls-tls", "json"] }
-
-# https://github.com/serde-rs/serde/releases
-serde = { version = "1.0.210", default-features = false, features = ["derive"] }
-
-# https://github.com/serde-rs/json/releases
-serde_json = { version = "1.0.128", default-features = false }
-
-# https://github.com/time-rs/time/releases
-time = { version = "0.3.36", default-features = false, features = ["macros", "serde-well-known"] }
-
-# https://github.com/tokio-rs/tracing/releases
-tracing = { version = "0.1.40", default-features = false }
-
-# https://github.com/tokio-rs/tracing/releases
-tracing-subscriber = { version = "0.3.18", default-features = false, features = ["json", "env-filter", "fmt"] }
-
-# https://github.com/Michael-F-Bryan/include_dir/tags
-include_dir = { version = "0.7.4", default-features = false }
-
-# https://github.com/tokio-rs/tokio/releases
-tokio = { version = "1.40.0", default-features = false, features = ["macros"] }
-
-# https://github.com/georust/geojson/tags
-geojson = { version = "0.24.1", default-features = false, features = ["geo-types"] }
-
-# https://github.com/georust/geo/blob/main/geo/CHANGES.md
-geo = { version = "0.28.0", default-features = false }
-
-# https://github.com/rust-lang/futures-rs/releases
-futures-util = { version = "0.3.31", default-features = false }
-
-# https://github.com/hyperium/http/releases
-http = { version = "1.1.0", default-features = false }
-
-# https://github.com/bikeshedder/deadpool/blob/master/sqlite/CHANGELOG.md
-deadpool-sqlite = { version = "0.8.1", default-features = false, features = ["rt_tokio_1"] }
-
-# https://github.com/AaronErhardt/actix-governor/releases
-actix-governor = { version = "0.6.0", default-features = false }
-
+# JSON RPC support
 # https://crates.io/crates/jsonrpc-v2
 jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-web-v4-integration", "easy-errors"] }
 
+# Rate limiters
+# https://github.com/AaronErhardt/actix-governor/releases
+actix-governor = { version = "0.6.0", default-features = false }
+
+# We're using SQLite because it's portable and it requires no maintenance
+# SQLite is fast enough for our needs and we aren't aiming for infinite scalability
+# https://github.com/rusqlite/rusqlite/releases
+rusqlite = { version = "0.31.0", default-features = false, features = ["bundled", "time", "serde_json"] }
+
+# That's an industry standard for making HTTP requests
+# https://github.com/seanmonstar/reqwest/releases
+reqwest = { version = "0.12.8", default-features = false, features = ["rustls-tls", "json"] }
+
+# Used for mapping Rust structs to JSON via derive annotation
+# https://github.com/serde-rs/serde/releases
+serde = { version = "1.0.210", default-features = false, features = ["derive"] }
+
+# JSON is heavily used in this project
+# https://github.com/serde-rs/json/releases
+serde_json = { version = "1.0.128", default-features = false }
+
+# That's an industry starnard for working with time
+# TODO consider switching to std alternatives, if/when present
+# https://github.com/time-rs/time/releases
+time = { version = "0.3.36", default-features = false, features = ["macros", "serde-well-known"] }
+
+# Async logging infra
+# https://github.com/tokio-rs/tracing/releases
+tracing = { version = "0.1.40", default-features = false }
+
+# Async logging infra
+# https://github.com/tokio-rs/tracing/releases
+tracing-subscriber = { version = "0.3.18", default-features = false, features = ["json", "env-filter", "fmt"] }
+
+# Used to embed database migrations
+# https://github.com/Michael-F-Bryan/include_dir/tags
+include_dir = { version = "0.7.4", default-features = false }
+
+# Used for dealing with area bounds
+# https://github.com/georust/geojson/tags
+geojson = { version = "0.24.1", default-features = false, features = ["geo-types"] }
+
+# Used for dealing with area bounds
+# https://github.com/georust/geo/blob/main/geo/CHANGES.md
+geo = { version = "0.28.0", default-features = false }
+
+# We're wrapping blocking SQLite connections into an async pool
+# https://github.com/bikeshedder/deadpool/blob/master/sqlite/CHANGELOG.md
+deadpool-sqlite = { version = "0.8.1", default-features = false, features = ["rt_tokio_1"] }
+
+# Used to handle area icons
 # https://crates.io/crates/base64
-base64 = "0.22.1"
+base64 = { version = "0.22.1", default-features = false }
