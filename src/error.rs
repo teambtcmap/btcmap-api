@@ -18,7 +18,7 @@ pub enum Error {
     DeadpoolInteract(deadpool_sqlite::InteractError),
     DeadpoolConfig(deadpool_sqlite::ConfigError),
     DeadpoolBuild(deadpool_sqlite::BuildError),
-    HttpBadRequest(String),
+    InvalidInput(String),
     HttpUnauthorized(String),
     HttpConflict(String),
     Generic(String),
@@ -41,7 +41,7 @@ impl Display for Error {
             Error::DeadpoolInteract(err) => err.fmt(f),
             Error::DeadpoolConfig(err) => err.fmt(f),
             Error::DeadpoolBuild(err) => err.fmt(f),
-            Error::HttpBadRequest(err) => write!(f, "{}", err),
+            Error::InvalidInput(err) => write!(f, "{}", err),
             Error::HttpConflict(err) => write!(f, "{}", err),
             Error::HttpUnauthorized(err) => write!(f, "{}", err),
             Error::Generic(err) => write!(f, "{}", err),
@@ -136,7 +136,7 @@ impl From<base64::DecodeError> for Error {
 }
 
 pub fn query_error_handler(err: QueryPayloadError, _req: &HttpRequest) -> actix_web::Error {
-    Error::HttpBadRequest(format!("Invalid arguments: {err}")).into()
+    Error::InvalidInput(format!("Invalid arguments: {err}")).into()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -155,7 +155,7 @@ impl ResponseError for Error {
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Error::HttpBadRequest(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidInput(_) => StatusCode::BAD_REQUEST,
             Error::HttpUnauthorized(_) => StatusCode::UNAUTHORIZED,
             Error::NotFound(_) => StatusCode::NOT_FOUND,
             Error::HttpConflict(_) => StatusCode::CONFLICT,

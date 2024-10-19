@@ -97,7 +97,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<G
     let r#type = id_parts[0].clone();
     let id = id_parts[1]
         .parse::<i64>()
-        .map_err(|_| Error::HttpBadRequest("Invalid ID".into()))?;
+        .map_err(|_| Error::InvalidInput("Invalid ID".into()))?;
 
     pool.get()
         .await?

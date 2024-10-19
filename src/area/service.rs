@@ -15,24 +15,24 @@ use time::OffsetDateTime;
 
 pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     if !tags.contains_key("geo_json") {
-        return Err(Error::HttpBadRequest("geo_json tag is missing".into()));
+        return Err(Error::InvalidInput("geo_json tag is missing".into()));
     }
     let url_alias = tags
         .get("url_alias")
-        .ok_or(Error::HttpBadRequest(
+        .ok_or(Error::InvalidInput(
             "Mandatory tag is missing: url_alias".into(),
         ))?
         .as_str()
-        .ok_or(Error::HttpBadRequest(
+        .ok_or(Error::InvalidInput(
             "This tag should be a string: url_alias".into(),
         ))?;
     let geo_json = tags
         .get("geo_json")
-        .ok_or(Error::HttpBadRequest(
+        .ok_or(Error::InvalidInput(
             "Mandatory tag is missing: geo_json".into(),
         ))?
         .as_object()
-        .ok_or(Error::HttpBadRequest(
+        .ok_or(Error::InvalidInput(
             "This tag should be an object: geo_json".into(),
         ))?;
     let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json).unwrap().parse();
@@ -77,9 +77,7 @@ pub fn patch_tags(id_or_alias: &str, tags: Map<String, Value>, conn: &Connection
 
 pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection) -> Result<Area> {
     if tag_name == "geo_json" {
-        return Err(Error::HttpBadRequest(
-            "geo_json tag can't be removed".into(),
-        ));
+        return Err(Error::InvalidInput("geo_json tag can't be removed".into()));
     }
     let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
     Ok(Area::remove_tag(area.id, tag_name, conn)?.unwrap())
