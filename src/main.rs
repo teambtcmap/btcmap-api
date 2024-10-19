@@ -55,8 +55,8 @@ async fn main() -> Result<()> {
         .await??;
 
     let rate_limit_conf = GovernorConfigBuilder::default()
-        .seconds_per_request(1)
-        .burst_size(30)
+        .milliseconds_per_request(500)
+        .burst_size(50)
         .key_extractor(get_key_extractor())
         .finish()
         .unwrap();
