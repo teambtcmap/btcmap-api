@@ -1,8 +1,6 @@
-use crate::Result;
+use crate::{data_dir_file, Result};
 use actix_web::HttpRequest;
-use dirs::data_dir;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
-use std::{fs::create_dir, path::PathBuf};
 use time::OffsetDateTime;
 
 #[allow(dead_code)]
@@ -42,7 +40,7 @@ pub fn log_sync_api_request(
 }
 
 pub fn open_conn() -> Result<Connection> {
-    let conn = Connection::open(db_path()?)?;
+    let conn = Connection::open(data_dir_file("firewall-v1.db")?)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.execute(
@@ -61,20 +59,6 @@ pub fn open_conn() -> Result<Connection> {
         [],
     )?;
     Ok(conn)
-}
-
-pub fn db_path() -> Result<PathBuf> {
-    let Some(data_dir) = data_dir() else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Can't find data directory",
-        ))?
-    };
-    let data_dir = data_dir.join("btcmap");
-    if !data_dir.exists() {
-        create_dir(&data_dir)?;
-    }
-    Ok(data_dir.join("firewall-v1.db"))
 }
 
 fn insert_usage_log(

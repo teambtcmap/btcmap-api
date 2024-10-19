@@ -15,6 +15,8 @@ mod test;
 mod tile;
 mod user;
 use std::env;
+use std::fs::create_dir_all;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -209,6 +211,17 @@ async fn main() -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+pub fn data_dir_file(name: &str) -> Result<PathBuf> {
+    #[allow(deprecated)]
+    let data_dir = std::env::home_dir()
+        .ok_or("Home directory does not exist")?
+        .join(".local/share/btcmap");
+    if !data_dir.exists() {
+        create_dir_all(&data_dir)?;
+    }
+    Ok(data_dir.join(name))
 }
 
 #[cfg(not(debug_assertions))]

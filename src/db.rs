@@ -1,3 +1,4 @@
+use crate::data_dir_file;
 use crate::Result;
 use deadpool_sqlite::Config;
 use deadpool_sqlite::Hook;
@@ -7,7 +8,6 @@ use include_dir::include_dir;
 use include_dir::Dir;
 use rusqlite::Connection;
 use std::fmt;
-use std::fs::create_dir_all;
 use tracing::info;
 use tracing::warn;
 
@@ -34,7 +34,7 @@ pub fn migrate(db: &mut Connection) -> Result<()> {
 }
 
 pub fn pool() -> Result<Pool> {
-    Ok(Config::new(get_file_path()?)
+    Ok(Config::new(data_dir_file("btcmap.db")?)
         .builder(Runtime::Tokio1)?
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let conn = conn.lock().unwrap();
@@ -45,20 +45,9 @@ pub fn pool() -> Result<Pool> {
 }
 
 pub fn open_connection() -> Result<Connection> {
-    let conn = Connection::open(get_file_path()?)?;
+    let conn = Connection::open(data_dir_file("btcmap.db")?)?;
     init_pragmas(&conn);
     Ok(conn)
-}
-
-pub fn get_file_path() -> Result<PathBuf> {
-    #[allow(deprecated)]
-    let data_dir = std::env::home_dir()
-        .ok_or("Home directory does not exist")?
-        .join(".local/share/btcmap");
-    if !data_dir.exists() {
-        create_dir_all(&data_dir)?;
-    }
-    Ok(data_dir.join("btcmap.db"))
 }
 
 fn init_pragmas(conn: &Connection) {
