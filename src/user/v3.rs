@@ -84,7 +84,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetI
         .interact(move |conn| User::select_by_id(id, conn))
         .await??
         .map(|it| it.into())
-        .ok_or(Error::HttpNotFound(format!(
+        .ok_or(Error::NotFound(format!(
             "User with id = {id} doesn't exist"
         )))
 }

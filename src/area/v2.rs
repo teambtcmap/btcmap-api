@@ -98,7 +98,7 @@ pub async fn get_by_url_alias(
         .await?
         .interact(move |conn| Area::select_by_alias(&cloned_url_alias, conn))
         .await??;
-    area.ok_or(Error::HttpNotFound(format!(
+    area.ok_or(Error::NotFound(format!(
         "Area with url_alias = {url_alias} doesn't exist"
     )))
     .map(|it| it.into())

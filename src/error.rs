@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Error {
+    NotFound(String),
     IO(std::io::Error),
     Rusqlite(rusqlite::Error),
     Reqwest(reqwest::Error),
@@ -19,7 +20,6 @@ pub enum Error {
     DeadpoolBuild(deadpool_sqlite::BuildError),
     HttpBadRequest(String),
     HttpUnauthorized(String),
-    HttpNotFound(String),
     HttpConflict(String),
     Generic(String),
     Parse(time::error::Parse),
@@ -29,6 +29,7 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Error::NotFound(err) => write!(f, "{}", err),
             Error::IO(err) => err.fmt(f),
             Error::Rusqlite(err) => err.fmt(f),
             Error::Reqwest(err) => err.fmt(f),
@@ -41,7 +42,6 @@ impl Display for Error {
             Error::DeadpoolConfig(err) => err.fmt(f),
             Error::DeadpoolBuild(err) => err.fmt(f),
             Error::HttpBadRequest(err) => write!(f, "{}", err),
-            Error::HttpNotFound(err) => write!(f, "{}", err),
             Error::HttpConflict(err) => write!(f, "{}", err),
             Error::HttpUnauthorized(err) => write!(f, "{}", err),
             Error::Generic(err) => write!(f, "{}", err),
@@ -157,7 +157,7 @@ impl ResponseError for Error {
         match self {
             Error::HttpBadRequest(_) => StatusCode::BAD_REQUEST,
             Error::HttpUnauthorized(_) => StatusCode::UNAUTHORIZED,
-            Error::HttpNotFound(_) => StatusCode::NOT_FOUND,
+            Error::NotFound(_) => StatusCode::NOT_FOUND,
             Error::HttpConflict(_) => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }

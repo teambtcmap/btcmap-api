@@ -74,9 +74,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<G
         .await?
         .interact(move |conn| Area::select_by_id_or_alias(&id_clone, conn))
         .await??
-        .ok_or(Error::HttpNotFound(format!(
-            "Area with id {id} doesn't exist"
-        )))
+        .ok_or(Error::NotFound(format!("Area with id {id} doesn't exist")))
         .map(|it| it.into())
 }
 

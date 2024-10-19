@@ -104,7 +104,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<G
         .interact(move |conn| Element::select_by_osm_type_and_id(&r#type, id, conn))
         .await??
         .map(|it| it.into())
-        .ok_or(Error::HttpNotFound(format!(
+        .ok_or(Error::NotFound(format!(
             "Element with id {id} doesn't exist"
         )))
 }
