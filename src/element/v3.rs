@@ -92,7 +92,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<G
 #[cfg(test)]
 mod test {
     use crate::element::Element;
-    use crate::error::{self, ApiError};
+    use crate::error::{self, SyncAPIErrorResponseBody};
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::Result;
@@ -112,7 +112,8 @@ mod test {
         )
         .await;
         let req = TestRequest::get().uri("/?limit=1").to_request();
-        let res: ApiError = test::try_call_and_read_body_json(&app, req).await.unwrap();
+        let res: SyncAPIErrorResponseBody =
+            test::try_call_and_read_body_json(&app, req).await.unwrap();
         assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
         assert!(res.message.contains("missing field `updated_since`"));
         Ok(())
@@ -130,7 +131,8 @@ mod test {
         let req = TestRequest::get()
             .uri("/?updated_since=2020-01-01T00:00:00Z")
             .to_request();
-        let res: ApiError = test::try_call_and_read_body_json(&app, req).await.unwrap();
+        let res: SyncAPIErrorResponseBody =
+            test::try_call_and_read_body_json(&app, req).await.unwrap();
         assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
         assert!(res.message.contains("missing field `limit`"));
         Ok(())

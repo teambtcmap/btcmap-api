@@ -37,12 +37,10 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
         ))?;
     let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json).unwrap().parse();
     if geo_json.is_err() {
-        Err(Error::HttpConflict("Invalid geo_json".into()))?
+        Err(Error::InvalidInput("Invalid geo_json".into()))?
     }
     if Area::select_by_alias(url_alias, &conn)?.is_some() {
-        Err(Error::HttpConflict(
-            "This url_alias is already in use".into(),
-        ))?
+        Err(Error::Conflict("This url_alias is already in use".into()))?
     }
     let area = Area::insert(geo_json.unwrap(), tags, &conn)?.unwrap();
     let area_elements = element::service::find_in_area(&area, conn)?;

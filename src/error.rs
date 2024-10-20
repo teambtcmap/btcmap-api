@@ -7,21 +7,21 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug)]
 pub enum Error {
     NotFound(String),
+    Unauthorized(String),
+    InvalidInput(String),
+    Conflict(String),
+    OsmApi(String),
+    OverpassApi(String),
+    Other(String),
     IO(std::io::Error),
     Rusqlite(rusqlite::Error),
     Reqwest(reqwest::Error),
     SerdeJson(serde_json::Error),
     TimeFormat(time::error::Format),
-    OsmApi(String),
-    OverpassApi(String),
     DeadpoolPool(deadpool_sqlite::PoolError),
     DeadpoolInteract(deadpool_sqlite::InteractError),
     DeadpoolConfig(deadpool_sqlite::ConfigError),
     DeadpoolBuild(deadpool_sqlite::BuildError),
-    InvalidInput(String),
-    HttpUnauthorized(String),
-    HttpConflict(String),
-    Generic(String),
     Parse(time::error::Parse),
     Decode(base64::DecodeError),
 }
@@ -30,6 +30,12 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::NotFound(err) => write!(f, "{}", err),
+            Error::InvalidInput(err) => write!(f, "{}", err),
+            Error::Conflict(err) => write!(f, "{}", err),
+            Error::Unauthorized(err) => write!(f, "{}", err),
+            Error::Other(err) => write!(f, "{}", err),
+            Error::Parse(err) => write!(f, "{}", err),
+            Error::Decode(err) => write!(f, "{}", err),
             Error::IO(err) => err.fmt(f),
             Error::Rusqlite(err) => err.fmt(f),
             Error::Reqwest(err) => err.fmt(f),
@@ -41,31 +47,19 @@ impl Display for Error {
             Error::DeadpoolInteract(err) => err.fmt(f),
             Error::DeadpoolConfig(err) => err.fmt(f),
             Error::DeadpoolBuild(err) => err.fmt(f),
-            Error::InvalidInput(err) => write!(f, "{}", err),
-            Error::HttpConflict(err) => write!(f, "{}", err),
-            Error::HttpUnauthorized(err) => write!(f, "{}", err),
-            Error::Generic(err) => write!(f, "{}", err),
-            Error::Parse(err) => write!(f, "{}", err),
-            Error::Decode(err) => write!(f, "{}", err),
         }
-    }
-}
-
-impl std::error::Error for Error {
-    fn description(&self) -> &str {
-        "TODO"
     }
 }
 
 impl From<&str> for Error {
     fn from(str: &str) -> Self {
-        Error::Generic(str.to_owned())
+        Error::Other(str.to_owned())
     }
 }
 
 impl From<String> for Error {
     fn from(str: String) -> Self {
-        Error::Generic(str)
+        Error::Other(str)
     }
 }
 
@@ -140,25 +134,31 @@ pub fn query_error_handler(err: QueryPayloadError, _req: &HttpRequest) -> actix_
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ApiError {
+pub struct SyncAPIErrorResponseBody {
     pub http_code: u16,
     pub message: String,
 }
 
+impl SyncAPIErrorResponseBody {
+    fn new(http_code: u16, message: String) -> Self {
+        SyncAPIErrorResponseBody { http_code, message }
+    }
+}
+
 impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(ApiError {
-            http_code: self.status_code().as_u16(),
-            message: self.to_string(),
-        })
+        HttpResponse::build(self.status_code()).json(SyncAPIErrorResponseBody::new(
+            self.status_code().as_u16(),
+            self.to_string(),
+        ))
     }
 
     fn status_code(&self) -> StatusCode {
         match self {
             Error::InvalidInput(_) => StatusCode::BAD_REQUEST,
-            Error::HttpUnauthorized(_) => StatusCode::UNAUTHORIZED,
+            Error::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Error::NotFound(_) => StatusCode::NOT_FOUND,
-            Error::HttpConflict(_) => StatusCode::CONFLICT,
+            Error::Conflict(_) => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
