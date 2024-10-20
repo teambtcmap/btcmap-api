@@ -17,7 +17,7 @@ actix-web = { version = "4.9.0", default-features = false, features = ["macros",
 
 # JSON RPC support
 # https://crates.io/crates/jsonrpc-v2
-jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-web-v4-integration", "easy-errors"] }
+jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-web-v4-integration"] }
 
 # Rate limiters
 # https://github.com/AaronErhardt/actix-governor/releases
