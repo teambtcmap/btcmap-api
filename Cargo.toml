@@ -3,6 +3,9 @@ name = "btcmap-api"
 version = "0.1.0"
 edition = "2021"
 
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
 [profile.release]
 codegen-units = 1
 lto = "fat"
