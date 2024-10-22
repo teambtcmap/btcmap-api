@@ -1,5 +1,12 @@
+use std::time::Instant;
+
 use crate::{data_dir_file, Result};
-use actix_web::HttpRequest;
+use actix_web::{
+    body::MessageBody,
+    dev::{ServiceRequest, ServiceResponse},
+    middleware::Next,
+    Error, HttpMessage, HttpRequest,
+};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use time::OffsetDateTime;
 
@@ -14,7 +21,44 @@ struct UsageLog {
     time_ms: i64,
 }
 
-pub fn log_sync_api_request(
+pub struct RequestExtension {
+    pub endpoint: String,
+    pub entities: i64,
+}
+
+impl RequestExtension {
+    pub fn new(endpoint: &str, entities: i64) -> Self {
+        RequestExtension {
+            endpoint: endpoint.into(),
+            entities,
+        }
+    }
+}
+
+pub async fn log(
+    req: ServiceRequest,
+    next: Next<impl MessageBody>,
+) -> Result<ServiceResponse<impl MessageBody>, Error> {
+    let started_at = Instant::now();
+    let res = next.call(req).await;
+    let Ok(res) = res else { return res };
+    let extensions = res.request().extensions();
+    let Some(extension) = extensions.get::<RequestExtension>() else {
+        drop(extensions);
+        return Ok(res);
+    };
+    let time_ms = Instant::now().duration_since(started_at).as_millis() as i64;
+    log_sync_api_request(
+        res.request(),
+        &extension.endpoint.clone(),
+        extension.entities,
+        time_ms,
+    )?;
+    drop(extensions);
+    Ok(res)
+}
+
+fn log_sync_api_request(
     req: &HttpRequest,
     endpoint_id: &str,
     entities: i64,

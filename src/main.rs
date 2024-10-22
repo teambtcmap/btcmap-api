@@ -72,6 +72,7 @@ async fn main() -> Result<()> {
 
     HttpServer::new(move || {
         App::new()
+            .wrap(from_fn(log::log))
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(pool.clone()))

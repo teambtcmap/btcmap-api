@@ -1,5 +1,5 @@
 use crate::element::Element;
-use crate::log;
+use crate::log::RequestExtension;
 use crate::osm::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -9,6 +9,7 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use actix_web::web::Redirect;
 use actix_web::Either;
+use actix_web::HttpMessage;
 use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
@@ -16,7 +17,6 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -69,7 +69,6 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Arc<Pool>>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
-    let started_at = Instant::now();
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
             Redirect::to("https://static.btcmap.org/api/v2/elements.json").permanent(),
@@ -85,8 +84,8 @@ pub async fn get(
         .await??;
     let elements_len = elements.len() as i64;
     let res = Either::Left(Json(elements.into_iter().map(|it| it.into()).collect()));
-    let time_ms = Instant::now().duration_since(started_at).as_millis() as i64;
-    log::log_sync_api_request(&req, "v2/elements", elements_len, time_ms)?;
+    req.extensions_mut()
+        .insert(RequestExtension::new("v2/elements", elements_len));
     Ok(res)
 }
 
