@@ -149,6 +149,7 @@ mod test {
         let area = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
+            "test",
             &state.conn,
         )?
         .unwrap();
@@ -172,18 +173,21 @@ mod test {
         let area_1 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
+            "test",
             &state.conn,
         )?
         .unwrap();
         let area_2 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
+            "test",
             &state.conn,
         )?
         .unwrap();
         let _area_3 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
+            "test",
             &state.conn,
         )?
         .unwrap();
@@ -207,6 +211,7 @@ mod test {
         let area_1 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
+            "test",
             &state.conn,
         )?
         .unwrap();
@@ -214,6 +219,7 @@ mod test {
         let area_2 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
+            "test",
             &state.conn,
         )?
         .unwrap();

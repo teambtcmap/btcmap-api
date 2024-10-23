@@ -215,7 +215,12 @@ mod test {
         let state = mock_state().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
-        Area::insert(GeoJson::Feature(Feature::default()), area_tags, &state.conn)?;
+        Area::insert(
+            GeoJson::Feature(Feature::default()),
+            area_tags,
+            "test",
+            &state.conn,
+        )?;
         for _ in 1..100 {
             Report::insert(1, &date!(2023 - 11 - 12), &Map::new(), &state.conn)?;
         }

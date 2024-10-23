@@ -133,7 +133,12 @@ mod tests {
         let state = mock_state().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
+        Area::insert(
+            GeoJson::Feature(Feature::default()),
+            tags,
+            "test",
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -154,14 +159,21 @@ mod tests {
         Area::insert(
             GeoJson::Feature(Feature::default()),
             tags.clone(),
+            "test",
             &state.conn,
         )?;
         Area::insert(
             GeoJson::Feature(Feature::default()),
             tags.clone(),
+            "test",
             &state.conn,
         )?;
-        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
+        Area::insert(
+            GeoJson::Feature(Feature::default()),
+            tags,
+            "test",
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))
@@ -182,7 +194,12 @@ mod tests {
         let area_url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
-        Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
+        Area::insert(
+            GeoJson::Feature(Feature::default()),
+            tags,
+            "test",
+            &state.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(state.pool))

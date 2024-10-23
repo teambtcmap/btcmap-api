@@ -17,7 +17,8 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     if !tags.contains_key("geo_json") {
         return Err(Error::InvalidInput("geo_json tag is missing".into()));
     }
-    let url_alias = tags
+    let cloned_tags = tags.clone();
+    let url_alias = cloned_tags
         .get("url_alias")
         .ok_or(Error::InvalidInput(
             "Mandatory tag is missing: url_alias".into(),
@@ -42,7 +43,7 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     if Area::select_by_alias(url_alias, &conn)?.is_some() {
         Err(Error::Conflict("This url_alias is already in use".into()))?
     }
-    let area = Area::insert(geo_json.unwrap(), tags, &conn)?.unwrap();
+    let area = Area::insert(geo_json.unwrap(), tags, url_alias, &conn)?.unwrap();
     let area_elements = element::service::find_in_area(&area, conn)?;
     element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
@@ -255,6 +256,7 @@ mod test {
         let area = Area::insert(
             GeoJson::from_json_value(phuket_geo_json()).unwrap(),
             tags,
+            url_alias.as_str().unwrap(),
             &mut conn,
         )?
         .unwrap();
@@ -290,6 +292,7 @@ mod test {
         let area = Area::insert(
             GeoJson::from_json_value(phuket_geo_json()).unwrap(),
             tags.clone(),
+            url_alias.as_str().unwrap(),
             &mut conn,
         )?
         .unwrap();
@@ -304,7 +307,13 @@ mod test {
     #[test]
     fn soft_delete() -> Result<()> {
         let mut conn = mock_conn();
-        let area = Area::insert(GeoJson::Feature(Feature::default()), Map::new(), &conn)?.unwrap();
+        let area = Area::insert(
+            GeoJson::Feature(Feature::default()),
+            Map::new(),
+            "test",
+            &conn,
+        )?
+        .unwrap();
         super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
@@ -327,6 +336,7 @@ mod test {
         let area = Area::insert(
             GeoJson::from_json_value(phuket_geo_json()).unwrap(),
             tags,
+            url_alias.as_str().unwrap(),
             &mut conn,
         )?
         .unwrap();
