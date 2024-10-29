@@ -47,14 +47,11 @@ pub async fn log(
         drop(extensions);
         return Ok(res);
     };
-    let time_ms = Instant::now().duration_since(started_at).as_millis() as i64;
-    log_sync_api_request(
-        res.request(),
-        &extension.endpoint.clone(),
-        extension.entities,
-        time_ms,
-    )?;
+    let endpoint = extension.endpoint.clone();
+    let entities = extension.entities;
     drop(extensions);
+    let time_ms = Instant::now().duration_since(started_at).as_millis() as i64;
+    log_sync_api_request(res.request(), &endpoint, entities, time_ms)?;
     Ok(res)
 }
 

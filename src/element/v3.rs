@@ -80,10 +80,9 @@ pub async fn get(
             Element::select_updated_since(&args.updated_since, Some(args.limit), conn)
         })
         .await??;
-    let res: Json<Vec<GetItem>> = Json(elements.into_iter().map(|it| it.into()).collect());
     req.extensions_mut()
-        .insert(RequestExtension::new("v3/elements", res.len() as i64));
-    Ok(res)
+        .insert(RequestExtension::new("v3/elements", elements.len() as i64));
+    Ok(Json(elements.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
