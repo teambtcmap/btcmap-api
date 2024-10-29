@@ -1,4 +1,5 @@
 use crate::element::Element;
+use crate::log::RequestExtension;
 use crate::osm::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -6,6 +7,8 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use actix_web::HttpMessage;
+use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
@@ -65,7 +68,11 @@ impl Into<Json<GetItem>> for Element {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(
+    req: HttpRequest,
+    args: Query<GetArgs>,
+    pool: Data<Arc<Pool>>,
+) -> Result<Json<Vec<GetItem>>, Error> {
     let elements = pool
         .get()
         .await?
@@ -73,7 +80,10 @@ pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec
             Element::select_updated_since(&args.updated_since, Some(args.limit), conn)
         })
         .await??;
-    Ok(Json(elements.into_iter().map(|it| it.into()).collect()))
+    let res: Json<Vec<GetItem>> = Json(elements.into_iter().map(|it| it.into()).collect());
+    req.extensions_mut()
+        .insert(RequestExtension::new("v3/elements", res.len() as i64));
+    Ok(res)
 }
 
 #[get("{id}")]
