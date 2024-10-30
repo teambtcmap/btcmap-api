@@ -1,3 +1,4 @@
+use crate::log::RequestExtension;
 use crate::osm::osm::OsmUser;
 use crate::user::User;
 use crate::Error;
@@ -6,6 +7,8 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
+use actix_web::HttpMessage;
+use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
@@ -65,7 +68,11 @@ impl Into<Json<GetItem>> for User {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(
+    req: HttpRequest,
+    args: Query<GetArgs>,
+    pool: Data<Arc<Pool>>,
+) -> Result<Json<Vec<GetItem>>, Error> {
     let users = pool
         .get()
         .await?
@@ -73,6 +80,8 @@ pub async fn get(args: Query<GetArgs>, pool: Data<Arc<Pool>>) -> Result<Json<Vec
             User::select_updated_since(&args.updated_since, Some(args.limit), conn)
         })
         .await??;
+    req.extensions_mut()
+        .insert(RequestExtension::new("v3/users", users.len() as i64));
     Ok(Json(users.into_iter().map(|it| it.into()).collect()))
 }
 
