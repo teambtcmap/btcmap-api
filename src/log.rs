@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use crate::{data_dir_file, Result};
 use actix_web::{
     body::MessageBody,
@@ -8,6 +6,7 @@ use actix_web::{
     Error, HttpMessage, HttpRequest,
 };
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use std::time::Instant;
 use time::OffsetDateTime;
 
 #[allow(dead_code)]
@@ -55,6 +54,10 @@ pub async fn log(
     Ok(res)
 }
 
+thread_local! {
+    static CONN: Connection = open_conn().unwrap();
+}
+
 fn log_sync_api_request(
     req: &HttpRequest,
     endpoint_id: &str,
@@ -66,18 +69,19 @@ fn log_sync_api_request(
         return Ok(());
     };
     let today = OffsetDateTime::now_utc().date().to_string();
-    let conn = open_conn()?;
-    match select_usage_log(&today, &addr, endpoint_id, &conn)? {
-        Some(log) => update_usage_log(
-            log.id,
-            log.reqests + 1,
-            log.entities + entities,
-            log.time_ms + time_ms,
-            &conn,
-        ),
-        None => insert_usage_log(&today, &addr, endpoint_id, 1, entities, time_ms, &conn),
-    }?;
-    Ok(())
+    CONN.with(|conn| {
+        match select_usage_log(&today, &addr, endpoint_id, &conn)? {
+            Some(log) => update_usage_log(
+                log.id,
+                log.reqests + 1,
+                log.entities + entities,
+                log.time_ms + time_ms,
+                &conn,
+            ),
+            None => insert_usage_log(&today, &addr, endpoint_id, 1, entities, time_ms, &conn),
+        }?;
+        Ok(())
+    })
 }
 
 pub fn open_conn() -> Result<Connection> {
