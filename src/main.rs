@@ -51,10 +51,7 @@ async fn main() -> Result<()> {
     // All the worker threads share a single connection pool
     let pool = Arc::new(db::pool()?);
 
-    pool.get()
-        .await?
-        .interact(|mut conn| db::migrate(&mut conn))
-        .await??;
+    pool.get().await?.interact(db::migrate).await??;
 
     let rate_limit_conf = GovernorConfigBuilder::default()
         .milliseconds_per_request(500)
@@ -245,7 +242,7 @@ impl KeyExtractor for RealIpKeyExtractor {
     fn extract(&self, req: &ServiceRequest) -> Result<Self::Key, Self::KeyExtractionError> {
         req.headers()
             .get("x-forwarded-for")
-            .map(|it| it.clone())
+            .cloned()
             .ok_or_else(|| {
                 SimpleKeyExtractionError::new("Could not extract real IP address from request")
             })

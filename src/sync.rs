@@ -69,7 +69,7 @@ pub async fn sync_deleted_elements(
         )?);
     }
     for event in &res {
-        event::service::on_new_event(&event, conn).await?;
+        event::service::on_new_event(event, conn).await?;
     }
     Ok(res)
 }
@@ -113,7 +113,7 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64) -> Result<OsmElement> {
             );
             error!(message);
             discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
-            Err(Error::OverpassApi(message.into()))?
+            Err(Error::OverpassApi(message))?
         }
     }
     Ok(osm_element)
@@ -153,18 +153,13 @@ pub async fn sync_updated_elements(
         }
         let sp = conn.savepoint()?;
         if fresh_element.changeset != cached_element.overpass_data.changeset {
-            let event = Event::insert(
-                user_id.unwrap().try_into().unwrap(),
-                cached_element.id,
-                "update",
-                &sp,
-            )?;
+            let event = Event::insert(user_id.unwrap(), cached_element.id, "update", &sp)?;
             res.push(event);
         } else {
             warn!("Changeset ID is identical, skipped user event generation");
         }
         info!("Updating osm_json");
-        let mut updated_element = cached_element.set_overpass_data(&fresh_element, &sp)?;
+        let mut updated_element = cached_element.set_overpass_data(fresh_element, &sp)?;
         let new_android_icon = updated_element.overpass_data.generate_android_icon();
         let old_android_icon = cached_element
             .tag("icon:android")
@@ -184,7 +179,7 @@ pub async fn sync_updated_elements(
         sp.commit()?;
     }
     for event in &res {
-        event::service::on_new_event(&event, conn).await?;
+        event::service::on_new_event(event, conn).await?;
     }
     Ok(res)
 }
@@ -210,13 +205,8 @@ pub async fn sync_new_elements(
                     insert_user_if_not_exists(user_id, conn).await?;
                 }
                 let sp = conn.savepoint()?;
-                let element = Element::insert(&fresh_element, &sp)?;
-                let event = Event::insert(
-                    user_id.unwrap().try_into().unwrap(),
-                    element.id,
-                    "create",
-                    &sp,
-                )?;
+                let element = Element::insert(fresh_element, &sp)?;
+                let event = Event::insert(user_id.unwrap(), element.id, "create", &sp)?;
                 res.push(event);
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
@@ -236,7 +226,7 @@ pub async fn sync_new_elements(
         }
     }
     for event in &res {
-        event::service::on_new_event(&event, conn).await?;
+        event::service::on_new_event(event, conn).await?;
     }
     Ok(res)
 }
@@ -247,7 +237,7 @@ async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()
         return Ok(());
     }
     match osm::get_user(user_id).await? {
-        Some(user) => User::insert(user_id, &user, &conn)?,
+        Some(user) => User::insert(user_id, &user, conn)?,
         None => Err(Error::OsmApi(format!(
             "User with id = {user_id} doesn't exist on OSM"
         )))?,

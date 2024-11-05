@@ -43,7 +43,7 @@ pub async fn check_if_banned(
         .unwrap()?;
     match current_ban {
         Some(current_ban) => {
-            return Err(actix_web::error::ErrorForbidden(format!(
+            Err(actix_web::error::ErrorForbidden(format!(
                 "You are banned for the following reason: {}. You can contact us by the following email for more details: support@btcmap.org.",
                 current_ban.reason,
             )))?

@@ -15,14 +15,14 @@ pub struct RpcArea {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<RpcArea> for Area {
-    fn into(self) -> RpcArea {
+impl From<Area> for RpcArea {
+    fn from(val: Area) -> Self {
         RpcArea {
-            id: self.id,
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            id: val.id,
+            tags: val.tags,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
