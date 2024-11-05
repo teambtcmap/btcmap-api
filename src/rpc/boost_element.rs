@@ -4,7 +4,6 @@ use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::Value;
-use std::sync::Arc;
 use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
 use tracing::info;
 
@@ -17,7 +16,7 @@ pub struct Args {
     pub days: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Element> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let element = pool
         .get()

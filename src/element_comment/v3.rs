@@ -11,7 +11,6 @@ use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
-use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -77,7 +76,7 @@ impl Into<Json<GetItem>> for ElementComment {
 pub async fn get(
     req: HttpRequest,
     args: Query<GetArgs>,
-    pool: Data<Arc<Pool>>,
+    pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
     let element_comments = pool
         .get()
@@ -96,7 +95,7 @@ pub async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
     let id_clone = id.clone();
     pool.get()
         .await?

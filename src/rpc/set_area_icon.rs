@@ -5,7 +5,7 @@ use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
 use serde_json::Value;
-use std::{fs::OpenOptions, io::Write, sync::Arc};
+use std::{fs::OpenOptions, io::Write};
 
 const NAME: &str = "set_area_icon";
 
@@ -17,7 +17,7 @@ pub struct Args {
     pub icon_ext: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<RpcArea> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_args_id = args.id.clone();
     let area = pool

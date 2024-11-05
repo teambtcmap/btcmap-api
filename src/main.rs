@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
             .wrap(from_fn(log::middleware))
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
-            .app_data(Data::new(pool.clone()))
+            .app_data(Data::from(pool.clone()))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
                 service("rpc").guard(actix_web::guard::Post()).finish(

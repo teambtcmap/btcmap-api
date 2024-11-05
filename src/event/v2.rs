@@ -15,7 +15,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
@@ -71,7 +70,7 @@ impl Into<Json<GetItem>> for Event {
 pub async fn get(
     req: HttpRequest,
     args: Query<GetArgs>,
-    pool: Data<Arc<Pool>>,
+    pool: Data<Pool>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
@@ -100,7 +99,7 @@ pub async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
     pool.get()
         .await?

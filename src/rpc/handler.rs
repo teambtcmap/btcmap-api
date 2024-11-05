@@ -25,7 +25,7 @@ struct ResponseBody {}
 pub async fn handle(
     req: HttpRequest,
     body: Query<RequestBody>,
-    pool: Data<Arc<Pool>>,
+    pool: Data<Pool>,
 ) -> Result<Json<ResponseBody>> {
     let cloned_body = body.clone();
     let res = pool

@@ -13,7 +13,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
-use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -62,7 +61,7 @@ impl Into<Json<GetItem>> for Area {
 pub async fn get(
     req: HttpRequest,
     args: Query<GetArgs>,
-    pool: Data<Arc<Pool>>,
+    pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
     let areas = pool
         .get()
@@ -77,7 +76,7 @@ pub async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<String>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
     let id_clone = id.clone();
     pool.get()
         .await?

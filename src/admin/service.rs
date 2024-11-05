@@ -79,7 +79,7 @@ mod tests {
     }
 
     //#[get("")]
-    //async fn get(req: HttpRequest, pool: Data<Arc<Pool>>) -> Result<impl Responder, Error> {
+    //async fn get(req: HttpRequest, pool: Data<Pool>) -> Result<impl Responder, Error> {
     //    super::check(&req, &pool).await?;
     //    Ok(Response::ok())
     //}

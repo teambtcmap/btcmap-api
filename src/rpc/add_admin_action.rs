@@ -5,7 +5,6 @@ use crate::{
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tracing::info;
 
 const NAME: &str = "add_admin_action";
@@ -23,7 +22,7 @@ pub struct Res {
     pub allowed_actions: Vec<String>,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Res> {
     let source_admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_args_admin = args.admin.clone();
     let target_admin = pool

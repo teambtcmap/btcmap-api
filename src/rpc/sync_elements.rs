@@ -4,7 +4,6 @@ use crate::{db, discord, sync, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
-use std::sync::Arc;
 use tracing::info;
 
 const NAME: &str = "sync_elements";
@@ -14,7 +13,7 @@ pub struct Args {
     pub password: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<MergeResult> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<MergeResult> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let elements = overpass::query_bitcoin_merchants().await?;
     let mut conn = db::open_connection()?;

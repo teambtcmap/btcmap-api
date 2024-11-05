@@ -4,7 +4,6 @@ use crate::{admin, area, discord};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
-use std::sync::Arc;
 use tracing::info;
 
 const NAME: &str = "remove_area";
@@ -15,7 +14,7 @@ pub struct Args {
     pub id: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<RpcArea> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let area = pool
         .get()

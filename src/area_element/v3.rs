@@ -7,7 +7,6 @@ use actix_web::{
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -62,7 +61,7 @@ impl Into<Json<GetItem>> for AreaElement {
 pub async fn get(
     req: HttpRequest,
     args: Query<GetArgs>,
-    pool: Data<Arc<Pool>>,
+    pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>> {
     let area_elements = pool
         .get()
@@ -81,7 +80,7 @@ pub async fn get(
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Arc<Pool>>) -> Result<Json<GetItem>> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>> {
     let id_clone = id.clone();
     pool.get()
         .await?

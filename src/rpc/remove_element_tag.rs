@@ -4,7 +4,6 @@ use crate::{admin, element::model::Element};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
-use std::sync::Arc;
 use tracing::info;
 
 const NAME: &str = "remove_element_tag";
@@ -16,7 +15,7 @@ pub struct Args {
     pub tag: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Element> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_args_id = args.id.clone();
     let element = pool

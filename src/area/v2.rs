@@ -15,7 +15,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
-use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -64,7 +63,7 @@ impl Into<Json<GetItem>> for Area {
 pub async fn get(
     req: HttpRequest,
     args: Query<GetArgs>,
-    pool: Data<Arc<Pool>>,
+    pool: Data<Pool>,
 ) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
     if args.limit.is_none() && args.updated_since.is_none() {
         return Ok(Either::Right(
@@ -89,7 +88,7 @@ pub async fn get(
 #[get("{url_alias}")]
 pub async fn get_by_url_alias(
     url_alias: Path<String>,
-    pool: Data<Arc<Pool>>,
+    pool: Data<Pool>,
 ) -> Result<Json<GetItem>, Error> {
     let cloned_url_alias = url_alias.clone();
     let area = pool
