@@ -137,7 +137,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -166,7 +166,7 @@ mod test {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -192,7 +192,7 @@ mod test {
         Report::insert(1, &date!(2023 - 05 - 08), &Map::new(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -237,7 +237,7 @@ mod test {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

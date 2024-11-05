@@ -67,7 +67,7 @@ mod test {
         //    .password;
         //let app = test::init_service(
         //    App::new()
-        //        .app_data(Data::new(state.pool))
+        //        .app_data(Data::from(state.pool))
         //        .service(super::patch_tags),
         //)
         //.await;

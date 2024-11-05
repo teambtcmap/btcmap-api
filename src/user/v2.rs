@@ -118,7 +118,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -134,7 +134,7 @@ mod test {
         User::insert(1, &OsmUser::mock(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -159,7 +159,7 @@ mod test {
         }).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -178,7 +178,7 @@ mod test {
         User::insert(user_id, &OsmUser::mock(), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(super::get_by_id),
         )
         .await;

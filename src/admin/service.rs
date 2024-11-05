@@ -49,7 +49,7 @@ mod tests {
         //super::mock_admin("test", &state.pool).await;
         //let app = test::init_service(
         //    App::new()
-        //        .app_data(Data::new(state.pool))
+        //        .app_data(Data::from(state.pool))
         //        .service(scope("/").service(get)),
         //)
         //.await;
@@ -65,7 +65,7 @@ mod tests {
         //super::mock_admin("test", &state.pool).await;
         //let app = test::init_service(
         //    App::new()
-        //        .app_data(Data::new(state.pool))
+        //        .app_data(Data::from(state.pool))
         //        .service(scope("/").service(get)),
         //)
         //.await;

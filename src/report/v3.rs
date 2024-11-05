@@ -161,7 +161,7 @@ mod test {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -193,7 +193,7 @@ mod test {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -237,7 +237,7 @@ mod test {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -279,7 +279,7 @@ mod test {
             Report::_set_updated_at(report_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

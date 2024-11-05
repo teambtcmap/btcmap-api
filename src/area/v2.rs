@@ -117,7 +117,7 @@ mod tests {
         let state = mock_state().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -140,7 +140,7 @@ mod tests {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -175,7 +175,7 @@ mod tests {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -201,7 +201,7 @@ mod tests {
         )?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(state.pool))
+                .app_data(Data::from(state.pool))
                 .service(super::get_by_url_alias),
         )
         .await;

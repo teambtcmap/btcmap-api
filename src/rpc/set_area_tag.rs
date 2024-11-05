@@ -57,7 +57,7 @@ mod test {
         //)?;
         //let app = test::init_service(
         //    App::new()
-        //        .app_data(Data::new(state.pool))
+        //        .app_data(Data::from(state.pool))
         //        .service(super::patch),
         //)
         //.await;
@@ -82,7 +82,7 @@ mod test {
         //Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
         //let app = test::init_service(
         //    App::new()
-        //        .app_data(Data::new(state.pool))
+        //        .app_data(Data::from(state.pool))
         //        .service(super::patch),
         //)
         //.await;
