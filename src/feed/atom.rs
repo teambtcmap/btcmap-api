@@ -120,8 +120,8 @@ fn event_to_atom_entry(event: (Event, Element)) -> String {
     let event_id = event.0.id;
     let event_created_at = event.0.created_at.format(&Rfc3339).unwrap();
     let element_id = event.1.overpass_data.btcmap_id();
-    let title = format!("{}", xml_escape(event.1.name()));
-    let summary = format!("Check BTC Map for more details");
+    let title = xml_escape(event.1.name());
+    let summary = "Check BTC Map for more details";
     format!(
         r#"
             <entry>
@@ -134,7 +134,6 @@ fn event_to_atom_entry(event: (Event, Element)) -> String {
             </entry>
         "#
     )
-    .into()
 }
 
 #[get("/new-comments")]
@@ -235,7 +234,7 @@ fn comment_to_atom_entry(comment: (ElementComment, Element)) -> String {
     let comment_id = comment.0.id;
     let comment_created_at = comment.0.created_at.format(&Rfc3339).unwrap();
     let element_id = comment.1.overpass_data.btcmap_id();
-    let title = format!("{}", xml_escape(comment.0.comment.clone()));
+    let title = xml_escape(comment.0.comment.clone());
     let summary = xml_escape(comment.0.comment);
     format!(
         r#"
@@ -249,7 +248,6 @@ fn comment_to_atom_entry(comment: (ElementComment, Element)) -> String {
             </entry>
         "#
     )
-    .into()
 }
 
 fn xml_escape(str: String) -> String {

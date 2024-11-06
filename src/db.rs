@@ -62,7 +62,7 @@ fn init_pragmas(conn: &Connection) {
     // conn.pragma_update(None, "cache_size", 25000).unwrap();
 }
 
-fn execute_migrations(migrations: &Vec<Migration>, db: &mut Connection) -> Result<()> {
+fn execute_migrations(migrations: &[Migration], db: &mut Connection) -> Result<()> {
     let mut schema_ver: i16 =
         db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
             row.get(0)

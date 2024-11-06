@@ -66,15 +66,15 @@ fn log_summary(req: &HttpRequest, endpoint_id: &str, entities: i64, time_ns: i64
     };
     let today = OffsetDateTime::now_utc().date().to_string();
     CONN.with(|conn| {
-        match summary::select(&today, &addr, endpoint_id, &conn)? {
+        match summary::select(&today, addr, endpoint_id, conn)? {
             Some(entry) => summary::update(
                 entry.id,
                 entry.reqests + 1,
                 entry.entities + entities,
                 entry.time_ns + time_ns,
-                &conn,
+                conn,
             ),
-            None => summary::insert(&today, &addr, endpoint_id, 1, entities, time_ns, &conn),
+            None => summary::insert(&today, addr, endpoint_id, 1, entities, time_ns, conn),
         }?;
         Ok(())
     })

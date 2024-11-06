@@ -37,25 +37,24 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for Area {
-    fn into(self) -> GetItem {
+impl From<Area> for GetItem {
+    fn from(val: Area) -> Self {
         GetItem {
-            id: self.tags["url_alias"].as_str().unwrap().into(),
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self
+            id: val.tags["url_alias"].as_str().unwrap().into(),
+            tags: val.tags,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val
                 .deleted_at
                 .map(|it| it.format(&Rfc3339).unwrap())
-                .unwrap_or_default()
-                .into(),
+                .unwrap_or_default(),
         }
     }
 }
 
-impl Into<Json<GetItem>> for Area {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Area> for Json<GetItem> {
+    fn from(val: Area) -> Self {
+        Json(val.into())
     }
 }
 

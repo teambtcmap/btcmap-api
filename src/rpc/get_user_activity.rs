@@ -43,7 +43,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Vec<Res
             events
                 .into_iter()
                 .map(|it| {
-                    let cloned_id = it.element_id.clone();
+                    let cloned_id = it.element_id;
                     (it, Element::select_by_id(cloned_id, conn).unwrap().unwrap())
                     // TODO remove unwraps
                 })
@@ -55,9 +55,9 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Vec<Res
         .map(|it| Res {
             date: it.0.created_at,
             message: format!(
-                "{} {} element {}",
+                "{} {}d element {}",
                 user.osm_data.display_name,
-                format!("{}d", it.0.r#type),
+                it.0.r#type,
                 it.1.name(),
             ),
             osm_url: format!(

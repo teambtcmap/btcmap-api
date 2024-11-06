@@ -35,25 +35,25 @@ pub struct GetItem {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<GetItem> for Area {
-    fn into(self) -> GetItem {
-        let tags = if self.deleted_at.is_none() && !self.tags.is_empty() {
-            Some(self.tags)
+impl From<Area> for GetItem {
+    fn from(val: Area) -> Self {
+        let tags = if val.deleted_at.is_none() && !val.tags.is_empty() {
+            Some(val.tags)
         } else {
             None
         };
         GetItem {
-            id: self.id,
+            id: val.id,
             tags,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
 
-impl Into<Json<GetItem>> for Area {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Area> for Json<GetItem> {
+    fn from(val: Area) -> Self {
+        Json(val.into())
     }
 }
 

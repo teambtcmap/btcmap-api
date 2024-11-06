@@ -38,37 +38,37 @@ pub struct GetItem {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<GetItem> for ElementComment {
-    fn into(self) -> GetItem {
-        let element_id = if self.deleted_at.is_none() {
-            Some(self.element_id)
+impl From<ElementComment> for GetItem {
+    fn from(val: ElementComment) -> Self {
+        let element_id = if val.deleted_at.is_none() {
+            Some(val.element_id)
         } else {
             None
         };
-        let created_at = if self.deleted_at.is_none() {
-            Some(self.created_at)
+        let created_at = if val.deleted_at.is_none() {
+            Some(val.created_at)
         } else {
             None
         };
-        let comment = if self.deleted_at.is_none() {
-            Some(self.comment)
+        let comment = if val.deleted_at.is_none() {
+            Some(val.comment)
         } else {
             None
         };
         GetItem {
-            id: self.id,
+            id: val.id,
             element_id,
             comment,
             created_at,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
 
-impl Into<Json<GetItem>> for ElementComment {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<ElementComment> for Json<GetItem> {
+    fn from(val: ElementComment) -> Self {
+        Json(val.into())
     }
 }
 
@@ -96,13 +96,11 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id_clone = id.clone();
+    let not_found_err = Error::NotFound(format!("Element comment with id {id} doesn't exist"));
     pool.get()
         .await?
-        .interact(move |conn| ElementComment::select_by_id(id_clone, conn))
+        .interact(move |conn| ElementComment::select_by_id(*id, conn))
         .await??
-        .ok_or(Error::NotFound(format!(
-            "Element comment with id {id} doesn't exist"
-        )))
+        .ok_or(not_found_err)
         .map(|it| it.into())
 }

@@ -50,7 +50,7 @@ fn generate_element_icons(
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {
-            Element::set_tag(element.id, "icon:android", &new_icon.clone().into(), &conn)?;
+            Element::set_tag(element.id, "icon:android", &new_icon.clone().into(), conn)?;
             changes += 1;
         }
     }
@@ -94,39 +94,39 @@ impl OverpassElement {
 
         let mut icon_id: &str = "question_mark";
 
-        if shop != "" {
+        if !shop.is_empty() {
             icon_id = "storefront";
         }
 
-        if office != "" {
+        if !office.is_empty() {
             icon_id = "business"
         }
 
-        if healthcare != "" {
+        if !healthcare.is_empty() {
             icon_id = "medical_services"
         }
 
-        if craft != "" {
+        if !craft.is_empty() {
             icon_id = "construction"
         }
 
-        if playground != "" {
+        if !playground.is_empty() {
             icon_id = "attractions"
         }
 
-        if industrial != "" {
+        if !industrial.is_empty() {
             icon_id = "factory"
         }
 
-        if attraction != "" {
+        if !attraction.is_empty() {
             icon_id = "attractions"
         }
 
-        if shelter_type != "" {
+        if !shelter_type.is_empty() {
             icon_id = "roofing"
         }
 
-        if aeroway != "" {
+        if !aeroway.is_empty() {
             icon_id = "paragliding"
         }
 

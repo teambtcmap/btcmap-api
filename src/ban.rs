@@ -20,6 +20,7 @@ struct Ban {
     end_at: OffsetDateTime,
 }
 
+#[allow(clippy::await_holding_refcell_ref)]
 pub async fn check_if_banned(
     req: ServiceRequest,
     next: Next<impl MessageBody>,

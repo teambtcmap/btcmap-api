@@ -29,31 +29,31 @@ pub struct GetItem {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<GetItem> for AreaElement {
-    fn into(self) -> GetItem {
-        let area_id = if self.deleted_at.is_none() {
-            Some(self.area_id)
+impl From<AreaElement> for GetItem {
+    fn from(val: AreaElement) -> Self {
+        let area_id = if val.deleted_at.is_none() {
+            Some(val.area_id)
         } else {
             None
         };
-        let element_id = if self.deleted_at.is_none() {
-            Some(self.element_id)
+        let element_id = if val.deleted_at.is_none() {
+            Some(val.element_id)
         } else {
             None
         };
         GetItem {
-            id: self.id,
+            id: val.id,
             area_id,
             element_id,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
 
-impl Into<Json<GetItem>> for AreaElement {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<AreaElement> for Json<GetItem> {
+    fn from(val: AreaElement) -> Self {
+        Json(val.into())
     }
 }
 
@@ -81,13 +81,11 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>> {
-    let id_clone = id.clone();
+    let not_found = Error::NotFound(format!("Area-element mapping with id {id} doesn't exist"));
     pool.get()
         .await?
-        .interact(move |conn| AreaElement::select_by_id(id_clone, conn))
+        .interact(move |conn| AreaElement::select_by_id(*id, conn))
         .await??
-        .ok_or(Error::NotFound(format!(
-            "Area-element mapping with id {id} doesn't exist"
-        )))
+        .ok_or(not_found)
         .map(|it| it.into())
 }

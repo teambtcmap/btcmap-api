@@ -53,9 +53,7 @@ fn get_most_commented_countries(
             let areas = element.tag("areas").as_array().ok_or("Not an array")?;
             for area in areas {
                 let area_id = area["id"].as_i64().ok_or("Not an integer")?;
-                if !areas_to_comments.contains_key(&area_id) {
-                    areas_to_comments.insert(area_id, vec![]);
-                }
+                areas_to_comments.entry(area_id).or_default();
                 let area_comments = areas_to_comments
                     .get_mut(&area_id)
                     .ok_or("Area key is missing")?;

@@ -55,7 +55,7 @@ fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Re
         element.id,
         "boost:expires",
         &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),
-        &conn,
+        conn,
     )?;
     Boost::insert(admin_id, element.id, days, conn)?;
     Ok(element)

@@ -14,7 +14,7 @@ pub fn generate_areas_mapping(
     conn: &Connection,
 ) -> Result<Res> {
     let mut has_changes = false;
-    let element_areas = element::service::find_areas(&element, &areas)?;
+    let element_areas = element::service::find_areas(element, areas)?;
     let old_mappings = AreaElement::select_by_element_id(element.id, conn)?;
     let mut old_area_ids: Vec<i64> = old_mappings.into_iter().map(|it| it.area_id).collect();
     let mut new_area_ids: Vec<i64> = element_areas.into_iter().map(|it| it.id).collect();
@@ -22,7 +22,7 @@ pub fn generate_areas_mapping(
     new_area_ids.sort();
     if new_area_ids != old_area_ids {
         for old_area_id in &old_area_ids {
-            if !new_area_ids.contains(&old_area_id) {
+            if !new_area_ids.contains(old_area_id) {
                 AreaElement::set_deleted_at(*old_area_id, Some(OffsetDateTime::now_utc()), conn)?;
             }
         }

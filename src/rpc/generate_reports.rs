@@ -28,11 +28,7 @@ pub struct Res {
 pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Res> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let started_at = OffsetDateTime::now_utc();
-    let res = pool
-        .get()
-        .await?
-        .interact(move |conn| generate_reports(conn))
-        .await??;
+    let res = pool.get().await?.interact(generate_reports).await??;
     if res > 0 {
         let log_message = format!("{} generated {} daily reports", admin.name, res);
         info!(log_message);
@@ -49,23 +45,23 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Res> {
 pub fn generate_reports(conn: &mut Connection) -> Result<usize> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
-    let today_reports = Report::select_by_date(&today, None, &conn)?;
+    let today_reports = Report::select_by_date(&today, None, conn)?;
     if !today_reports.is_empty() {
         info!("Found existing reports for today, aborting");
         return Ok(0);
     }
-    let all_areas = Area::select_all_except_deleted(&conn)?;
-    let all_elements = Element::select_all_except_deleted(&conn)?;
+    let all_areas = Area::select_all_except_deleted(conn)?;
+    let all_elements = Element::select_all_except_deleted(conn)?;
     let mut reports: HashMap<Area, Map<String, Value>> = HashMap::new();
     for area in all_areas {
         let area_elements = crate::element::service::filter_by_area(&all_elements, &area)?;
-        if let Some(report) = generate_new_report_if_necessary(&area, area_elements, &conn)? {
+        if let Some(report) = generate_new_report_if_necessary(&area, area_elements, conn)? {
             reports.insert(area, report);
         }
     }
     let sp = conn.savepoint()?;
     for (area, report) in &reports {
-        insert_report(area.id, &report, &sp)?;
+        insert_report(area.id, report, &sp)?;
     }
     sp.commit()?;
     Ok(reports.len())
@@ -81,7 +77,7 @@ fn generate_new_report_if_necessary(
     Ok(match prev_report {
         None => Some(new_report_tags),
         Some(latest_report) => {
-            if &new_report_tags != &latest_report.tags {
+            if new_report_tags != latest_report.tags {
                 Some(new_report_tags)
             } else {
                 None
@@ -157,8 +153,6 @@ fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
         (up_to_date_percent as usize).into(),
     );
 
-    let now = OffsetDateTime::now_utc();
-
     let verification_dates: Vec<i64> = elements
         .iter()
         .filter_map(|it| {
@@ -166,16 +160,15 @@ fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
                 .verification_date()
                 .map(|it| it.unix_timestamp())
         })
-        .filter_map(|it| {
-            if it > now.unix_timestamp() {
-                None
-            } else {
-                Some(it)
-            }
-        })
         .collect();
 
-    if verification_dates.len() > 0 {
+    let now = OffsetDateTime::now_utc();
+    let verification_dates: Vec<i64> = verification_dates
+        .into_iter()
+        .filter(|it| *it <= now.unix_timestamp())
+        .collect();
+
+    if !verification_dates.is_empty() {
         let avg_verification_date: f64 =
             verification_dates.iter().sum::<i64>() as f64 / verification_dates.len() as f64;
         let avg_verification_date: i64 = avg_verification_date as i64;
@@ -195,7 +188,7 @@ fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
 fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<()> {
     let date = OffsetDateTime::now_utc().date();
     info!(area_id, ?date, ?tags, "Inserting new report");
-    Report::insert(area_id, &date, &tags, conn)?;
+    Report::insert(area_id, &date, tags, conn)?;
     info!(area_id, ?date, "Inserted new report");
     Ok(())
 }
