@@ -6,6 +6,7 @@ use crate::{
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
+use std::sync::Arc;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 const NAME: &str = "get_trending_countries";
@@ -17,7 +18,7 @@ pub struct Args {
     pub period_end: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Vec<TrendingArea>> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<TrendingArea>> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let period_start =
         OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_start), &Rfc3339)?;

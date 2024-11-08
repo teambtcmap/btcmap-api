@@ -7,6 +7,7 @@ use crate::{
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
+use std::sync::Arc;
 use tracing::info;
 
 #[derive(Deserialize)]
@@ -18,7 +19,7 @@ pub struct Args {
 
 const NAME: &str = "remove_area_tag";
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<RpcArea> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_tag = args.tag.clone();
     let area = pool

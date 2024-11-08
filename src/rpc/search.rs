@@ -2,6 +2,7 @@ use crate::{admin, area::Area, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 const NAME: &str = "search";
 
@@ -18,7 +19,7 @@ pub struct Res {
     pub id: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Vec<Res>> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Res>> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let areas = pool
         .get()

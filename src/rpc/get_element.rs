@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::Result;
 use crate::{admin, element::model::Element};
 use deadpool_sqlite::Pool;
@@ -12,7 +14,7 @@ pub struct Args {
     pub id: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Element> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_args_id = args.id.clone();
     let element = pool

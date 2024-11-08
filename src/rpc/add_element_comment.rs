@@ -2,6 +2,7 @@ use crate::{admin, discord, element::Element, element_comment::ElementComment, R
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
+use std::sync::Arc;
 use tracing::info;
 
 const NAME: &str = "add_element_comment";
@@ -13,7 +14,7 @@ pub struct Args {
     pub comment: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<ElementComment> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<ElementComment> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_id = args.id.clone();
     let element = pool

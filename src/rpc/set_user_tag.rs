@@ -3,6 +3,7 @@ use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::sync::Arc;
 use tracing::info;
 
 const NAME: &str = "set_user_tag";
@@ -21,7 +22,7 @@ pub struct Res {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Res> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_args = args.clone();
     let user = pool

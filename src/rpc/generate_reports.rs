@@ -4,7 +4,7 @@ use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use tracing::info;
 
@@ -25,7 +25,7 @@ pub struct Res {
     pub new_reports: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Res> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let started_at = OffsetDateTime::now_utc();
     let res = pool.get().await?.interact(generate_reports).await??;

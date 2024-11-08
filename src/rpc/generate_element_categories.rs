@@ -3,6 +3,7 @@ use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::info;
 
 const NAME: &str = "generate_element_categories";
@@ -19,7 +20,7 @@ pub struct Res {
     pub changes: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Res> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let res = pool
         .get()

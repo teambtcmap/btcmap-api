@@ -2,6 +2,7 @@ use crate::{admin, element::Element, event::Event, user::User, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use time::OffsetDateTime;
 
 const NAME: &str = "get_user_activity";
@@ -22,7 +23,7 @@ pub struct Res {
     pub btcmap_url: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Pool>) -> Result<Vec<Res>> {
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Res>> {
     admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let cloned_args_id = args.id.clone();
     let user = pool
