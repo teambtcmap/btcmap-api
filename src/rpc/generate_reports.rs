@@ -29,8 +29,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
     let started_at = OffsetDateTime::now_utc();
     let res = pool.get().await?.interact(generate_reports).await??;
+    let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     if res > 0 {
-        let log_message = format!("{} generated {} daily reports", admin.name, res);
+        let log_message = format!(
+            "{} generated {} daily reports in {} seconds",
+            admin.name, res, time_s,
+        );
         info!(log_message);
         discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     }
