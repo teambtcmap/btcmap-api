@@ -1,6 +1,15 @@
 #!/bin/bash
 
 case "$1" in
+    db)
+        if [ "$#" -eq 1 ]
+        then
+            sqlite3 ~/.local/share/btcmap/btcmap.db
+        else
+            sqlite3 ~/.local/share/btcmap/btcmap.db "$2"
+        fi
+        ;;
+
     fetch-prod-db)
         rsync -v btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
         ;;
