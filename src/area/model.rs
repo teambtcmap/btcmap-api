@@ -186,7 +186,7 @@ impl Area {
                 ":tags": Value::from(tags),
             },
         )?;
-        let res = Area::select_by_id(id, &conn)?;
+        let res = Area::select_by_id(id, conn)?;
         Ok(res)
     }
 
@@ -207,7 +207,7 @@ impl Area {
                 ":name": format!("$.{name}"),
             },
         )?;
-        let res = Area::select_by_id(id, &conn)?;
+        let res = Area::select_by_id(id, conn)?;
         Ok(res)
     }
 
@@ -339,7 +339,7 @@ impl Area {
             GeoJson::Geometry(v) => geometries.push(v),
         };
 
-        return geometries;
+        geometries
     }
 }
 

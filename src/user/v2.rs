@@ -1,5 +1,5 @@
 use crate::log::RequestExtension;
-use crate::osm::osm::OsmUser;
+use crate::osm::api::OsmUser;
 use crate::user::User;
 use crate::Error;
 use actix_web::get;
@@ -39,26 +39,25 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for User {
-    fn into(self) -> GetItem {
+impl From<User> for GetItem {
+    fn from(val: User) -> Self {
         GetItem {
-            id: self.id,
-            osm_json: self.osm_data,
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self
+            id: val.id,
+            osm_json: val.osm_data,
+            tags: val.tags,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val
                 .deleted_at
                 .map(|it| it.format(&Rfc3339).unwrap())
-                .unwrap_or_default()
-                .into(),
+                .unwrap_or_default(),
         }
     }
 }
 
-impl Into<Json<GetItem>> for User {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<User> for Json<GetItem> {
+    fn from(val: User) -> Self {
+        Json(val.into())
     }
 }
 
@@ -103,7 +102,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
-    use crate::osm::osm::OsmUser;
+    use crate::osm::api::OsmUser;
     use crate::test::mock_state;
     use crate::user::v2::GetItem;
     use crate::user::User;

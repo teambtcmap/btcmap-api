@@ -39,37 +39,37 @@ pub struct GetItem {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<GetItem> for Report {
-    fn into(self) -> GetItem {
-        let area_id = if self.deleted_at.is_none() {
-            Some(self.area_id)
+impl From<Report> for GetItem {
+    fn from(val: Report) -> Self {
+        let area_id = if val.deleted_at.is_none() {
+            Some(val.area_id)
         } else {
             None
         };
-        let date = if self.deleted_at.is_none() {
-            Some(self.date)
+        let date = if val.deleted_at.is_none() {
+            Some(val.date)
         } else {
             None
         };
-        let tags = if self.deleted_at.is_none() && !self.tags.is_empty() {
-            Some(self.tags)
+        let tags = if val.deleted_at.is_none() && !val.tags.is_empty() {
+            Some(val.tags)
         } else {
             None
         };
         GetItem {
-            id: self.id,
+            id: val.id,
             area_id,
             date: date.map(|it| it.to_string()),
             tags,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
 
-impl Into<Json<GetItem>> for Report {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Report> for Json<GetItem> {
+    fn from(val: Report) -> Self {
+        Json(val.into())
     }
 }
 

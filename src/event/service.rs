@@ -1,6 +1,6 @@
 use crate::discord;
 use crate::event::Event;
-use crate::osm::osm;
+use crate::osm;
 use crate::user::User;
 use crate::Result;
 use rusqlite::Connection;
@@ -13,7 +13,7 @@ use tracing::info;
 use tracing::warn;
 
 pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
-    let user = User::select_by_id(event.user_id, &conn)?.unwrap();
+    let user = User::select_by_id(event.user_id, conn)?.unwrap();
 
     let message = match event.r#type.as_str() {
         "create" => format!(
@@ -53,7 +53,7 @@ pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
         }
     }
 
-    match osm::get_user(user.osm_data.id).await {
+    match osm::api::get_user(user.osm_data.id).await {
         Ok(new_osm_data) => match new_osm_data {
             Some(new_osm_data) => {
                 if new_osm_data != user.osm_data {
@@ -62,18 +62,18 @@ pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
                         new_osm_data = serde_json::to_string(&new_osm_data)?,
                         "User data changed",
                     );
-                    User::set_osm_data(user.id, &new_osm_data, &conn)?;
+                    User::set_osm_data(user.id, &new_osm_data, conn)?;
                 } else {
                     info!("User data didn't change")
                 }
 
                 let now = OffsetDateTime::now_utc();
                 let now: String = now.format(&Rfc3339)?;
-                User::set_tag(user.id, "osm:sync:date", &Value::String(now), &conn)?;
+                User::set_tag(user.id, "osm:sync:date", &Value::String(now), conn)?;
             }
             None => {
                 warn!(user.osm_data.id, "User no longer exists on OSM");
-                User::set_tag(user.id, "osm:missing", &Value::Bool(true), &conn)?;
+                User::set_tag(user.id, "osm:missing", &Value::Bool(true), conn)?;
             }
         },
         Err(e) => error!("Failed to fetch user {} {}", user.osm_data.id, e),

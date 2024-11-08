@@ -43,14 +43,14 @@ pub async fn get_element(element_type: &str, element_id: i64) -> Result<Option<O
 async fn _get_element(res: Response) -> Result<Option<OsmElement>> {
     if res.status().is_success() {
         let mut res: OsmElementResponse = res.json().await?;
-        return Ok(if res.elements.len() == 1 {
+        Ok(if res.elements.len() == 1 {
             Some(res.elements.pop().unwrap())
         } else {
             None
-        });
+        })
     } else {
         match res.status() {
-            StatusCode::NOT_FOUND => return Ok(None),
+            StatusCode::NOT_FOUND => Ok(None),
             _ => Err(Error::OsmApi(format!(
                 "Unexpected response status: {}",
                 res.status()
@@ -144,11 +144,11 @@ pub async fn get_user(id: i64) -> Result<Option<OsmUser>> {
 async fn _get_user(res: Response) -> Result<Option<OsmUser>> {
     if res.status().is_success() {
         let res: OsmUserResponse = res.json().await?;
-        return Ok(Some(res.user));
+        Ok(Some(res.user))
     } else {
         match res.status() {
-            StatusCode::NOT_FOUND => return Ok(None),
-            StatusCode::GONE => return Ok(None),
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::GONE => Ok(None),
             _ => Err(Error::OsmApi(format!(
                 "Unexpected response status: {}",
                 res.status()

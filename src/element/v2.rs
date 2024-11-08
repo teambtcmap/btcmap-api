@@ -39,26 +39,25 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for Element {
-    fn into(self) -> GetItem {
+impl From<Element> for GetItem {
+    fn from(val: Element) -> GetItem {
         GetItem {
-            id: self.overpass_data.btcmap_id(),
-            osm_json: self.overpass_data,
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self
+            id: val.overpass_data.btcmap_id(),
+            osm_json: val.overpass_data,
+            tags: val.tags,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val
                 .deleted_at
                 .map(|it| it.format(&Rfc3339).unwrap())
-                .unwrap_or_default()
-                .into(),
+                .unwrap_or_default(),
         }
     }
 }
 
-impl Into<Json<GetItem>> for Element {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Element> for Json<GetItem> {
+    fn from(val: Element) -> Json<GetItem> {
+        Json(val.into())
     }
 }
 

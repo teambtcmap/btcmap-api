@@ -49,8 +49,8 @@ impl Element {
             &query,
             named_params! { ":overpass_data": serde_json::to_string(overpass_data)?},
         )?;
-        Ok(Element::select_by_id(conn.last_insert_rowid(), &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Element::select_by_id(conn.last_insert_rowid(), conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
@@ -209,8 +209,8 @@ impl Element {
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Ok(Element::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Element::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn set_overpass_data(
@@ -235,8 +235,8 @@ impl Element {
                 ":overpass_data": serde_json::to_string(overpass_data)?,
             },
         )?;
-        Ok(Element::select_by_id(self.id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Element::select_by_id(self.id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
@@ -264,8 +264,8 @@ impl Element {
             },
         )?;
         info!("Removed {name} tag from element {id}");
-        Ok(Element::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Element::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     #[cfg(test)]
@@ -341,8 +341,8 @@ impl Element {
                 conn.execute(&query, named_params! { ":id": self.id })?;
             }
         };
-        Ok(Element::select_by_id(self.id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Element::select_by_id(self.id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn tag(&self, name: &str) -> &Value {
@@ -361,7 +361,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
         let tags: String = row.get(2)?;
         Ok(Element {
             id: row.get(0)?,
-            overpass_data: overpass_data,
+            overpass_data,
             tags: serde_json::from_str(&tags).unwrap(),
             created_at: row.get(3)?,
             updated_at: row.get(4)?,

@@ -1,7 +1,7 @@
 use crate::element::{self, Element};
 use crate::event::{self, Event};
-use crate::osm::osm::{self, OsmElement};
 use crate::osm::overpass::OverpassElement;
+use crate::osm::{self, api::OsmElement};
 use crate::user::User;
 use crate::{discord, Error, Result};
 use rusqlite::Connection;
@@ -98,23 +98,21 @@ fn mark_element_as_deleted(
 }
 
 async fn confirm_deleted(osm_type: &str, osm_id: i64) -> Result<OsmElement> {
-    let osm_element = match osm::get_element(osm_type, osm_id).await? {
+    let osm_element = match osm::api::get_element(osm_type, osm_id).await? {
         Some(v) => v,
         None => Err(Error::OsmApi(format!(
             "Failed to fetch element {}:{} from OSM",
             osm_type, osm_id,
         )))?,
     };
-    if osm_element.visible.unwrap_or(true) {
-        if osm_element.tag("currency:XBT", "no") == "yes" {
-            let message = format!(
-                "Overpass lied about element {}:{} being deleted",
-                osm_type, osm_id,
-            );
-            error!(message);
-            discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
-            Err(Error::OverpassApi(message))?
-        }
+    if osm_element.visible.unwrap_or(true) && osm_element.tag("currency:XBT", "no") == "yes" {
+        let message = format!(
+            "Overpass lied about element {}:{} being deleted",
+            osm_type, osm_id,
+        );
+        error!(message);
+        discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
+        Err(Error::OverpassApi(message))?
     }
     Ok(osm_element)
 }
@@ -236,7 +234,7 @@ async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()
         info!(user_id, "User already exists");
         return Ok(());
     }
-    match osm::get_user(user_id).await? {
+    match osm::api::get_user(user_id).await? {
         Some(user) => User::insert(user_id, &user, conn)?,
         None => Err(Error::OsmApi(format!(
             "User with id = {user_id} doesn't exist on OSM"
@@ -249,7 +247,7 @@ async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()
 mod test {
     use crate::{
         element::Element,
-        osm::{osm::OsmUser, overpass::OverpassElement},
+        osm::{api::OsmUser, overpass::OverpassElement},
         test::mock_state,
         user::User,
         Result,

@@ -67,10 +67,10 @@ impl OverpassElement {
     }
 
     pub fn up_to_date(&self) -> bool {
-        return match self.days_since_verified() {
+        match self.days_since_verified() {
             Some(days) => days < 365,
             None => false,
-        };
+        }
     }
 
     pub fn days_since_verified(&self) -> Option<i64> {
@@ -162,7 +162,7 @@ pub async fn query_bitcoin_merchants() -> Result<Vec<OverpassElement>> {
 
     let response = response.json::<Response>().await?;
 
-    if response.elements.len() == 0 {
+    if response.elements.is_empty() {
         Err(Error::OverpassApi(format!(
             "Got suspicious response: {}",
             serde_json::to_string_pretty(&response)?

@@ -1,5 +1,5 @@
 use crate::log::RequestExtension;
-use crate::osm::osm::OsmUser;
+use crate::osm::api::OsmUser;
 use crate::user::User;
 use crate::Error;
 use actix_web::get;
@@ -38,31 +38,31 @@ pub struct GetItem {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<GetItem> for User {
-    fn into(self) -> GetItem {
-        let osm_data = if self.deleted_at.is_none() {
-            Some(self.osm_data)
+impl From<User> for GetItem {
+    fn from(val: User) -> Self {
+        let osm_data = if val.deleted_at.is_none() {
+            Some(val.osm_data)
         } else {
             None
         };
-        let tags = if self.deleted_at.is_none() {
-            Some(self.tags)
+        let tags = if val.deleted_at.is_none() {
+            Some(val.tags)
         } else {
             None
         };
         GetItem {
-            id: self.id,
+            id: val.id,
             osm_data,
             tags,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
 
-impl Into<Json<GetItem>> for User {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<User> for Json<GetItem> {
+    fn from(val: User) -> Self {
+        Json(val.into())
     }
 }
 
@@ -100,7 +100,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 #[cfg(test)]
 mod test {
     use crate::error::{self, SyncAPIErrorResponseBody};
-    use crate::osm::osm::OsmUser;
+    use crate::osm::api::OsmUser;
     use crate::test::mock_state;
     use crate::user::User;
     use crate::Result;

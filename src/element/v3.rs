@@ -38,31 +38,31 @@ pub struct GetItem {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<GetItem> for Element {
-    fn into(self) -> GetItem {
-        let overpass_data = if self.deleted_at.is_none() {
-            Some(self.overpass_data)
+impl From<Element> for GetItem {
+    fn from(val: Element) -> GetItem {
+        let overpass_data = if val.deleted_at.is_none() {
+            Some(val.overpass_data)
         } else {
             None
         };
-        let tags = if self.deleted_at.is_none() {
-            Some(self.tags)
+        let tags = if val.deleted_at.is_none() {
+            Some(val.tags)
         } else {
             None
         };
         GetItem {
-            id: self.id,
+            id: val.id,
             osm_data: overpass_data,
             tags,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
 
-impl Into<Json<GetItem>> for Element {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Element> for Json<GetItem> {
+    fn from(val: Element) -> Json<GetItem> {
+        Json(val.into())
     }
 }
 

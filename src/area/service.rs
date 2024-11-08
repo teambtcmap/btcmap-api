@@ -40,10 +40,10 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     if geo_json.is_err() {
         Err(Error::InvalidInput("Invalid geo_json".into()))?
     }
-    if Area::select_by_alias(url_alias, &conn)?.is_some() {
+    if Area::select_by_alias(url_alias, conn)?.is_some() {
         Err(Error::Conflict("This url_alias is already in use".into()))?
     }
-    let area = Area::insert(geo_json.unwrap(), tags, url_alias, &conn)?.unwrap();
+    let area = Area::insert(geo_json.unwrap(), tags, url_alias, conn)?.unwrap();
     let area_elements = element::service::find_in_area(&area, conn)?;
     element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
@@ -108,71 +108,63 @@ pub fn get_trending_areas(
     period_end: &OffsetDateTime,
     conn: &Connection,
 ) -> Result<Vec<TrendingArea>> {
-    let events = Event::select_created_between(&period_start, &period_end, &conn)?;
+    let events = Event::select_created_between(period_start, period_end, conn)?;
     let mut areas_to_events: HashMap<i64, Vec<&Event>> = HashMap::new();
     for event in &events {
-        let element = Element::select_by_id(event.element_id, &conn)?.unwrap();
+        let element = Element::select_by_id(event.element_id, conn)?.unwrap();
         let element_area_ids: Vec<i64> = AreaElement::select_by_element_id(element.id, conn)?
             .into_iter()
             .map(|it| it.area_id)
             .collect();
         for element_area_id in element_area_ids {
-            if !areas_to_events.contains_key(&element_area_id) {
-                areas_to_events.insert(element_area_id, vec![]);
-            }
+            areas_to_events.entry(element_area_id).or_default();
             let area_events = areas_to_events.get_mut(&element_area_id).unwrap();
             area_events.push(event);
         }
     }
-    let comments = ElementComment::select_created_between(&period_start, &period_end, &conn)?;
+    let comments = ElementComment::select_created_between(period_start, period_end, conn)?;
     let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
     for comment in &comments {
-        let element = Element::select_by_id(comment.element_id, &conn)?.unwrap();
+        let element = Element::select_by_id(comment.element_id, conn)?.unwrap();
         let element_area_ids: Vec<i64> = AreaElement::select_by_element_id(element.id, conn)?
             .into_iter()
             .map(|it| it.area_id)
             .collect();
         for element_area_id in element_area_ids {
-            if !areas_to_comments.contains_key(&element_area_id) {
-                areas_to_comments.insert(element_area_id, vec![]);
-            }
+            areas_to_comments.entry(element_area_id).or_default();
             let area_comments = areas_to_comments.get_mut(&element_area_id).unwrap();
             area_comments.push(comment);
         }
     }
     let mut areas: HashSet<i64> = HashSet::new();
-    for (area_id, _) in &areas_to_events {
+    for area_id in areas_to_events.keys() {
         areas.insert(*area_id);
     }
-    for (area_id, _) in &areas_to_comments {
+    for area_id in areas_to_comments.keys() {
         areas.insert(*area_id);
     }
     let areas: Vec<_> = areas
         .into_iter()
-        .map(|it| Area::select_by_id(it, &conn).unwrap().unwrap())
+        .map(|it| Area::select_by_id(it, conn).unwrap().unwrap())
         .collect();
     let mut res: Vec<TrendingArea> = areas
         .into_iter()
         .filter(|it| it.tags.contains_key("type") && it.tags["type"].as_str() == Some(r#type))
         .map(|it| {
-            if !areas_to_events.contains_key(&it.id) {
-                areas_to_events.insert(it.id, vec![]);
-            }
+            areas_to_events.entry(it.id).or_default();
             let events = areas_to_events.get(&it.id).unwrap();
             let mut created: Vec<&Event> = vec![];
             let mut updated: Vec<&Event> = vec![];
             let mut deleted: Vec<&Event> = vec![];
             for event in events {
                 match event.r#type.as_str() {
-                    "create" => created.push(&event),
-                    "update" => updated.push(&event),
-                    "delete" => deleted.push(&event),
+                    "create" => created.push(event),
+                    "update" => updated.push(event),
+                    "delete" => deleted.push(event),
                     _ => {}
                 }
             }
-            if !areas_to_comments.contains_key(&it.id) {
-                areas_to_comments.insert(it.id, vec![]);
-            }
+            areas_to_comments.entry(it.id).or_default();
             let comments = areas_to_comments.get(&it.id).unwrap();
             TrendingArea {
                 id: it.id,

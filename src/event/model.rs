@@ -68,8 +68,8 @@ impl Event {
                 ":type": r#type,
             },
         )?;
-        Ok(Event::select_by_id(conn.last_insert_rowid(), &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Event::select_by_id(conn.last_insert_rowid(), conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn select_all(
@@ -304,8 +304,7 @@ impl Event {
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Ok(Event::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Event::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     #[cfg(test)]
@@ -365,7 +364,7 @@ mod test {
     use super::Event;
     use crate::{
         element::Element,
-        osm::{osm::OsmUser, overpass::OverpassElement},
+        osm::{api::OsmUser, overpass::OverpassElement},
         test::mock_conn,
         user::User,
         Result,

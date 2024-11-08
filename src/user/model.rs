@@ -1,4 +1,4 @@
-use crate::{osm::osm::OsmUser, Error, Result};
+use crate::{osm::api::OsmUser, Error, Result};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -18,6 +18,8 @@ pub struct User {
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
 }
+
+const TABLE_NAME: &str = "user";
 
 impl User {
     pub fn insert(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<User> {
@@ -40,8 +42,8 @@ impl User {
             },
         )?;
 
-        Ok(User::select_by_id(conn.last_insert_rowid(), &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        User::select_by_id(conn.last_insert_rowid(), conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<User>> {
@@ -133,7 +135,7 @@ impl User {
                     created_at,
                     updated_at,
                     deleted_at
-                FROM user
+                FROM {TABLE_NAME}
                 WHERE json_extract(osm_data, '$.display_name') = :name
             "#
         );
@@ -154,25 +156,26 @@ impl User {
         tags: &HashMap<String, Value>,
         conn: &Connection,
     ) -> crate::Result<User> {
-        let query = r#"
-            UPDATE user
-            SET tags = json_patch(tags, :tags)
-            WHERE rowid = :id
-        "#;
+        let query = format!(
+            r#"
+                UPDATE {TABLE_NAME}
+                SET tags = json_patch(tags, :tags)
+                WHERE rowid = :id
+            "#
+        );
         #[cfg(not(test))]
         sleep(Duration::from_millis(10));
         conn.execute(
-            query,
+            &query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        Ok(User::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        User::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<User>> {
         let query = format!(
             r#"
-                UPDATE user
+                UPDATE {TABLE_NAME}
                 SET tags = json_remove(tags, :name)
                 WHERE id = :id
             "#
@@ -186,7 +189,7 @@ impl User {
                 ":name": format!("$.{name}"),
             },
         )?;
-        let res = User::select_by_id(id, &conn)?;
+        let res = User::select_by_id(id, conn)?;
         Ok(res)
     }
 
@@ -255,7 +258,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
 
 #[cfg(test)]
 mod test {
-    use crate::{osm::osm::OsmUser, test::mock_conn, user::User, Result};
+    use crate::{osm::api::OsmUser, test::mock_conn, user::User, Result};
     use std::collections::HashMap;
     use time::macros::datetime;
 

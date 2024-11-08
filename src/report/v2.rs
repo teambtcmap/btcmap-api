@@ -42,33 +42,32 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for Report {
-    fn into(self) -> GetItem {
-        let area_id = if self.area_url_alias == "earth" {
+impl From<Report> for GetItem {
+    fn from(val: Report) -> Self {
+        let area_id = if val.area_url_alias == "earth" {
             "".into()
         } else {
-            self.area_url_alias
+            val.area_url_alias
         };
 
         GetItem {
-            id: self.id,
+            id: val.id,
             area_id,
-            date: self.date.to_string(),
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self
+            date: val.date.to_string(),
+            tags: val.tags,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val
                 .deleted_at
                 .map(|it| it.format(&Rfc3339).unwrap())
-                .unwrap_or_default()
-                .into(),
+                .unwrap_or_default(),
         }
     }
 }
 
-impl Into<Json<GetItem>> for Report {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Report> for Json<GetItem> {
+    fn from(val: Report) -> Self {
+        Json(val.into())
     }
 }
 

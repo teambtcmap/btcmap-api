@@ -17,10 +17,7 @@ use time::OffsetDateTime;
 use tracing::info;
 
 pub fn find_in_area(area: &Area, conn: &Connection) -> Result<Vec<Element>> {
-    let all_elements: Vec<Element> = Element::select_all(None, &conn)?
-        .into_iter()
-        .filter(|it| it.deleted_at == None)
-        .collect();
+    let all_elements: Vec<Element> = Element::select_all_except_deleted(conn)?;
     filter_by_area(&all_elements, area)
 }
 
@@ -65,7 +62,7 @@ pub fn generate_areas_mapping_old(
     conn: &Connection,
 ) -> Result<Vec<Element>> {
     let mut res: Vec<Element> = vec![];
-    let all_areas: Vec<Area> = Area::select_all(&conn)?;
+    let all_areas: Vec<Area> = Area::select_all(conn)?;
     for element in elements {
         let element_areas = find_areas(element, &all_areas)?;
         let element_areas = areas_to_areas_tag(element_areas);
@@ -153,7 +150,7 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
     let started_at = OffsetDateTime::now_utc();
     let mut affected_elements = 0;
     for element in elements {
-        let issues = crate::element::service::get_issues(&element);
+        let issues = crate::element::service::get_issues(element);
         // No current issues, no saved issues, nothing to do here
         if issues.is_empty() && !element.tags.contains_key("issues") {
             continue;
@@ -196,10 +193,8 @@ fn get_issues(element: &Element) -> Vec<Issue> {
     };
     if let Some(issue) = crate::element::service::get_out_of_date_issue(element) {
         res.push(issue);
-    } else {
-        if let Some(issue) = crate::element::service::get_soon_out_of_date_issue(element) {
-            res.push(issue);
-        };
+    } else if let Some(issue) = crate::element::service::get_soon_out_of_date_issue(element) {
+        res.push(issue);
     };
     res
 }
@@ -208,7 +203,7 @@ fn get_date_format_issues(element: &Element) -> Vec<Issue> {
     let mut res: Vec<Issue> = vec![];
     let date_format = format_description!("[year]-[month]-[day]");
     let survey_date = element.overpass_data.tag("survey:date");
-    if survey_date.len() > 0 && Date::parse(survey_date, &date_format).is_err() {
+    if !survey_date.is_empty() && Date::parse(survey_date, &date_format).is_err() {
         res.push(Issue {
             r#type: "date_format".into(),
             severity: 600,
@@ -216,7 +211,7 @@ fn get_date_format_issues(element: &Element) -> Vec<Issue> {
         });
     }
     let check_date = element.overpass_data.tag("check_date");
-    if check_date.len() > 0 && Date::parse(check_date, &date_format).is_err() {
+    if !check_date.is_empty() && Date::parse(check_date, &date_format).is_err() {
         res.push(Issue {
             r#type: "date_format".into(),
             severity: 600,
@@ -224,7 +219,7 @@ fn get_date_format_issues(element: &Element) -> Vec<Issue> {
         });
     }
     let check_date_currency_xbt = element.overpass_data.tag("check_date:currency:XBT");
-    if check_date_currency_xbt.len() > 0
+    if !check_date_currency_xbt.is_empty()
         && Date::parse(check_date_currency_xbt, &date_format).is_err()
     {
         res.push(Issue {
@@ -239,7 +234,7 @@ fn get_date_format_issues(element: &Element) -> Vec<Issue> {
 fn get_misspelled_tag_issues(element: &Element) -> Vec<Issue> {
     let mut res: Vec<Issue> = vec![];
     let payment_lighting = element.overpass_data.tag("payment:lighting");
-    if payment_lighting.len() > 0 {
+    if !payment_lighting.is_empty() {
         res.push(Issue {
             r#type: "misspelled_tag".into(),
             severity: 500,
@@ -247,7 +242,7 @@ fn get_misspelled_tag_issues(element: &Element) -> Vec<Issue> {
         });
     }
     let payment_lightning_contacless = element.overpass_data.tag("payment:lightning_contacless");
-    if payment_lightning_contacless.len() > 0 {
+    if !payment_lightning_contacless.is_empty() {
         res.push(Issue {
             r#type: "misspelled_tag".into(),
             severity: 500,
@@ -255,7 +250,7 @@ fn get_misspelled_tag_issues(element: &Element) -> Vec<Issue> {
         });
     }
     let payment_lighting_contactless = element.overpass_data.tag("payment:lighting_contactless");
-    if payment_lighting_contactless.len() > 0 {
+    if !payment_lighting_contactless.is_empty() {
         res.push(Issue {
             r#type: "misspelled_tag".into(),
             severity: 500,

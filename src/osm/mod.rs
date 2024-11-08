@@ -1,2 +1,2 @@
-pub mod osm;
+pub mod api;
 pub mod overpass;

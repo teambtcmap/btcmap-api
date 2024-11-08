@@ -49,7 +49,7 @@ impl Admin {
                 ":password": password,
             },
         )?;
-        Ok(Admin::select_by_password(password, conn)?)
+        Admin::select_by_password(password, conn)
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Admin>> {
@@ -119,7 +119,7 @@ impl Admin {
                 ":allowed_actions": serde_json::to_string(allowed_actions)?,
             },
         )?;
-        Admin::select_by_id(id, &conn)
+        Admin::select_by_id(id, conn)
     }
 
     const fn mapper() -> fn(&Row) -> rusqlite::Result<Admin> {
@@ -132,7 +132,7 @@ impl Admin {
                 allowed_actions: allowed_actions
                     .as_array()
                     .unwrap()
-                    .into_iter()
+                    .iter()
                     .map(|it| it.as_str().unwrap().into())
                     .collect(),
                 created_at: row.get(4)?,

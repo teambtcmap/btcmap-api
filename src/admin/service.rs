@@ -32,9 +32,9 @@ pub async fn check_rpc(password: &str, action: &str, pool: &Pool) -> Result<Admi
             admin.name, action,
         );
         discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-        Err(Error::Unauthorized(format!(
-            "You are not allowed to perform this action"
-        )))?
+        Err(Error::Unauthorized(
+            "You are not allowed to perform this action".into(),
+        ))?
     }
     Ok(admin)
 }

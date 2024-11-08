@@ -41,28 +41,27 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl Into<GetItem> for Event {
-    fn into(self) -> GetItem {
+impl From<Event> for GetItem {
+    fn from(val: Event) -> GetItem {
         GetItem {
-            id: self.id,
-            user_id: self.user_id,
-            element_id: format!("{}:{}", self.element_osm_type, self.element_osm_id),
-            r#type: self.r#type,
-            tags: self.tags,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self
+            id: val.id,
+            user_id: val.user_id,
+            element_id: format!("{}:{}", val.element_osm_type, val.element_osm_id),
+            r#type: val.r#type,
+            tags: val.tags,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val
                 .deleted_at
                 .map(|it| it.format(&Rfc3339).unwrap())
-                .unwrap_or_default()
-                .into(),
+                .unwrap_or_default(),
         }
     }
 }
 
-impl Into<Json<GetItem>> for Event {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Event> for Json<GetItem> {
+    fn from(val: Event) -> Json<GetItem> {
+        Json(val.into())
     }
 }
 
@@ -116,7 +115,7 @@ mod test {
     use crate::element::Element;
     use crate::event::v2::GetItem;
     use crate::event::Event;
-    use crate::osm::osm::OsmUser;
+    use crate::osm::api::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::user::User;

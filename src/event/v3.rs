@@ -46,20 +46,20 @@ pub struct GetItem {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Into<GetItem> for Event {
-    fn into(self) -> GetItem {
-        let user_id = if self.deleted_at.is_none() {
-            Some(self.user_id)
+impl From<Event> for GetItem {
+    fn from(val: Event) -> GetItem {
+        let user_id = if val.deleted_at.is_none() {
+            Some(val.user_id)
         } else {
             None
         };
-        let element_id = if self.deleted_at.is_none() {
-            Some(self.element_id)
+        let element_id = if val.deleted_at.is_none() {
+            Some(val.element_id)
         } else {
             None
         };
-        let r#type = if self.deleted_at.is_none() {
-            Some(match self.r#type.as_str() {
+        let r#type = if val.deleted_at.is_none() {
+            Some(match val.r#type.as_str() {
                 "create" => 1,
                 "update" => 2,
                 "delete" => 3,
@@ -68,32 +68,32 @@ impl Into<GetItem> for Event {
         } else {
             None
         };
-        let tags = if self.deleted_at.is_none() && !self.tags.is_empty() {
-            Some(self.tags)
+        let tags = if val.deleted_at.is_none() && !val.tags.is_empty() {
+            Some(val.tags)
         } else {
             None
         };
-        let created_at = if self.deleted_at.is_none() {
-            Some(self.created_at)
+        let created_at = if val.deleted_at.is_none() {
+            Some(val.created_at)
         } else {
             None
         };
         GetItem {
-            id: self.id,
+            id: val.id,
             user_id,
             element_id,
             r#type,
             tags,
             created_at,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
         }
     }
 }
 
-impl Into<Json<GetItem>> for Event {
-    fn into(self) -> Json<GetItem> {
-        Json(self.into())
+impl From<Event> for Json<GetItem> {
+    fn from(val: Event) -> Self {
+        Json(val.into())
     }
 }
 
@@ -135,7 +135,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 mod test {
     use crate::element::Element;
     use crate::event::Event;
-    use crate::osm::osm::OsmUser;
+    use crate::osm::api::OsmUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_state;
     use crate::user::User;

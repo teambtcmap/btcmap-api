@@ -57,8 +57,8 @@ impl Report {
             },
         )?;
 
-        Ok(Report::select_by_id(conn.last_insert_rowid(), &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Report::select_by_id(conn.last_insert_rowid(), conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn select_updated_since(
@@ -266,7 +266,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
             area_id: row.get(1)?,
             area_url_alias: row.get(2)?,
             date: Date::parse(&date, &format_description!("[year]-[month]-[day]")).unwrap(),
-            tags: tags,
+            tags,
             created_at: row.get(5)?,
             updated_at: row.get(6)?,
             deleted_at: row.get(7)?,
