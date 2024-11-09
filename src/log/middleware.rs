@@ -1,4 +1,4 @@
-use super::summary;
+use super::{request, summary};
 use crate::{data_dir_file, Result};
 use actix_web::{
     body::MessageBody,
@@ -21,6 +21,7 @@ fn open_conn() -> Result<Connection> {
     let conn = Connection::open(data_dir_file("log.db")?)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
+    request::init(&conn)?;
     summary::init(&conn)?;
     Ok(conn)
 }
@@ -55,8 +56,27 @@ pub async fn handle_request(
     let entities = extension.entities;
     drop(extensions);
     let time_ns = Instant::now().duration_since(started_at).as_nanos();
+    log_request(res.request(), entities, time_ns as i64)?;
     log_summary(res.request(), &endpoint, entities, time_ns as i64)?;
     Ok(res)
+}
+
+fn log_request(req: &HttpRequest, entities: i64, time_ns: i64) -> Result<()> {
+    let conn_info = req.connection_info();
+    let Some(addr) = conn_info.realip_remote_addr() else {
+        return Ok(());
+    };
+    CONN.with(|conn| {
+        request::insert(
+            addr,
+            req.path(),
+            req.query_string(),
+            entities,
+            time_ns,
+            conn,
+        )?;
+        Ok(())
+    })
 }
 
 fn log_summary(req: &HttpRequest, endpoint_id: &str, entities: i64, time_ns: i64) -> Result<()> {

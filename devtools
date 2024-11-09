@@ -10,6 +10,15 @@ case "$1" in
         fi
         ;;
 
+    log)
+        if [ "$#" -eq 1 ]
+        then
+            sqlite3 ~/.local/share/btcmap/log.db
+        else
+            sqlite3 ~/.local/share/btcmap/log.db "$2"
+        fi
+        ;;
+
     fetch-prod-db)
         rsync -v btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
         ;;
