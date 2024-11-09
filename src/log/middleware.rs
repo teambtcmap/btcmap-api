@@ -3,6 +3,7 @@ use crate::{data_dir_file, Result};
 use actix_web::{
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
+    http::StatusCode,
     middleware::Next,
     Error, HttpMessage, HttpRequest,
 };
@@ -27,15 +28,13 @@ fn open_conn() -> Result<Connection> {
 }
 
 pub struct RequestExtension {
-    pub endpoint: String,
     pub entities: i64,
 }
 
 impl RequestExtension {
-    pub fn new(endpoint: &str, entities: i64) -> Self {
+    pub fn new(entities: usize) -> Self {
         RequestExtension {
-            endpoint: endpoint.into(),
-            entities,
+            entities: entities as i64,
         }
     }
 }
@@ -48,20 +47,30 @@ pub async fn handle_request(
     let res = next.call(req).await;
     let Ok(res) = res else { return res };
     let extensions = res.request().extensions();
-    let Some(extension) = extensions.get::<RequestExtension>() else {
-        drop(extensions);
-        return Ok(res);
-    };
-    let endpoint = extension.endpoint.clone();
-    let entities = extension.entities;
+    let entities = extensions.get::<RequestExtension>().map(|it| it.entities);
     drop(extensions);
     let time_ns = Instant::now().duration_since(started_at).as_nanos();
-    log_request(res.request(), entities, time_ns as i64)?;
-    log_summary(res.request(), &endpoint, entities, time_ns as i64)?;
+    log_request(
+        res.request(),
+        res.response().status(),
+        entities,
+        time_ns as i64,
+    )?;
+    log_summary(
+        res.request(),
+        res.request().path(),
+        entities.unwrap_or_default(),
+        time_ns as i64,
+    )?;
     Ok(res)
 }
 
-fn log_request(req: &HttpRequest, entities: i64, time_ns: i64) -> Result<()> {
+fn log_request(
+    req: &HttpRequest,
+    code: StatusCode,
+    entities: Option<i64>,
+    time_ns: i64,
+) -> Result<()> {
     let conn_info = req.connection_info();
     let Some(addr) = conn_info.realip_remote_addr() else {
         return Ok(());
@@ -71,6 +80,7 @@ fn log_request(req: &HttpRequest, entities: i64, time_ns: i64) -> Result<()> {
             addr,
             req.path(),
             req.query_string(),
+            code.as_u16() as i64,
             entities,
             time_ns,
             conn,

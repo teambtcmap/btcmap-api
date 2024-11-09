@@ -90,10 +90,10 @@ pub async fn get(
             ),
         })
         .await??;
-    let events_len = events.len() as i64;
+    let events_len = events.len();
     let res = Either::Left(Json(events.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
-        .insert(RequestExtension::new("v2/events", events_len));
+        .insert(RequestExtension::new(events_len));
     Ok(res)
 }
 

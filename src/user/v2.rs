@@ -80,10 +80,10 @@ pub async fn get(
             None => User::select_all(args.limit, conn),
         })
         .await??;
-    let users_len = users.len() as i64;
+    let users_len = users.len();
     let res = Either::Left(Json(users.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
-        .insert(RequestExtension::new("v2/users", users_len));
+        .insert(RequestExtension::new(users_len));
     Ok(res)
 }
 

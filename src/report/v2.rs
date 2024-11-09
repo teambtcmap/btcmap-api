@@ -96,10 +96,10 @@ pub async fn get(
             ),
         })
         .await??;
-    let reports_len = reports.len() as i64;
+    let reports_len = reports.len();
     let res = Either::Left(Json(reports.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
-        .insert(RequestExtension::new("v2/reports", reports_len));
+        .insert(RequestExtension::new(reports_len));
     Ok(res)
 }
 

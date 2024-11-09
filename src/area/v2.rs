@@ -77,10 +77,10 @@ pub async fn get(
             None => Area::select_all(conn),
         })
         .await??;
-    let areas_len = areas.len() as i64;
+    let areas_len = areas.len();
     let res = Either::Left(Json(areas.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
-        .insert(RequestExtension::new("v2/areas", areas_len));
+        .insert(RequestExtension::new(areas_len));
     Ok(res)
 }
 

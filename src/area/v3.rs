@@ -71,7 +71,7 @@ pub async fn get(
         })
         .await??;
     req.extensions_mut()
-        .insert(RequestExtension::new("v3/areas", areas.len() as i64));
+        .insert(RequestExtension::new(areas.len()));
     Ok(Json(areas.into_iter().map(|it| it.into()).collect()))
 }
 

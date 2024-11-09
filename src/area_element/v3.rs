@@ -70,10 +70,8 @@ pub async fn get(
             AreaElement::select_updated_since(&args.updated_since, Some(args.limit), conn)
         })
         .await??;
-    req.extensions_mut().insert(RequestExtension::new(
-        "v3/area-elements",
-        area_elements.len() as i64,
-    ));
+    req.extensions_mut()
+        .insert(RequestExtension::new(area_elements.len()));
     Ok(Json(
         area_elements.into_iter().map(|it| it.into()).collect(),
     ))

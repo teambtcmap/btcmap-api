@@ -85,10 +85,8 @@ pub async fn get(
             ElementComment::select_updated_since(&args.updated_since, Some(args.limit), conn)
         })
         .await??;
-    req.extensions_mut().insert(RequestExtension::new(
-        "v3/element-comments",
-        element_comments.len() as i64,
-    ));
+    req.extensions_mut()
+        .insert(RequestExtension::new(element_comments.len()));
     Ok(Json(
         element_comments.into_iter().map(|it| it.into()).collect(),
     ))
