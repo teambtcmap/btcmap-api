@@ -3,27 +3,10 @@ use crate::Result;
 use crate::{discord, Error};
 use deadpool_sqlite::Pool;
 
-//#[cfg(test)]
-//pub async fn mock_admin(password: &str, pool: &Pool) -> Admin {
-//    let password = password.to_string();
-//    pool.get()
-//        .await
-//        .unwrap()
-//        .interact(move |conn| Admin::insert("test", &password, conn))
-//        .await
-//        .unwrap()
-//        .unwrap()
-//        .unwrap()
-//}
-
 pub async fn check_rpc(password: &str, action: &str, pool: &Pool) -> Result<Admin> {
-    let password = password.to_string();
-    let admin = pool
-        .get()
+    let admin = Admin::select_by_password_async(password, pool)
         .await?
-        .interact(move |conn| Admin::select_by_password(&password, conn))
-        .await??
-        .unwrap();
+        .ok_or("invalid token")?;
     if !admin.allowed_actions.contains(&"all".into())
         && !admin.allowed_actions.contains(&action.into())
     {
@@ -40,47 +23,22 @@ pub async fn check_rpc(password: &str, action: &str, pool: &Pool) -> Result<Admi
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::Result;
+mod test {
+    use crate::{admin::Admin, test::mock_state, Result};
 
     #[actix_web::test]
-    async fn no_header() -> Result<()> {
-        //let state = mock_state().await;
-        //super::mock_admin("test", &state.pool).await;
-        //let app = test::init_service(
-        //    App::new()
-        //        .app_data(Data::from(state.pool))
-        //        .service(scope("/").service(get)),
-        //)
-        //.await;
-        //let req = TestRequest::get().uri("/").to_request();
-        //let res = test::call_service(&app, req).await;
-        //assert_eq!(401, res.status().as_u16());
+    async fn check_rpc() -> Result<()> {
+        let state = mock_state().await;
+        assert!(super::check_rpc("pwd", "action", &state.pool)
+            .await
+            .is_err());
+        let password = "pwd";
+        let action = "action";
+        Admin::insert("name", password, &state.conn)?;
+        Admin::update_allowed_actions(1, &vec!["action".into()], &state.conn)?;
+        assert!(super::check_rpc(password, action, &state.pool)
+            .await
+            .is_ok());
         Ok(())
     }
-
-    #[actix_web::test]
-    async fn valid_token() -> Result<()> {
-        //let state = mock_state().await;
-        //super::mock_admin("test", &state.pool).await;
-        //let app = test::init_service(
-        //    App::new()
-        //        .app_data(Data::from(state.pool))
-        //        .service(scope("/").service(get)),
-        //)
-        //.await;
-        //let req = TestRequest::get()
-        //    .uri("/")
-        //    .append_header(("Authorization", "Bearer test"))
-        //    .to_request();
-        //let res = test::call_service(&app, req).await;
-        //assert_eq!(200, res.status().as_u16());
-        Ok(())
-    }
-
-    //#[get("")]
-    //async fn get(req: HttpRequest, pool: Data<Pool>) -> Result<impl Responder, Error> {
-    //    super::check(&req, &pool).await?;
-    //    Ok(Response::ok())
-    //}
 }

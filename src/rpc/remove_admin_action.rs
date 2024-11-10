@@ -32,7 +32,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .interact(move |conn| Admin::select_by_name(&cloned_args_admin, conn))
         .await??
         .ok_or(format!("There is no admin with name = {}", args.admin))?;
-    let allowed_actions = target_admin
+    let allowed_actions: Vec<String> = target_admin
         .allowed_actions
         .into_iter()
         .filter(|it| it != &args.action)
@@ -40,7 +40,9 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
     let target_admin = pool
         .get()
         .await?
-        .interact(move |conn| Admin::set_allowed_actions(target_admin.id, &allowed_actions, conn))
+        .interact(move |conn| {
+            Admin::update_allowed_actions(target_admin.id, &allowed_actions, conn)
+        })
         .await??
         .ok_or(format!("There is no admin with name = {}", args.admin))?;
     let log_message = format!(
