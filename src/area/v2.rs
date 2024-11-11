@@ -104,7 +104,7 @@ pub async fn get_by_url_alias(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test::mock_state;
+    use crate::test::mock_db;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -113,10 +113,10 @@ mod tests {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -128,18 +128,13 @@ mod tests {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            tags,
-            "test",
-            &state.conn,
-        )?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, "test", &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -151,30 +146,25 @@ mod tests {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let mut tags = Map::new();
         tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             tags.clone(),
             "test",
-            &state.conn,
+            &db.conn,
         )?;
         Area::insert(
             GeoJson::Feature(Feature::default()),
             tags.clone(),
             "test",
-            &state.conn,
+            &db.conn,
         )?;
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            tags,
-            "test",
-            &state.conn,
-        )?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, "test", &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -188,19 +178,14 @@ mod tests {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let area_url_alias = "test";
         let mut tags = Map::new();
         tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            tags,
-            "test",
-            &state.conn,
-        )?;
+        Area::insert(GeoJson::Feature(Feature::default()), tags, "test", &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(super::get_by_url_alias),
         )
         .await;

@@ -90,7 +90,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
 mod test {
     use crate::area::Area;
     use crate::error::{self, SyncAPIErrorResponseBody};
-    use crate::test::mock_state;
+    use crate::test::mock_db;
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -136,10 +136,10 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -153,17 +153,17 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let area = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             "test",
-            &state.conn,
+            &db.conn,
         )?
         .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -177,31 +177,31 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let area_1 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             "test",
-            &state.conn,
+            &db.conn,
         )?
         .unwrap();
         let area_2 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             "test",
-            &state.conn,
+            &db.conn,
         )?
         .unwrap();
         let _area_3 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             "test",
-            &state.conn,
+            &db.conn,
         )?
         .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -215,28 +215,27 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let area_1 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             "test",
-            &state.conn,
+            &db.conn,
         )?
         .unwrap();
-        Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
+        Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
         let area_2 = Area::insert(
             GeoJson::Feature(Feature::default()),
             Map::new(),
             "test",
-            &state.conn,
+            &db.conn,
         )?
         .unwrap();
         let area_2 =
-            Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?
-                .unwrap();
+            Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?.unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

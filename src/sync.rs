@@ -248,7 +248,7 @@ mod test {
     use crate::{
         element::Element,
         osm::{api::OsmUser, overpass::OverpassElement},
-        test::mock_state,
+        test::mock_conn,
         user::User,
         Result,
     };
@@ -257,15 +257,15 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
-        let mut state = mock_state().await;
-        let _element_1 = Element::insert(&OverpassElement::mock(1), &state.conn)?;
-        let _element_2 = Element::insert(&OverpassElement::mock(2), &state.conn)?;
-        let element_3 = Element::insert(&OverpassElement::mock(2702291726), &state.conn)?;
+        let mut conn = mock_conn();
+        let _element_1 = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let _element_2 = Element::insert(&OverpassElement::mock(2), &conn)?;
+        let element_3 = Element::insert(&OverpassElement::mock(2702291726), &conn)?;
         let res = super::sync_deleted_elements(
             &vec!["node:1".to_string(), "node:2".to_string()]
                 .into_iter()
                 .collect(),
-            &mut state.conn,
+            &mut conn,
         )
         .await;
         assert!(res.is_ok());
@@ -289,9 +289,9 @@ mod test {
 
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
-        let state = mock_state().await;
-        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
-        assert!(super::insert_user_if_not_exists(user.id, &state.conn)
+        let conn = mock_conn();
+        let user = User::insert(1, &OsmUser::mock(), &conn)?;
+        assert!(super::insert_user_if_not_exists(user.id, &conn)
             .await
             .is_ok());
         Ok(())
@@ -300,14 +300,12 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn insert_user_if_not_exists_when_exists_on_osm() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let btc_map_user_id = 18545877;
-        assert!(
-            super::insert_user_if_not_exists(btc_map_user_id, &state.conn)
-                .await
-                .is_ok()
-        );
-        assert!(User::select_by_id(btc_map_user_id, &state.conn)?.is_some());
+        assert!(super::insert_user_if_not_exists(btc_map_user_id, &conn)
+            .await
+            .is_ok());
+        assert!(User::select_by_id(btc_map_user_id, &conn)?.is_some());
         Ok(())
     }
 }

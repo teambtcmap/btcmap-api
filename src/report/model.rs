@@ -276,7 +276,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 
 #[cfg(test)]
 mod test {
-    use crate::{area::Area, report::Report, test::mock_state, Result};
+    use crate::{area::Area, report::Report, test::mock_conn, Result};
     use actix_web::test;
     use geojson::{Feature, GeoJson};
     use serde_json::Map;
@@ -285,141 +285,102 @@ mod test {
 
     #[test]
     async fn insert() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &conn,
         )?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        let reports =
-            Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &state.conn)?;
+        Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
+        let reports = Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &conn)?;
         assert_eq!(1, reports.len());
         Ok(())
     }
 
     #[test]
     async fn select_updated_since() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &conn,
         )?;
-        let report_1 = Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::_set_updated_at(
-            report_1.id,
-            &datetime!(2020-01-01 00:00:00 UTC),
-            &state.conn,
-        )?;
-        let report_2 = Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::_set_updated_at(
-            report_2.id,
-            &datetime!(2020-01-02 00:00:00 UTC),
-            &state.conn,
-        )?;
-        let report_3 = Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::_set_updated_at(
-            report_3.id,
-            &datetime!(2020-01-03 00:00:00 UTC),
-            &state.conn,
-        )?;
+        let report_1 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
+        Report::_set_updated_at(report_1.id, &datetime!(2020-01-01 00:00:00 UTC), &conn)?;
+        let report_2 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
+        Report::_set_updated_at(report_2.id, &datetime!(2020-01-02 00:00:00 UTC), &conn)?;
+        let report_3 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
+        Report::_set_updated_at(report_3.id, &datetime!(2020-01-03 00:00:00 UTC), &conn)?;
         assert_eq!(
             2,
-            Report::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &state.conn)?
-                .len(),
+            Report::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &conn)?.len(),
         );
         Ok(())
     }
 
     #[test]
     async fn select_by_id() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &conn,
         )?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        assert!(Report::select_by_id(1, &state.conn)?.is_some());
+        Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
+        assert!(Report::select_by_id(1, &conn)?.is_some());
         Ok(())
     }
 
     #[test]
     async fn select_latest_by_area_id() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         let area = Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &conn,
         )?
         .unwrap();
         Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date().previous_day().unwrap(),
             &Map::new(),
-            &state.conn,
+            &conn,
         )?;
         let latest_report = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),
             &Map::new(),
-            &state.conn,
+            &conn,
         )?;
         assert_eq!(
             latest_report,
-            Report::select_latest_by_area_id(area.id, &state.conn)?.unwrap(),
+            Report::select_latest_by_area_id(area.id, &conn)?.unwrap(),
         );
         Ok(())
     }
 
     #[test]
     async fn merge_tags() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &conn,
         )?;
         let tag_1_name = "foo";
         let tag_1_value = "bar";
@@ -427,46 +388,36 @@ mod test {
         let tag_2_value = "test";
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        let report = Report::select_by_id(1, &state.conn)?.unwrap();
+        Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
+        let report = Report::select_by_id(1, &conn)?.unwrap();
         assert!(report.tags.is_empty());
-        Report::patch_tags(1, &tags, &state.conn)?;
-        let report = Report::select_by_id(1, &state.conn)?.unwrap();
+        Report::patch_tags(1, &tags, &conn)?;
+        let report = Report::select_by_id(1, &conn)?.unwrap();
         assert_eq!(1, report.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
-        Report::patch_tags(1, &tags, &state.conn)?;
-        let report = Report::select_by_id(1, &state.conn)?.unwrap();
+        Report::patch_tags(1, &tags, &conn)?;
+        let report = Report::select_by_id(1, &conn)?.unwrap();
         assert_eq!(2, report.tags.len());
         Ok(())
     }
 
     #[test]
     async fn set_deleted_at() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &conn,
         )?;
-        let report = Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
+        let report = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         let new_deleted_at = OffsetDateTime::now_utc().add(Duration::days(1));
-        Report::set_deleted_at(report.id, &new_deleted_at, &state.conn)?;
+        Report::set_deleted_at(report.id, &new_deleted_at, &conn)?;
         assert_eq!(
             new_deleted_at,
-            Report::select_by_id(report.id, &state.conn)?
+            Report::select_by_id(report.id, &conn)?
                 .unwrap()
                 .deleted_at
                 .unwrap(),

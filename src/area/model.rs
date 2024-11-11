@@ -360,7 +360,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
 mod test {
     use crate::{
         area::Area,
-        test::{mock_conn, mock_state, mock_tags},
+        test::{mock_conn, mock_tags},
         Result,
     };
     use actix_web::test;
@@ -370,7 +370,7 @@ mod test {
 
     #[test]
     async fn insert() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let mut tags = mock_tags();
         tags.insert(
             "geo_json".into(),
@@ -380,11 +380,11 @@ mod test {
             GeoJson::Feature(Feature::default()),
             tags.clone(),
             "test",
-            &state.conn,
+            &conn,
         )?
         .unwrap();
         assert_eq!(tags, res.tags);
-        assert_eq!(res, Area::select_by_id(res.id, &state.conn)?.unwrap());
+        assert_eq!(res, Area::select_by_id(res.id, &conn)?.unwrap());
         Ok(())
     }
 
@@ -422,39 +422,36 @@ mod test {
 
     #[test]
     async fn select_updated_since() -> Result<()> {
-        let state = mock_state().await;
+        let conn = mock_conn();
         let _area_1 = Area::insert(
             GeoJson::Feature(Feature::default()),
             mock_tags(),
             "test",
-            &state.conn,
+            &conn,
         )?
         .unwrap();
-        let _area_1 =
-            Area::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &state.conn)?;
+        let _area_1 = Area::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
         let area_2 = Area::insert(
             GeoJson::Feature(Feature::default()),
             mock_tags(),
             "test",
-            &state.conn,
+            &conn,
         )?
         .unwrap();
         let area_2 =
-            Area::set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &state.conn)?
-                .unwrap();
+            Area::set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &conn)?.unwrap();
         let area_3 = Area::insert(
             GeoJson::Feature(Feature::default()),
             mock_tags(),
             "test",
-            &state.conn,
+            &conn,
         )?
         .unwrap();
         let area_3 =
-            Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &state.conn)?
-                .unwrap();
+            Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &conn)?.unwrap();
         assert_eq!(
             vec![area_2, area_3],
-            Area::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &state.conn)?,
+            Area::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &conn)?,
         );
         Ok(())
     }

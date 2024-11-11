@@ -103,7 +103,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 #[cfg(test)]
 mod test {
     use crate::osm::api::OsmUser;
-    use crate::test::mock_state;
+    use crate::test::mock_db;
     use crate::user::v2::GetItem;
     use crate::user::User;
     use crate::Result;
@@ -114,10 +114,10 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -129,11 +129,11 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state().await;
-        User::insert(1, &OsmUser::mock(), &state.conn)?;
+        let db = mock_db().await;
+        User::insert(1, &OsmUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -145,8 +145,8 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state().await;
-        state.pool.get().await?.interact(|conn| {
+        let db = mock_db().await;
+        db.pool.get().await?.interact(|conn| {
             conn.execute(
                 "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
                 [serde_json::to_string(&OsmUser::mock()).unwrap()],
@@ -158,7 +158,7 @@ mod test {
         }).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -172,12 +172,12 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let user_id = 1;
-        User::insert(user_id, &OsmUser::mock(), &state.conn)?;
+        User::insert(user_id, &OsmUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(super::get_by_id),
         )
         .await;

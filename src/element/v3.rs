@@ -102,7 +102,7 @@ mod test {
     use crate::element::Element;
     use crate::error::{self, SyncAPIErrorResponseBody};
     use crate::osm::overpass::OverpassElement;
-    use crate::test::mock_state;
+    use crate::test::mock_db;
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -115,7 +115,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(mock_state().await.pool))
+                .app_data(Data::new(mock_db().await.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -132,7 +132,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(mock_state().await.pool)
+                .app_data(mock_db().await.pool)
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -148,10 +148,10 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -165,11 +165,11 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let state = mock_state().await;
-        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
+        let db = mock_db().await;
+        let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -183,13 +183,13 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state().await;
-        let element_1 = Element::insert(&OverpassElement::mock(1), &state.conn)?;
-        let element_2 = Element::insert(&OverpassElement::mock(2), &state.conn)?;
-        let _element_3 = Element::insert(&OverpassElement::mock(3), &state.conn)?;
+        let db = mock_db().await;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;
+        let _element_3 = Element::insert(&OverpassElement::mock(3), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -203,15 +203,15 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state().await;
-        let element_1 = Element::insert(&OverpassElement::mock(1), &state.conn)?;
-        Element::_set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC), &state.conn)?;
-        let element_2 = Element::insert(&OverpassElement::mock(2), &state.conn)?;
+        let db = mock_db().await;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        Element::_set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;
         let element_2 =
-            Element::_set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC), &state.conn)?;
+            Element::_set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

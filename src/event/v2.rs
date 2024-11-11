@@ -117,7 +117,7 @@ mod test {
     use crate::event::Event;
     use crate::osm::api::OsmUser;
     use crate::osm::overpass::OverpassElement;
-    use crate::test::mock_state;
+    use crate::test::mock_db;
     use crate::user::User;
     use crate::Result;
     use actix_web::test::TestRequest;
@@ -128,10 +128,10 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -143,13 +143,13 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state().await;
-        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
-        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
-        Event::insert(user.id, element.id, "", &state.conn)?;
+        let db = mock_db().await;
+        let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
+        let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        Event::insert(user.id, element.id, "", &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -161,15 +161,15 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state().await;
-        User::insert(1, &OsmUser::mock(), &state.conn)?;
-        Element::insert(&OverpassElement::mock(1), &state.conn)?;
-        Event::insert(1, 1, "", &state.conn)?;
-        Event::insert(1, 1, "", &state.conn)?;
-        Event::insert(1, 1, "", &state.conn)?;
+        let db = mock_db().await;
+        User::insert(1, &OsmUser::mock(), &db.conn)?;
+        Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        Event::insert(1, 1, "", &db.conn)?;
+        Event::insert(1, 1, "", &db.conn)?;
+        Event::insert(1, 1, "", &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -181,16 +181,16 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state().await;
-        User::insert(1, &OsmUser::mock(), &state.conn)?;
-        Element::insert(&OverpassElement::mock(1), &state.conn)?;
-        let event_1 = Event::insert(1, 1, "", &state.conn)?;
-        Event::set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC), &state.conn)?;
-        let event_2 = Event::insert(1, 1, "", &state.conn)?;
-        Event::set_updated_at(event_2.id, &datetime!(2022-02-05 00:00:00 UTC), &state.conn)?;
+        let db = mock_db().await;
+        User::insert(1, &OsmUser::mock(), &db.conn)?;
+        Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let event_1 = Event::insert(1, 1, "", &db.conn)?;
+        Event::set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC), &db.conn)?;
+        let event_2 = Event::insert(1, 1, "", &db.conn)?;
+        Event::set_updated_at(event_2.id, &datetime!(2022-02-05 00:00:00 UTC), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -204,14 +204,14 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let event_id = 1;
-        let user = User::insert(1, &OsmUser::mock(), &state.conn)?;
-        let element = Element::insert(&OverpassElement::mock(1), &state.conn)?;
-        Event::insert(user.id, element.id, "", &state.conn)?;
+        let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
+        let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        Event::insert(user.id, element.id, "", &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(super::get_by_id),
         )
         .await;

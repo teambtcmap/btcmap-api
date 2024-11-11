@@ -4,11 +4,24 @@ use rusqlite::Connection;
 use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
+
+static MEM_DB_COUNTER: AtomicUsize = AtomicUsize::new(1);
+
+pub struct Database {
+    pub conn: Connection,
+    pub pool: Pool,
+}
+
+pub async fn mock_db() -> Database {
+    let mut db = _mock_db();
+    db::migrate(&mut db.0).unwrap();
+    Database {
+        conn: db.0,
+        pool: db.1,
+    }
+}
 
 pub fn mock_conn() -> Connection {
     let mut conn = Connection::open_in_memory().unwrap();
@@ -16,19 +29,7 @@ pub fn mock_conn() -> Connection {
     conn
 }
 
-static MEM_DB_COUNTER: AtomicUsize = AtomicUsize::new(1);
-
-pub async fn mock_state() -> State {
-    let mut db = mock_db();
-    let pool = Arc::new(db.1);
-    db::migrate(&mut db.0).unwrap();
-    State {
-        conn: db.0,
-        pool: pool.clone(),
-    }
-}
-
-pub fn mock_db() -> (Connection, Pool) {
+fn _mock_db() -> (Connection, Pool) {
     let uri = format!(
         "file::testdb_{}:?mode=memory&cache=shared",
         MEM_DB_COUNTER.fetch_add(1, Ordering::Relaxed)
@@ -43,11 +44,6 @@ pub fn mock_db() -> (Connection, Pool) {
             .build()
             .unwrap(),
     )
-}
-
-pub struct State {
-    pub conn: Connection,
-    pub pool: Arc<Pool>,
 }
 
 pub fn mock_tags() -> Map<String, Value> {

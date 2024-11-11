@@ -24,21 +24,17 @@ pub async fn check_rpc(password: &str, action: &str, pool: &Pool) -> Result<Admi
 
 #[cfg(test)]
 mod test {
-    use crate::{admin::Admin, test::mock_state, Result};
+    use crate::{admin::Admin, test::mock_db, Result};
 
     #[actix_web::test]
     async fn check_rpc() -> Result<()> {
-        let state = mock_state().await;
-        assert!(super::check_rpc("pwd", "action", &state.pool)
-            .await
-            .is_err());
+        let db = mock_db().await;
+        assert!(super::check_rpc("pwd", "action", &db.pool).await.is_err());
         let password = "pwd";
         let action = "action";
-        Admin::insert("name", password, &state.conn)?;
-        Admin::update_allowed_actions(1, &vec!["action".into()], &state.conn)?;
-        assert!(super::check_rpc(password, action, &state.pool)
-            .await
-            .is_ok());
+        Admin::insert("name", password, &db.conn)?;
+        Admin::update_allowed_actions(1, &vec!["action".into()], &db.conn)?;
+        assert!(super::check_rpc(password, action, &db.pool).await.is_ok());
         Ok(())
     }
 }

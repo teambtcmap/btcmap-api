@@ -121,7 +121,7 @@ mod test {
     use crate::area::Area;
     use crate::report::v2::GetItem;
     use crate::report::Report;
-    use crate::test::mock_state;
+    use crate::test::mock_db;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -133,10 +133,10 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -148,24 +148,19 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &db.conn,
         )?;
-        Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
+        Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -177,21 +172,21 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &db.conn,
         )?;
-        Report::insert(1, &date!(2023 - 05 - 06), &Map::new(), &state.conn)?;
-        Report::insert(1, &date!(2023 - 05 - 07), &Map::new(), &state.conn)?;
-        Report::insert(1, &date!(2023 - 05 - 08), &Map::new(), &state.conn)?;
+        Report::insert(1, &date!(2023 - 05 - 06), &Map::new(), &db.conn)?;
+        Report::insert(1, &date!(2023 - 05 - 07), &Map::new(), &db.conn)?;
+        Report::insert(1, &date!(2023 - 05 - 08), &Map::new(), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -203,40 +198,22 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let state = mock_state().await;
+        let db = mock_db().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), "test".into());
         Area::insert(
             GeoJson::Feature(Feature::default()),
             area_tags,
             "test",
-            &state.conn,
+            &db.conn,
         )?;
-        let report_1 = Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::_set_updated_at(
-            report_1.id,
-            &datetime!(2022-01-05 00:00:00 UTC),
-            &state.conn,
-        )?;
-        let report_2 = Report::insert(
-            1,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &state.conn,
-        )?;
-        Report::_set_updated_at(
-            report_2.id,
-            &datetime!(2022-02-05 00:00:00 UTC),
-            &state.conn,
-        )?;
+        let report_1 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &db.conn)?;
+        Report::_set_updated_at(report_1.id, &datetime!(2022-01-05 00:00:00 UTC), &db.conn)?;
+        let report_2 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &db.conn)?;
+        Report::_set_updated_at(report_2.id, &datetime!(2022-02-05 00:00:00 UTC), &db.conn)?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::from(state.pool))
+                .app_data(Data::new(db.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
