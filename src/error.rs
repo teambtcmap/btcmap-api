@@ -25,6 +25,7 @@ pub enum Error {
     DeadpoolBuild(deadpool_sqlite::BuildError),
     Parse(time::error::Parse),
     Decode(base64::DecodeError),
+    GeoJson(geojson::Error),
 }
 
 impl Display for Error {
@@ -37,6 +38,7 @@ impl Display for Error {
             Error::Other(err) => write!(f, "{}", err),
             Error::Parse(err) => write!(f, "{}", err),
             Error::Decode(err) => write!(f, "{}", err),
+            Error::GeoJson(err) => write!(f, "{}", err),
             Error::IO(err) => err.fmt(f),
             Error::Rusqlite(err) => err.fmt(f),
             Error::Reqwest(err) => err.fmt(f),
@@ -127,6 +129,12 @@ impl From<time::error::Parse> for Error {
 impl From<base64::DecodeError> for Error {
     fn from(error: base64::DecodeError) -> Self {
         Error::Decode(error)
+    }
+}
+
+impl From<geojson::Error> for Error {
+    fn from(error: geojson::Error) -> Self {
+        Error::GeoJson(error)
     }
 }
 

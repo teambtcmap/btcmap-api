@@ -115,7 +115,6 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data, QueryConfig};
     use actix_web::{test, App};
-    use geojson::{Feature, GeoJson};
     use serde_json::Map;
     use time::macros::datetime;
     use time::OffsetDateTime;
@@ -176,15 +175,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let db = mock_db().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
+        let area = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
         let report = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),
@@ -208,15 +199,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
+        let area = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
         let report_1 = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),
@@ -252,16 +235,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
-
+        let area = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
         let report_1 = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),

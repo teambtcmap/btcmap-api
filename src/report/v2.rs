@@ -126,7 +126,6 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
-    use geojson::{Feature, GeoJson};
     use serde_json::{Map, Value};
     use time::macros::{date, datetime};
     use time::OffsetDateTime;
@@ -149,14 +148,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let db = mock_db().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &db.conn,
-        )?;
+        Area::insert(Area::mock_tags(), &db.conn)?;
         Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &db.conn)?;
         let app = test::init_service(
             App::new()
@@ -173,14 +165,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &db.conn,
-        )?;
+        Area::insert(Area::mock_tags(), &db.conn)?;
         Report::insert(1, &date!(2023 - 05 - 06), &Map::new(), &db.conn)?;
         Report::insert(1, &date!(2023 - 05 - 07), &Map::new(), &db.conn)?;
         Report::insert(1, &date!(2023 - 05 - 08), &Map::new(), &db.conn)?;
@@ -199,14 +184,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db().await;
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &db.conn,
-        )?;
+        Area::insert(Area::mock_tags(), &db.conn)?;
         let report_1 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &db.conn)?;
         Report::_set_updated_at(report_1.id, &datetime!(2022-01-05 00:00:00 UTC), &db.conn)?;
         let report_2 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &db.conn)?;

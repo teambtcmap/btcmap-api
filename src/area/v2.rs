@@ -109,7 +109,6 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
-    use geojson::{Feature, GeoJson};
 
     #[test]
     async fn get_empty_table() -> Result<()> {
@@ -129,9 +128,7 @@ mod tests {
     #[test]
     async fn get_one_row() -> Result<()> {
         let db = mock_db().await;
-        let mut tags = Map::new();
-        tags.insert("url_alias".into(), "test".into());
-        Area::insert(GeoJson::Feature(Feature::default()), tags, "test", &db.conn)?;
+        Area::insert(Area::mock_tags(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -147,21 +144,9 @@ mod tests {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db().await;
-        let mut tags = Map::new();
-        tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            tags.clone(),
-            "test",
-            &db.conn,
-        )?;
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            tags.clone(),
-            "test",
-            &db.conn,
-        )?;
-        Area::insert(GeoJson::Feature(Feature::default()), tags, "test", &db.conn)?;
+        Area::insert(Area::mock_tags(), &db.conn)?;
+        Area::insert(Area::mock_tags(), &db.conn)?;
+        Area::insert(Area::mock_tags(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -179,10 +164,10 @@ mod tests {
     #[test]
     async fn get_by_id() -> Result<()> {
         let db = mock_db().await;
+        let mut tags = Area::mock_tags();
         let area_url_alias = "test";
-        let mut tags = Map::new();
-        tags.insert("url_alias".into(), Value::String(area_url_alias.into()));
-        Area::insert(GeoJson::Feature(Feature::default()), tags, "test", &db.conn)?;
+        tags.insert("url_alias".into(), area_url_alias.into());
+        Area::insert(tags, &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))

@@ -22,7 +22,7 @@ pub fn find_in_area(area: &Area, conn: &Connection) -> Result<Vec<Element>> {
 }
 
 pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
-    let geometries = area.geo_json_geometries();
+    let geometries = area.geo_json_geometries()?;
     let mut area_elements: Vec<Element> = vec![];
 
     for element in all_elements {
@@ -99,7 +99,7 @@ pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a
             continue;
         }
 
-        let geometries = area.geo_json_geometries();
+        let geometries = area.geo_json_geometries()?;
 
         for geometry in &geometries {
             match &geometry.value {

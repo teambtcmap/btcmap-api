@@ -43,7 +43,7 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     if Area::select_by_alias(url_alias, conn)?.is_some() {
         Err(Error::Conflict("This url_alias is already in use".into()))?
     }
-    let area = Area::insert(geo_json.unwrap(), tags, url_alias, conn)?.unwrap();
+    let area = Area::insert(tags, conn)?.ok_or("failed to insert area")?;
     let area_elements = element::service::find_in_area(&area, conn)?;
     element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
@@ -204,7 +204,6 @@ mod test {
     use crate::osm::overpass::OverpassElement;
     use crate::test::{mock_conn, mock_tags, phuket_geo_json};
     use crate::Result;
-    use geojson::{Feature, GeoJson};
     use serde_json::{json, Map};
 
     #[test]
@@ -242,16 +241,7 @@ mod test {
     #[test]
     fn patch_tags() -> Result<()> {
         let mut conn = mock_conn();
-        let mut tags = Map::new();
-        let url_alias = json!("test");
-        tags.insert("url_alias".into(), url_alias.clone());
-        let area = Area::insert(
-            GeoJson::from_json_value(phuket_geo_json()).unwrap(),
-            tags,
-            url_alias.as_str().unwrap(),
-            &mut conn,
-        )?
-        .unwrap();
+        let area = Area::insert(Area::mock_tags(), &mut conn)?.unwrap();
         let mut patch_tags = Map::new();
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
@@ -277,17 +267,9 @@ mod test {
         let area_element = Element::insert(&area_element, &conn)?;
         let area_element =
             Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
-        let mut tags = Map::new();
-        let url_alias = json!("test");
-        tags.insert("url_alias".into(), url_alias.clone());
+        let mut tags = Area::mock_tags();
         tags.insert("geo_json".into(), phuket_geo_json());
-        let area = Area::insert(
-            GeoJson::from_json_value(phuket_geo_json()).unwrap(),
-            tags.clone(),
-            url_alias.as_str().unwrap(),
-            &mut conn,
-        )?
-        .unwrap();
+        let area = Area::insert(tags.clone(), &mut conn)?.unwrap();
         let area = super::patch_tags(&area.id.to_string(), tags, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
@@ -299,13 +281,7 @@ mod test {
     #[test]
     fn soft_delete() -> Result<()> {
         let mut conn = mock_conn();
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
         super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
@@ -322,16 +298,7 @@ mod test {
         };
         let area_element = Element::insert(&area_element, &conn)?;
         Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
-        let mut tags = Map::new();
-        let url_alias = json!("test");
-        tags.insert("url_alias".into(), url_alias.clone());
-        let area = Area::insert(
-            GeoJson::from_json_value(phuket_geo_json()).unwrap(),
-            tags,
-            url_alias.as_str().unwrap(),
-            &mut conn,
-        )?
-        .unwrap();
+        let area = Area::insert(Area::mock_tags(), &mut conn)?.unwrap();
         super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());

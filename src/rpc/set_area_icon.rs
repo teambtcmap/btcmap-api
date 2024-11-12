@@ -41,10 +41,10 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
         .get()
         .await?
         .interact(move |conn| {
-            Area::set_tag(
+            Area::patch_tag(
                 area.id,
                 "icon:square",
-                &Value::String(format!(
+                Value::String(format!(
                     "https://static.btcmap.org/images/areas/{file_name}"
                 )),
                 conn,

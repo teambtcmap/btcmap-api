@@ -278,7 +278,6 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 mod test {
     use crate::{area::Area, report::Report, test::mock_conn, Result};
     use actix_web::test;
-    use geojson::{Feature, GeoJson};
     use serde_json::Map;
     use std::ops::Add;
     use time::{macros::datetime, Duration, OffsetDateTime};
@@ -286,14 +285,7 @@ mod test {
     #[test]
     async fn insert() -> Result<()> {
         let conn = mock_conn();
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &conn,
-        )?;
+        Area::insert(Area::mock_tags(), &conn)?;
         Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         let reports = Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &conn)?;
         assert_eq!(1, reports.len());
@@ -303,14 +295,7 @@ mod test {
     #[test]
     async fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &conn,
-        )?;
+        Area::insert(Area::mock_tags(), &conn)?;
         let report_1 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         Report::_set_updated_at(report_1.id, &datetime!(2020-01-01 00:00:00 UTC), &conn)?;
         let report_2 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
@@ -327,14 +312,7 @@ mod test {
     #[test]
     async fn select_by_id() -> Result<()> {
         let conn = mock_conn();
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &conn,
-        )?;
+        Area::insert(Area::mock_tags(), &conn)?;
         Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         assert!(Report::select_by_id(1, &conn)?.is_some());
         Ok(())
@@ -343,15 +321,7 @@ mod test {
     #[test]
     async fn select_latest_by_area_id() -> Result<()> {
         let conn = mock_conn();
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
         Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date().previous_day().unwrap(),
@@ -374,14 +344,7 @@ mod test {
     #[test]
     async fn merge_tags() -> Result<()> {
         let conn = mock_conn();
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &conn,
-        )?;
+        Area::insert(Area::mock_tags(), &conn)?;
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
@@ -404,14 +367,7 @@ mod test {
     #[test]
     async fn set_deleted_at() -> Result<()> {
         let conn = mock_conn();
-        let mut area_tags = Map::new();
-        area_tags.insert("url_alias".into(), "test".into());
-        Area::insert(
-            GeoJson::Feature(Feature::default()),
-            area_tags,
-            "test",
-            &conn,
-        )?;
+        Area::insert(Area::mock_tags(), &conn)?;
         let report = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         let new_deleted_at = OffsetDateTime::now_utc().add(Duration::days(1));
         Report::set_deleted_at(report.id, &new_deleted_at, &conn)?;

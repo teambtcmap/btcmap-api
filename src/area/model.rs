@@ -2,12 +2,7 @@ use crate::Result;
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
-#[cfg(not(test))]
-use std::thread::sleep;
-#[cfg(not(test))]
-use std::time::Duration;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tracing::error;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Area {
@@ -18,67 +13,64 @@ pub struct Area {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-const TABLE: &str = "area";
-const ALL_COLUMNS: &str = "id, tags, created_at, updated_at, deleted_at";
+const TABLE_NAME: &str = "area";
 const COL_ID: &str = "id";
 const COL_TAGS: &str = "tags";
-const _COL_CREATED_AT: &str = "created_at";
+const COL_ALIAS: &str = "alias";
 const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
+const MAPPER_PROJECTION: &str = "id, tags, created_at, updated_at, deleted_at";
 
 impl Area {
-    pub fn insert(
-        geo_json: GeoJson,
-        mut tags: Map<String, Value>,
-        alias: &str,
-        conn: &Connection,
-    ) -> Result<Option<Area>> {
-        tags.insert("geo_json".into(), geo_json.into());
-        let query = format!(
+    pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Option<Area>> {
+        let alias = tags
+            .get("url_alias")
+            .cloned()
+            .ok_or("url_alias is missing")?;
+        let alias = alias.as_str().ok_or("url_alias is not a string")?;
+        let _ = tags.get("geo_json").ok_or("geo_json is missing")?;
+        let geo_json = tags["geo_json"].clone();
+        serde_json::to_string(&geo_json)?.parse::<GeoJson>()?;
+        let sql = format!(
             r#"
-                INSERT INTO {TABLE} ({COL_TAGS}, alias)
-                VALUES (json(:tags), :alias)
+                INSERT INTO {TABLE_NAME} ({COL_TAGS}, {COL_ALIAS})
+                VALUES (json(:{COL_TAGS}), :{COL_ALIAS})
             "#
         );
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! { ":tags": Value::from(tags), ":alias": alias },
         )?;
-        let res = Area::select_by_id(conn.last_insert_rowid(), conn)?;
-        Ok(res)
+        Area::select_by_id(conn.last_insert_rowid(), conn)
     }
 
     pub fn select_all(conn: &Connection) -> Result<Vec<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
+                SELECT {MAPPER_PROJECTION}
+                FROM {TABLE_NAME}
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
             "#
         );
-        let res = conn
-            .prepare(&query)?
+        conn.prepare(&sql)?
             .query_map({}, mapper())?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(res)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     pub fn select_all_except_deleted(conn: &Connection) -> Result<Vec<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
+                SELECT {MAPPER_PROJECTION}
+                FROM {TABLE_NAME}
                 WHERE {COL_DELETED_AT} IS NULL
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
             "#
         );
-        let res = conn
-            .prepare(&query)?
+        conn.prepare(&sql)?
             .query_map({}, mapper())?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(res)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     pub fn select_updated_since(
@@ -86,17 +78,16 @@ impl Area {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
+                SELECT {MAPPER_PROJECTION}
+                FROM {TABLE_NAME}
                 WHERE {COL_UPDATED_AT} > :updated_since
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
                 LIMIT :limit
             "#
         );
-        let res = conn
-            .prepare(&query)?
+        conn.prepare(&sql)?
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
@@ -104,24 +95,23 @@ impl Area {
                 },
                 mapper(),
             )?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(res)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     pub fn select_by_search_query(search_query: &str, conn: &Connection) -> Result<Vec<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
+                SELECT {MAPPER_PROJECTION}
+                FROM {TABLE_NAME}
                 WHERE LOWER(json_extract({COL_TAGS}, '$.name')) LIKE '%' || UPPER(:query) || '%'
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
             "#
         );
-        let res = conn
-            .prepare(&query)?
+        conn.prepare(&sql)?
             .query_map(named_params! { ":query": search_query }, mapper())?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(res)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     pub fn select_by_id_or_alias(id_or_alias: &str, conn: &Connection) -> Result<Option<Area>> {
@@ -132,36 +122,34 @@ impl Area {
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
-                WHERE {COL_ID} = :id
+                SELECT {MAPPER_PROJECTION}
+                FROM {TABLE_NAME}
+                WHERE {COL_ID} = :{COL_ID}
             "#
         );
-        let res = conn
-            .query_row(&query, named_params! { ":id": id }, mapper())
-            .optional()?;
-        Ok(res)
+        conn.query_row(&sql, named_params! { ":id": id }, mapper())
+            .optional()
+            .map_err(Into::into)
     }
 
     pub fn select_by_alias(alias: &str, conn: &Connection) -> Result<Option<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
-                WHERE json_extract({COL_TAGS}, '$.url_alias') = :alias
+                SELECT {MAPPER_PROJECTION}
+                FROM {TABLE_NAME}
+                WHERE {COL_ALIAS} = :alias
             "#
         );
-        let res = conn
-            .query_row(&query, named_params! { ":alias": alias }, mapper())
-            .optional()?;
-        Ok(res)
+        conn.query_row(&sql, named_params! { ":alias": alias }, mapper())
+            .optional()
+            .map_err(Into::into)
     }
 
-    pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Option<Area>> {
+    pub fn patch_tag(id: i64, name: &str, value: Value, conn: &Connection) -> Result<Option<Area>> {
         let mut patch_set = Map::new();
-        patch_set.insert(name.into(), value.clone());
+        patch_set.insert(name.into(), value);
         Area::patch_tags(id, patch_set, conn)
     }
 
@@ -170,71 +158,61 @@ impl Area {
         tags: Map<String, Value>,
         conn: &Connection,
     ) -> Result<Option<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                UPDATE {TABLE}
+                UPDATE {TABLE_NAME}
                 SET {COL_TAGS} = json_patch({COL_TAGS}, json(:tags))
-                WHERE {COL_ID} = :id
+                WHERE {COL_ID} = :{COL_ID}
             "#
         );
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":tags": Value::from(tags),
             },
         )?;
-        let res = Area::select_by_id(id, conn)?;
-        Ok(res)
+        Area::select_by_id(id, conn)
     }
 
     pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                UPDATE {TABLE}
+                UPDATE {TABLE_NAME}
                 SET {COL_TAGS} = json_remove({COL_TAGS}, :name)
-                WHERE {COL_ID} = :id
+                WHERE {COL_ID} = :{COL_ID}
             "#
         );
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":name": format!("$.{name}"),
             },
         )?;
-        let res = Area::select_by_id(id, conn)?;
-        Ok(res)
+        Area::select_by_id(id, conn)
     }
 
-    #[allow(dead_code)]
     pub fn set_updated_at(
         id: i64,
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Option<Area>> {
-        let query = format!(
+        let sql = format!(
             r#"
-                UPDATE {TABLE}
-                SET {COL_UPDATED_AT} = :updated_at
-                WHERE {COL_ID} = :id
+                UPDATE {TABLE_NAME}
+                SET {COL_UPDATED_AT} = :{COL_UPDATED_AT}
+                WHERE {COL_ID} = :{COL_ID}
             "#
         );
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        let res = Area::select_by_id(id, conn)?;
-        Ok(res)
+        Area::select_by_id(id, conn)
     }
 
     pub fn set_deleted_at(
@@ -244,17 +222,15 @@ impl Area {
     ) -> Result<Option<Area>> {
         match deleted_at {
             Some(deleted_at) => {
-                let query = format!(
+                let sql = format!(
                     r#"
-                        UPDATE {TABLE}
-                        SET {COL_DELETED_AT} = :deleted_at
-                        WHERE {COL_ID} = :id
+                        UPDATE {TABLE_NAME}
+                        SET {COL_DELETED_AT} = :{COL_DELETED_AT}
+                        WHERE {COL_ID} = :{COL_ID}
                     "#
                 );
-                #[cfg(not(test))]
-                sleep(Duration::from_millis(10));
                 conn.execute(
-                    &query,
+                    &sql,
                     named_params! {
                         ":id": id,
                         ":deleted_at": deleted_at.format(&Rfc3339)?,
@@ -264,66 +240,43 @@ impl Area {
             None => {
                 let query = format!(
                     r#"
-                        UPDATE {TABLE}
+                        UPDATE {TABLE_NAME}
                         SET {COL_DELETED_AT} = NULL
-                        WHERE {COL_ID} = :id
+                        WHERE {COL_ID} = :{COL_ID}
                     "#
                 );
-                #[cfg(not(test))]
-                sleep(Duration::from_millis(10));
                 conn.execute(&query, named_params! { ":id": id })?;
             }
         };
-        let res = Area::select_by_id(id, conn)?;
-        Ok(res)
+        Area::select_by_id(id, conn)
     }
 
     pub fn name(&self) -> String {
         self.tags
             .get("name")
-            .unwrap_or(&Value::String("".into()))
-            .as_str()
-            .unwrap()
+            .map(|it| it.as_str().unwrap_or_default())
+            .unwrap_or_default()
             .into()
     }
 
     pub fn alias(&self) -> String {
         self.tags
             .get("url_alias")
-            .unwrap_or(&Value::String("".into()))
-            .as_str()
-            .unwrap()
+            .map(|it| it.as_str().unwrap_or_default())
+            .unwrap_or_default()
             .into()
     }
 
-    pub fn geo_json(&self) -> Option<GeoJson> {
-        let geo_json = self.tags.get("geo_json").unwrap_or(&Value::Null);
-
-        if !geo_json.is_object() {
-            error!(self.id, "geo_json is missing or not an object");
-            return None;
-        }
-
-        let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json).unwrap().parse();
-
-        match geo_json {
-            Ok(geo_json) => Some(geo_json),
-            Err(e) => {
-                error!(self.id, error = e.to_string(), "Failed to parse geo_json");
-                None
-            }
-        }
+    pub fn geo_json(&self) -> Result<GeoJson> {
+        let geo_json = self.tags["geo_json"].clone();
+        serde_json::to_string(&geo_json)?
+            .parse()
+            .map_err(Into::into)
     }
 
-    pub fn geo_json_geometries(&self) -> Vec<Geometry> {
-        let geo_json = match self.geo_json() {
-            Some(geo_json) => geo_json,
-            None => return vec![],
-        };
-
+    pub fn geo_json_geometries(&self) -> Result<Vec<Geometry>> {
         let mut geometries: Vec<Geometry> = vec![];
-
-        match geo_json {
+        match self.geo_json()? {
             GeoJson::FeatureCollection(v) => {
                 for feature in v.features {
                     if let Some(v) = feature.geometry {
@@ -338,8 +291,18 @@ impl Area {
             }
             GeoJson::Geometry(v) => geometries.push(v),
         };
+        Ok(geometries)
+    }
 
-        geometries
+    #[cfg(test)]
+    pub fn mock_tags() -> Map<String, Value> {
+        let mut tags = Map::new();
+        tags.insert(
+            "geo_json".into(),
+            GeoJson::Feature(geojson::Feature::default()).into(),
+        );
+        tags.insert("url_alias".into(), Value::String("alias".into()));
+        tags
     }
 }
 
@@ -358,62 +321,38 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        area::Area,
-        test::{mock_conn, mock_tags},
-        Result,
-    };
-    use actix_web::test;
+    use crate::{area::Area, test::mock_conn, Result};
     use geojson::{Feature, GeoJson};
-    use serde_json::{json, Map};
+    use serde_json::{json, Map, Value};
+    use time::ext::NumericalDuration;
     use time::{macros::datetime, OffsetDateTime};
 
     #[test]
-    async fn insert() -> Result<()> {
+    fn insert() -> Result<()> {
         let conn = mock_conn();
-        let mut tags = mock_tags();
-        tags.insert(
-            "geo_json".into(),
-            GeoJson::Feature(Feature::default()).into(),
-        );
-        let res = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            tags.clone(),
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        let tags = Area::mock_tags();
+        let res = Area::insert(tags.clone(), &conn)?.unwrap();
         assert_eq!(tags, res.tags);
         assert_eq!(res, Area::select_by_id(res.id, &conn)?.unwrap());
         Ok(())
     }
 
     #[test]
-    async fn select_all() -> Result<()> {
+    fn insert_without_mandatory_tags() -> Result<()> {
+        let conn = mock_conn();
+        let res = Area::insert(Map::new(), &conn);
+        assert!(res.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn select_all() -> Result<()> {
         let conn = mock_conn();
         assert_eq!(
             vec![
-                Area::insert(
-                    GeoJson::Feature(Feature::default()),
-                    Map::new(),
-                    "test",
-                    &conn
-                )?
-                .unwrap(),
-                Area::insert(
-                    GeoJson::Feature(Feature::default()),
-                    Map::new(),
-                    "test",
-                    &conn
-                )?
-                .unwrap(),
-                Area::insert(
-                    GeoJson::Feature(Feature::default()),
-                    Map::new(),
-                    "test",
-                    &conn
-                )?
-                .unwrap(),
+                Area::insert(Area::mock_tags(), &conn)?.unwrap(),
+                Area::insert(Area::mock_tags(), &conn)?.unwrap(),
+                Area::insert(Area::mock_tags(), &conn)?.unwrap(),
             ],
             Area::select_all(&conn)?,
         );
@@ -421,32 +360,25 @@ mod test {
     }
 
     #[test]
-    async fn select_updated_since() -> Result<()> {
+    fn select_all_except_deleted() -> Result<()> {
         let conn = mock_conn();
-        let _area_1 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            mock_tags(),
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::set_deleted_at(2, Some(OffsetDateTime::now_utc()), &conn)?;
+        assert_eq!(2, Area::select_all_except_deleted(&conn)?.len(),);
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since() -> Result<()> {
+        let conn = mock_conn();
+        let _area_1 = Area::insert(Area::mock_tags(), &conn)?.unwrap();
         let _area_1 = Area::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
-        let area_2 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            mock_tags(),
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        let area_2 = Area::insert(Area::mock_tags(), &conn)?.unwrap();
         let area_2 =
             Area::set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &conn)?.unwrap();
-        let area_3 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            mock_tags(),
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        let area_3 = Area::insert(Area::mock_tags(), &conn)?.unwrap();
         let area_3 =
             Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &conn)?.unwrap();
         assert_eq!(
@@ -457,26 +389,37 @@ mod test {
     }
 
     #[test]
-    async fn select_by_id() -> Result<()> {
+    fn select_by_search_query() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::patch_tag(2, "name", "sushi".into(), &conn)?;
+        assert_eq!(1, Area::select_by_search_query("sus", &conn)?.len());
+        assert_eq!(1, Area::select_by_search_query("hi", &conn)?.len());
+        assert_eq!(0, Area::select_by_search_query("sashimi", &conn)?.len());
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id() -> Result<()> {
+        let conn = mock_conn();
+        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
         assert_eq!(area, Area::select_by_id(area.id, &conn)?.unwrap());
         Ok(())
     }
 
     #[test]
-    async fn select_by_url_alias() -> Result<()> {
+    fn select_by_alias() -> Result<()> {
         let conn = mock_conn();
         let url_alias = json!("url_alias_value");
         let mut tags = Map::new();
         tags.insert("url_alias".into(), url_alias.clone());
-        Area::insert(GeoJson::Feature(Feature::default()), tags, "test", &conn)?;
+        tags.insert(
+            "geo_json".into(),
+            GeoJson::Feature(Feature::default()).into(),
+        );
+        Area::insert(tags, &conn)?;
         let area = Area::select_by_alias(url_alias.as_str().unwrap(), &conn)?;
         assert!(area.is_some());
         let area = area.unwrap();
@@ -485,21 +428,32 @@ mod test {
     }
 
     #[test]
-    async fn patch_tags() -> Result<()> {
+    fn patch_tag() -> Result<()> {
+        let conn = mock_conn();
+        let area = Area::insert(Area::mock_tags(), &conn)?.ok_or("failed to insert area")?;
+        let new_tag_name = "new_tag";
+        let new_tag_value: Value = "new_tag_value".into();
+        Area::patch_tag(area.id, new_tag_name, new_tag_value.clone(), &conn)?;
+        assert_eq!(
+            Some(&new_tag_value),
+            Area::select_by_id(1, &conn)?
+                .ok_or("")?
+                .tags
+                .get(new_tag_name)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn patch_tags() -> Result<()> {
         let conn = mock_conn();
         let tag_1_name = "tag_1_name";
         let tag_1_value = json!("tag_1_value");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
-        let mut tags = Map::new();
+        let mut tags = Area::mock_tags();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            tags.clone(),
-            "test",
-            &conn,
-        )?
-        .unwrap();
+        let area = Area::insert(tags.clone(), &conn)?.unwrap();
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         tags.insert(tag_2_name.into(), tag_2_value.clone());
         let area = Area::patch_tags(area.id, tags, &conn)?.unwrap();
@@ -509,15 +463,23 @@ mod test {
     }
 
     #[test]
-    async fn set_deleted_at() -> Result<()> {
+    fn set_updated_at() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
+        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area = Area::set_updated_at(
+            area.id,
+            &OffsetDateTime::now_utc().checked_add(2.days()).unwrap(),
             &conn,
         )?
         .unwrap();
+        assert!(area.updated_at > OffsetDateTime::now_utc().checked_add(1.days()).unwrap());
+        Ok(())
+    }
+
+    #[test]
+    fn set_deleted_at() -> Result<()> {
+        let conn = mock_conn();
+        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
         let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?.unwrap();
         assert!(area.deleted_at.is_some());
         let area = Area::set_deleted_at(area.id, None, &conn)?.unwrap();

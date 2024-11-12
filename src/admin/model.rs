@@ -18,9 +18,6 @@ const COL_ID: &str = "id";
 const COL_NAME: &str = "name";
 const COL_PASSWORD: &str = "password";
 const COL_ALLOWED_ACTIONS: &str = "allowed_actions";
-const _COL_CREATED_AT: &str = "created_at";
-const _COL_UPDATED_AT: &str = "updated_at";
-const _COL_DELETED_AT: &str = "deleted_at";
 const MAPPER_PROJECTION: &str = "id, name, allowed_actions";
 
 impl Admin {

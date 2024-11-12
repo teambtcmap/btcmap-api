@@ -96,8 +96,6 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data, QueryConfig};
     use actix_web::{test, App};
-    use geojson::{Feature, GeoJson};
-    use serde_json::Map;
     use time::macros::datetime;
 
     #[test]
@@ -154,13 +152,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let db = mock_db().await;
-        let area = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
+        let area = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -178,27 +170,9 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db().await;
-        let area_1 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
-        let area_2 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
-        let _area_3 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
+        let area_1 = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
+        let area_2 = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
+        let _area_3 = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -216,21 +190,9 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db().await;
-        let area_1 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
+        let area_1 = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
         Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
-        let area_2 = Area::insert(
-            GeoJson::Feature(Feature::default()),
-            Map::new(),
-            "test",
-            &db.conn,
-        )?
-        .unwrap();
+        let area_2 = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
         let area_2 =
             Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?.unwrap();
         let app = test::init_service(
