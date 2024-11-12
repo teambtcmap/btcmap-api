@@ -1,51 +1,26 @@
 use super::Area;
 use crate::{
-    area_element::model::AreaElement,
+    area_element::{self, model::AreaElement},
     element::{self, Element},
     element_comment::ElementComment,
     event::Event,
     Error, Result,
 };
-use geojson::GeoJson;
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
 
-pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
-    if !tags.contains_key("geo_json") {
-        return Err(Error::InvalidInput("geo_json tag is missing".into()));
-    }
-    let cloned_tags = tags.clone();
-    let url_alias = cloned_tags
-        .get("url_alias")
-        .ok_or(Error::InvalidInput(
-            "Mandatory tag is missing: url_alias".into(),
-        ))?
-        .as_str()
-        .ok_or(Error::InvalidInput(
-            "This tag should be a string: url_alias".into(),
-        ))?;
-    let geo_json = tags
-        .get("geo_json")
-        .ok_or(Error::InvalidInput(
-            "Mandatory tag is missing: geo_json".into(),
-        ))?
-        .as_object()
-        .ok_or(Error::InvalidInput(
-            "This tag should be an object: geo_json".into(),
-        ))?;
-    let geo_json: Result<GeoJson, _> = serde_json::to_string(geo_json).unwrap().parse();
-    if geo_json.is_err() {
-        Err(Error::InvalidInput("Invalid geo_json".into()))?
-    }
-    if Area::select_by_alias(url_alias, conn)?.is_some() {
-        Err(Error::Conflict("This url_alias is already in use".into()))?
-    }
+pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     let area = Area::insert(tags, conn)?.ok_or("failed to insert area")?;
-    let area_elements = element::service::find_in_area(&area, conn)?;
-    element::service::generate_areas_mapping_old(&area_elements, conn)?;
+    let area_elements =
+        area_element::service::get_elements_within_geometries(area.geo_json_geometries()?, &conn)?;
+    AreaElement::insert_bulk(
+        area.id,
+        area_elements.into_iter().map(|it| it.id).collect(),
+        conn,
+    )?;
     Ok(area)
 }
 
@@ -200,41 +175,40 @@ pub fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment
 #[cfg(test)]
 mod test {
     use crate::area::Area;
+    use crate::area_element::model::AreaElement;
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
-    use crate::test::{mock_conn, mock_tags, phuket_geo_json};
+    use crate::test::{mock_conn, phuket_geo_json};
     use crate::Result;
     use serde_json::{json, Map};
 
     #[test]
     fn insert() -> Result<()> {
         let mut conn = mock_conn();
-        let mut tags = mock_tags();
-        let url_alias = json!("test");
-        tags.insert("url_alias".into(), url_alias.clone());
-        tags.insert("geo_json".into(), phuket_geo_json());
-        let area = super::insert(tags, &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
-        assert_eq!(area, db_area);
+        let area = super::insert(Area::mock_tags(), &mut conn)?;
+        assert_eq!(Some(area), Area::select_by_id(1, &conn)?);
         Ok(())
     }
 
     #[test]
-    fn insert_should_update_areas_tags() -> Result<()> {
+    fn insert_should_create_area_mappings() -> Result<()> {
         let mut conn = mock_conn();
-        let area_element = OverpassElement {
+        let element_1 = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        let area_element = Element::insert(&area_element, &conn)?;
-        let mut tags = mock_tags();
-        let url_alias = json!("test");
-        tags.insert("url_alias".into(), url_alias.clone());
+        Element::insert(&element_1, &conn)?;
+        let element_2 = OverpassElement {
+            lat: Some(50.0),
+            lon: Some(1.0),
+            ..OverpassElement::mock(2)
+        };
+        Element::insert(&element_2, &conn)?;
+        let mut tags = Area::mock_tags();
         tags.insert("geo_json".into(), phuket_geo_json());
         super::insert(tags, &mut conn)?;
-        let db_area_element = Element::select_by_id(area_element.id, &conn)?.unwrap();
-        assert_eq!(1, db_area_element.tag("areas").as_array().unwrap().len());
+        assert_eq!(1, AreaElement::select_by_area_id(1, &conn)?.len());
         Ok(())
     }
 

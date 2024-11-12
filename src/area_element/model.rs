@@ -32,6 +32,15 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at ";
 
 impl AreaElement {
+    pub fn insert_bulk(area_id: i64, element_ids: Vec<i64>, conn: &mut Connection) -> Result<()> {
+        let sp = conn.savepoint()?;
+        for element in element_ids {
+            AreaElement::insert(area_id, element, &sp)?;
+        }
+        sp.commit()?;
+        Ok(())
+    }
+
     pub fn insert(area_id: i64, element_id: i64, conn: &Connection) -> Result<AreaElement> {
         let query = format!(
             r#"

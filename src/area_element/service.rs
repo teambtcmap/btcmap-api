@@ -1,6 +1,8 @@
 use super::model::AreaElement;
 use crate::{area::Area, element::Element};
 use crate::{element, Result};
+use geo::{Contains, LineString, MultiPolygon, Polygon};
+use geojson::Geometry;
 use rusqlite::Connection;
 use time::OffsetDateTime;
 
@@ -34,4 +36,41 @@ pub fn generate_areas_mapping(
         has_changes = true;
     }
     Ok(Res { has_changes })
+}
+
+pub fn get_elements_within_geometries(
+    geometries: Vec<Geometry>,
+    conn: &Connection,
+) -> Result<Vec<Element>> {
+    let mut area_elements: Vec<Element> = vec![];
+    for element in Element::select_all(None, &conn)? {
+        for geometry in &geometries {
+            match &geometry.value {
+                geojson::Value::MultiPolygon(_) => {
+                    let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
+
+                    if multi_poly.contains(&element.overpass_data.coord()) {
+                        area_elements.push(element.clone());
+                    }
+                }
+                geojson::Value::Polygon(_) => {
+                    let poly: Polygon = (&geometry.value).try_into().unwrap();
+
+                    if poly.contains(&element.overpass_data.coord()) {
+                        area_elements.push(element.clone());
+                    }
+                }
+                geojson::Value::LineString(_) => {
+                    let line_string: LineString = (&geometry.value).try_into().unwrap();
+
+                    if line_string.contains(&element.overpass_data.coord()) {
+                        area_elements.push(element.clone());
+                    }
+                }
+                _ => continue,
+            }
+        }
+    }
+
+    Ok(area_elements)
 }

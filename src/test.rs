@@ -1,7 +1,7 @@
 use crate::db;
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
@@ -44,17 +44,6 @@ fn _mock_db() -> (Connection, Pool) {
             .build()
             .unwrap(),
     )
-}
-
-pub fn mock_tags() -> Map<String, Value> {
-    let mut tags = Map::new();
-    tags.insert("null".into(), Value::Null);
-    tags.insert("bool".into(), Value::Bool(true));
-    tags.insert("number".into(), Value::Number(1.into()));
-    tags.insert("string".into(), Value::String("test".into()));
-    tags.insert("array".into(), Value::Array(vec![]));
-    tags.insert("object".into(), Value::Object(Map::new()));
-    tags
 }
 
 pub fn mock_osm_tags(kv_pairs: &[&str]) -> HashMap<String, String> {
