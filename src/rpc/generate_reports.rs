@@ -203,7 +203,6 @@ mod test {
     use crate::{osm::overpass::OverpassElement, test::mock_conn};
     use actix_web::test;
     use serde_json::{json, Map};
-    use std::collections::HashMap;
     use time::{macros::date, Duration};
 
     #[test]
@@ -305,7 +304,7 @@ mod test {
         let element_1 = Element {
             id: 1,
             overpass_data: element_1,
-            tags: HashMap::new(),
+            tags: Map::new(),
             created_at: OffsetDateTime::now_utc(),
             updated_at: OffsetDateTime::now_utc(),
             deleted_at: None,
@@ -313,7 +312,7 @@ mod test {
         let element_2 = Element {
             id: 2,
             overpass_data: element_2,
-            tags: HashMap::new(),
+            tags: Map::new(),
             created_at: OffsetDateTime::now_utc(),
             updated_at: OffsetDateTime::now_utc(),
             deleted_at: None,

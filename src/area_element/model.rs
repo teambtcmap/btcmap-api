@@ -103,6 +103,27 @@ impl AreaElement {
         Ok(res)
     }
 
+    pub fn select_by_area_id_and_element_id(
+        area_id: i64,
+        element_id: i64,
+        conn: &Connection,
+    ) -> Result<Option<AreaElement>> {
+        let query = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE {COL_AREA_ID} = :area_id AND {COL_ELEMENT_ID} = :element_id;
+            "#
+        );
+        Ok(conn
+            .query_row(
+                &query,
+                named_params! { ":area_id": area_id, ":element_id": element_id },
+                mapper(),
+            )
+            .optional()?)
+    }
+
     pub fn select_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
         let query = format!(
             r#"

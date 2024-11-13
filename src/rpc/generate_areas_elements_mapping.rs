@@ -1,6 +1,5 @@
 use crate::{
     admin,
-    area::Area,
     area_element::{self},
     discord,
     element::Element,
@@ -53,12 +52,11 @@ fn generate_areas_elements_mapping(
 ) -> Result<Res> {
     let mut elements_processed = 0;
     let mut elements_affected = 0;
-    let areas = Area::select_all(conn)?;
     for element_id in from_element_id..=to_element_id {
         let Some(element) = Element::select_by_id(element_id, conn)? else {
             continue;
         };
-        if area_element::service::generate_areas_mapping(&element, &areas, conn)?.has_changes {
+        if area_element::service::generate_mapping(&[element], conn)?.has_changes {
             elements_affected += 1;
         }
         elements_processed += 1;

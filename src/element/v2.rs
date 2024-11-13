@@ -14,8 +14,8 @@ use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -31,7 +31,7 @@ pub struct GetArgs {
 pub struct GetItem {
     pub id: String,
     pub osm_json: OverpassElement,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]

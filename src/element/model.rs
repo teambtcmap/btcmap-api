@@ -3,7 +3,8 @@ use crate::{osm::overpass::OverpassElement, Error};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::hash::Hash;
+use std::hash::Hasher;
 #[cfg(not(test))]
 use std::thread::sleep;
 #[cfg(not(test))]
@@ -12,17 +13,31 @@ use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, info};
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Element {
     pub id: i64,
     pub overpass_data: OverpassElement,
-    pub tags: HashMap<String, Value>,
+    pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     pub deleted_at: Option<OffsetDateTime>,
+}
+
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Element {}
+
+impl Hash for Element {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 const TABLE: &str = "element";

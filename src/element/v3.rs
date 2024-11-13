@@ -12,8 +12,8 @@ use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashMap;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -29,7 +29,7 @@ pub struct GetItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub osm_data: Option<OverpassElement>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<HashMap<String, Value>>,
+    pub tags: Option<Map<String, Value>>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
     #[serde(default)]

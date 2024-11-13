@@ -1,6 +1,5 @@
 use super::Element;
 use crate::area::Area;
-use crate::area_element;
 use crate::Result;
 use geo::Contains;
 use geo::LineString;
@@ -9,17 +8,10 @@ use geo::Polygon;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::json;
 use serde_json::Value;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
-use tracing::info;
-
-pub fn find_in_area(area: &Area, conn: &Connection) -> Result<Vec<Element>> {
-    let all_elements: Vec<Element> = Element::select_all_except_deleted(conn)?;
-    filter_by_area(&all_elements, area)
-}
 
 pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
     let geometries = area.geo_json_geometries()?;
@@ -55,40 +47,6 @@ pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<El
     }
 
     Ok(area_elements)
-}
-
-pub fn generate_areas_mapping_old(
-    elements: &Vec<Element>,
-    conn: &Connection,
-) -> Result<Vec<Element>> {
-    let mut res: Vec<Element> = vec![];
-    let all_areas: Vec<Area> = Area::select_all(conn)?;
-    for element in elements {
-        let element_areas = find_areas(element, &all_areas)?;
-        let element_areas = areas_to_areas_tag(element_areas);
-        let element = if element.tag("areas") != &element_areas {
-            info!(
-                element = element.id,
-                old = serde_json::to_string(element.tag("areas"))?,
-                new = serde_json::to_string(&element_areas)?,
-                "Change detected, updating areas tag",
-            );
-            Element::set_tag(element.id, "areas", &element_areas, conn)?
-        } else {
-            info!(element = element.id, "No changes, skipping update");
-            element.clone()
-        };
-        area_element::service::generate_areas_mapping(&element, &all_areas, conn)?;
-        res.push(element);
-    }
-    Ok(res)
-}
-
-fn areas_to_areas_tag(areas: Vec<&Area>) -> Value {
-    let element_areas: Vec<Value> = areas.iter().map(|it| {
-        json!({"id": it.id, "url_alias": it.tags.get("url_alias").unwrap_or(&Value::Null).as_str().unwrap_or_default()})
-    }).collect();
-    Value::Array(element_areas)
 }
 
 pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a Area>> {

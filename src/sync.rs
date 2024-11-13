@@ -3,7 +3,7 @@ use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
 use crate::user::User;
-use crate::{discord, Error, Result};
+use crate::{area_element, discord, Error, Result};
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::Value;
@@ -173,7 +173,7 @@ pub async fn sync_updated_elements(
             )?;
         }
         element::service::generate_issues(vec![&updated_element], &sp)?;
-        element::service::generate_areas_mapping_old(&vec![updated_element], &sp)?;
+        area_element::service::generate_mapping(&vec![updated_element], &sp)?;
         sp.commit()?;
     }
     for event in &res {
@@ -218,7 +218,7 @@ pub async fn sync_new_elements(
                 )?;
                 info!(category, android_icon);
                 element::service::generate_issues(vec![&element], &sp)?;
-                element::service::generate_areas_mapping_old(&vec![element], &sp)?;
+                area_element::service::generate_mapping(&vec![element], &sp)?;
                 sp.commit()?;
             }
         }

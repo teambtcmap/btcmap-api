@@ -94,3 +94,44 @@ pub fn phuket_geo_json() -> Value {
           }
     )
 }
+
+pub fn earth_geo_json() -> Value {
+    json!(
+        {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                  "coordinates": [
+                    [
+                      [
+                        -180,
+                        -90
+                      ],
+                      [
+                        -180,
+                        90
+                      ],
+                      [
+                        180,
+                        90
+                      ],
+                      [
+                        180,
+                        -90
+                      ],
+                      [
+                        -180,
+                        -90
+                      ]
+                    ]
+                  ],
+                  "type": "Polygon"
+                }
+              }
+            ]
+          }
+    )
+}

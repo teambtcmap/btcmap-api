@@ -1,7 +1,7 @@
 use super::Area;
 use crate::{
     area_element::{self, model::AreaElement},
-    element::{self, Element},
+    element::Element,
     element_comment::ElementComment,
     event::Event,
     Error, Result,
@@ -12,6 +12,14 @@ use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
 
+// it can take a long time to find area_elements
+// let's say it takes 10 minutes
+// on 7th minute a new element was added by osm sync
+// this new area will be mapped to that place by the sync
+// so we can't assume that insert_bulk will always append to an empty dataset
+// but confilct seems unlikely since the place was added after get_elements_within_geometries queried elements snapshot
+// and if an element was deleted, that's not an issue since we never fully delete elements
+// but wat if an element was moved? It could change its area set... TODO
 pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     let area = Area::insert(tags, conn)?.ok_or("failed to insert area")?;
     let area_elements =
@@ -35,23 +43,43 @@ pub fn patch_tag(
     patch_tags(id_or_alias, tags, conn)
 }
 
-pub fn patch_tags(id_or_alias: &str, tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
-    let area = Area::select_by_id_or_alias(id_or_alias, conn)?.unwrap();
+fn patch_tags(area_id_or_alias: &str, tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
+    if tags.contains_key("url_alias") {
+        return Err(Error::InvalidInput("url_alias can't be changed".into()));
+    }
+    let area =
+        Area::select_by_id_or_alias(area_id_or_alias, conn)?.ok_or("failed to fetch area")?;
     if tags.contains_key("geo_json") {
-        let area_elements = element::service::find_in_area(&area, conn)?;
+        let mut affected_elements: HashSet<Element> = HashSet::new();
+        for area_element in AreaElement::select_by_area_id(area.id, &conn)? {
+            let element = Element::select_by_id(area_element.element_id, &conn)?.ok_or(format!(
+                "failed to fetch element {}",
+                area_element.element_id,
+            ))?;
+            affected_elements.insert(element);
+        }
         let area = Area::patch_tags(area.id, tags, conn)?.unwrap();
-        element::service::generate_areas_mapping_old(&area_elements, conn)?;
-        let area_elements = element::service::find_in_area(&area, conn)?;
-        element::service::generate_areas_mapping_old(&area_elements, conn)?;
+        let elements_in_new_bounds = area_element::service::get_elements_within_geometries(
+            area.geo_json_geometries()?,
+            &conn,
+        )?;
+        for element in elements_in_new_bounds {
+            affected_elements.insert(element);
+        }
+        let affected_elements: Vec<Element> = affected_elements.into_iter().collect();
+        area_element::service::generate_mapping(&affected_elements, conn)?;
         Ok(area)
     } else {
-        Ok(Area::patch_tags(area.id, tags, conn)?.unwrap())
+        Area::patch_tags(area.id, tags, conn)?.ok_or("failed to fetch area".into())
     }
 }
 
 pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection) -> Result<Area> {
+    if tag_name == "url_alias" {
+        return Err(Error::InvalidInput("url_alias can't be removed".into()));
+    }
     if tag_name == "geo_json" {
-        return Err(Error::InvalidInput("geo_json tag can't be removed".into()));
+        return Err(Error::InvalidInput("geo_json can't be removed".into()));
     }
     let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
     Ok(Area::remove_tag(area.id, tag_name, conn)?.unwrap())
@@ -59,9 +87,7 @@ pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection)
 
 pub fn soft_delete(area_id_or_alias: &str, conn: &Connection) -> Result<Area> {
     let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
-    let area_elements = element::service::find_in_area(&area, conn)?;
     let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?.unwrap();
-    element::service::generate_areas_mapping_old(&area_elements, conn)?;
     Ok(area)
 }
 
@@ -178,7 +204,7 @@ mod test {
     use crate::area_element::model::AreaElement;
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
-    use crate::test::{mock_conn, phuket_geo_json};
+    use crate::test::{earth_geo_json, mock_conn, phuket_geo_json};
     use crate::Result;
     use serde_json::{json, Map};
 
@@ -216,39 +242,62 @@ mod test {
     fn patch_tags() -> Result<()> {
         let mut conn = mock_conn();
         let area = Area::insert(Area::mock_tags(), &mut conn)?.unwrap();
-        let mut patch_tags = Map::new();
+        let mut patch_set = Map::new();
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
-        patch_tags.insert(new_tag_name.into(), new_tag_value.clone());
-        let new_alias = json!("test1");
-        patch_tags.insert("url_alias".into(), new_alias.clone());
-        let area = super::patch_tags(&area.id.to_string(), patch_tags, &mut conn)?;
+        patch_set.insert(new_tag_name.into(), new_tag_value.clone());
+        let area = super::patch_tags(&area.id.to_string(), patch_set, &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
         assert_eq!(new_tag_value, db_area.tags[new_tag_name]);
-        assert_eq!(new_alias, db_area.tags["url_alias"]);
         Ok(())
     }
 
     #[test]
-    fn patch_tags_should_update_areas_tags() -> Result<()> {
+    fn patch_tags_should_update_area_mappings() -> Result<()> {
         let mut conn = mock_conn();
-        let area_element = OverpassElement {
+        let element_in_phuket = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        let area_element = Element::insert(&area_element, &conn)?;
-        let area_element =
-            Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
+        Element::insert(&element_in_phuket, &conn)?;
+        let element_in_london = OverpassElement {
+            lat: Some(50.0),
+            lon: Some(1.0),
+            ..OverpassElement::mock(2)
+        };
+        Element::insert(&element_in_london, &conn)?;
         let mut tags = Area::mock_tags();
-        tags.insert("geo_json".into(), phuket_geo_json());
+        tags.insert("geo_json".into(), earth_geo_json());
         let area = Area::insert(tags.clone(), &mut conn)?.unwrap();
-        let area = super::patch_tags(&area.id.to_string(), tags, &mut conn)?;
+        let area_element_phuket = AreaElement::insert(area.id, element_in_phuket.id, &conn)?;
+        let area_element_london = AreaElement::insert(area.id, element_in_london.id, &conn)?;
+        tags.insert("geo_json".into(), phuket_geo_json());
+        tags.remove("url_alias");
+        let area = super::patch_tags(&area.id.to_string(), tags.clone(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert_eq!(area, db_area);
-        let db_area_element = Element::select_by_id(area_element.id, &conn)?.unwrap();
-        assert_eq!(1, db_area_element.tag("areas").as_array().unwrap().len());
+        assert!(AreaElement::select_by_id(area_element_phuket.id, &conn)?
+            .ok_or("failed to insert area element")?
+            .deleted_at
+            .is_none());
+        assert!(AreaElement::select_by_id(area_element_london.id, &conn)?
+            .ok_or("failed to insert area element")?
+            .deleted_at
+            .is_some());
+        assert_eq!(2, AreaElement::select_by_area_id(area.id, &conn)?.len());
+        tags.insert("geo_json".into(), earth_geo_json());
+        let area = super::patch_tags(&area.id.to_string(), tags, &mut conn)?;
+        assert_eq!(2, AreaElement::select_by_area_id(area.id, &conn)?.len());
+        assert!(AreaElement::select_by_id(area_element_phuket.id, &conn)?
+            .ok_or("failed to insert area element")?
+            .deleted_at
+            .is_none());
+        assert!(AreaElement::select_by_id(area_element_london.id, &conn)?
+            .ok_or("failed to insert area element")?
+            .deleted_at
+            .is_none());
         Ok(())
     }
 
