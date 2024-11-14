@@ -1,5 +1,5 @@
 use crate::{
-    admin::{self, Admin},
+    admin::{service::check_rpc, Admin},
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -24,13 +24,9 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
-    let new_admin = pool
-        .get()
-        .await?
-        .interact(move |conn| Admin::insert(&args.new_admin_name, &args.new_admin_password, conn))
-        .await??
-        .ok_or("Failed to insert new admin user record")?;
+    let admin = check_rpc(&args.password, NAME, &pool).await?;
+    let new_admin =
+        Admin::insert_async(args.new_admin_name, args.new_admin_password, &pool).await?;
     let log_message = format!(
         "{} added new admin user {} with the following allowed actions: {}",
         admin.name,
