@@ -147,12 +147,6 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub fn patch_tag(id: i64, name: &str, value: Value, conn: &Connection) -> Result<Option<Area>> {
-        let mut patch_set = Map::new();
-        patch_set.insert(name.into(), value);
-        Area::patch_tags(id, patch_set, conn)
-    }
-
     pub fn patch_tags(
         id: i64,
         tags: Map<String, Value>,
@@ -323,7 +317,7 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
 mod test {
     use crate::{area::Area, test::mock_conn, Result};
     use geojson::{Feature, GeoJson};
-    use serde_json::{json, Map, Value};
+    use serde_json::{json, Map};
     use time::ext::NumericalDuration;
     use time::{macros::datetime, OffsetDateTime};
 
@@ -394,7 +388,11 @@ mod test {
         Area::insert(Area::mock_tags(), &conn)?.unwrap();
         Area::insert(Area::mock_tags(), &conn)?.unwrap();
         Area::insert(Area::mock_tags(), &conn)?.unwrap();
-        Area::patch_tag(2, "name", "sushi".into(), &conn)?;
+        Area::patch_tags(
+            2,
+            Map::from_iter([("name".into(), "sushi".into())].into_iter()),
+            &conn,
+        )?;
         assert_eq!(1, Area::select_by_search_query("sus", &conn)?.len());
         assert_eq!(1, Area::select_by_search_query("hi", &conn)?.len());
         assert_eq!(0, Area::select_by_search_query("sashimi", &conn)?.len());
@@ -424,23 +422,6 @@ mod test {
         assert!(area.is_some());
         let area = area.unwrap();
         assert_eq!(url_alias, area.tags["url_alias"]);
-        Ok(())
-    }
-
-    #[test]
-    fn patch_tag() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?.ok_or("failed to insert area")?;
-        let new_tag_name = "new_tag";
-        let new_tag_value: Value = "new_tag_value".into();
-        Area::patch_tag(area.id, new_tag_name, new_tag_value.clone(), &conn)?;
-        assert_eq!(
-            Some(&new_tag_value),
-            Area::select_by_id(1, &conn)?
-                .ok_or("")?
-                .tags
-                .get(new_tag_name)
-        );
         Ok(())
     }
 

@@ -4,7 +4,7 @@ use base64::prelude::*;
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::Map;
 use std::{fs::OpenOptions, io::Write, sync::Arc};
 
 const NAME: &str = "set_area_icon";
@@ -37,19 +37,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
         ))?;
     file.write_all(&bytes)?;
     file.flush()?;
+    let url = format!("https://static.btcmap.org/images/areas/{file_name}");
+    let patch_set = Map::from_iter([("icon_square".into(), url.into())].into_iter());
     let area = pool
         .get()
         .await?
-        .interact(move |conn| {
-            Area::patch_tag(
-                area.id,
-                "icon:square",
-                Value::String(format!(
-                    "https://static.btcmap.org/images/areas/{file_name}"
-                )),
-                conn,
-            )
-        })
+        .interact(move |conn| Area::patch_tags(area.id, patch_set, conn))
         .await??
         .ok_or("Failed to update area tag")?;
     Ok(area.into())

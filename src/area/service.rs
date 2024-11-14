@@ -32,18 +32,11 @@ pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     Ok(area)
 }
 
-pub fn patch_tag(
-    id_or_alias: &str,
-    tag_name: &str,
-    tag_value: &Value,
-    conn: &mut Connection,
+pub fn patch_tags(
+    area_id_or_alias: &str,
+    tags: Map<String, Value>,
+    conn: &Connection,
 ) -> Result<Area> {
-    let mut tags = Map::new();
-    tags.insert(tag_name.to_string(), tag_value.clone());
-    patch_tags(id_or_alias, tags, conn)
-}
-
-fn patch_tags(area_id_or_alias: &str, tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     if tags.contains_key("url_alias") {
         return Err(Error::InvalidInput("url_alias can't be changed".into()));
     }

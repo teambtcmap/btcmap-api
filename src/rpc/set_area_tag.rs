@@ -7,7 +7,7 @@ use crate::{
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::sync::Arc;
 use tracing::info;
 
@@ -23,12 +23,11 @@ pub struct Args {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
-    let cloned_name = args.name.clone();
-    let cloned_value = args.value.clone();
+    let patch_set = Map::from_iter([(args.name.clone(), args.value.clone())].into_iter());
     let area = pool
         .get()
         .await?
-        .interact(move |conn| area::service::patch_tag(&args.id, &cloned_name, &cloned_value, conn))
+        .interact(move |conn| area::service::patch_tags(&args.id, patch_set, conn))
         .await??;
     let log_message = format!(
         "{} set tag {} = {} for area {} https://api.btcmap.org/v3/areas/{}",
