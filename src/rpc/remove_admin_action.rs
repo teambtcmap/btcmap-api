@@ -25,26 +25,18 @@ pub struct Res {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
     let source_admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
-    let cloned_args_admin = args.admin.clone();
-    let target_admin = pool
-        .get()
+    let target_admin = Admin::select_by_name_async(&args.admin, &pool)
         .await?
-        .interact(move |conn| Admin::select_by_name(&cloned_args_admin, conn))
-        .await??
         .ok_or(format!("There is no admin with name = {}", args.admin))?;
     let allowed_actions: Vec<String> = target_admin
         .allowed_actions
         .into_iter()
         .filter(|it| it != &args.action)
         .collect();
-    let target_admin = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            Admin::update_allowed_actions(target_admin.id, &allowed_actions, conn)
-        })
-        .await??
-        .ok_or(format!("There is no admin with name = {}", args.admin))?;
+    let target_admin =
+        Admin::update_allowed_actions_async(target_admin.id, &allowed_actions, &pool)
+            .await?
+            .ok_or(format!("There is no admin with name = {}", args.admin))?;
     let log_message = format!(
         "{} removed action '{}' for admin {}",
         source_admin.name, args.action, target_admin.name,

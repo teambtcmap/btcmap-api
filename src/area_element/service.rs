@@ -12,7 +12,7 @@ pub struct Res {
 
 pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Res> {
     let mut has_changes = false;
-    let areas = Area::select_all(&conn)?;
+    let areas = Area::select_all(conn)?;
     for element in elements {
         let element_areas = element::service::find_areas(element, &areas)?;
         let old_mappings = AreaElement::select_by_element_id(element.id, conn)?;
@@ -68,7 +68,7 @@ pub fn get_elements_within_geometries(
     conn: &Connection,
 ) -> Result<Vec<Element>> {
     let mut area_elements: Vec<Element> = vec![];
-    for element in Element::select_all(None, &conn)? {
+    for element in Element::select_all(None, conn)? {
         for geometry in &geometries {
             match &geometry.value {
                 geojson::Value::MultiPolygon(_) => {

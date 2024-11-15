@@ -17,14 +17,25 @@ const COL_ALLOWED_ACTIONS: &str = "allowed_actions";
 const MAPPER_PROJECTION: &str = "id, name, allowed_actions";
 
 impl Admin {
-    pub async fn insert_async(name: String, password: String, pool: &Pool) -> Result<Admin> {
+    pub async fn insert_async(
+        name: impl Into<String>,
+        password: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Admin> {
+        let name = name.into();
+        let password = password.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::insert(&name, &password, conn))
+            .interact(move |conn| Admin::insert(name, password, conn))
             .await?
     }
 
-    pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<Admin> {
+    pub fn insert(
+        name: impl Into<String>,
+        password: impl Into<String>,
+        conn: &Connection,
+    ) -> Result<Admin> {
+        let password = password.into();
         let sql = format!(
             r#"
                 INSERT INTO {TABLE_NAME} (
@@ -39,11 +50,11 @@ impl Admin {
         conn.execute(
             &sql,
             named_params! {
-                ":name": name,
-                ":password": password,
+                ":name": name.into(),
+                ":password": &password,
             },
         )?;
-        Admin::select_by_password(password, conn)?
+        Admin::select_by_password(&password, conn)?
             .ok_or("failed to select newly inserted admin".into())
     }
 
@@ -55,12 +66,23 @@ impl Admin {
                 WHERE {COL_ID} = :{COL_ID};
             "#
         );
-        conn.query_row(&sql, named_params! { ":id": id }, Self::mapper())
+        conn.query_row(&sql, named_params! { ":id": id }, mapper())
             .optional()
             .map_err(Into::into)
     }
 
-    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<Admin>> {
+    pub async fn select_by_name_async(
+        name: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Option<Admin>> {
+        let name = name.into();
+        pool.get()
+            .await?
+            .interact(move |conn| Admin::select_by_name(name, conn))
+            .await?
+    }
+
+    pub fn select_by_name(name: impl Into<String>, conn: &Connection) -> Result<Option<Admin>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -68,20 +90,26 @@ impl Admin {
                 WHERE {COL_NAME} = :{COL_NAME};
             "#
         );
-        conn.query_row(&sql, named_params! { ":name": name }, Self::mapper())
+        conn.query_row(&sql, named_params! { ":name": name.into() }, mapper())
             .optional()
             .map_err(Into::into)
     }
 
-    pub async fn select_by_password_async(password: &str, pool: &Pool) -> Result<Option<Admin>> {
-        let password = password.to_string();
+    pub async fn select_by_password_async(
+        password: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Option<Admin>> {
+        let password = password.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::select_by_password(&password, conn))
+            .interact(move |conn| Admin::select_by_password(password, conn))
             .await?
     }
 
-    pub fn select_by_password(password: &str, conn: &Connection) -> Result<Option<Admin>> {
+    pub fn select_by_password(
+        password: impl Into<String>,
+        conn: &Connection,
+    ) -> Result<Option<Admin>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -91,11 +119,23 @@ impl Admin {
         );
         conn.query_row(
             &sql,
-            named_params! { ":password": password },
-            Self::mapper(),
+            named_params! { ":password": password.into() },
+            mapper(),
         )
         .optional()
         .map_err(Into::into)
+    }
+
+    pub async fn update_allowed_actions_async(
+        id: i64,
+        allowed_actions: &[String],
+        pool: &Pool,
+    ) -> Result<Option<Admin>> {
+        let allowed_actions = allowed_actions.to_vec();
+        pool.get()
+            .await?
+            .interact(move |conn| Admin::update_allowed_actions(id, &allowed_actions, conn))
+            .await?
     }
 
     pub fn update_allowed_actions(
@@ -119,15 +159,15 @@ impl Admin {
         )?;
         Admin::select_by_id(id, conn)
     }
+}
 
-    const fn mapper() -> fn(&Row) -> rusqlite::Result<Admin> {
-        |row: &Row| -> rusqlite::Result<Admin> {
-            Ok(Admin {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                allowed_actions: serde_json::from_value(row.get(2)?).unwrap_or_default(),
-            })
-        }
+const fn mapper() -> fn(&Row) -> rusqlite::Result<Admin> {
+    |row: &Row| -> rusqlite::Result<Admin> {
+        Ok(Admin {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            allowed_actions: serde_json::from_value(row.get(2)?).unwrap_or_default(),
+        })
     }
 }
 

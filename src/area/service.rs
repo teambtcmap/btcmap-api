@@ -23,7 +23,7 @@ use time::OffsetDateTime;
 pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     let area = Area::insert(tags, conn)?.ok_or("failed to insert area")?;
     let area_elements =
-        area_element::service::get_elements_within_geometries(area.geo_json_geometries()?, &conn)?;
+        area_element::service::get_elements_within_geometries(area.geo_json_geometries()?, conn)?;
     AreaElement::insert_bulk(
         area.id,
         area_elements.into_iter().map(|it| it.id).collect(),
@@ -44,7 +44,7 @@ pub fn patch_tags(
         Area::select_by_id_or_alias(area_id_or_alias, conn)?.ok_or("failed to fetch area")?;
     if tags.contains_key("geo_json") {
         let mut affected_elements: HashSet<Element> = HashSet::new();
-        for area_element in AreaElement::select_by_area_id(area.id, &conn)? {
+        for area_element in AreaElement::select_by_area_id(area.id, conn)? {
             let element = Element::select_by_id(area_element.element_id, &conn)?.ok_or(format!(
                 "failed to fetch element {}",
                 area_element.element_id,
@@ -54,7 +54,7 @@ pub fn patch_tags(
         let area = Area::patch_tags(area.id, tags, conn)?.unwrap();
         let elements_in_new_bounds = area_element::service::get_elements_within_geometries(
             area.geo_json_geometries()?,
-            &conn,
+            conn,
         )?;
         for element in elements_in_new_bounds {
             affected_elements.insert(element);
