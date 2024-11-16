@@ -174,3 +174,12 @@ impl ResponseError for Error {
 }
 
 impl ErrorLike for Error {}
+
+pub fn action_is_not_allowed(action: impl Into<String>) -> Error {
+    let action = action.into();
+    Error::Unauthorized(format!("you are not allowed to perform action {action}"))
+}
+
+pub fn invalid_token() -> Error {
+    Error::Unauthorized("invalid token".into())
+}
