@@ -18,7 +18,7 @@ pub struct Args {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
-    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
     let element = pool
         .get()
         .await?

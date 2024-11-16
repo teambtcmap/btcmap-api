@@ -15,7 +15,7 @@ pub struct Args {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<MergeResult> {
-    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
     let elements = overpass::query_bitcoin_merchants().await?;
     let mut conn = db::open_connection()?;
     let res = sync::merge_overpass_elements(elements, &mut conn).await?;

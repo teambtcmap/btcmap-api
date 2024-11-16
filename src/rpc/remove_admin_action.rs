@@ -24,7 +24,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let source_admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let source_admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
     let target_admin = Admin::select_by_name_async(&args.admin, &pool)
         .await?
         .ok_or(format!("There is no admin with name = {}", args.admin))?;

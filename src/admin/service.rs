@@ -3,13 +3,16 @@ use crate::Result;
 use crate::{discord, Error};
 use deadpool_sqlite::Pool;
 
-pub async fn check_rpc(password: &str, action: &str, pool: &Pool) -> Result<Admin> {
+pub async fn check_rpc(
+    password: impl Into<String>,
+    action: impl Into<String>,
+    pool: &Pool,
+) -> Result<Admin> {
+    let action = action.into();
     let admin = Admin::select_by_password_async(password, pool)
         .await?
         .ok_or("invalid token")?;
-    if !admin.allowed_actions.contains(&"all".into())
-        && !admin.allowed_actions.contains(&action.into())
-    {
+    if !admin.allowed_actions.contains(&"all".into()) && !admin.allowed_actions.contains(&action) {
         let log_message = format!(
             "{} tried to call action {} without proper permissions",
             admin.name, action,

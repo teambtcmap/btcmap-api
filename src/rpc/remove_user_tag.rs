@@ -22,18 +22,19 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
-    let cloned_args = args.clone();
+    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
+    let cloned_args_user_name = args.user_name.clone();
+    let cloned_args_tag_name = args.tag_name.clone();
     let user = pool
         .get()
         .await?
-        .interact(move |conn| User::select_by_name(&cloned_args.user_name, conn))
+        .interact(move |conn| User::select_by_name(&cloned_args_user_name, conn))
         .await??
         .ok_or(format!("There is no user with name = {}", args.user_name))?;
     let user = pool
         .get()
         .await?
-        .interact(move |conn| User::remove_tag(user.id, &cloned_args.tag_name, conn))
+        .interact(move |conn| User::remove_tag(user.id, &cloned_args_tag_name, conn))
         .await??
         .ok_or(format!("There is no user with name = {}", args.user_name))?;
     let log_message = format!(

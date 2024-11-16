@@ -24,7 +24,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = check_rpc(&args.password, NAME, &pool).await?;
+    let admin = check_rpc(args.password, NAME, &pool).await?;
     let new_admin =
         Admin::insert_async(args.new_admin_name, args.new_admin_password, &pool).await?;
     let log_message = format!(

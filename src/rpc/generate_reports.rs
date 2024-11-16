@@ -26,7 +26,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
     let started_at = OffsetDateTime::now_utc();
     let res = pool.get().await?.interact(generate_reports).await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();

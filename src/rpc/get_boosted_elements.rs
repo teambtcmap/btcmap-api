@@ -14,7 +14,7 @@ pub struct Args {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Boost>> {
-    admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    admin::service::check_rpc(args.password, NAME, &pool).await?;
     let boosts = pool
         .get()
         .await?

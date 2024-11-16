@@ -15,7 +15,7 @@ pub struct Args {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<ElementComment> {
-    let admin = admin::service::check_rpc(&args.password, NAME, &pool).await?;
+    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
     let cloned_id = args.id.clone();
     let element = pool
         .get()

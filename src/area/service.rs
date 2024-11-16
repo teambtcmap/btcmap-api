@@ -45,7 +45,7 @@ pub fn patch_tags(
     if tags.contains_key("geo_json") {
         let mut affected_elements: HashSet<Element> = HashSet::new();
         for area_element in AreaElement::select_by_area_id(area.id, conn)? {
-            let element = Element::select_by_id(area_element.element_id, &conn)?.ok_or(format!(
+            let element = Element::select_by_id(area_element.element_id, conn)?.ok_or(format!(
                 "failed to fetch element {}",
                 area_element.element_id,
             ))?;
