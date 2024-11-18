@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{error, Result};
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
@@ -22,15 +22,21 @@ const COL_DELETED_AT: &str = "deleted_at";
 const MAPPER_PROJECTION: &str = "id, tags, created_at, updated_at, deleted_at";
 
 impl Area {
-    pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Option<Area>> {
+    pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
         let alias = tags
             .get("url_alias")
             .cloned()
-            .ok_or("url_alias is missing")?;
-        let alias = alias.as_str().ok_or("url_alias is not a string")?;
-        let _ = tags.get("geo_json").ok_or("geo_json is missing")?;
+            .ok_or(error::invalid_arg("url_alias is missing"))?;
+        let alias = alias
+            .as_str()
+            .ok_or(error::invalid_arg("url_alias is not a string"))?;
+        let _ = tags
+            .get("geo_json")
+            .ok_or(error::invalid_arg("geo_json is missing"))?;
         let geo_json = tags["geo_json"].clone();
-        serde_json::to_string(&geo_json)?.parse::<GeoJson>()?;
+        serde_json::to_string(&geo_json)?
+            .parse::<GeoJson>()
+            .map_err(|_| error::invalid_arg("invalid geo_json"))?;
         let sql = format!(
             r#"
                 INSERT INTO {TABLE_NAME} ({COL_TAGS}, {COL_ALIAS})
@@ -41,7 +47,8 @@ impl Area {
             &sql,
             named_params! { ":tags": Value::from(tags), ":alias": alias },
         )?;
-        Area::select_by_id(conn.last_insert_rowid(), conn)
+        Area::select_by_id(conn.last_insert_rowid(), conn)?
+            .ok_or(error::select_after_insert_failed("area"))
     }
 
     pub fn select_all(conn: &Connection) -> Result<Vec<Area>> {
@@ -325,7 +332,7 @@ mod test {
     fn insert() -> Result<()> {
         let conn = mock_conn();
         let tags = Area::mock_tags();
-        let res = Area::insert(tags.clone(), &conn)?.unwrap();
+        let res = Area::insert(tags.clone(), &conn)?;
         assert_eq!(tags, res.tags);
         assert_eq!(res, Area::select_by_id(res.id, &conn)?.unwrap());
         Ok(())
@@ -344,9 +351,9 @@ mod test {
         let conn = mock_conn();
         assert_eq!(
             vec![
-                Area::insert(Area::mock_tags(), &conn)?.unwrap(),
-                Area::insert(Area::mock_tags(), &conn)?.unwrap(),
-                Area::insert(Area::mock_tags(), &conn)?.unwrap(),
+                Area::insert(Area::mock_tags(), &conn)?,
+                Area::insert(Area::mock_tags(), &conn)?,
+                Area::insert(Area::mock_tags(), &conn)?,
             ],
             Area::select_all(&conn)?,
         );
@@ -356,9 +363,9 @@ mod test {
     #[test]
     fn select_all_except_deleted() -> Result<()> {
         let conn = mock_conn();
-        Area::insert(Area::mock_tags(), &conn)?.unwrap();
-        Area::insert(Area::mock_tags(), &conn)?.unwrap();
-        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::insert(Area::mock_tags(), &conn)?;
+        Area::insert(Area::mock_tags(), &conn)?;
+        Area::insert(Area::mock_tags(), &conn)?;
         Area::set_deleted_at(2, Some(OffsetDateTime::now_utc()), &conn)?;
         assert_eq!(2, Area::select_all_except_deleted(&conn)?.len(),);
         Ok(())
@@ -367,12 +374,12 @@ mod test {
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
-        let _area_1 = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let _area_1 = Area::insert(Area::mock_tags(), &conn)?;
         let _area_1 = Area::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
-        let area_2 = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area_2 = Area::insert(Area::mock_tags(), &conn)?;
         let area_2 =
             Area::set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &conn)?.unwrap();
-        let area_3 = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area_3 = Area::insert(Area::mock_tags(), &conn)?;
         let area_3 =
             Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &conn)?.unwrap();
         assert_eq!(
@@ -385,9 +392,9 @@ mod test {
     #[test]
     fn select_by_search_query() -> Result<()> {
         let conn = mock_conn();
-        Area::insert(Area::mock_tags(), &conn)?.unwrap();
-        Area::insert(Area::mock_tags(), &conn)?.unwrap();
-        Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        Area::insert(Area::mock_tags(), &conn)?;
+        Area::insert(Area::mock_tags(), &conn)?;
+        Area::insert(Area::mock_tags(), &conn)?;
         Area::patch_tags(
             2,
             Map::from_iter([("name".into(), "sushi".into())].into_iter()),
@@ -402,7 +409,7 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &conn)?;
         assert_eq!(area, Area::select_by_id(area.id, &conn)?.unwrap());
         Ok(())
     }
@@ -434,7 +441,7 @@ mod test {
         let tag_2_value = json!("tag_2_value");
         let mut tags = Area::mock_tags();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
-        let area = Area::insert(tags.clone(), &conn)?.unwrap();
+        let area = Area::insert(tags.clone(), &conn)?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         tags.insert(tag_2_name.into(), tag_2_value.clone());
         let area = Area::patch_tags(area.id, tags, &conn)?.unwrap();
@@ -446,7 +453,7 @@ mod test {
     #[test]
     fn set_updated_at() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &conn)?;
         let area = Area::set_updated_at(
             area.id,
             &OffsetDateTime::now_utc().checked_add(2.days()).unwrap(),
@@ -460,7 +467,7 @@ mod test {
     #[test]
     fn set_deleted_at() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &conn)?;
         let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?.unwrap();
         assert!(area.deleted_at.is_some());
         let area = Area::set_deleted_at(area.id, None, &conn)?.unwrap();

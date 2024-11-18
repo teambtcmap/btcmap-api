@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{error, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 
@@ -55,7 +55,7 @@ impl Admin {
             },
         )?;
         Admin::select_by_password(&password, conn)?
-            .ok_or("failed to select newly inserted admin".into())
+            .ok_or(error::select_after_insert_failed("admin"))
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Admin>> {

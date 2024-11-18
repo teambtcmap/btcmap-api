@@ -183,3 +183,11 @@ pub fn action_is_not_allowed(action: impl Into<String>) -> Error {
 pub fn invalid_token() -> Error {
     Error::Unauthorized("invalid token".into())
 }
+
+pub fn select_after_insert_failed(entity: &str) -> Error {
+    Error::Other(format!("Failed to retrieve newly created {entity}"))
+}
+
+pub fn invalid_arg(msg: &str) -> Error {
+    Error::InvalidInput(msg.into())
+}

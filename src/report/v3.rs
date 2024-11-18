@@ -175,7 +175,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let db = mock_db().await;
-        let area = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let report = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),
@@ -199,7 +199,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db().await;
-        let area = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let report_1 = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),
@@ -235,7 +235,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db().await;
-        let area = Area::insert(Area::mock_tags(), &db.conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let report_1 = Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date(),

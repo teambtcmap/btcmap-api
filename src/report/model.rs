@@ -321,7 +321,7 @@ mod test {
     #[test]
     async fn select_latest_by_area_id() -> Result<()> {
         let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &conn)?;
         Report::insert(
             area.id,
             &OffsetDateTime::now_utc().date().previous_day().unwrap(),

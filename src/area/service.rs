@@ -21,7 +21,7 @@ use time::OffsetDateTime;
 // and if an element was deleted, that's not an issue since we never fully delete elements
 // but wat if an element was moved? It could change its area set... TODO
 pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
-    let area = Area::insert(tags, conn)?.ok_or("failed to insert area")?;
+    let area = Area::insert(tags, conn)?;
     let area_elements =
         area_element::service::get_elements_within_geometries(area.geo_json_geometries()?, conn)?;
     AreaElement::insert_bulk(
@@ -234,7 +234,7 @@ mod test {
     #[test]
     fn patch_tags() -> Result<()> {
         let mut conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &mut conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &mut conn)?;
         let mut patch_set = Map::new();
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
@@ -263,7 +263,7 @@ mod test {
         Element::insert(&element_in_london, &conn)?;
         let mut tags = Area::mock_tags();
         tags.insert("geo_json".into(), earth_geo_json());
-        let area = Area::insert(tags.clone(), &mut conn)?.unwrap();
+        let area = Area::insert(tags.clone(), &mut conn)?;
         let area_element_phuket = AreaElement::insert(area.id, element_in_phuket.id, &conn)?;
         let area_element_london = AreaElement::insert(area.id, element_in_london.id, &conn)?;
         tags.insert("geo_json".into(), phuket_geo_json());
@@ -297,7 +297,7 @@ mod test {
     #[test]
     fn soft_delete() -> Result<()> {
         let mut conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &conn)?;
         super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
@@ -314,7 +314,7 @@ mod test {
         };
         let area_element = Element::insert(&area_element, &conn)?;
         Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
-        let area = Area::insert(Area::mock_tags(), &mut conn)?.unwrap();
+        let area = Area::insert(Area::mock_tags(), &mut conn)?;
         super::soft_delete(&area.id.to_string(), &mut conn)?;
         let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
         assert!(db_area.deleted_at.is_some());
