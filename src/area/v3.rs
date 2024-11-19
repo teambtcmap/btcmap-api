@@ -63,13 +63,8 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let areas = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            Area::select_updated_since(&args.updated_since, Some(args.limit), conn)
-        })
-        .await??;
+    let areas =
+        Area::select_updated_since_async(&args.updated_since, Some(args.limit), &pool).await?;
     req.extensions_mut()
         .insert(RequestExtension::new(areas.len()));
     Ok(Json(areas.into_iter().map(|it| it.into()).collect()))

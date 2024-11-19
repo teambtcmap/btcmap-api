@@ -1,4 +1,5 @@
 use crate::{error, Result};
+use deadpool_sqlite::Pool;
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
@@ -40,7 +41,7 @@ impl Area {
         let sql = format!(
             r#"
                 INSERT INTO {TABLE_NAME} ({COL_TAGS}, {COL_ALIAS})
-                VALUES (json(:{COL_TAGS}), :{COL_ALIAS})
+                VALUES (json(:{COL_TAGS}), :{COL_ALIAS});
             "#
         );
         conn.execute(
@@ -51,12 +52,19 @@ impl Area {
             .ok_or(error::select_after_insert_failed("area"))
     }
 
+    pub async fn select_all_async(pool: &Pool) -> Result<Vec<Area>> {
+        pool.get()
+            .await?
+            .interact(|conn| Area::select_all(conn))
+            .await?
+    }
+
     pub fn select_all(conn: &Connection) -> Result<Vec<Area>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
                 FROM {TABLE_NAME}
-                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+                ORDER BY {COL_UPDATED_AT}, {COL_ID};
             "#
         );
         conn.prepare(&sql)?
@@ -71,13 +79,25 @@ impl Area {
                 SELECT {MAPPER_PROJECTION}
                 FROM {TABLE_NAME}
                 WHERE {COL_DELETED_AT} IS NULL
-                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+                ORDER BY {COL_UPDATED_AT}, {COL_ID};
             "#
         );
         conn.prepare(&sql)?
             .query_map({}, mapper())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
+    }
+
+    pub async fn select_updated_since_async(
+        updated_since: &OffsetDateTime,
+        limit: Option<i64>,
+        pool: &Pool,
+    ) -> Result<Vec<Area>> {
+        let updated_since = updated_since.clone();
+        pool.get()
+            .await?
+            .interact(move |conn| Area::select_updated_since(&updated_since, limit, conn))
+            .await?
     }
 
     pub fn select_updated_since(

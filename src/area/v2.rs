@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 use time::format_description::well_known::Rfc3339;
+use time::macros::datetime;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -69,14 +70,12 @@ pub async fn get(
             Redirect::to("https://static.btcmap.org/api/v2/areas.json").permanent(),
         ));
     }
-    let areas = pool
-        .get()
-        .await?
-        .interact(move |conn| match &args.updated_since {
-            Some(updated_since) => Area::select_updated_since(updated_since, args.limit, conn),
-            None => Area::select_all(conn),
-        })
-        .await??;
+    let areas = Area::select_updated_since_async(
+        &args.updated_since.unwrap_or(datetime!(2000-01-01 0:00 UTC)),
+        args.limit,
+        &pool,
+    )
+    .await?;
     let areas_len = areas.len();
     let res = Either::Left(Json(areas.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
