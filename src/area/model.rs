@@ -89,19 +89,18 @@ impl Area {
     }
 
     pub async fn select_updated_since_async(
-        updated_since: &OffsetDateTime,
+        updated_since: OffsetDateTime,
         limit: Option<i64>,
         pool: &Pool,
     ) -> Result<Vec<Area>> {
-        let updated_since = updated_since.clone();
         pool.get()
             .await?
-            .interact(move |conn| Area::select_updated_since(&updated_since, limit, conn))
+            .interact(move |conn| Area::select_updated_since(updated_since, limit, conn))
             .await?
     }
 
     pub fn select_updated_since(
-        updated_since: &OffsetDateTime,
+        updated_since: OffsetDateTime,
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Area>> {
@@ -126,7 +125,21 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub fn select_by_search_query(search_query: &str, conn: &Connection) -> Result<Vec<Area>> {
+    pub async fn select_by_search_query_async(
+        search_query: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Vec<Area>> {
+        let search_query = search_query.into();
+        pool.get()
+            .await?
+            .interact(move |conn| Area::select_by_search_query(&search_query, conn))
+            .await?
+    }
+
+    pub fn select_by_search_query(
+        search_query: impl Into<String>,
+        conn: &Connection,
+    ) -> Result<Vec<Area>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -136,7 +149,7 @@ impl Area {
             "#
         );
         conn.prepare(&sql)?
-            .query_map(named_params! { ":query": search_query }, mapper())?
+            .query_map(named_params! { ":query": search_query.into() }, mapper())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
     }
@@ -404,7 +417,7 @@ mod test {
             Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &conn)?.unwrap();
         assert_eq!(
             vec![area_2, area_3],
-            Area::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &conn)?,
+            Area::select_updated_since(datetime!(2020-01-01 00:00 UTC), None, &conn)?,
         );
         Ok(())
     }

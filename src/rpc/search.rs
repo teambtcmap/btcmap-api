@@ -21,11 +21,7 @@ pub struct Res {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Res>> {
     admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let areas = pool
-        .get()
-        .await?
-        .interact(move |conn| Area::select_by_search_query(&args.query, conn))
-        .await??;
+    let areas = Area::select_by_search_query_async(args.query, &pool).await?;
     let res = areas
         .into_iter()
         .map(|it| Res {

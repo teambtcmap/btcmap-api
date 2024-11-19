@@ -71,7 +71,7 @@ pub async fn get(
         ));
     }
     let areas = Area::select_updated_since_async(
-        &args.updated_since.unwrap_or(datetime!(2000-01-01 0:00 UTC)),
+        args.updated_since.unwrap_or(datetime!(2000-01-01 0:00 UTC)),
         args.limit,
         &pool,
     )
