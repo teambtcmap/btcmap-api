@@ -15,12 +15,11 @@ pub struct Args {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let cloned_id = args.id.clone();
-    let area = pool
-        .get()
+    Area::select_by_id_or_alias_async(&args.id, &pool)
         .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&cloned_id, conn))
-        .await??;
-    area.map(|it| it.into())
-        .ok_or(format!("There is no area with id or alias = {}", args.id).into())
+        .ok_or(crate::error::Error::NotFound(format!(
+            "there is no area with id or alias = {}",
+            args.id,
+        )))
+        .map(Into::into)
 }

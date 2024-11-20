@@ -45,11 +45,8 @@ async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
 
 #[get("/new-places/{area}")]
 async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
-    let area = pool
-        .get()
+    let area = Area::select_by_id_or_alias_async(area.to_string(), &pool)
         .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&area, conn))
-        .await??
         .unwrap();
     let area_elements = pool
         .get()
@@ -168,11 +165,8 @@ async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
 
 #[get("/new-comments/{area}")]
 async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
-    let area = pool
-        .get()
+    let area = Area::select_by_id_or_alias_async(area.to_string(), &pool)
         .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&area, conn))
-        .await??
         .unwrap();
     let area_id = area.id;
     let area_name = area.name();

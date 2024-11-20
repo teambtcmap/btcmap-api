@@ -110,7 +110,7 @@ impl Area {
                 FROM {TABLE_NAME}
                 WHERE {COL_UPDATED_AT} > :updated_since
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
-                LIMIT :limit
+                LIMIT :limit;
             "#
         );
         conn.prepare(&sql)?
@@ -145,7 +145,7 @@ impl Area {
                 SELECT {MAPPER_PROJECTION}
                 FROM {TABLE_NAME}
                 WHERE LOWER(json_extract({COL_TAGS}, '$.name')) LIKE '%' || UPPER(:query) || '%'
-                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+                ORDER BY {COL_UPDATED_AT}, {COL_ID};
             "#
         );
         conn.prepare(&sql)?
@@ -154,10 +154,25 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub fn select_by_id_or_alias(id_or_alias: &str, conn: &Connection) -> Result<Option<Area>> {
+    pub async fn select_by_id_or_alias_async(
+        id_or_alias: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Option<Area>> {
+        let id_or_alias = id_or_alias.into();
+        pool.get()
+            .await?
+            .interact(|conn| Area::select_by_id_or_alias(id_or_alias, conn))
+            .await?
+    }
+
+    pub fn select_by_id_or_alias(
+        id_or_alias: impl Into<String>,
+        conn: &Connection,
+    ) -> Result<Option<Area>> {
+        let id_or_alias = id_or_alias.into();
         match id_or_alias.parse::<i64>() {
             Ok(id) => Area::select_by_id(id, conn),
-            Err(_) => Area::select_by_alias(id_or_alias, conn),
+            Err(_) => Area::select_by_alias(&id_or_alias, conn),
         }
     }
 

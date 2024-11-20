@@ -72,13 +72,12 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id_clone = id.clone();
-    pool.get()
+    Area::select_by_id_or_alias_async(id.to_string(), &pool)
         .await?
-        .interact(move |conn| Area::select_by_id_or_alias(&id_clone, conn))
-        .await??
-        .ok_or(Error::NotFound(format!("Area with id {id} doesn't exist")))
-        .map(|it| it.into())
+        .ok_or(Error::NotFound(format!(
+            "area with id = {id} does not exist"
+        )))
+        .map(Into::into)
 }
 
 #[cfg(test)]
