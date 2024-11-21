@@ -181,7 +181,7 @@ impl Area {
             r#"
                 SELECT {MAPPER_PROJECTION}
                 FROM {TABLE_NAME}
-                WHERE {COL_ID} = :{COL_ID}
+                WHERE {COL_ID} = :{COL_ID};
             "#
         );
         conn.query_row(&sql, named_params! { ":id": id }, mapper())
@@ -189,15 +189,26 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub fn select_by_alias(alias: &str, conn: &Connection) -> Result<Option<Area>> {
+    pub async fn select_by_alias_async(
+        alias: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Option<Area>> {
+        let alias = alias.into();
+        pool.get()
+            .await?
+            .interact(|conn| Area::select_by_alias(alias, conn))
+            .await?
+    }
+
+    pub fn select_by_alias(alias: impl Into<String>, conn: &Connection) -> Result<Option<Area>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
                 FROM {TABLE_NAME}
-                WHERE {COL_ALIAS} = :alias
+                WHERE {COL_ALIAS} = :{COL_ALIAS};
             "#
         );
-        conn.query_row(&sql, named_params! { ":alias": alias }, mapper())
+        conn.query_row(&sql, named_params! { ":alias": alias.into() }, mapper())
             .optional()
             .map_err(Into::into)
     }

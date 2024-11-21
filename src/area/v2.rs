@@ -88,12 +88,7 @@ pub async fn get_by_url_alias(
     url_alias: Path<String>,
     pool: Data<Pool>,
 ) -> Result<Json<GetItem>, Error> {
-    let cloned_url_alias = url_alias.clone();
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| Area::select_by_alias(&cloned_url_alias, conn))
-        .await??;
+    let area = Area::select_by_alias_async(url_alias.to_string(), &pool).await?;
     area.ok_or(Error::NotFound(format!(
         "Area with url_alias = {url_alias} doesn't exist"
     )))
