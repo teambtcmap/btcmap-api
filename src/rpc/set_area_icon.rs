@@ -34,7 +34,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
     file.write_all(&bytes)?;
     file.flush()?;
     let url = format!("https://static.btcmap.org/images/areas/{file_name}");
-    let patch_set = Map::from_iter([("icon_square".into(), url.into())].into_iter());
+    let patch_set = Map::from_iter([("icon:square".into(), url.into())].into_iter());
     let area = pool
         .get()
         .await?
