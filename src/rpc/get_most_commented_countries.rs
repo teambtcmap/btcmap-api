@@ -63,7 +63,7 @@ fn get_most_commented_countries(
     }
     let areas_to_comments: Vec<(Area, Vec<&ElementComment>)> = areas_to_comments
         .into_iter()
-        .map(|(k, v)| (Area::select_by_id(k, conn).unwrap().unwrap(), v)) // TODO remove unwraps
+        .map(|(k, v)| (Area::select_by_id(k, conn).unwrap(), v)) // TODO remove unwraps
         .collect();
     let mut res: Vec<Res> = areas_to_comments
         .iter()

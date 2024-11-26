@@ -1,6 +1,6 @@
-use crate::{error, Result};
+use crate::Result;
 use deadpool_sqlite::Pool;
-use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use rusqlite::{named_params, Connection, Row};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Admin {
@@ -54,11 +54,10 @@ impl Admin {
                 ":password": &password,
             },
         )?;
-        Admin::select_by_password(&password, conn)?
-            .ok_or(error::select_after_insert_failed("admin"))
+        Admin::select_by_password(&password, conn)
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Admin>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Admin> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -67,14 +66,10 @@ impl Admin {
             "#
         );
         conn.query_row(&sql, named_params! { ":id": id }, mapper())
-            .optional()
             .map_err(Into::into)
     }
 
-    pub async fn select_by_name_async(
-        name: impl Into<String>,
-        pool: &Pool,
-    ) -> Result<Option<Admin>> {
+    pub async fn select_by_name_async(name: impl Into<String>, pool: &Pool) -> Result<Admin> {
         let name = name.into();
         pool.get()
             .await?
@@ -82,7 +77,7 @@ impl Admin {
             .await?
     }
 
-    pub fn select_by_name(name: impl Into<String>, conn: &Connection) -> Result<Option<Admin>> {
+    pub fn select_by_name(name: impl Into<String>, conn: &Connection) -> Result<Admin> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -91,14 +86,13 @@ impl Admin {
             "#
         );
         conn.query_row(&sql, named_params! { ":name": name.into() }, mapper())
-            .optional()
             .map_err(Into::into)
     }
 
     pub async fn select_by_password_async(
         password: impl Into<String>,
         pool: &Pool,
-    ) -> Result<Option<Admin>> {
+    ) -> Result<Admin> {
         let password = password.into();
         pool.get()
             .await?
@@ -106,10 +100,7 @@ impl Admin {
             .await?
     }
 
-    pub fn select_by_password(
-        password: impl Into<String>,
-        conn: &Connection,
-    ) -> Result<Option<Admin>> {
+    pub fn select_by_password(password: impl Into<String>, conn: &Connection) -> Result<Admin> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -122,27 +113,26 @@ impl Admin {
             named_params! { ":password": password.into() },
             mapper(),
         )
-        .optional()
         .map_err(Into::into)
     }
 
     pub async fn update_allowed_actions_async(
-        id: i64,
+        admin_id: i64,
         allowed_actions: &[String],
         pool: &Pool,
-    ) -> Result<Option<Admin>> {
+    ) -> Result<Admin> {
         let allowed_actions = allowed_actions.to_vec();
         pool.get()
             .await?
-            .interact(move |conn| Admin::update_allowed_actions(id, &allowed_actions, conn))
+            .interact(move |conn| Admin::update_allowed_actions(admin_id, &allowed_actions, conn))
             .await?
     }
 
     pub fn update_allowed_actions(
-        id: i64,
+        admin_id: i64,
         allowed_actions: &[String],
         conn: &Connection,
-    ) -> Result<Option<Admin>> {
+    ) -> Result<Admin> {
         let sql = format!(
             r#"
                 UPDATE {TABLE_NAME}
@@ -153,11 +143,11 @@ impl Admin {
         conn.execute(
             &sql,
             named_params! {
-                ":id": id,
+                ":id": admin_id,
                 ":allowed_actions": serde_json::to_string(allowed_actions)?,
             },
         )?;
-        Admin::select_by_id(id, conn)
+        Admin::select_by_id(admin_id, conn)
     }
 }
 
@@ -180,7 +170,7 @@ mod test {
     fn insert() -> Result<()> {
         let conn = mock_conn();
         let admin = Admin::insert("name", "pwd", &conn)?;
-        assert_eq!(Some(admin), Admin::select_by_id(1, &conn)?);
+        assert_eq!(admin, Admin::select_by_id(1, &conn)?);
         Ok(())
     }
 
@@ -188,7 +178,7 @@ mod test {
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
         let admin = Admin::insert("name", "pwd", &conn)?;
-        assert_eq!(Some(admin), Admin::select_by_id(1, &conn)?);
+        assert_eq!(admin, Admin::select_by_id(1, &conn)?);
         Ok(())
     }
 
@@ -197,7 +187,7 @@ mod test {
         let conn = mock_conn();
         let name = "name";
         let admin = Admin::insert(name, "pwd", &conn)?;
-        assert_eq!(Some(admin), Admin::select_by_name(name, &conn)?);
+        assert_eq!(admin, Admin::select_by_name(name, &conn)?);
         Ok(())
     }
 
@@ -206,7 +196,7 @@ mod test {
         let conn = mock_conn();
         let password = "pwd";
         let admin = Admin::insert("name", password, &conn)?;
-        assert_eq!(Some(admin), Admin::select_by_password(password, &conn)?);
+        assert_eq!(admin, Admin::select_by_password(password, &conn)?);
         Ok(())
     }
 
@@ -217,8 +207,8 @@ mod test {
         let actions = vec!["action_1".into(), "action_2".into()];
         Admin::update_allowed_actions(admin.id, &actions, &conn)?;
         assert_eq!(
-            Some(actions),
-            Admin::select_by_id(admin.id, &conn)?.map(|it| it.allowed_actions),
+            actions,
+            Admin::select_by_id(admin.id, &conn)?.allowed_actions,
         );
         Ok(())
     }

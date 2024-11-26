@@ -8,9 +8,7 @@ pub async fn check_rpc(
     pool: &Pool,
 ) -> Result<Admin> {
     let action = action.into();
-    let admin = Admin::select_by_password_async(password, pool)
-        .await?
-        .ok_or(error::invalid_token())?;
+    let admin = Admin::select_by_password_async(password, pool).await?;
     if is_allowed(&action, &admin.allowed_actions) {
         Ok(admin)
     } else {

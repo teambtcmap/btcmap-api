@@ -40,8 +40,7 @@ pub fn patch_tags(
     if tags.contains_key("url_alias") {
         return Err(Error::InvalidInput("url_alias can't be changed".into()));
     }
-    let area =
-        Area::select_by_id_or_alias(area_id_or_alias, conn)?.ok_or("failed to fetch area")?;
+    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
     if tags.contains_key("geo_json") {
         let mut affected_elements: HashSet<Element> = HashSet::new();
         for area_element in AreaElement::select_by_area_id(area.id, conn)? {
@@ -51,7 +50,7 @@ pub fn patch_tags(
             ))?;
             affected_elements.insert(element);
         }
-        let area = Area::patch_tags(area.id, tags, conn)?.unwrap();
+        let area = Area::patch_tags(area.id, tags, conn)?;
         let elements_in_new_bounds = area_element::service::get_elements_within_geometries(
             area.geo_json_geometries()?,
             conn,
@@ -63,7 +62,7 @@ pub fn patch_tags(
         area_element::service::generate_mapping(&affected_elements, conn)?;
         Ok(area)
     } else {
-        Area::patch_tags(area.id, tags, conn)?.ok_or("failed to fetch area".into())
+        Area::patch_tags(area.id, tags, conn)
     }
 }
 
@@ -74,13 +73,13 @@ pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection)
     if tag_name == "geo_json" {
         return Err(Error::InvalidInput("geo_json can't be removed".into()));
     }
-    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
-    Ok(Area::remove_tag(area.id, tag_name, conn)?.unwrap())
+    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
+    Ok(Area::remove_tag(area.id, tag_name, conn)?)
 }
 
 pub fn soft_delete(area_id_or_alias: &str, conn: &Connection) -> Result<Area> {
-    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?.unwrap();
-    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?.unwrap();
+    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
+    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?;
     Ok(area)
 }
 
@@ -139,7 +138,7 @@ pub fn get_trending_areas(
     }
     let areas: Vec<_> = areas
         .into_iter()
-        .map(|it| Area::select_by_id(it, conn).unwrap().unwrap())
+        .map(|it| Area::select_by_id(it, conn).unwrap())
         .collect();
     let mut res: Vec<TrendingArea> = areas
         .into_iter()
@@ -205,7 +204,7 @@ mod test {
     fn insert() -> Result<()> {
         let mut conn = mock_conn();
         let area = super::insert(Area::mock_tags(), &mut conn)?;
-        assert_eq!(Some(area), Area::select_by_id(1, &conn)?);
+        assert_eq!(area, Area::select_by_id(1, &conn)?);
         Ok(())
     }
 
@@ -240,7 +239,7 @@ mod test {
         let new_tag_value = json!("bar");
         patch_set.insert(new_tag_name.into(), new_tag_value.clone());
         let area = super::patch_tags(&area.id.to_string(), patch_set, &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
+        let db_area = Area::select_by_id(area.id, &conn)?;
         assert_eq!(area, db_area);
         assert_eq!(new_tag_value, db_area.tags[new_tag_name]);
         Ok(())
@@ -269,7 +268,7 @@ mod test {
         tags.insert("geo_json".into(), phuket_geo_json());
         tags.remove("url_alias");
         let area = super::patch_tags(&area.id.to_string(), tags.clone(), &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
+        let db_area = Area::select_by_id(area.id, &conn)?;
         assert_eq!(area, db_area);
         assert!(AreaElement::select_by_id(area_element_phuket.id, &conn)?
             .ok_or("failed to insert area element")?
@@ -299,7 +298,7 @@ mod test {
         let mut conn = mock_conn();
         let area = Area::insert(Area::mock_tags(), &conn)?;
         super::soft_delete(&area.id.to_string(), &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
+        let db_area = Area::select_by_id(area.id, &conn)?;
         assert!(db_area.deleted_at.is_some());
         Ok(())
     }
@@ -316,7 +315,7 @@ mod test {
         Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
         let area = Area::insert(Area::mock_tags(), &mut conn)?;
         super::soft_delete(&area.id.to_string(), &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?.unwrap();
+        let db_area = Area::select_by_id(area.id, &conn)?;
         assert!(db_area.deleted_at.is_some());
         assert!(db_area.tags.get("areas").is_none());
         Ok(())

@@ -25,23 +25,13 @@ pub struct Res {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
     let source_admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let target_admin = Admin::select_by_name_async(&args.admin, &pool)
-        .await?
-        .ok_or(format!(
-            "Admin user with name = {} does not exist",
-            args.admin,
-        ))?;
+    let target_admin = Admin::select_by_name_async(&args.admin, &pool).await?;
     let mut allowed_actions = target_admin.allowed_actions;
     if !allowed_actions.contains(&args.action) {
         allowed_actions.push(args.action.clone());
     }
     let target_admin =
-        Admin::update_allowed_actions_async(target_admin.id, &allowed_actions, &pool)
-            .await?
-            .ok_or(format!(
-                "Failed to update allowed actions for admin user {}",
-                args.admin,
-            ))?;
+        Admin::update_allowed_actions_async(target_admin.id, &allowed_actions, &pool).await?;
     let log_message = format!(
         "{} allowed action '{}' for admin {}",
         source_admin.name, args.action, target_admin.name,

@@ -19,9 +19,7 @@ pub struct Args {
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
     admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let area = Area::select_by_id_or_alias_async(&args.id, &pool)
-        .await?
-        .ok_or(format!("There is no area with id or alias = {}", args.id))?;
+    let area = Area::select_by_id_or_alias_async(&args.id, &pool).await?;
     let file_name = format!("{}.{}", area.id, args.icon_ext);
     let bytes = BASE64_STANDARD.decode(args.icon_base64)?;
     let mut file = OpenOptions::new()
@@ -35,11 +33,6 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
     file.flush()?;
     let url = format!("https://static.btcmap.org/images/areas/{file_name}");
     let patch_set = Map::from_iter([("icon:square".into(), url.into())].into_iter());
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| Area::patch_tags(area.id, patch_set, conn))
-        .await??
-        .ok_or("Failed to update area tag")?;
+    let area = Area::patch_tags_async(area.id, patch_set, &pool).await?;
     Ok(area.into())
 }

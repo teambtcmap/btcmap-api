@@ -73,10 +73,7 @@ pub async fn get(
 #[get("{id}")]
 pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
     Area::select_by_id_or_alias_async(id.to_string(), &pool)
-        .await?
-        .ok_or(Error::NotFound(format!(
-            "area with id = {id} does not exist"
-        )))
+        .await
         .map(Into::into)
 }
 
@@ -187,8 +184,7 @@ mod test {
         let area_1 = Area::insert(Area::mock_tags(), &db.conn)?;
         Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
         let area_2 = Area::insert(Area::mock_tags(), &db.conn)?;
-        let area_2 =
-            Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?.unwrap();
+        let area_2 = Area::set_updated_at(area_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
