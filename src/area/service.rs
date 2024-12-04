@@ -195,6 +195,7 @@ mod test {
     use crate::area::Area;
     use crate::area_element::model::AreaElement;
     use crate::element::Element;
+    use crate::element_comment::ElementComment;
     use crate::osm::overpass::OverpassElement;
     use crate::test::{earth_geo_json, mock_conn, phuket_geo_json};
     use crate::Result;
@@ -318,6 +319,17 @@ mod test {
         let db_area = Area::select_by_id(area.id, &conn)?;
         assert!(db_area.deleted_at.is_some());
         assert!(db_area.tags.get("areas").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn get_comments() -> Result<()> {
+        let conn = mock_conn();
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let comment = ElementComment::insert(element.id, "test", &conn)?;
+        let area = Area::insert(Area::mock_tags(), &conn)?;
+        let _area_element = AreaElement::insert(area.id, element.id, &conn)?;
+        assert_eq!(Some(&comment), super::get_comments(&area, &conn)?.first());
         Ok(())
     }
 }
