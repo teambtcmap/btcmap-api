@@ -330,8 +330,8 @@ impl Event {
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        Ok(Event::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Event::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     #[cfg(test)]

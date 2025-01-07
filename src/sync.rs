@@ -25,6 +25,16 @@ pub struct MergeResultElement {
     pub name: String,
 }
 
+impl From<Element> for MergeResultElement {
+    fn from(val: Element) -> Self {
+        MergeResultElement {
+            id: val.id,
+            osm_url: val.osm_url(),
+            name: val.name(),
+        }
+    }
+}
+
 pub async fn merge_overpass_elements(
     fresh_overpass_elements: Vec<OverpassElement>,
     conn: &mut Connection,
@@ -60,52 +70,22 @@ pub async fn merge_overpass_elements(
     );
     let created_elements: Vec<Element> = created_element_events
         .iter()
-        .map(|it| {
-            Element::select_by_id(it.element_id, &conn)
-                .unwrap()
-                .unwrap()
-        })
+        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
         .collect();
-    let created_elements: Vec<MergeResultElement> = created_elements
-        .iter()
-        .map(|it| MergeResultElement {
-            id: it.id,
-            osm_url: it.osm_url(),
-            name: it.name(),
-        })
-        .collect();
+    let created_elements: Vec<MergeResultElement> =
+        created_elements.into_iter().map(|it| it.into()).collect();
     let updated_elements: Vec<Element> = updated_element_events
         .iter()
-        .map(|it| {
-            Element::select_by_id(it.element_id, &conn)
-                .unwrap()
-                .unwrap()
-        })
+        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
         .collect();
-    let updated_elements: Vec<MergeResultElement> = updated_elements
-        .iter()
-        .map(|it| MergeResultElement {
-            id: it.id,
-            osm_url: it.osm_url(),
-            name: it.name(),
-        })
-        .collect();
+    let updated_elements: Vec<MergeResultElement> =
+        updated_elements.into_iter().map(|it| it.into()).collect();
     let deleted_elements: Vec<Element> = deleted_element_events
         .iter()
-        .map(|it| {
-            Element::select_by_id(it.element_id, &conn)
-                .unwrap()
-                .unwrap()
-        })
+        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
         .collect();
-    let deleted_elements: Vec<MergeResultElement> = deleted_elements
-        .iter()
-        .map(|it| MergeResultElement {
-            id: it.id,
-            osm_url: it.osm_url(),
-            name: it.name(),
-        })
-        .collect();
+    let deleted_elements: Vec<MergeResultElement> =
+        deleted_elements.into_iter().map(|it| it.into()).collect();
     Ok(MergeResult {
         elements_created: created_elements,
         elements_updated: updated_elements,

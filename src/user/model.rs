@@ -218,13 +218,11 @@ impl User {
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<User> {
-        let query = format!(
-            r#"
+        let query = r#"
                 UPDATE user
                 SET updated_at = :updated_at
                 WHERE rowid = :id
-            "#
-        );
+            "#.to_string();
         debug!(query);
         #[cfg(not(test))]
         sleep(Duration::from_millis(10));
@@ -235,8 +233,8 @@ impl User {
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        Ok(User::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        User::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 }
 

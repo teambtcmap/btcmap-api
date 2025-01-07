@@ -40,7 +40,7 @@ mod test {
         let password = "pwd";
         let action = "action";
         Admin::insert("name", password, &db.conn)?;
-        Admin::update_allowed_actions(1, &vec!["action".into()], &db.conn)?;
+        Admin::update_allowed_actions(1, &["action".into()], &db.conn)?;
         assert!(super::check_rpc(password, action, &db.pool).await.is_ok());
         Ok(())
     }

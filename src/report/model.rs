@@ -186,8 +186,8 @@ impl Report {
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        Ok(Report::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Report::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     #[cfg(test)]
@@ -205,13 +205,11 @@ impl Report {
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Report> {
-        let query = format!(
-            r#"
+        let query = r#"
                 UPDATE report
                 SET updated_at = :updated_at
                 WHERE id = :id
-            "#
-        );
+            "#.to_string();
         debug!(query);
         #[cfg(not(test))]
         sleep(Duration::from_millis(10));
@@ -222,8 +220,8 @@ impl Report {
                 ":updated_at": updated_at.format(&time::format_description::well_known::Rfc3339)?,
             },
         )?;
-        Ok(Report::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Report::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     #[cfg(test)]
@@ -232,13 +230,11 @@ impl Report {
         deleted_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Report> {
-        let query = format!(
-            r#"
+        let query = r#"
                 UPDATE report
                 SET deleted_at = :deleted_at
                 WHERE id = :id
-            "#
-        );
+            "#.to_string();
         debug!(query);
         #[cfg(not(test))]
         sleep(Duration::from_millis(10));
@@ -249,8 +245,8 @@ impl Report {
                 ":deleted_at": deleted_at.format(&time::format_description::well_known::Rfc3339)?,
             },
         )?;
-        Ok(Report::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Report::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 }
 

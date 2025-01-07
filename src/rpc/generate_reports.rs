@@ -263,7 +263,7 @@ mod test {
 
         let element_2 = json!({
           "type": "node",
-          "id": 6402700275 as i64,
+          "id": 6402700275_i64,
           "lat": 28.4077730,
           "lon": -106.8668376,
           "timestamp": "2023-03-15T18:24:05Z",
@@ -298,7 +298,7 @@ mod test {
             .ok_or("Date overflow")?;
         element_2.tags.as_mut().ok_or("No tags")?.insert(
             "check_date:currency:XBT".into(),
-            today_plus_year.to_string().into(),
+            today_plus_year.to_string(),
         );
 
         let element_1 = Element {

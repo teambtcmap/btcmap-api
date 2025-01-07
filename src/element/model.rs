@@ -313,8 +313,8 @@ impl Element {
                 ":updated_at": updated_at.format(&Rfc3339).unwrap(),
             },
         )?;
-        Ok(Element::select_by_id(id, &conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))?)
+        Element::select_by_id(id, conn)?
+            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn set_deleted_at(

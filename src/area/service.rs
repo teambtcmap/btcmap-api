@@ -74,7 +74,7 @@ pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection)
         return Err(Error::InvalidInput("geo_json can't be removed".into()));
     }
     let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
-    Ok(Area::remove_tag(area.id, tag_name, conn)?)
+    Area::remove_tag(area.id, tag_name, conn)
 }
 
 pub fn soft_delete(area_id_or_alias: &str, conn: &Connection) -> Result<Area> {
