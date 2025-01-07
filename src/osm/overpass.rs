@@ -55,7 +55,7 @@ pub struct OverpassElement {
 
 impl PartialEq for OverpassElement {
     fn eq(&self, other: &Self) -> bool {
-        self.r#type == other.r#type && self.id == other.id
+        self.r#type == other.r#type && self.id == other.id && self.version == other.version
     }
 }
 

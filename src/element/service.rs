@@ -54,7 +54,7 @@ pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a
     let mut element_areas = vec![];
     info!("iterating all areas");
     for area in areas {
-        info!(area_id = area.id, area_name = area.name(), "iterating area");
+        //info!(area_id = area.id, area_name = area.name(), "iterating area");
         if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
             continue;
         }

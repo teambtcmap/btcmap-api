@@ -20,14 +20,17 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Me
     let elements = overpass::query_bitcoin_merchants().await?;
     let mut conn = db::open_connection()?;
     let res = sync::merge_overpass_elements(elements, &mut conn).await?;
-    info!(
-        res.elements_created,
-        res.elements_updated, res.elements_deleted,
-    );
-    if res.elements_created + res.elements_updated + res.elements_deleted > 3 {
+    //info!(
+    //    res.elements_created,
+    //    res.elements_updated, res.elements_deleted,
+    //);
+    if res.elements_created.len() + res.elements_updated.len() + res.elements_deleted.len() > 3 {
         let log_message = format!(
             "{} ran a sync with high number of changes (created: {}, updated: {}, deleted: {})",
-            admin.name, res.elements_created, res.elements_updated, res.elements_deleted,
+            admin.name,
+            res.elements_created.len(),
+            res.elements_updated.len(),
+            res.elements_deleted.len(),
         );
         info!(log_message);
         discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;

@@ -367,6 +367,13 @@ impl Element {
     pub fn name(&self) -> String {
         self.overpass_data.tag("name").into()
     }
+
+    pub fn osm_url(&self) -> String {
+        format!(
+            "https://www.openstreetmap.org/{}/{}",
+            self.overpass_data.r#type, self.overpass_data.id,
+        )
+    }
 }
 
 const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {

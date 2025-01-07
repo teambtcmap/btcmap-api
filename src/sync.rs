@@ -13,9 +13,16 @@ use tracing::{error, info, warn};
 
 #[derive(Serialize)]
 pub struct MergeResult {
-    pub elements_created: i64,
-    pub elements_updated: i64,
-    pub elements_deleted: i64,
+    pub elements_created: Vec<MergeResultElement>,
+    pub elements_updated: Vec<MergeResultElement>,
+    pub elements_deleted: Vec<MergeResultElement>,
+}
+
+#[derive(Serialize)]
+pub struct MergeResultElement {
+    pub id: i64,
+    pub osm_url: String,
+    pub name: String,
 }
 
 pub async fn merge_overpass_elements(
@@ -51,10 +58,58 @@ pub async fn merge_overpass_elements(
         created_elements = created_element_events.len(),
         "finished processing created elements",
     );
+    let created_elements: Vec<Element> = created_element_events
+        .iter()
+        .map(|it| {
+            Element::select_by_id(it.element_id, &conn)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let created_elements: Vec<MergeResultElement> = created_elements
+        .iter()
+        .map(|it| MergeResultElement {
+            id: it.id,
+            osm_url: it.osm_url(),
+            name: it.name(),
+        })
+        .collect();
+    let updated_elements: Vec<Element> = updated_element_events
+        .iter()
+        .map(|it| {
+            Element::select_by_id(it.element_id, &conn)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let updated_elements: Vec<MergeResultElement> = updated_elements
+        .iter()
+        .map(|it| MergeResultElement {
+            id: it.id,
+            osm_url: it.osm_url(),
+            name: it.name(),
+        })
+        .collect();
+    let deleted_elements: Vec<Element> = deleted_element_events
+        .iter()
+        .map(|it| {
+            Element::select_by_id(it.element_id, &conn)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let deleted_elements: Vec<MergeResultElement> = deleted_elements
+        .iter()
+        .map(|it| MergeResultElement {
+            id: it.id,
+            osm_url: it.osm_url(),
+            name: it.name(),
+        })
+        .collect();
     Ok(MergeResult {
-        elements_created: created_element_events.len() as i64,
-        elements_updated: updated_element_events.len() as i64,
-        elements_deleted: deleted_element_events.len() as i64,
+        elements_created: created_elements,
+        elements_updated: updated_elements,
+        elements_deleted: deleted_elements,
     })
 }
 
@@ -140,43 +195,56 @@ pub async fn sync_updated_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
     conn: &mut Connection,
 ) -> Result<Vec<Event>> {
+    info!("syncing updated elements");
     let mut res = vec![];
     let cached_elements = Element::select_all(None, conn)?;
-    for fresh_element in fresh_overpass_elements {
-        let btcmap_id = fresh_element.btcmap_id();
-        let user_id = fresh_element.uid;
-        let cached_element = cached_elements
-            .iter()
-            .find(|it| it.overpass_data.btcmap_id() == fresh_element.btcmap_id());
+    info!(
+        overpass_elements = fresh_overpass_elements.len(),
+        cached_elements = cached_elements.len(),
+        "prepared to merge elements",
+    );
+    for fresh_overpass_element in fresh_overpass_elements {
+        let cached_element = cached_elements.iter().find(|cached_element| {
+            cached_element.overpass_data.r#type == fresh_overpass_element.r#type
+                && cached_element.overpass_data.id == fresh_overpass_element.id
+        });
         if cached_element.is_none() {
             continue;
         }
         let mut cached_element = cached_element.unwrap().clone();
         if cached_element.deleted_at.is_some() {
-            info!(btcmap_id, "Bitcoin tags were re-added");
+            info!(
+                id = fresh_overpass_element.btcmap_id(),
+                "Bitcoin tags were re-added",
+            );
             cached_element = cached_element.set_deleted_at(None, conn)?;
         }
-        if *fresh_element == cached_element.overpass_data {
+        if *fresh_overpass_element == cached_element.overpass_data {
             continue;
         }
         info!(
-            btcmap_id,
+            id = fresh_overpass_element.btcmap_id(),
             old_json = serde_json::to_string(&cached_element.overpass_data)?,
-            new_json = serde_json::to_string(&fresh_element)?,
+            new_json = serde_json::to_string(&fresh_overpass_element)?,
             "Element JSON was updated",
         );
-        if let Some(user_id) = user_id {
+        if let Some(user_id) = fresh_overpass_element.uid {
             insert_user_if_not_exists(user_id, conn).await?;
         }
         let sp = conn.savepoint()?;
-        if fresh_element.changeset != cached_element.overpass_data.changeset {
-            let event = Event::insert(user_id.unwrap(), cached_element.id, "update", &sp)?;
+        if fresh_overpass_element.changeset != cached_element.overpass_data.changeset {
+            let event = Event::insert(
+                fresh_overpass_element.uid.unwrap(),
+                cached_element.id,
+                "update",
+                &sp,
+            )?;
             res.push(event);
         } else {
             warn!("Changeset ID is identical, skipped user event generation");
         }
         info!("Updating osm_json");
-        let mut updated_element = cached_element.set_overpass_data(fresh_element, &sp)?;
+        let mut updated_element = cached_element.set_overpass_data(fresh_overpass_element, &sp)?;
         let new_android_icon = updated_element.overpass_data.generate_android_icon();
         let old_android_icon = cached_element
             .tag("icon:android")
