@@ -22,18 +22,37 @@ pub async fn merge_overpass_elements(
     fresh_overpass_elements: Vec<OverpassElement>,
     conn: &mut Connection,
 ) -> Result<MergeResult> {
+    info!(
+        overpass_elements = fresh_overpass_elements.len(),
+        "merging fresh overpass elements"
+    );
     // stage 1: find and process deleted elements
     let fresh_elemement_ids: HashSet<String> = fresh_overpass_elements
         .iter()
         .map(|it| it.btcmap_id())
         .collect();
+    info!("stage 1 - processing deleted elements");
     let deleted_element_events = sync_deleted_elements(&fresh_elemement_ids, conn).await?;
+    info!(
+        deleted_elements = deleted_element_events.len(),
+        "finished processing deleted elements",
+    );
     // stage 2: find and process updated elements
+    info!("stage 2 - processing updated elements");
     let updated_element_events = sync_updated_elements(&fresh_overpass_elements, conn).await?;
+    info!(
+        updated_elements = updated_element_events.len(),
+        "finished processing updated elements",
+    );
     // stage 3: find and process new elements
-    let created_element_evnets = sync_new_elements(&fresh_overpass_elements, conn).await?;
+    info!("stage 3 - processing created elements");
+    let created_element_events = sync_new_elements(&fresh_overpass_elements, conn).await?;
+    info!(
+        created_elements = created_element_events.len(),
+        "finished processing created elements",
+    );
     Ok(MergeResult {
-        elements_created: created_element_evnets.len() as i64,
+        elements_created: created_element_events.len() as i64,
         elements_updated: updated_element_events.len() as i64,
         elements_deleted: deleted_element_events.len() as i64,
     })
@@ -198,7 +217,11 @@ pub async fn sync_new_elements(
         {
             Some(_) => {}
             None => {
-                info!(btcmap_id, "Element does not exist, inserting");
+                info!(
+                    btcmap_id,
+                    name = fresh_element.tag("name"),
+                    "Element does not exist, inserting"
+                );
                 if let Some(user_id) = user_id {
                     insert_user_if_not_exists(user_id, conn).await?;
                 }
@@ -217,8 +240,11 @@ pub async fn sync_new_elements(
                     &sp,
                 )?;
                 info!(category, android_icon);
+                info!("generating issues");
                 element::service::generate_issues(vec![&element], &sp)?;
+                info!("generating mapping");
                 area_element::service::generate_mapping(&vec![element], &sp)?;
+                info!("commiting new element transaction");
                 sp.commit()?;
             }
         }

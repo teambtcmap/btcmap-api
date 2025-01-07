@@ -12,6 +12,7 @@ use serde_json::Value;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
+use tracing::info;
 
 pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
     let geometries = area.geo_json_geometries()?;
@@ -51,8 +52,9 @@ pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<El
 
 pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a Area>> {
     let mut element_areas = vec![];
-
+    info!("iterating all areas");
     for area in areas {
+        info!(area_id = area.id, area_name = area.name(), "iterating area");
         if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
             continue;
         }

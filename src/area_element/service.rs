@@ -5,17 +5,27 @@ use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
 use rusqlite::Connection;
 use time::OffsetDateTime;
+use tracing::info;
 
 pub struct Res {
     pub has_changes: bool,
 }
 
 pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Res> {
+    info!("generating areas to elements mapping");
     let mut has_changes = false;
     let areas = Area::select_all(conn)?;
     for element in elements {
+        info!(
+            name = element.overpass_data.tag("name"),
+            "generating areas to element mapping"
+        );
+        info!("finding containing areas");
         let element_areas = element::service::find_areas(element, &areas)?;
+        info!(areas = element_areas.len(), "found containing areas");
+        info!("finding old mappings");
         let old_mappings = AreaElement::select_by_element_id(element.id, conn)?;
+        info!(mappings = old_mappings.len(), "found old mappings");
         let old_mappings: Vec<AreaElement> = old_mappings
             .into_iter()
             .filter(|it| it.deleted_at.is_none())
