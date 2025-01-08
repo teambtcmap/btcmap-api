@@ -3,7 +3,7 @@ use crate::{admin, sync::MergeResult};
 use crate::{db, discord, sync, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::info;
 
@@ -14,26 +14,38 @@ pub struct Args {
     pub password: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<MergeResult> {
+#[derive(Serialize)]
+pub struct Res {
+    pub overpass_query_time_s: f64,
+    pub overpass_elements: usize,
+    pub merge_result: MergeResult,
+}
+
+pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
     let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
     info!(admin.name, "Admin requested element sync");
-    let elements = overpass::query_bitcoin_merchants().await?;
+    let overpass_res = overpass::query_bitcoin_merchants().await?;
+    let overpass_elements_len = overpass_res.elements.len();
     let mut conn = db::open_connection()?;
-    let res = sync::merge_overpass_elements(elements, &mut conn).await?;
-    //info!(
-    //    res.elements_created,
-    //    res.elements_updated, res.elements_deleted,
-    //);
-    if res.elements_created.len() + res.elements_updated.len() + res.elements_deleted.len() > 3 {
+    let merge_res = sync::merge_overpass_elements(overpass_res.elements, &mut conn).await?;
+    if merge_res.elements_created.len()
+        + merge_res.elements_updated.len()
+        + merge_res.elements_deleted.len()
+        > 3
+    {
         let log_message = format!(
             "{} ran a sync with high number of changes (created: {}, updated: {}, deleted: {})",
             admin.name,
-            res.elements_created.len(),
-            res.elements_updated.len(),
-            res.elements_deleted.len(),
+            merge_res.elements_created.len(),
+            merge_res.elements_updated.len(),
+            merge_res.elements_deleted.len(),
         );
         info!(log_message);
         discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
     }
-    Ok(res)
+    Ok(Res {
+        overpass_query_time_s: overpass_res.time_s,
+        overpass_elements: overpass_elements_len,
+        merge_result: merge_res,
+    })
 }

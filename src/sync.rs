@@ -16,6 +16,7 @@ pub struct MergeResult {
     pub elements_created: Vec<MergeResultElement>,
     pub elements_updated: Vec<MergeResultElement>,
     pub elements_deleted: Vec<MergeResultElement>,
+    pub total_time_s: f64,
 }
 
 #[derive(Serialize)]
@@ -39,35 +40,17 @@ pub async fn merge_overpass_elements(
     fresh_overpass_elements: Vec<OverpassElement>,
     conn: &mut Connection,
 ) -> Result<MergeResult> {
-    info!(
-        overpass_elements = fresh_overpass_elements.len(),
-        "merging fresh overpass elements"
-    );
+    let started_at = OffsetDateTime::now_utc();
     // stage 1: find and process deleted elements
     let fresh_elemement_ids: HashSet<String> = fresh_overpass_elements
         .iter()
         .map(|it| it.btcmap_id())
         .collect();
-    info!("stage 1 - processing deleted elements");
     let deleted_element_events = sync_deleted_elements(&fresh_elemement_ids, conn).await?;
-    info!(
-        deleted_elements = deleted_element_events.len(),
-        "finished processing deleted elements",
-    );
     // stage 2: find and process updated elements
-    info!("stage 2 - processing updated elements");
     let updated_element_events = sync_updated_elements(&fresh_overpass_elements, conn).await?;
-    info!(
-        updated_elements = updated_element_events.len(),
-        "finished processing updated elements",
-    );
     // stage 3: find and process new elements
-    info!("stage 3 - processing created elements");
     let created_element_events = sync_new_elements(&fresh_overpass_elements, conn).await?;
-    info!(
-        created_elements = created_element_events.len(),
-        "finished processing created elements",
-    );
     let created_elements: Vec<Element> = created_element_events
         .iter()
         .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
@@ -90,6 +73,7 @@ pub async fn merge_overpass_elements(
         elements_created: created_elements,
         elements_updated: updated_elements,
         elements_deleted: deleted_elements,
+        total_time_s: (OffsetDateTime::now_utc() - started_at).as_seconds_f64(),
     })
 }
 

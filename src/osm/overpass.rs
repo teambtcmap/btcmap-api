@@ -164,33 +164,36 @@ impl OverpassElement {
     }
 }
 
-pub async fn query_bitcoin_merchants() -> Result<Vec<OverpassElement>> {
-    info!("Querying OSM API, it could take a while...");
+#[derive(Serialize)]
+pub struct QueryBitcoinMerchantsRes {
+    pub elements: Vec<OverpassElement>,
+    pub time_s: f64,
+}
 
+pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
+    info!("Querying OSM API, it could take a while...");
+    let started_at = OffsetDateTime::now_utc();
     let response = reqwest::Client::new()
         .post(API_URL)
         .body(QUERY)
         .send()
         .await?;
-
     info!(http_status_code = ?response.status(), "Got OSM API response");
-
     let response = response.json::<Response>().await?;
-
     if response.elements.is_empty() {
         Err(Error::OverpassApi(format!(
             "Got suspicious response: {}",
             serde_json::to_string_pretty(&response)?
         )))?
     }
-
     info!(elements = response.elements.len(), "Fetched elements");
-
     if response.elements.len() < 5000 {
         Err(Error::OverpassApi("Data set is most likely invalid".into()))?
     }
-
-    Ok(response.elements)
+    Ok(QueryBitcoinMerchantsRes {
+        elements: response.elements,
+        time_s: (OffsetDateTime::now_utc() - started_at).as_seconds_f64(),
+    })
 }
 
 #[cfg(test)]
