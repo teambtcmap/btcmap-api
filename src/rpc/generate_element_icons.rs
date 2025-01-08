@@ -4,6 +4,7 @@ use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use time::OffsetDateTime;
 use tracing::info;
 
 const NAME: &str = "generate_element_icons";
@@ -17,45 +18,77 @@ pub struct Args {
 
 #[derive(Serialize)]
 pub struct Res {
-    pub changes: i64,
+    pub updated_elements: Vec<UpdatedElement>,
+    pub time_s: f64,
+}
+
+#[derive(Serialize)]
+pub struct UpdatedElement {
+    pub id: i64,
+    pub osm_url: String,
+    pub old_icon: String,
+    pub new_icon: String,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
     let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let res = pool
+    let started_at = OffsetDateTime::now_utc();
+    let updated_elements = pool
         .get()
         .await?
         .interact(move |conn| {
             generate_element_icons(args.from_element_id, args.to_element_id, conn)
         })
         .await??;
+    let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     let log_message = format!(
-        "{} generated element icons, potentially affecting element ids {}..{}",
-        admin.name, args.from_element_id, args.to_element_id,
+        "{} generated element icons, potentially affecting element ids {}..{} ({} elements updated)",
+        admin.name, args.from_element_id, args.to_element_id, updated_elements.len(),
     );
     info!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
-    Ok(res)
+    Ok(Res {
+        updated_elements,
+        time_s,
+    })
 }
 
 fn generate_element_icons(
     from_element_id: i64,
     to_element_id: i64,
     conn: &Connection,
-) -> Result<Res> {
-    let mut changes = 0;
+) -> Result<Vec<UpdatedElement>> {
+    let mut updated_elements = vec![];
     for element_id in from_element_id..=to_element_id {
         let Some(element) = Element::select_by_id(element_id, conn)? else {
             continue;
         };
+        if element.deleted_at.is_some() {
+            if element.tags.contains_key("icon:android") {
+                Element::remove_tag(element.id, "icon:android", conn)?;
+                let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
+                updated_elements.push(UpdatedElement {
+                    id: element_id,
+                    osm_url: element.osm_url(),
+                    old_icon: old_icon.into(),
+                    new_icon: "".into(),
+                });
+            }
+            continue;
+        }
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {
             Element::set_tag(element.id, "icon:android", &new_icon.clone().into(), conn)?;
-            changes += 1;
+            updated_elements.push(UpdatedElement {
+                id: element_id,
+                osm_url: element.osm_url(),
+                old_icon: old_icon.into(),
+                new_icon,
+            });
         }
     }
-    Ok(Res { changes })
+    Ok(updated_elements)
 }
 
 impl OverpassElement {
@@ -192,6 +225,10 @@ impl OverpassElement {
         }
 
         if building == "apartments" {
+            icon_id = "hotel"
+        }
+
+        if building == "dormitory" {
             icon_id = "hotel"
         }
 
