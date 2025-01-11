@@ -1,6 +1,6 @@
 use crate::{
     admin,
-    area_element::{self},
+    area_element::{self, service::Diff},
     discord,
     element::Element,
     Result,
@@ -23,8 +23,7 @@ pub struct Args {
 
 #[derive(Serialize)]
 pub struct Res {
-    pub elements_processed: i64,
-    pub elements_affected: i64,
+    pub affected_elements: Vec<Diff>,
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
@@ -37,8 +36,8 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         })
         .await??;
     let log_message = format!(
-            "{} generated areas to elements mappings, potentially affecting element ids {}..{}. {} elements were processed and {} elements were affected",
-            admin.name, args.from_element_id, args.to_element_id, res.elements_processed, res.elements_affected
+            "{} generated areas to elements mappings, potentially affecting element ids {}..{}. {} elements were affected",
+            admin.name, args.from_element_id, args.to_element_id, res.affected_elements.len(),
         );
     info!(log_message);
     discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
@@ -50,19 +49,13 @@ fn generate_areas_elements_mapping(
     to_element_id: i64,
     conn: &mut Connection,
 ) -> Result<Res> {
-    let mut elements_processed = 0;
-    let mut elements_affected = 0;
+    let mut elements: Vec<Element> = vec![];
     for element_id in from_element_id..=to_element_id {
         let Some(element) = Element::select_by_id(element_id, conn)? else {
             continue;
         };
-        if area_element::service::generate_mapping(&[element], conn)?.has_changes {
-            elements_affected += 1;
-        }
-        elements_processed += 1;
+        elements.push(element);
     }
-    Ok(Res {
-        elements_processed,
-        elements_affected,
-    })
+    let affected_elements = area_element::service::generate_mapping(&elements, conn)?;
+    Ok(Res { affected_elements })
 }

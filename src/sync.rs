@@ -17,6 +17,9 @@ pub struct MergeResult {
     pub elements_updated: Vec<MergeResultElement>,
     pub elements_deleted: Vec<MergeResultElement>,
     pub total_time_s: f64,
+    pub deleted_sync_time_s: f64,
+    pub created_sync_time_s: f64,
+    pub updated_sync_time_s: f64,
 }
 
 #[derive(Serialize)]
@@ -47,9 +50,11 @@ pub async fn merge_overpass_elements(
         .map(|it| it.btcmap_id())
         .collect();
     let deleted_element_events = sync_deleted_elements(&fresh_elemement_ids, conn).await?;
+    let deleted_sync_time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     // stage 2: find and process updated elements
     let updated_element_events = sync_updated_elements(&fresh_overpass_elements, conn).await?;
     // stage 3: find and process new elements
+    let created_sync_started_at = OffsetDateTime::now_utc();
     let created_element_events = sync_new_elements(&fresh_overpass_elements, conn).await?;
     let created_elements: Vec<Element> = created_element_events
         .iter()
@@ -57,12 +62,17 @@ pub async fn merge_overpass_elements(
         .collect();
     let created_elements: Vec<MergeResultElement> =
         created_elements.into_iter().map(|it| it.into()).collect();
+    let created_sync_time_s =
+        (OffsetDateTime::now_utc() - created_sync_started_at).as_seconds_f64();
+    let updated_sync_started_at = OffsetDateTime::now_utc();
     let updated_elements: Vec<Element> = updated_element_events
         .iter()
         .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
         .collect();
     let updated_elements: Vec<MergeResultElement> =
         updated_elements.into_iter().map(|it| it.into()).collect();
+    let updated_sync_time_s =
+        (OffsetDateTime::now_utc() - updated_sync_started_at).as_seconds_f64();
     let deleted_elements: Vec<Element> = deleted_element_events
         .iter()
         .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
@@ -74,6 +84,9 @@ pub async fn merge_overpass_elements(
         elements_updated: updated_elements,
         elements_deleted: deleted_elements,
         total_time_s: (OffsetDateTime::now_utc() - started_at).as_seconds_f64(),
+        deleted_sync_time_s,
+        updated_sync_time_s,
+        created_sync_time_s,
     })
 }
 

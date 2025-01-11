@@ -4,28 +4,23 @@ use crate::{element, Result};
 use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
 use rusqlite::Connection;
+use serde::Serialize;
 use time::OffsetDateTime;
-use tracing::info;
 
-pub struct Res {
-    pub has_changes: bool,
+#[derive(Serialize)]
+pub struct Diff {
+    pub element_id: i64,
+    pub element_osm_url: String,
+    pub added_areas: Vec<i64>,
+    pub removed_areas: Vec<i64>,
 }
 
-pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Res> {
-    info!("generating areas to elements mapping");
-    let mut has_changes = false;
+pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Vec<Diff>> {
+    let mut diffs = vec![];
     let areas = Area::select_all(conn)?;
     for element in elements {
-        info!(
-            name = element.overpass_data.tag("name"),
-            "generating areas to element mapping"
-        );
-        info!("finding containing areas");
         let element_areas = element::service::find_areas(element, &areas)?;
-        info!(areas = element_areas.len(), "found containing areas");
-        info!("finding old mappings");
         let old_mappings = AreaElement::select_by_element_id(element.id, conn)?;
-        info!(mappings = old_mappings.len(), "found old mappings");
         let old_mappings: Vec<AreaElement> = old_mappings
             .into_iter()
             .filter(|it| it.deleted_at.is_none())
@@ -34,6 +29,8 @@ pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Res> 
         let mut new_area_ids: Vec<i64> = element_areas.into_iter().map(|it| it.id).collect();
         old_area_ids.sort();
         new_area_ids.sort();
+        let mut added_areas: Vec<i64> = vec![];
+        let mut removed_areas: Vec<i64> = vec![];
         if new_area_ids != old_area_ids {
             for old_area_id in &old_area_ids {
                 if !new_area_ids.contains(old_area_id) {
@@ -48,6 +45,7 @@ pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Res> 
                         Some(OffsetDateTime::now_utc()),
                         conn,
                     )?;
+                    removed_areas.push(area_element.area_id);
                 }
             }
             for new_area_id in new_area_ids {
@@ -65,12 +63,18 @@ pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Res> 
                             AreaElement::insert(new_area_id, element.id, conn)?;
                         }
                     }
+                    added_areas.push(new_area_id);
                 }
             }
-            has_changes = true;
+            diffs.push(Diff {
+                element_id: element.id,
+                element_osm_url: element.osm_url(),
+                added_areas,
+                removed_areas,
+            });
         }
     }
-    Ok(Res { has_changes })
+    Ok(diffs)
 }
 
 pub fn get_elements_within_geometries(
