@@ -1,6 +1,7 @@
 use crate::discord;
 use crate::event::Event;
 use crate::osm;
+use crate::user;
 use crate::user::User;
 use crate::Result;
 use rusqlite::Connection;
@@ -13,6 +14,7 @@ use tracing::info;
 use tracing::warn;
 
 pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
+    user::service::insert_user_if_not_exists(event.user_id, conn).await?;
     let user = User::select_by_id(event.user_id, conn)?.unwrap();
 
     let message = match event.r#type.as_str() {

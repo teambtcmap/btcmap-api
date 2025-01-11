@@ -2,14 +2,13 @@ use crate::element::{self, Element};
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
-use crate::user::User;
 use crate::{area_element, discord, Error, Result};
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
-use tracing::{error, info, warn};
+use tracing::error;
 
 #[derive(Serialize)]
 pub struct MergeResult {
@@ -20,6 +19,7 @@ pub struct MergeResult {
     pub deleted_sync_time_s: f64,
     pub created_sync_time_s: f64,
     pub updated_sync_time_s: f64,
+    pub events_processing_time_s: f64,
 }
 
 #[derive(Serialize)]
@@ -50,9 +50,24 @@ pub async fn merge_overpass_elements(
         .map(|it| it.btcmap_id())
         .collect();
     let deleted_element_events = sync_deleted_elements(&fresh_elemement_ids, conn).await?;
+    let deleted_elements: Vec<Element> = deleted_element_events
+        .iter()
+        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
+        .collect();
+    let deleted_elements: Vec<MergeResultElement> =
+        deleted_elements.into_iter().map(|it| it.into()).collect();
     let deleted_sync_time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     // stage 2: find and process updated elements
+    let updated_sync_started_at = OffsetDateTime::now_utc();
     let updated_element_events = sync_updated_elements(&fresh_overpass_elements, conn).await?;
+    let updated_elements: Vec<Element> = updated_element_events
+        .iter()
+        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
+        .collect();
+    let updated_elements: Vec<MergeResultElement> =
+        updated_elements.into_iter().map(|it| it.into()).collect();
+    let updated_sync_time_s =
+        (OffsetDateTime::now_utc() - updated_sync_started_at).as_seconds_f64();
     // stage 3: find and process new elements
     let created_sync_started_at = OffsetDateTime::now_utc();
     let created_element_events = sync_new_elements(&fresh_overpass_elements, conn).await?;
@@ -64,21 +79,18 @@ pub async fn merge_overpass_elements(
         created_elements.into_iter().map(|it| it.into()).collect();
     let created_sync_time_s =
         (OffsetDateTime::now_utc() - created_sync_started_at).as_seconds_f64();
-    let updated_sync_started_at = OffsetDateTime::now_utc();
-    let updated_elements: Vec<Element> = updated_element_events
-        .iter()
-        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
-        .collect();
-    let updated_elements: Vec<MergeResultElement> =
-        updated_elements.into_iter().map(|it| it.into()).collect();
-    let updated_sync_time_s =
-        (OffsetDateTime::now_utc() - updated_sync_started_at).as_seconds_f64();
-    let deleted_elements: Vec<Element> = deleted_element_events
-        .iter()
-        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
-        .collect();
-    let deleted_elements: Vec<MergeResultElement> =
-        deleted_elements.into_iter().map(|it| it.into()).collect();
+
+    let events_processing_started_at = OffsetDateTime::now_utc();
+    let mut all_events: Vec<Event> = vec![];
+    all_events.extend(created_element_events);
+    all_events.extend(updated_element_events);
+    all_events.extend(deleted_element_events);
+    for event in all_events {
+        event::service::on_new_event(&event, conn).await?;
+    }
+    let events_processing_time_s =
+        (OffsetDateTime::now_utc() - events_processing_started_at).as_seconds_f64();
+
     Ok(MergeResult {
         elements_created: created_elements,
         elements_updated: updated_elements,
@@ -87,6 +99,7 @@ pub async fn merge_overpass_elements(
         deleted_sync_time_s,
         updated_sync_time_s,
         created_sync_time_s,
+        events_processing_time_s,
     })
 }
 
@@ -112,15 +125,11 @@ pub async fn sync_deleted_elements(
             absent_element.overpass_data.id,
         )
         .await?;
-        insert_user_if_not_exists(fresh_osm_element.uid, conn).await?;
         res.push(mark_element_as_deleted(
             &absent_element,
             &fresh_osm_element,
             conn,
         )?);
-    }
-    for event in &res {
-        event::service::on_new_event(event, conn).await?;
     }
     Ok(res)
 }
@@ -173,14 +182,8 @@ pub async fn sync_updated_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
     conn: &mut Connection,
 ) -> Result<Vec<Event>> {
-    info!("syncing updated elements");
     let mut res = vec![];
     let cached_elements = Element::select_all(None, conn)?;
-    info!(
-        overpass_elements = fresh_overpass_elements.len(),
-        cached_elements = cached_elements.len(),
-        "prepared to merge elements",
-    );
     for fresh_overpass_element in fresh_overpass_elements {
         let cached_element = cached_elements.iter().find(|cached_element| {
             cached_element.overpass_data.r#type == fresh_overpass_element.r#type
@@ -191,23 +194,10 @@ pub async fn sync_updated_elements(
         }
         let mut cached_element = cached_element.unwrap().clone();
         if cached_element.deleted_at.is_some() {
-            info!(
-                id = fresh_overpass_element.btcmap_id(),
-                "Bitcoin tags were re-added",
-            );
             cached_element = cached_element.set_deleted_at(None, conn)?;
         }
         if *fresh_overpass_element == cached_element.overpass_data {
             continue;
-        }
-        info!(
-            id = fresh_overpass_element.btcmap_id(),
-            old_json = serde_json::to_string(&cached_element.overpass_data)?,
-            new_json = serde_json::to_string(&fresh_overpass_element)?,
-            "Element JSON was updated",
-        );
-        if let Some(user_id) = fresh_overpass_element.uid {
-            insert_user_if_not_exists(user_id, conn).await?;
         }
         let sp = conn.savepoint()?;
         if fresh_overpass_element.changeset != cached_element.overpass_data.changeset {
@@ -218,10 +208,7 @@ pub async fn sync_updated_elements(
                 &sp,
             )?;
             res.push(event);
-        } else {
-            warn!("Changeset ID is identical, skipped user event generation");
         }
-        info!("Updating osm_json");
         let mut updated_element = cached_element.set_overpass_data(fresh_overpass_element, &sp)?;
         let new_android_icon = updated_element.overpass_data.generate_android_icon();
         let old_android_icon = cached_element
@@ -229,7 +216,6 @@ pub async fn sync_updated_elements(
             .as_str()
             .unwrap_or_default();
         if new_android_icon != old_android_icon {
-            info!(old_android_icon, new_android_icon, "Updating Android icon");
             updated_element = Element::set_tag(
                 updated_element.id,
                 "icon:android",
@@ -240,9 +226,6 @@ pub async fn sync_updated_elements(
         element::service::generate_issues(vec![&updated_element], &sp)?;
         area_element::service::generate_mapping(&vec![updated_element], &sp)?;
         sp.commit()?;
-    }
-    for event in &res {
-        event::service::on_new_event(event, conn).await?;
     }
     Ok(res)
 }
@@ -263,14 +246,6 @@ pub async fn sync_new_elements(
         {
             Some(_) => {}
             None => {
-                info!(
-                    btcmap_id,
-                    name = fresh_element.tag("name"),
-                    "Element does not exist, inserting"
-                );
-                if let Some(user_id) = user_id {
-                    insert_user_if_not_exists(user_id, conn).await?;
-                }
                 let sp = conn.savepoint()?;
                 let element = Element::insert(fresh_element, &sp)?;
                 let event = Event::insert(user_id.unwrap(), element.id, "create", &sp)?;
@@ -285,34 +260,13 @@ pub async fn sync_new_elements(
                     &android_icon.clone().into(),
                     &sp,
                 )?;
-                info!(category, android_icon);
-                info!("generating issues");
                 element::service::generate_issues(vec![&element], &sp)?;
-                info!("generating mapping");
                 area_element::service::generate_mapping(&vec![element], &sp)?;
-                info!("commiting new element transaction");
                 sp.commit()?;
             }
         }
     }
-    for event in &res {
-        event::service::on_new_event(event, conn).await?;
-    }
     Ok(res)
-}
-
-async fn insert_user_if_not_exists(user_id: i64, conn: &Connection) -> Result<()> {
-    if User::select_by_id(user_id, conn)?.is_some() {
-        info!(user_id, "User already exists");
-        return Ok(());
-    }
-    match osm::api::get_user(user_id).await? {
-        Some(user) => User::insert(user_id, &user, conn)?,
-        None => Err(Error::OsmApi(format!(
-            "User with id = {user_id} doesn't exist on OSM"
-        )))?,
-    };
-    Ok(())
 }
 
 #[cfg(test)]
@@ -321,7 +275,7 @@ mod test {
         element::Element,
         osm::{api::OsmUser, overpass::OverpassElement},
         test::mock_conn,
-        user::User,
+        user::{self, User},
         Result,
     };
     use actix_web::test;
@@ -363,7 +317,7 @@ mod test {
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
         let conn = mock_conn();
         let user = User::insert(1, &OsmUser::mock(), &conn)?;
-        assert!(super::insert_user_if_not_exists(user.id, &conn)
+        assert!(user::service::insert_user_if_not_exists(user.id, &conn)
             .await
             .is_ok());
         Ok(())
@@ -374,9 +328,11 @@ mod test {
     async fn insert_user_if_not_exists_when_exists_on_osm() -> Result<()> {
         let conn = mock_conn();
         let btc_map_user_id = 18545877;
-        assert!(super::insert_user_if_not_exists(btc_map_user_id, &conn)
-            .await
-            .is_ok());
+        assert!(
+            user::service::insert_user_if_not_exists(btc_map_user_id, &conn)
+                .await
+                .is_ok()
+        );
         assert!(User::select_by_id(btc_map_user_id, &conn)?.is_some());
         Ok(())
     }
