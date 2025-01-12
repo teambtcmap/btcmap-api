@@ -186,8 +186,7 @@ impl Report {
             query,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        Report::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     #[cfg(test)]
@@ -209,7 +208,8 @@ impl Report {
                 UPDATE report
                 SET updated_at = :updated_at
                 WHERE id = :id
-            "#.to_string();
+            "#
+        .to_string();
         debug!(query);
         #[cfg(not(test))]
         sleep(Duration::from_millis(10));
@@ -220,8 +220,7 @@ impl Report {
                 ":updated_at": updated_at.format(&time::format_description::well_known::Rfc3339)?,
             },
         )?;
-        Report::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     #[cfg(test)]
@@ -234,7 +233,8 @@ impl Report {
                 UPDATE report
                 SET deleted_at = :deleted_at
                 WHERE id = :id
-            "#.to_string();
+            "#
+        .to_string();
         debug!(query);
         #[cfg(not(test))]
         sleep(Duration::from_millis(10));
@@ -245,8 +245,7 @@ impl Report {
                 ":deleted_at": deleted_at.format(&time::format_description::well_known::Rfc3339)?,
             },
         )?;
-        Report::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 }
 

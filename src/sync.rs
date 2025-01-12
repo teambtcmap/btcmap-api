@@ -2,7 +2,7 @@ use crate::element::{self, Element};
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
-use crate::{area_element, discord, Error, Result};
+use crate::{area_element, discord, user, Error, Result};
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::Value;
@@ -125,6 +125,7 @@ pub async fn sync_deleted_elements(
             absent_element.overpass_data.id,
         )
         .await?;
+        user::service::insert_user_if_not_exists(fresh_osm_element.uid, conn).await?;
         res.push(mark_element_as_deleted(
             &absent_element,
             &fresh_osm_element,
@@ -199,6 +200,7 @@ pub async fn sync_updated_elements(
         if *fresh_overpass_element == cached_element.overpass_data {
             continue;
         }
+        user::service::insert_user_if_not_exists(fresh_overpass_element.uid.unwrap(), conn).await?;
         let sp = conn.savepoint()?;
         if fresh_overpass_element.changeset != cached_element.overpass_data.changeset {
             let event = Event::insert(
@@ -246,6 +248,7 @@ pub async fn sync_new_elements(
         {
             Some(_) => {}
             None => {
+                user::service::insert_user_if_not_exists(user_id.unwrap(), conn).await?;
                 let sp = conn.savepoint()?;
                 let element = Element::insert(fresh_element, &sp)?;
                 let event = Event::insert(user_id.unwrap(), element.id, "create", &sp)?;
