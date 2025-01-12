@@ -48,11 +48,7 @@ pub async fn merge_overpass_elements(
 ) -> Result<MergeResult> {
     let started_at = OffsetDateTime::now_utc();
     // stage 1: find and process deleted elements
-    let fresh_elemement_ids: HashSet<String> = fresh_overpass_elements
-        .iter()
-        .map(|it| it.btcmap_id())
-        .collect();
-    let deleted_element_events = sync_deleted_elements(&fresh_elemement_ids, conn).await?;
+    let deleted_element_events = sync_deleted_elements(&fresh_overpass_elements, conn).await?;
     let deleted_elements: Vec<Element> = deleted_element_events
         .iter()
         .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
@@ -60,6 +56,7 @@ pub async fn merge_overpass_elements(
     let deleted_elements: Vec<MergeResultElement> =
         deleted_elements.into_iter().map(|it| it.into()).collect();
     let deleted_sync_time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
+
     // stage 2: find and process updated elements
     let updated_sync_started_at = OffsetDateTime::now_utc();
     let updated_element_events = sync_updated_elements(&fresh_overpass_elements, conn).await?;
@@ -69,6 +66,7 @@ pub async fn merge_overpass_elements(
         .collect();
     let updated_sync_time_s =
         (OffsetDateTime::now_utc() - updated_sync_started_at).as_seconds_f64();
+
     // stage 3: find and process new elements
     let created_sync_started_at = OffsetDateTime::now_utc();
     let created_element_events = sync_new_elements(&fresh_overpass_elements, conn).await?;
@@ -125,9 +123,13 @@ pub async fn merge_overpass_elements(
 ///
 /// Will return `Err` in many cases!
 pub async fn sync_deleted_elements(
-    fresh_overpass_element_ids: &HashSet<String>,
+    fresh_overpass_elements: &Vec<OverpassElement>,
     conn: &mut Connection,
 ) -> Result<Vec<Event>> {
+    let fresh_overpass_element_ids: HashSet<String> = fresh_overpass_elements
+        .iter()
+        .map(|it| it.btcmap_id())
+        .collect();
     let absent_elements: Vec<Element> = Element::select_all_except_deleted(conn)?
         .into_iter()
         .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
