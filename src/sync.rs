@@ -1,3 +1,4 @@
+use crate::area_element::service::Diff;
 use crate::element::{self, Element};
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
@@ -20,6 +21,8 @@ pub struct MergeResult {
     pub created_sync_time_s: f64,
     pub updated_sync_time_s: f64,
     pub events_processing_time_s: f64,
+    pub area_mapping_processing_time_s: f64,
+    pub area_mapping_diff: Vec<Diff>,
 }
 
 #[derive(Serialize)]
@@ -64,8 +67,6 @@ pub async fn merge_overpass_elements(
         .iter()
         .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
         .collect();
-    let updated_elements: Vec<MergeResultElement> =
-        updated_elements.into_iter().map(|it| it.into()).collect();
     let updated_sync_time_s =
         (OffsetDateTime::now_utc() - updated_sync_started_at).as_seconds_f64();
     // stage 3: find and process new elements
@@ -75,8 +76,6 @@ pub async fn merge_overpass_elements(
         .iter()
         .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
         .collect();
-    let created_elements: Vec<MergeResultElement> =
-        created_elements.into_iter().map(|it| it.into()).collect();
     let created_sync_time_s =
         (OffsetDateTime::now_utc() - created_sync_started_at).as_seconds_f64();
 
@@ -91,6 +90,19 @@ pub async fn merge_overpass_elements(
     let events_processing_time_s =
         (OffsetDateTime::now_utc() - events_processing_started_at).as_seconds_f64();
 
+    let area_mapping_started_at = OffsetDateTime::now_utc();
+    let mut area_mapping_elements: Vec<Element> = vec![];
+    area_mapping_elements.extend(created_elements.clone());
+    area_mapping_elements.extend(updated_elements.clone());
+    let area_mapping_diff = area_element::service::generate_mapping(&area_mapping_elements, conn)?;
+    let area_mapping_processing_time_s =
+        (OffsetDateTime::now_utc() - area_mapping_started_at).as_seconds_f64();
+
+    let created_elements: Vec<MergeResultElement> =
+        created_elements.into_iter().map(|it| it.into()).collect();
+    let updated_elements: Vec<MergeResultElement> =
+        updated_elements.into_iter().map(|it| it.into()).collect();
+
     Ok(MergeResult {
         elements_created: created_elements,
         elements_updated: updated_elements,
@@ -100,6 +112,8 @@ pub async fn merge_overpass_elements(
         updated_sync_time_s,
         created_sync_time_s,
         events_processing_time_s,
+        area_mapping_processing_time_s,
+        area_mapping_diff,
     })
 }
 
@@ -226,7 +240,7 @@ pub async fn sync_updated_elements(
             )?;
         }
         element::service::generate_issues(vec![&updated_element], &sp)?;
-        area_element::service::generate_mapping(&vec![updated_element], &sp)?;
+        //area_element::service::generate_mapping(&vec![updated_element], &sp)?;
         sp.commit()?;
     }
     Ok(res)
@@ -264,7 +278,7 @@ pub async fn sync_new_elements(
                     &sp,
                 )?;
                 element::service::generate_issues(vec![&element], &sp)?;
-                area_element::service::generate_mapping(&vec![element], &sp)?;
+                //area_element::service::generate_mapping(&vec![element], &sp)?;
                 sp.commit()?;
             }
         }
