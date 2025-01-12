@@ -203,6 +203,13 @@ async fn main() -> Result<()> {
                             .service(area_element::v3::get_by_id),
                     ),
             )
+            .service(
+                scope("v4").wrap(Governor::new(&rate_limit_conf)).service(
+                    scope("elements")
+                        .service(element::v4::get)
+                        .service(element::v4::get_by_id),
+                ),
+            )
     })
     .bind(("127.0.0.1", 8000))?
     .run()
