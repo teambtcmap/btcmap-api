@@ -303,13 +303,11 @@ mod test {
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
         let mut conn = mock_conn();
-        let _element_1 = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let _element_2 = Element::insert(&OverpassElement::mock(2), &conn)?;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?;
         let element_3 = Element::insert(&OverpassElement::mock(2702291726), &conn)?;
         let res = super::sync_deleted_elements(
-            &vec!["node:1".to_string(), "node:2".to_string()]
-                .into_iter()
-                .collect(),
+            &vec![element_1.overpass_data, element_2.overpass_data],
             &mut conn,
         )
         .await;
