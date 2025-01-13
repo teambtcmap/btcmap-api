@@ -20,6 +20,7 @@ pub struct GetArgs {
     #[serde(with = "time::serde::rfc3339")]
     updated_since: OffsetDateTime,
     limit: i64,
+    include_deleted: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -115,7 +116,12 @@ pub async fn get(
         .get()
         .await?
         .interact(move |conn| {
-            Element::select_updated_since(&args.updated_since, Some(args.limit), conn)
+            Element::select_updated_since(
+                &args.updated_since,
+                Some(args.limit),
+                args.include_deleted.unwrap_or(true),
+                conn,
+            )
         })
         .await??;
     req.extensions_mut()

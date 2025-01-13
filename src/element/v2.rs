@@ -76,7 +76,9 @@ pub async fn get(
         .get()
         .await?
         .interact(move |conn| match &args.updated_since {
-            Some(updated_since) => Element::select_updated_since(updated_since, args.limit, conn),
+            Some(updated_since) => {
+                Element::select_updated_since(updated_since, args.limit, true, conn)
+            }
             None => Element::select_all(args.limit, conn),
         })
         .await??;

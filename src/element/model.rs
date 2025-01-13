@@ -128,17 +128,30 @@ impl Element {
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
         limit: Option<i64>,
+        include_deleted: bool,
         conn: &Connection,
     ) -> Result<Vec<Element>> {
-        let query = format!(
-            r#"
+        let query = if include_deleted {
+            format!(
+                r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
                 WHERE {COL_UPDATED_AT} > :updated_since
                 ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
                 LIMIT :limit
             "#
-        );
+            )
+        } else {
+            format!(
+                r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE deleted_at IS NOT NULL AND {COL_UPDATED_AT} > :updated_since
+                ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
+                LIMIT :limit
+            "#
+            )
+        };
         debug!(query);
         Ok(conn
             .prepare(&query)?
