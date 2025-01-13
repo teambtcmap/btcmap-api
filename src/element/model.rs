@@ -146,7 +146,7 @@ impl Element {
                 r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
-                WHERE deleted_at IS NOT NULL AND {COL_UPDATED_AT} > :updated_since
+                WHERE deleted_at IS NULL AND {COL_UPDATED_AT} > :updated_since
                 ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
                 LIMIT :limit
             "#
