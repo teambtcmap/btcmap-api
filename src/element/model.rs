@@ -447,7 +447,7 @@ mod test {
             .set_updated_at(&datetime!(2023-10-02 00:00 UTC), &conn)?;
         assert_eq!(
             vec![expected_element],
-            Element::select_updated_since(&datetime!(2023-10-01 00:00 UTC), None, &conn)?
+            Element::select_updated_since(&datetime!(2023-10-01 00:00 UTC), None, true, &conn)?
         );
         Ok(())
     }
