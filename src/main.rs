@@ -28,6 +28,7 @@ mod boost;
 mod db;
 mod element_comment;
 mod feed;
+mod invoice;
 mod log;
 mod rpc;
 mod sync;
