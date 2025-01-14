@@ -118,6 +118,7 @@ async fn main() -> Result<()> {
                         .with_method("search", rpc::search::run)
                         .with_method("set_area_icon", rpc::set_area_icon::run)
                         .with_method("get_boosted_elements", rpc::get_boosted_elements::run)
+                        .with_method("get_elements_snapshot", rpc::get_elements_snapshot::run)
                         .finish()
                         .into_actix_web_service(),
                 ),
