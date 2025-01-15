@@ -120,6 +120,8 @@ async fn main() -> Result<()> {
                         .with_method("set_area_icon", rpc::set_area_icon::run)
                         .with_method("get_boosted_elements", rpc::get_boosted_elements::run)
                         .with_method("get_elements_snapshot", rpc::get_elements_snapshot::run)
+                        .with_method("generate_invoice", rpc::generate_invoice::run)
+                        .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
                         .finish()
                         .into_actix_web_service(),
                 ),

@@ -7,6 +7,7 @@ use time::OffsetDateTime;
 #[derive(Debug, Eq, PartialEq, Serialize)]
 pub struct Invoice {
     pub id: i64,
+    pub description: String,
     pub amount_sats: i64,
     pub payment_hash: String,
     pub payment_request: String,
@@ -21,36 +22,47 @@ pub struct Invoice {
 
 const TABLE: &str = "invoice";
 const ALL_COLUMNS: &str =
-    "id, amount_sats, payment_hash, payment_request, status, created_at, updated_at, deleted_at";
+    "id, description, amount_sats, payment_hash, payment_request, status, created_at, updated_at, deleted_at";
 const COL_ID: &str = "id";
+const COL_DESCRIPTION: &str = "description";
 const COL_AMOUNT_SATS: &str = "amount_sats";
 const COL_PAYMENT_HASH: &str = "payment_hash";
 const COL_PAYMENT_REQUEST: &str = "payment_request";
 const COL_STATUS: &str = "status";
-const COL_CREATED_AT: &str = "created_at";
+const _COL_CREATED_AT: &str = "created_at";
 const COL_UPDATED_AT: &str = "updated_at";
 const _COL_DELETED_AT: &str = "deleted_at ";
 
 impl Invoice {
     pub async fn insert_async(
+        description: impl Into<String>,
         amount_sats: i64,
         payment_hash: impl Into<String>,
         payment_request: impl Into<String>,
         status: impl Into<String>,
         pool: &Pool,
     ) -> Result<Invoice> {
+        let description = description.into();
         let payment_hash = payment_hash.into();
         let payment_request = payment_request.into();
         let status = status.into();
         pool.get()
             .await?
             .interact(move |conn| {
-                Invoice::insert(amount_sats, payment_hash, payment_request, status, conn)
+                Invoice::insert(
+                    description,
+                    amount_sats,
+                    payment_hash,
+                    payment_request,
+                    status,
+                    conn,
+                )
             })
             .await?
     }
 
     pub fn insert(
+        description: impl Into<String>,
         amount_sats: i64,
         payment_hash: impl Into<String>,
         payment_request: impl Into<String>,
@@ -60,11 +72,13 @@ impl Invoice {
         let sql = format!(
             r#"
                 INSERT INTO {TABLE} (
+                    {COL_DESCRIPTION},
                     {COL_AMOUNT_SATS},
                     {COL_PAYMENT_HASH},
                     {COL_PAYMENT_REQUEST},
                     {COL_STATUS}
                 ) VALUES (
+                    :description,
                     :amount_sats,
                     :payment_hash,
                     :payment_request,
@@ -76,6 +90,7 @@ impl Invoice {
             &sql,
             named_params! {
                 ":amount_sats": amount_sats,
+                ":description": description.into(),
                 ":payment_hash": payment_hash.into(),
                 ":payment_request": payment_request.into(),
                 ":status": status.into(),
@@ -157,7 +172,7 @@ impl Invoice {
                 UPDATE {TABLE}
                 SET {COL_STATUS} = :{COL_STATUS}
                 WHERE {COL_ID} = :{COL_ID}
-        "#
+            "#
         );
         conn.execute(
             &sql,
@@ -174,13 +189,14 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Invoice> {
     |row: &Row| -> rusqlite::Result<Invoice> {
         Ok(Invoice {
             id: row.get(0)?,
-            amount_sats: row.get(1)?,
-            payment_hash: row.get(2)?,
-            payment_request: row.get(3)?,
-            status: row.get(4)?,
-            created_at: row.get(5)?,
-            updated_at: row.get(6)?,
-            deleted_at: row.get(7)?,
+            description: row.get(1)?,
+            amount_sats: row.get(2)?,
+            payment_hash: row.get(3)?,
+            payment_request: row.get(4)?,
+            status: row.get(5)?,
+            created_at: row.get(6)?,
+            updated_at: row.get(7)?,
+            deleted_at: row.get(8)?,
         })
     }
 }
