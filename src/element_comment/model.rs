@@ -1,4 +1,5 @@
 use crate::Result;
+use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 #[cfg(not(test))]
@@ -29,10 +30,26 @@ const COL_ELEMENT_ID: &str = "element_id";
 const COL_COMMENT: &str = "comment";
 const COL_CREATED_AT: &str = "created_at";
 const COL_UPDATED_AT: &str = "updated_at";
-const _COL_DELETED_AT: &str = "deleted_at ";
+const COL_DELETED_AT: &str = "deleted_at ";
 
 impl ElementComment {
-    pub fn insert(element_id: i64, comment: &str, conn: &Connection) -> Result<ElementComment> {
+    pub async fn insert_async(
+        element_id: i64,
+        comment: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<ElementComment> {
+        let comment = comment.into();
+        pool.get()
+            .await?
+            .interact(move |conn| ElementComment::insert(element_id, comment, conn))
+            .await?
+    }
+
+    pub fn insert(
+        element_id: i64,
+        comment: impl Into<String>,
+        conn: &Connection,
+    ) -> Result<ElementComment> {
         let query = format!(
             r#"
                 INSERT INTO {TABLE} (
@@ -51,7 +68,7 @@ impl ElementComment {
             &query,
             named_params! {
                 ":element_id": element_id,
-                ":comment": comment,
+                ":comment": comment.into(),
             },
         )?;
         Ok(ElementComment::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
@@ -174,6 +191,13 @@ impl ElementComment {
         Ok(res)
     }
 
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<ElementComment>> {
+        pool.get()
+            .await?
+            .interact(move |conn| ElementComment::select_by_id(id, conn))
+            .await?
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<ElementComment>> {
         let query = format!(
             r#"
@@ -186,6 +210,53 @@ impl ElementComment {
         Ok(conn
             .query_row(&query, named_params! { ":id": id }, mapper())
             .optional()?)
+    }
+
+    pub async fn set_deleted_at_async(
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+        pool: &Pool,
+    ) -> Result<Option<ElementComment>> {
+        pool.get()
+            .await?
+            .interact(move |conn| ElementComment::set_deleted_at(id, deleted_at, conn))
+            .await?
+    }
+
+    pub fn set_deleted_at(
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+        conn: &Connection,
+    ) -> Result<Option<ElementComment>> {
+        match deleted_at {
+            Some(deleted_at) => {
+                let sql = format!(
+                    r#"
+                        UPDATE {TABLE}
+                        SET {COL_DELETED_AT} = :{COL_DELETED_AT}
+                        WHERE {COL_ID} = :{COL_ID}
+                    "#
+                );
+                conn.execute(
+                    &sql,
+                    named_params! {
+                        ":id": id,
+                        ":deleted_at": deleted_at.format(&Rfc3339)?,
+                    },
+                )?;
+            }
+            None => {
+                let sql = format!(
+                    r#"
+                        UPDATE {TABLE}
+                        SET {COL_DELETED_AT} = NULL
+                        WHERE {COL_ID} = :{COL_ID}
+                    "#
+                );
+                conn.execute(&sql, named_params! { ":id": id })?;
+            }
+        };
+        ElementComment::select_by_id(id, conn)
     }
 }
 

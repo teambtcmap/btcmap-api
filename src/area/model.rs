@@ -304,14 +304,14 @@ impl Area {
                 )?;
             }
             None => {
-                let query = format!(
+                let sql = format!(
                     r#"
                         UPDATE {TABLE_NAME}
                         SET {COL_DELETED_AT} = NULL
                         WHERE {COL_ID} = :{COL_ID}
                     "#
                 );
-                conn.execute(&query, named_params! { ":id": area_id })?;
+                conn.execute(&sql, named_params! { ":id": area_id })?;
             }
         };
         Area::select_by_id(area_id, conn)

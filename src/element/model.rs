@@ -1,5 +1,6 @@
 use crate::Result;
 use crate::{osm::overpass::OverpassElement, Error};
+use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -165,7 +166,23 @@ impl Element {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub fn select_by_id_or_osm_id(id: &str, conn: &Connection) -> Result<Option<Element>> {
+    pub async fn select_by_id_or_osm_id_async(
+        id: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Option<Element>> {
+        let id = id.into();
+        pool.get()
+            .await?
+            .interact(|conn| Element::select_by_id_or_osm_id(id, conn))
+            .await?
+    }
+
+    pub fn select_by_id_or_osm_id(
+        id: impl Into<String>,
+        conn: &Connection,
+    ) -> Result<Option<Element>> {
+        let id: String = id.into();
+        let id = id.as_str();
         match id.parse::<i64>() {
             Ok(id) => Element::select_by_id(id, conn),
             Err(_) => {

@@ -1,9 +1,10 @@
 use super::model::Invoice;
-use crate::Result;
+use crate::{discord, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde_json::json;
 use std::env;
+use tracing::info;
 
 #[derive(Deserialize)]
 pub struct CreateLNbitsInvoiceResponse {
@@ -25,7 +26,7 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
         return Err("Failed to generate LNBITS invoice".into());
     }
     let lnbits_response: CreateLNbitsInvoiceResponse = lnbits_response.json().await?;
-    Invoice::insert_async(
+    let invoice = Invoice::insert_async(
         description,
         amount_sats,
         lnbits_response.payment_hash,
@@ -33,7 +34,16 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
         "unpaid",
         pool,
     )
-    .await
+    .await?;
+    discord::send_message_to_channel(
+        &format!(
+            "created invoice id = {} sats = {} description = {}",
+            invoice.id, invoice.amount_sats, invoice.description,
+        ),
+        discord::CHANNEL_API,
+    )
+    .await;
+    Ok(invoice)
 }
 
 #[derive(Deserialize)]
@@ -58,8 +68,39 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<Vec<Invoice>> {
         let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
         if lnbits_response.paid {
             Invoice::set_status_async(invoice.id, "paid", pool).await?;
+            on_invoice_paid(&invoice, pool).await?;
             affected_invoices.push(invoice);
         }
     }
     Ok(affected_invoices)
+}
+
+pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
+    info!(invoice.id, invoice.description, "invoice has been paid");
+    discord::send_message_to_channel(
+        &format!(
+            "invoice id = {} sats = {} description = {} has been paid",
+            invoice.id, invoice.amount_sats, invoice.description,
+        ),
+        discord::CHANNEL_API,
+    )
+    .await;
+    if invoice.description.starts_with("element_comment") {
+        info!("parsing element comment invoice");
+        let parts: Vec<&str> = invoice.description.split(":").collect();
+        let id = parts.get(1).unwrap_or(&"");
+        let action = parts.get(2).unwrap_or(&"");
+        info!(id, action, "parsed element_comment id and action");
+        if id.is_empty() || action.is_empty() {
+            return Ok(());
+        }
+        let id = id.parse::<i64>().unwrap_or(0);
+        if *action == "publish" {
+            let comment = ElementComment::select_by_id_async(id, pool).await?;
+            if comment.is_some() {
+                ElementComment::set_deleted_at_async(id, None, pool).await?;
+            }
+        }
+    }
+    Ok(())
 }

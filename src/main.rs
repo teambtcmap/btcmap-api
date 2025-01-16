@@ -84,6 +84,10 @@ async fn main() -> Result<()> {
                         .with_method("remove_element_tag", rpc::remove_element_tag::run)
                         .with_method("boost_element", rpc::boost_element::run)
                         .with_method("add_element_comment", rpc::add_element_comment::run)
+                        .with_method(
+                            "add_paid_element_comment",
+                            rpc::add_paid_element_comment::run,
+                        )
                         .with_method("generate_element_issues", rpc::generate_element_issues::run)
                         .with_method("add_area", rpc::add_area::run)
                         .with_method("get_area", rpc::get_area::run)
