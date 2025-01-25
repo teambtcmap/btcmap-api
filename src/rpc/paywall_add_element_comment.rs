@@ -1,4 +1,5 @@
 use crate::{
+    conf::Conf,
     element::Element,
     element_comment::ElementComment,
     invoice::{self},
@@ -24,6 +25,7 @@ pub struct Res {
 }
 
 pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
+    let conf = Conf::select_async(&pool).await?;
     let element = Element::select_by_id_or_osm_id_async(&args.element_id, &pool)
         .await?
         .ok_or(format!(
@@ -35,7 +37,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .await?;
     let invoice = invoice::service::create(
         format!("element_comment:{}:publish", comment.id),
-        500,
+        conf.paywall_add_element_comment_price_sat,
         &pool,
     )
     .await?;

@@ -4,6 +4,7 @@ use actix_web::middleware::{from_fn, Compress, NormalizePath};
 use actix_web::{App, HttpServer};
 pub use error::Error;
 mod admin;
+mod conf;
 mod discord;
 mod element;
 mod error;
