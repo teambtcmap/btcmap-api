@@ -26,7 +26,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         ))?;
     let sats = match args.days {
         30 => 5000,
-        60 => 10000,
+        90 => 10000,
         365 => 30000,
         _ => Err("Invalid duration")?,
     };

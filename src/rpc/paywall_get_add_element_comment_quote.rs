@@ -5,9 +5,9 @@ pub const NAME: &str = "paywall_get_add_element_comment_quote";
 
 #[derive(Serialize)]
 pub struct Res {
-    pub quote_sats: i64,
+    pub quote_sat: i64,
 }
 
 pub async fn run() -> Result<Res> {
-    Ok(Res { quote_sats: 500 })
+    Ok(Res { quote_sat: 500 })
 }
