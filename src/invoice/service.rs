@@ -1,9 +1,10 @@
 use super::model::Invoice;
-use crate::{discord, element_comment::ElementComment, Result};
+use crate::{discord, element::Element, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::env;
+use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use tracing::info;
 
 #[derive(Deserialize)]
@@ -102,5 +103,85 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
             }
         }
     }
+
+    if invoice.description.starts_with("element_boost") {
+        let parts: Vec<&str> = invoice.description.split(":").collect();
+        let element_id = parts.get(1).unwrap_or(&"");
+        let element_id = element_id.parse::<i64>().unwrap_or(0);
+        let days = parts.get(2).unwrap_or(&"");
+        let days = days.parse::<i64>().unwrap_or(0);
+        if element_id == 0 || days == 0 {
+            return Ok(());
+        }
+        let element = Element::select_by_id_or_osm_id_async(element_id.to_string(), pool).await?;
+        let Some(element) = element else {
+            return Ok(());
+        };
+        let boost_expires = if element.tags.contains_key("boost:expires") {
+            let now = OffsetDateTime::now_utc();
+            let now_str = now.format(&Rfc3339)?;
+            let old_boost_expires = element.tags["boost:expires"].as_str().unwrap_or(&now_str);
+            let old_boost_expires =
+                OffsetDateTime::parse(old_boost_expires, &Rfc3339).unwrap_or(now);
+            old_boost_expires + Duration::days(days)
+        } else {
+            OffsetDateTime::now_utc().saturating_add(Duration::days(days))
+        };
+        Element::set_tag_async(
+            element_id,
+            "boost:expires",
+            &Value::String(boost_expires.format(&Rfc3339)?),
+            pool,
+        )
+        .await?;
+    }
+
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        element::Element, invoice::model::Invoice, osm::overpass::OverpassElement, test::mock_db,
+        Result,
+    };
+    use actix_web::test;
+    use serde_json::Value;
+    use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+    #[test]
+    async fn on_invoice_paid_on_unboosted_element() -> Result<()> {
+        let db = mock_db().await;
+        Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let invoice = Invoice::insert("element_boost:1:10", 0, "", "", "", &db.conn)?;
+        super::on_invoice_paid(&invoice, &db.pool).await?;
+        let element = Element::select_by_id(1, &db.conn)?.unwrap();
+        assert!(element.tags.contains_key("boost:expires"));
+        let boost_expires =
+            OffsetDateTime::parse(element.tags["boost:expires"].as_str().unwrap(), &Rfc3339)?;
+        assert_eq!(9, (boost_expires - OffsetDateTime::now_utc()).whole_days());
+        Ok(())
+    }
+
+    #[test]
+    async fn on_invoice_paid_on_boosted_element() -> Result<()> {
+        let db = mock_db().await;
+        let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let old_boost_expires = OffsetDateTime::now_utc().saturating_sub(Duration::days(5));
+        let old_boost_expires = old_boost_expires.format(&Rfc3339)?;
+        Element::set_tag(
+            element.id,
+            "boost:expires",
+            &Value::String(old_boost_expires),
+            &db.conn,
+        )?;
+        let invoice = Invoice::insert("element_boost:1:10", 0, "", "", "", &db.conn)?;
+        super::on_invoice_paid(&invoice, &db.pool).await?;
+        let element = Element::select_by_id(1, &db.conn)?.unwrap();
+        assert!(element.tags.contains_key("boost:expires"));
+        let boost_expires =
+            OffsetDateTime::parse(element.tags["boost:expires"].as_str().unwrap(), &Rfc3339)?;
+        assert_eq!(4, (boost_expires - OffsetDateTime::now_utc()).whole_days());
+        Ok(())
+    }
 }

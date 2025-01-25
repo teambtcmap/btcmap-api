@@ -284,6 +284,20 @@ impl Element {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub async fn set_tag_async(
+        id: i64,
+        name: impl Into<String>,
+        value: &Value,
+        pool: &Pool,
+    ) -> Result<Element> {
+        let name = name.into();
+        let value = value.clone();
+        pool.get()
+            .await?
+            .interact(move |conn| Element::set_tag(id, &name, &value, conn))
+            .await?
+    }
+
     pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
         let mut patch_set = Map::new();
         patch_set.insert(name.into(), value.clone());

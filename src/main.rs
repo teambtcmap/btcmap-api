@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
                         .with_method("add_element_comment", rpc::add_element_comment::run)
                         .with_method(
                             "add_paid_element_comment",
-                            rpc::add_paid_element_comment::run,
+                            rpc::paywall_add_element_comment::run,
                         )
                         .with_method("generate_element_issues", rpc::generate_element_issues::run)
                         .with_method("add_area", rpc::add_area::run)
@@ -126,6 +126,22 @@ async fn main() -> Result<()> {
                         .with_method("get_elements_snapshot", rpc::get_elements_snapshot::run)
                         .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
+                        .with_method(
+                            rpc::paywall_get_add_element_comment_quote::NAME,
+                            rpc::paywall_get_add_element_comment_quote::run,
+                        )
+                        .with_method(
+                            rpc::paywall_add_element_comment::NAME,
+                            rpc::paywall_add_element_comment::run,
+                        )
+                        .with_method(
+                            rpc::paywall_get_boost_element_quote::NAME,
+                            rpc::paywall_get_boost_element_quote::run,
+                        )
+                        .with_method(
+                            rpc::paywall_boost_element::NAME,
+                            rpc::paywall_boost_element::run,
+                        )
                         .finish()
                         .into_actix_web_service(),
                 ),
