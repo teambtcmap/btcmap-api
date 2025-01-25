@@ -100,6 +100,14 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
             let comment = ElementComment::select_by_id_async(id, pool).await?;
             if comment.is_some() {
                 ElementComment::set_deleted_at_async(id, None, pool).await?;
+                discord::send_message_to_channel(
+                    &format!(
+                        "posted comment '{}' since invoice has been paid",
+                        comment.unwrap().comment,
+                    ),
+                    discord::CHANNEL_API,
+                )
+                .await;
             }
         }
     }
@@ -134,6 +142,14 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
             pool,
         )
         .await?;
+        discord::send_message_to_channel(
+            &format!(
+                "boosted element id = {} days = {} since invoice has been paid",
+                element_id, days,
+            ),
+            discord::CHANNEL_API,
+        )
+        .await;
     }
 
     Ok(())
