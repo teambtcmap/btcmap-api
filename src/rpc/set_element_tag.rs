@@ -1,3 +1,4 @@
+use crate::conf::Conf;
 use crate::discord;
 use crate::Result;
 use crate::{admin, element::model::Element};
@@ -38,7 +39,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
         .interact(move |conn| Element::set_tag(element.id, &cloned_name, &cloned_value, conn))
         .await??;
     let log_message = format!(
-        "{} set tag {} = {} for element {} https://api.btcmap.org/v3/elements/{}",
+        "Admin {} set tag {} = {} for element {} https://api.btcmap.org/v3/elements/{}",
         admin.name,
         args.name,
         serde_json::to_string(&args.value)?,
@@ -46,6 +47,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
         element.id,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(element)
 }

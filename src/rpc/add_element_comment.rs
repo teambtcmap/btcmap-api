@@ -1,4 +1,6 @@
-use crate::{admin, discord, element::Element, element_comment::ElementComment, Result};
+use crate::{
+    admin, conf::Conf, discord, element::Element, element_comment::ElementComment, Result,
+};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
@@ -37,6 +39,7 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
         args.comment,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(review)
 }

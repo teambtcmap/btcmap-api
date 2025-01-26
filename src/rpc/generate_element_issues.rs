@@ -1,5 +1,7 @@
 use crate::{
-    admin, discord,
+    admin,
+    conf::Conf,
+    discord,
     element::{self, Element},
     Result,
 };
@@ -44,11 +46,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .interact(move |conn| element::service::generate_issues(elements.iter().collect(), conn))
         .await??;
     let log_message = format!(
-        "{} generated element issues, affecting {} elements",
+        "Admin {} generated element issues, affecting {} elements",
         admin.name, res.affected_elements,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(Res {
         started_at: res.started_at,
         finished_at: res.finished_at,

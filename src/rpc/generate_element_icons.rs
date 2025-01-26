@@ -1,4 +1,4 @@
-use crate::{admin, discord, element::Element, osm::overpass::OverpassElement, Result};
+use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -42,11 +42,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     let log_message = format!(
-        "{} generated element icons, potentially affecting element ids {}..{} ({} elements updated)",
+        "Admin {} generated element icons, potentially affecting element ids {}..{} ({} elements updated)",
         admin.name, args.from_element_id, args.to_element_id, updated_elements.len(),
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(Res {
         updated_elements,
         time_s,

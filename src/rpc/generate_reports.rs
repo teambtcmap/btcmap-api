@@ -1,4 +1,4 @@
-use crate::{admin, area::Area, discord, element::Element, report::Report, Result};
+use crate::{admin, area::Area, conf::Conf, discord, element::Element, report::Report, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -32,11 +32,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     if res > 0 {
         let log_message = format!(
-            "{} generated {} daily reports in {} seconds",
+            "Admin {} generated {} daily reports in {} seconds",
             admin.name, res, time_s,
         );
         info!(log_message);
-        discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+        let conf = Conf::select_async(&pool).await?;
+        discord::post_message(conf.discord_webhook_api, log_message).await;
     }
     Ok(Res {
         started_at: OffsetDateTime::now_utc(),

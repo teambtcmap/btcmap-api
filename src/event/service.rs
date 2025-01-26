@@ -1,3 +1,4 @@
+use crate::conf::Conf;
 use crate::discord;
 use crate::event::Event;
 use crate::osm;
@@ -33,7 +34,8 @@ pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
         _ => "".into(),
     };
     info!(message);
-    discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
+    let conf = Conf::select(conn)?;
+    discord::post_message(conf.discord_webhook_osm_changes, message).await;
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {
         info!(user.osm_data.id, "This user is missing from OSM, skipping");

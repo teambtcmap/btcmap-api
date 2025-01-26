@@ -1,4 +1,4 @@
-use crate::{admin, discord, user::User, Result};
+use crate::{admin, conf::Conf, discord, user::User, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::{Deserialize, Serialize};
@@ -38,11 +38,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         .await??
         .ok_or(format!("There is no user with name = {}", args.user_name))?;
     let log_message = format!(
-        "{} removed tag {} for user {} https://api.btcmap.org/v3/users/{}",
+        "Admin {} removed tag {} for user {} https://api.btcmap.org/v3/users/{}",
         admin.name, args.tag_name, args.user_name, user.id,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(Res {
         id: user.id,
         tags: user.tags,

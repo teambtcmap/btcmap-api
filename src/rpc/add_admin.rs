@@ -1,5 +1,6 @@
 use crate::{
     admin::{service::check_rpc, Admin},
+    conf::Conf,
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -28,13 +29,14 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
     let new_admin =
         Admin::insert_async(args.new_admin_name, args.new_admin_password, &pool).await?;
     let log_message = format!(
-        "{} added new admin user {} with the following allowed actions: {}",
+        "Admin {} added new admin user {} with the following allowed actions: {}",
         admin.name,
         new_admin.name,
         serde_json::to_string(&new_admin.allowed_actions)?,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(Res {
         name: new_admin.name,
         allowed_actions: new_admin.allowed_actions,

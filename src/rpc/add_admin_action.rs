@@ -1,5 +1,6 @@
 use crate::{
     admin::{self, Admin},
+    conf::Conf,
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -33,11 +34,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
     let target_admin =
         Admin::update_allowed_actions_async(target_admin.id, &allowed_actions, &pool).await?;
     let log_message = format!(
-        "{} allowed action '{}' for admin {}",
+        "Admin {} allowed action '{}' for admin {}",
         source_admin.name, args.action, target_admin.name,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(Res {
         name: target_admin.name,
         allowed_actions: target_admin.allowed_actions,

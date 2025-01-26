@@ -1,5 +1,5 @@
 use super::Admin;
-use crate::{discord, error, Result};
+use crate::{conf::Conf, discord, error, Result};
 use deadpool_sqlite::Pool;
 
 pub async fn check_rpc(
@@ -12,10 +12,11 @@ pub async fn check_rpc(
     if is_allowed(&action, &admin.allowed_actions) {
         Ok(admin)
     } else {
-        discord::send_message(
-            discord::CHANNEL_API,
+        let conf = Conf::select_async(&pool).await?;
+        discord::post_message(
+            conf.discord_webhook_api,
             format!(
-                "admin user {} tried to call {action} without proper permissions",
+                "Admin {} tried to call {action} without proper permissions",
                 admin.name,
             ),
         )

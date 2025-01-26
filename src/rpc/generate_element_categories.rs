@@ -1,4 +1,4 @@
-use crate::{admin, discord, element::Element, osm::overpass::OverpassElement, Result};
+use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -30,11 +30,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         })
         .await??;
     let log_message = format!(
-        "{} generated element categories, potentially affecting element ids {}..{}",
+        "Admin {} generated element categories, potentially affecting element ids {}..{}",
         admin.name, args.from_element_id, args.to_element_id,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(res)
 }
 

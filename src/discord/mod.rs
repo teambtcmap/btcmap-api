@@ -1,43 +1,13 @@
-use std::{collections::HashMap, env};
-use tracing::{error, info};
+use std::collections::HashMap;
 
-pub static CHANNEL_OSM_CHANGES: &str = "DISCORD_WEBHOOK_URL";
-pub static CHANNEL_API: &str = "DISCORD_ADMIN_CHANNEL_WEBHOOK_URL";
-
-pub async fn send_message(channel: &str, message: impl Into<String>) {
+pub async fn post_message(webhook_url: impl Into<String>, message: impl Into<String>) {
+    let url = webhook_url.into();
+    if url.is_empty() {
+        return;
+    }
     let message = message.into();
-    info!("attempting to send message {message} to channel {channel}");
-    if let Ok(webhook_url) = env::var(channel) {
-        _send_message(&message, &webhook_url).await;
-    }
-}
-
-pub async fn send_message_to_channel(message: &str, channel: &str) {
-    info!("attempting to send message {message} to channel {channel}");
-    if let Ok(webhook_url) = env::var(channel) {
-        _send_message(message, &webhook_url).await;
-    }
-}
-
-async fn _send_message(message: &str, webhook_url: &str) {
     let mut args = HashMap::new();
     args.insert("username", "btcmap.org");
-    args.insert("content", message);
-
-    info!("Sending discord message");
-
-    let response = reqwest::Client::new()
-        .post(webhook_url)
-        .json(&args)
-        .send()
-        .await;
-
-    match response {
-        Ok(response) => {
-            info!(response_status = ?response.status(), "Got response");
-        }
-        Err(_) => {
-            error!("Failed to send Discord message");
-        }
-    };
+    args.insert("content", &message);
+    let _ = reqwest::Client::new().post(url).json(&args).send().await;
 }

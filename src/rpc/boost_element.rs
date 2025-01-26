@@ -1,4 +1,4 @@
-use crate::{admin, boost::Boost, discord, element::Element, Result};
+use crate::{admin, boost::Boost, conf::Conf, discord, element::Element, Result};
 use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use rusqlite::Connection;
@@ -25,14 +25,15 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<El
         .interact(move |conn| _boost(admin.id, &args.id, args.days, conn))
         .await??;
     let log_message = format!(
-        "{} boosted element {} https://api.btcmap.org/v3/elements/{} for {} days",
+        "Admin {} boosted element {} https://api.btcmap.org/v3/elements/{} for {} days",
         admin.name,
         element.name(),
         element.id,
         args.days,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(element)
 }
 

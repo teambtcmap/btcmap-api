@@ -1,4 +1,5 @@
 use super::model::RpcArea;
+use crate::conf::Conf;
 use crate::Result;
 use crate::{admin, area, discord};
 use deadpool_sqlite::Pool;
@@ -29,7 +30,8 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Rp
         area.id,
     );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(area.into())
 }
 

@@ -1,4 +1,5 @@
 use crate::area_element::service::Diff;
+use crate::conf::Conf;
 use crate::element::{self, Element};
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
@@ -135,10 +136,12 @@ pub async fn sync_deleted_elements(
         .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
         .collect();
     let mut res = vec![];
+    let conf = Conf::select(conn)?;
     for absent_element in absent_elements {
         let fresh_osm_element = confirm_deleted(
             &absent_element.overpass_data.r#type,
             absent_element.overpass_data.id,
+            &conf,
         )
         .await?;
         user::service::insert_user_if_not_exists(fresh_osm_element.uid, conn).await?;
@@ -175,7 +178,7 @@ fn mark_element_as_deleted(
     Ok(event)
 }
 
-async fn confirm_deleted(osm_type: &str, osm_id: i64) -> Result<OsmElement> {
+async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<OsmElement> {
     let osm_element = match osm::api::get_element(osm_type, osm_id).await? {
         Some(v) => v,
         None => Err(Error::OsmApi(format!(
@@ -189,7 +192,7 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64) -> Result<OsmElement> {
             osm_type, osm_id,
         );
         error!(message);
-        discord::send_message_to_channel(&message, discord::CHANNEL_OSM_CHANGES).await;
+        discord::post_message(&conf.discord_webhook_osm_changes, &message).await;
         Err(Error::OverpassApi(message))?
     }
     Ok(osm_element)
@@ -291,6 +294,7 @@ pub async fn sync_new_elements(
 #[cfg(test)]
 mod test {
     use crate::{
+        conf::Conf,
         element::Element,
         osm::{api::OsmUser, overpass::OverpassElement},
         test::mock_conn,
@@ -325,8 +329,12 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn confirm_deleted() -> Result<()> {
-        assert!(super::confirm_deleted("node", 2702291726).await.is_ok());
-        assert!(super::confirm_deleted("node", 12181429828).await.is_err());
+        assert!(super::confirm_deleted("node", 2702291726, &Conf::mock())
+            .await
+            .is_ok());
+        assert!(super::confirm_deleted("node", 12181429828, &Conf::mock())
+            .await
+            .is_err());
         Ok(())
     }
 

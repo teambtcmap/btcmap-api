@@ -1,6 +1,7 @@
 use crate::{
     admin,
     area_element::{self, service::Diff},
+    conf::Conf,
     discord,
     element::Element,
     Result,
@@ -36,11 +37,12 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         })
         .await??;
     let log_message = format!(
-            "{} generated areas to elements mappings, potentially affecting element ids {}..{}. {} elements were affected",
+            "Admin {} generated areas to elements mappings, potentially affecting element ids {}..{}. {} elements were affected",
             admin.name, args.from_element_id, args.to_element_id, res.affected_elements.len(),
         );
     info!(log_message);
-    discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+    let conf = Conf::select_async(&pool).await?;
+    discord::post_message(conf.discord_webhook_api, log_message).await;
     Ok(res)
 }
 

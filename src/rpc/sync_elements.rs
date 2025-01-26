@@ -1,3 +1,4 @@
+use crate::conf::Conf;
 use crate::osm::overpass;
 use crate::{admin, sync::MergeResult};
 use crate::{db, discord, sync, Result};
@@ -34,14 +35,15 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
         > 3
     {
         let log_message = format!(
-            "{} ran a sync with high number of changes (created: {}, updated: {}, deleted: {})",
+            "Admin {} ran a sync with high number of changes (created: {}, updated: {}, deleted: {})",
             admin.name,
             merge_res.elements_created.len(),
             merge_res.elements_updated.len(),
             merge_res.elements_deleted.len(),
         );
         info!(log_message);
-        discord::send_message_to_channel(&log_message, discord::CHANNEL_API).await;
+        let conf = Conf::select_async(&pool).await?;
+        discord::post_message(conf.discord_webhook_api, log_message).await;
     }
     Ok(Res {
         overpass_query_time_s: overpass_res.time_s,
