@@ -59,6 +59,11 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<Vec<Invoice>> {
         Err("lnbits invoice key is not set")?
     }
     let unpaid_invoices = Invoice::select_by_status_async("unpaid", pool).await?;
+    let now = OffsetDateTime::now_utc();
+    let unpaid_invoices: Vec<Invoice> = unpaid_invoices
+        .into_iter()
+        .filter(|it| it.created_at > now.saturating_sub(Duration::hours(1)))
+        .collect();
     let mut affected_invoices = vec![];
     let client = reqwest::Client::new();
     for invoice in unpaid_invoices {
