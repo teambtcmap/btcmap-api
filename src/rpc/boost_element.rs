@@ -8,7 +8,7 @@ use std::sync::Arc;
 use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
 use tracing::info;
 
-const NAME: &str = "boost_element";
+pub const NAME: &str = "boost_element";
 
 #[derive(Deserialize)]
 pub struct Args {

@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use tracing::info;
 
-const NAME: &str = "remove_element_tag";
+pub const NAME: &str = "remove_element_tag";
 
 #[derive(Deserialize)]
 pub struct Args {

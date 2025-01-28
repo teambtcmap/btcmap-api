@@ -12,7 +12,7 @@ use std::sync::Arc;
 use time::OffsetDateTime;
 use tracing::info;
 
-const NAME: &str = "generate_element_issues";
+pub const NAME: &str = "generate_element_issues";
 
 #[derive(Deserialize)]
 pub struct Args {

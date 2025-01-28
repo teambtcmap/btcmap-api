@@ -6,7 +6,7 @@ use deadpool_sqlite::Pool;
 use jsonrpc_v2::{Data, Params};
 use serde::Deserialize;
 
-const NAME: &str = "get_element";
+pub const NAME: &str = "get_element";
 
 #[derive(Deserialize)]
 pub struct Args {

@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use tracing::info;
 
-const NAME: &str = "add_element_comment";
+pub const NAME: &str = "add_element_comment";
 
 #[derive(Deserialize)]
 pub struct Args {

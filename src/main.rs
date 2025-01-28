@@ -79,17 +79,26 @@ async fn main() -> Result<()> {
             .service(
                 service("rpc").guard(actix_web::guard::Post()).finish(
                     jsonrpc_v2::Server::new()
+                        // element
                         .with_data(jsonrpc_v2::Data::new(pool.clone()))
-                        .with_method("get_element", rpc::get_element::run)
-                        .with_method("set_element_tag", rpc::set_element_tag::run)
-                        .with_method("remove_element_tag", rpc::remove_element_tag::run)
-                        .with_method("boost_element", rpc::boost_element::run)
-                        .with_method("add_element_comment", rpc::add_element_comment::run)
+                        .with_method(rpc::get_element::NAME, rpc::get_element::run)
+                        .with_method(rpc::set_element_tag::NAME, rpc::set_element_tag::run)
+                        .with_method(rpc::remove_element_tag::NAME, rpc::remove_element_tag::run)
+                        .with_method(rpc::boost_element::NAME, rpc::boost_element::run)
+                        .with_method(
+                            rpc::add_element_comment::NAME,
+                            rpc::add_element_comment::run,
+                        )
+                        // TODO remove
                         .with_method(
                             "add_paid_element_comment",
                             rpc::paywall_add_element_comment::run,
                         )
-                        .with_method("generate_element_issues", rpc::generate_element_issues::run)
+                        .with_method(
+                            rpc::generate_element_issues::NAME,
+                            rpc::generate_element_issues::run,
+                        )
+                        // area
                         .with_method("add_area", rpc::add_area::run)
                         .with_method("get_area", rpc::get_area::run)
                         .with_method("set_area_tag", rpc::set_area_tag::run)

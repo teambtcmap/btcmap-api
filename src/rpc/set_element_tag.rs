@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tracing::info;
 
-const NAME: &str = "set_element_tag";
+pub const NAME: &str = "set_element_tag";
 
 #[derive(Deserialize, Clone)]
 pub struct Args {
