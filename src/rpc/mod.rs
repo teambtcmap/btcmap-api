@@ -13,6 +13,7 @@ pub mod get_area;
 pub mod get_boosted_elements;
 pub mod get_element;
 pub mod get_elements_snapshot;
+pub mod get_invoice;
 pub mod get_most_commented_countries;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
