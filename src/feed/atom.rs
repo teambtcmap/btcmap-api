@@ -152,6 +152,10 @@ async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
                 .collect()
         })
         .await?;
+    let comments = comments
+        .into_iter()
+        .filter(|it| it.0.deleted_at.is_none())
+        .collect();
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(comments_to_atom_feed(
@@ -185,6 +189,10 @@ async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Result<i
                 .collect()
         })
         .await?;
+    let comments = comments
+        .into_iter()
+        .filter(|it| it.0.deleted_at.is_none())
+        .collect();
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(comments_to_atom_feed(
