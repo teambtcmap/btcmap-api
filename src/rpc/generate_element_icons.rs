@@ -64,19 +64,6 @@ fn generate_element_icons(
         let Some(element) = Element::select_by_id(element_id, conn)? else {
             continue;
         };
-        if element.deleted_at.is_some() {
-            if element.tags.contains_key("icon:android") {
-                Element::remove_tag(element.id, "icon:android", conn)?;
-                let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
-                updated_elements.push(UpdatedElement {
-                    id: element_id,
-                    osm_url: element.osm_url(),
-                    old_icon: old_icon.into(),
-                    new_icon: "".into(),
-                });
-            }
-            continue;
-        }
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {

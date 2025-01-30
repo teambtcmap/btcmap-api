@@ -28,8 +28,7 @@ pub struct GetItem {
     pub id: i64,
     pub lat: f64,
     pub lon: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Map<String, Value>>,
+    pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
     #[serde(default)]
@@ -40,60 +39,11 @@ pub struct GetItem {
 
 impl From<Element> for GetItem {
     fn from(val: Element) -> GetItem {
-        let tags = if val.deleted_at.is_none() {
-            let mut merged_tags = Map::new();
-            let osm_tags = val.overpass_data.tags.unwrap_or_default();
-            if osm_tags.contains_key("name") {
-                merged_tags.insert("name".into(), Value::String(osm_tags["name"].clone()));
-            }
-            if osm_tags.contains_key("phone") {
-                merged_tags.insert("phone".into(), Value::String(osm_tags["phone"].clone()));
-            }
-            if osm_tags.contains_key("website") {
-                merged_tags.insert("website".into(), Value::String(osm_tags["website"].clone()));
-            }
-            if osm_tags.contains_key("check_date") {
-                merged_tags.insert(
-                    "check_date".into(),
-                    Value::String(osm_tags["check_date"].clone()),
-                );
-            }
-            if osm_tags.contains_key("survey:date") {
-                merged_tags.insert(
-                    "survey:date".into(),
-                    Value::String(osm_tags["survey:date"].clone()),
-                );
-            }
-            if osm_tags.contains_key("check_date:currency:XBT") {
-                merged_tags.insert(
-                    "check_date:currency:XBT".into(),
-                    Value::String(osm_tags["check_date:currency:XBT"].clone()),
-                );
-            }
-            if osm_tags.contains_key("addr:street") {
-                merged_tags.insert(
-                    "addr:street".into(),
-                    Value::String(osm_tags["addr:street"].clone()),
-                );
-            }
-            if osm_tags.contains_key("addr:housenumber") {
-                merged_tags.insert(
-                    "addr:housenumber".into(),
-                    Value::String(osm_tags["addr:housenumber"].clone()),
-                );
-            }
-            if val.tags.contains_key("icon:android") {
-                merged_tags.insert("btcmap:icon".into(), val.tags["icon:android"].clone());
-            }
-            Some(merged_tags)
-        } else {
-            None
-        };
         GetItem {
             id: val.id,
-            lat: val.overpass_data.lat.unwrap_or_default(),
-            lon: val.overpass_data.lon.unwrap_or_default(),
-            tags,
+            lat: val.overpass_data.coord().y,
+            lon: val.overpass_data.coord().x,
+            tags: generate_tags(&val),
             updated_at: val.updated_at,
             deleted_at: val.deleted_at,
         }
@@ -140,6 +90,56 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
             "Element with id {id} doesn't exist"
         )))
         .map(|it| it.into())
+}
+
+fn generate_tags(element: &Element) -> Map<String, Value> {
+    let mut res = Map::new();
+    let whitelisted_osm_tags = vec![
+        "name",
+        "phone",
+        "website",
+        "check_date",
+        "survey:date",
+        "check_date:currency:XBT",
+        "addr:street",
+        "addr:housenumber",
+        "contact:website",
+        "opening_hours",
+        "contact:phone",
+        "contact:email",
+        "contact:twitter",
+        "contact:instagram",
+        "contact:facebook",
+        "contact:line",
+    ];
+    if let Some(osm_tags) = &element.overpass_data.tags {
+        for whitelisted_tag in whitelisted_osm_tags {
+            if osm_tags.contains_key(whitelisted_tag) {
+                res.insert(
+                    whitelisted_tag.into(),
+                    Value::String(osm_tags[whitelisted_tag].clone()),
+                );
+            }
+        }
+    }
+    if element.tags.contains_key("icon:android") {
+        res.insert("btcmap:icon".into(), element.tags["icon:android"].clone());
+    }
+    if element.tags.contains_key("boost:expires") {
+        res.insert(
+            "btcmap:boost:expires".into(),
+            element.tags["boost:expires"].clone(),
+        );
+    }
+    res.insert(
+        "osm:type".into(),
+        Value::String(element.overpass_data.r#type.clone()),
+    );
+    res.insert(
+        "osm:id".into(),
+        Value::Number(element.overpass_data.id.into()),
+    );
+    res
 }
 
 #[cfg(test)]

@@ -171,7 +171,6 @@ fn mark_element_as_deleted(
     }
     let sp = conn.savepoint()?;
     element.set_deleted_at(Some(OffsetDateTime::now_utc()), &sp)?;
-    Element::remove_tag(element.id, "icon:android", &sp)?;
     let event = Event::insert(fresh_osm_element.uid, element.id, "delete", &sp)?;
     let event = event.patch_tags(&event_tags, &sp)?;
     sp.commit()?;
