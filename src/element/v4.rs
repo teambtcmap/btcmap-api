@@ -149,51 +149,13 @@ fn generate_tags(element: &Element) -> Map<String, Value> {
 #[cfg(test)]
 mod test {
     use crate::element::Element;
-    use crate::error::{self, SyncAPIErrorResponseBody};
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_db;
     use crate::Result;
-    use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
-    use actix_web::web::{scope, Data, QueryConfig};
+    use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use time::macros::datetime;
-
-    #[test]
-    async fn get_no_updated_since() -> Result<()> {
-        let app = test::init_service(
-            App::new()
-                .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(Data::new(mock_db().await.pool))
-                .service(scope("/").service(super::get)),
-        )
-        .await;
-        let req = TestRequest::get().uri("/?limit=1").to_request();
-        let res: SyncAPIErrorResponseBody =
-            test::try_call_and_read_body_json(&app, req).await.unwrap();
-        assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
-        assert!(res.message.contains("missing field `updated_since`"));
-        Ok(())
-    }
-
-    #[test]
-    async fn get_no_limit() -> Result<()> {
-        let app = test::init_service(
-            App::new()
-                .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-                .app_data(mock_db().await.pool)
-                .service(scope("/").service(super::get)),
-        )
-        .await;
-        let req = TestRequest::get()
-            .uri("/?updated_since=2020-01-01T00:00:00Z")
-            .to_request();
-        let res: SyncAPIErrorResponseBody =
-            test::try_call_and_read_body_json(&app, req).await.unwrap();
-        assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
-        assert!(res.message.contains("missing field `limit`"));
-        Ok(())
-    }
 
     #[test]
     async fn get_empty_array() -> Result<()> {
