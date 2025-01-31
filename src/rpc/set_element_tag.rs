@@ -3,51 +3,43 @@ use crate::discord;
 use crate::Result;
 use crate::{admin, element::model::Element};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
-use tracing::info;
 
 pub const NAME: &str = "set_element_tag";
 
 #[derive(Deserialize, Clone)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub id: String,
     pub name: String,
     pub value: Value,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let cloned_args_id = args.id.clone();
-    let element = pool
-        .get()
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Element> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Element> {
+    let admin = admin::service::check_rpc(params.password, NAME, pool).await?;
+    let element = Element::select_by_id_or_osm_id_async(params.id, pool)
         .await?
-        .interact(move |conn| Element::select_by_id_or_osm_id(&cloned_args_id, conn))
-        .await??
-        .ok_or(format!(
-            "There is no element with id or osm_id = {}",
-            args.id
-        ))?;
-    let cloned_name = args.name.clone();
-    let cloned_value = args.value.clone();
-    let element = pool
-        .get()
-        .await?
-        .interact(move |conn| Element::set_tag(element.id, &cloned_name, &cloned_value, conn))
-        .await??;
-    let log_message = format!(
-        "Admin {} set tag {} = {} for element {} https://api.btcmap.org/v3/elements/{}",
+        .ok_or("Element not found")?;
+    Element::set_tag_async(element.id, &params.name, &params.value, pool).await?;
+    let message = format!(
+        "Admin {} set tag {} = {} for element {} https://api.btcmap.org/v4/elements/{}",
         admin.name,
-        args.name,
-        serde_json::to_string(&args.value)?,
+        params.name,
+        serde_json::to_string(&params.value)?,
         element.name(),
         element.id,
     );
-    info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
+    discord::post_message(&conf.discord_webhook_api, message).await;
     Ok(element)
 }

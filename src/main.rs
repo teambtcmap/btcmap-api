@@ -1,11 +1,9 @@
 use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
 use actix_web::dev::ServiceRequest;
-use actix_web::middleware::{from_fn, Compress, NormalizePath};
-use actix_web::{post, App, HttpServer};
-use deadpool_sqlite::Pool;
-pub use error::Error;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
+use actix_web::{App, HttpServer};
+use conf::Conf;
+use error::Error;
 mod admin;
 mod conf;
 mod discord;
@@ -37,7 +35,7 @@ mod log;
 mod rpc;
 mod sync;
 use actix_web::http::header::HeaderValue;
-use actix_web::web::{scope, service, Data, Json, QueryConfig};
+use actix_web::web::{scope, service, Data, QueryConfig};
 mod ban;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -57,6 +55,8 @@ async fn main() -> Result<()> {
     let pool = Arc::new(db::pool()?);
 
     pool.get().await?.interact(db::migrate).await??;
+
+    let conf = Arc::new(Conf::select_async(&pool).await?);
 
     let rate_limit_conf = GovernorConfigBuilder::default()
         .milliseconds_per_request(500)
@@ -78,13 +78,19 @@ async fn main() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::from(pool.clone()))
+            .app_data(Data::from(conf.clone()))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
-            .service(rpc_v2)
+            .service(
+                scope("rpc_v2")
+                    .wrap(ErrorHandlers::new().default_handler(rpc::handler::handle_rpc_error))
+                    .service(rpc::handler::handle),
+            )
             .service(
                 service("rpc").guard(actix_web::guard::Post()).finish(
                     jsonrpc_v2::Server::new()
                         // element
                         .with_data(jsonrpc_v2::Data::new(pool.clone()))
+                        .with_data(jsonrpc_v2::Data::new(conf.clone()))
                         .with_method(rpc::get_element::NAME, rpc::get_element::run)
                         .with_method(rpc::set_element_tag::NAME, rpc::set_element_tag::run)
                         .with_method(rpc::remove_element_tag::NAME, rpc::remove_element_tag::run)
@@ -255,62 +261,6 @@ async fn main() -> Result<()> {
     .await?;
 
     Ok(())
-}
-
-#[derive(Deserialize)]
-pub struct RpcRequest {
-    pub jsonrpc: String,
-    pub method: String,
-    pub params: Option<Value>,
-    pub id: Value,
-}
-
-#[derive(Serialize)]
-pub struct RpcResponseSuccess {
-    pub jsonrpc: String,
-    pub result: Value,
-    pub id: Value,
-}
-
-#[derive(Serialize)]
-pub struct RpcResponseError {
-    pub code: i64,
-    pub message: String,
-}
-
-#[post("/rpc_v2")]
-async fn rpc_v2(req: Json<RpcRequest>, pool: Data<Pool>) -> Result<Json<Value>> {
-    if req.id.as_str().is_none() && req.id.as_number().is_none() && req.id.as_null().is_none() {
-        return Ok(Json(serde_json::to_value(RpcResponseError {
-            code: -32600,
-            message: "Invalid Request".into(),
-        })?));
-    }
-    if req.jsonrpc != "2.0" {
-        return Ok(Json(serde_json::to_value(RpcResponseError {
-            code: -32600,
-            message: "Invalid Request".into(),
-        })?));
-    }
-    let res: Value = serde_json::to_value(match req.method.as_str() {
-        "get_element" => rpc::get_element::run_internal(
-            serde_json::from_value(req.params.clone().unwrap())?,
-            &pool,
-        )
-        .await
-        .unwrap(),
-        _ => {
-            return Ok(Json(serde_json::to_value(RpcResponseError {
-                code: -32601,
-                message: "Method not found".into(),
-            })?));
-        }
-    })?;
-    Ok(Json(serde_json::to_value(RpcResponseSuccess {
-        jsonrpc: req.jsonrpc.clone(),
-        result: res,
-        id: req.id.clone(),
-    })?))
 }
 
 pub fn data_dir_file(name: &str) -> Result<PathBuf> {

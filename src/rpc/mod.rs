@@ -18,6 +18,7 @@ pub mod get_most_commented_countries;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
 pub mod get_user_activity;
+pub mod handler;
 pub mod model;
 pub mod paywall_add_element_comment;
 pub mod paywall_boost_element;
