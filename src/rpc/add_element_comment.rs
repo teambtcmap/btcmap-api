@@ -2,44 +2,40 @@ use crate::{
     admin, conf::Conf, discord, element::Element, element_comment::ElementComment, Result,
 };
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::Deserialize;
 use std::sync::Arc;
-use tracing::info;
 
 pub const NAME: &str = "add_element_comment";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub id: String,
     pub comment: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<ElementComment> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let cloned_id = args.id.clone();
-    let element = pool
-        .get()
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<ElementComment> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<ElementComment> {
+    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let element = Element::select_by_id_or_osm_id_async(params.id, &pool)
         .await?
-        .interact(move |conn| Element::select_by_id_or_osm_id(&cloned_id, conn))
-        .await??
-        .ok_or(format!("There is no element with id = {}", &args.id))?;
-    let cloned_comment = args.comment.clone();
-    let review = pool
-        .get()
-        .await?
-        .interact(move |conn| ElementComment::insert(element.id, &cloned_comment, conn))
-        .await??;
+        .ok_or("Element not found")?;
+    let comment = ElementComment::insert_async(element.id, &params.comment, &pool).await?;
     let log_message = format!(
-        "{} added a comment to element {} ({}): {}",
+        "Admin {} added a comment to element {} ({}): {}",
         admin.name,
         element.name(),
         element.id,
-        args.comment,
+        params.comment,
     );
-    info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
-    Ok(review)
+    discord::post_message(&conf.discord_webhook_api, log_message).await;
+    Ok(comment)
 }

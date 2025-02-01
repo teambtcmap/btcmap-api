@@ -99,11 +99,6 @@ async fn main() -> Result<()> {
                             rpc::add_element_comment::NAME,
                             rpc::add_element_comment::run,
                         )
-                        // TODO remove
-                        .with_method(
-                            "add_paid_element_comment",
-                            rpc::paywall_add_element_comment::run,
-                        )
                         .with_method(
                             rpc::generate_element_issues::NAME,
                             rpc::generate_element_issues::run,

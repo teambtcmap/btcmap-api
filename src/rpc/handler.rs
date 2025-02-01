@@ -24,6 +24,7 @@ pub enum RpcMethod {
     SetElementTag,
     RemoveElementTag,
     BoostElement,
+    AddElementComment,
 }
 
 #[derive(Serialize)]
@@ -127,6 +128,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::BoostElement => RpcResponse::from(
             req.id.clone(),
             super::boost_element::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::AddElementComment => RpcResponse::from(
+            req.id.clone(),
+            super::add_element_comment::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))
