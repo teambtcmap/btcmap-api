@@ -20,12 +20,15 @@ pub struct RpcRequest {
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
+    // element
     GetElement,
     SetElementTag,
     RemoveElementTag,
     BoostElement,
     AddElementComment,
     GenerateElementIssues,
+    // area
+    AddArea,
 }
 
 #[derive(Serialize)]
@@ -137,6 +140,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
             super::generate_element_issues::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::AddArea => RpcResponse::from(
+            req.id.clone(),
+            super::add_area::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))

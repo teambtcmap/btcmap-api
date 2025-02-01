@@ -6,11 +6,19 @@ use crate::{
     event::Event,
     Error, Result,
 };
+use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
+
+pub async fn insert_async(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
+    pool.get()
+        .await?
+        .interact(move |conn| insert(tags, conn))
+        .await?
+}
 
 // it can take a long time to find area_elements
 // let's say it takes 10 minutes
