@@ -1,6 +1,7 @@
 use super::Element;
 use crate::area::Area;
 use crate::Result;
+use deadpool_sqlite::Pool;
 use geo::Contains;
 use geo::LineString;
 use geo::MultiPolygon;
@@ -104,6 +105,16 @@ pub struct GenerateIssuesResult {
     pub finished_at: OffsetDateTime,
     pub time_s: f64,
     pub affected_elements: i64,
+}
+
+pub async fn generate_issues_async(
+    elements: Vec<Element>,
+    pool: &Pool,
+) -> Result<GenerateIssuesResult> {
+    pool.get()
+        .await?
+        .interact(move |conn| generate_issues(elements.iter().collect(), conn))
+        .await?
 }
 
 pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<GenerateIssuesResult> {

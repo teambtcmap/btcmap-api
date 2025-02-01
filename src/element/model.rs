@@ -69,6 +69,13 @@ impl Element {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub async fn select_all_async(limit: Option<i64>, pool: &Pool) -> Result<Vec<Element>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Element::select_all(limit, conn))
+            .await?
+    }
+
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
         let start = Instant::now();
         let query = format!(
@@ -97,6 +104,13 @@ impl Element {
             time_ms,
         );
         Ok(res)
+    }
+
+    pub async fn select_all_except_deleted_async(pool: &Pool) -> Result<Vec<Element>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Element::select_all_except_deleted(conn))
+            .await?
     }
 
     pub fn select_all_except_deleted(conn: &Connection) -> Result<Vec<Element>> {
