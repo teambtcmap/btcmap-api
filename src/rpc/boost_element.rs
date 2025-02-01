@@ -1,6 +1,6 @@
 use crate::{admin, boost::Boost, conf::Conf, discord, element::Element, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::Value;
@@ -11,29 +11,36 @@ use tracing::info;
 pub const NAME: &str = "boost_element";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub id: String,
     pub days: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Element> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Element> {
+    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
     let element = pool
         .get()
         .await?
-        .interact(move |conn| _boost(admin.id, &args.id, args.days, conn))
+        .interact(move |conn| _boost(admin.id, &params.id, params.days, conn))
         .await??;
     let log_message = format!(
-        "Admin {} boosted element {} https://api.btcmap.org/v3/elements/{} for {} days",
+        "Admin {} boosted element {} ({}) for {} days",
         admin.name,
         element.name(),
         element.id,
-        args.days,
+        params.days,
     );
     info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
+    discord::post_message(&conf.discord_webhook_api, log_message).await;
     Ok(element)
 }
 

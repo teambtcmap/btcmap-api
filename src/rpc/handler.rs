@@ -23,6 +23,7 @@ pub enum RpcMethod {
     GetElement,
     SetElementTag,
     RemoveElementTag,
+    BoostElement,
 }
 
 #[derive(Serialize)]
@@ -122,6 +123,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::RemoveElementTag => RpcResponse::from(
             req.id.clone(),
             super::remove_element_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::BoostElement => RpcResponse::from(
+            req.id.clone(),
+            super::boost_element::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))
