@@ -22,6 +22,7 @@ pub struct RpcRequest {
 pub enum RpcMethod {
     GetElement,
     SetElementTag,
+    RemoveElementTag,
 }
 
 #[derive(Serialize)]
@@ -117,6 +118,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::SetElementTag => RpcResponse::from(
             req.id.clone(),
             super::set_element_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::RemoveElementTag => RpcResponse::from(
+            req.id.clone(),
+            super::remove_element_tag::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))

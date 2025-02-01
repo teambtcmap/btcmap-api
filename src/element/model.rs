@@ -304,6 +304,18 @@ impl Element {
         Element::patch_tags(id, &patch_set, conn)
     }
 
+    pub async fn remove_tag_async(
+        element_id: i64,
+        tag_name: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Element> {
+        let tag_name = tag_name.into();
+        pool.get()
+            .await?
+            .interact(move |conn| Element::remove_tag(element_id, &tag_name, conn))
+            .await?
+    }
+
     pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Element> {
         let query = format!(
             r#"

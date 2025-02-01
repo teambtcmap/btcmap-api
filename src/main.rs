@@ -88,9 +88,9 @@ async fn main() -> Result<()> {
             .service(
                 service("rpc").guard(actix_web::guard::Post()).finish(
                     jsonrpc_v2::Server::new()
-                        // element
                         .with_data(jsonrpc_v2::Data::new(pool.clone()))
                         .with_data(jsonrpc_v2::Data::new(conf.clone()))
+                        // element
                         .with_method(rpc::get_element::NAME, rpc::get_element::run)
                         .with_method(rpc::set_element_tag::NAME, rpc::set_element_tag::run)
                         .with_method(rpc::remove_element_tag::NAME, rpc::remove_element_tag::run)

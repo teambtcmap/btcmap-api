@@ -3,47 +3,40 @@ use crate::discord;
 use crate::Result;
 use crate::{admin, element::model::Element};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::Deserialize;
 use std::sync::Arc;
-use tracing::info;
 
 pub const NAME: &str = "remove_element_tag";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
-    pub id: String,
-    pub tag: String,
+    pub element_id: String,
+    pub tag_name: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Element> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let cloned_args_id = args.id.clone();
-    let element = pool
-        .get()
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Element> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Element> {
+    let admin = admin::service::check_rpc(params.password, NAME, pool).await?;
+    let element = Element::select_by_id_or_osm_id_async(params.element_id, pool)
         .await?
-        .interact(move |conn| Element::select_by_id_or_osm_id(&cloned_args_id, conn))
-        .await??
-        .ok_or(format!(
-            "There is no element with id or osm_id = {}",
-            args.id,
-        ))?;
-    let cloned_tag = args.tag.clone();
-    let element = pool
-        .get()
-        .await?
-        .interact(move |conn| Element::remove_tag(element.id, &cloned_tag, conn))
-        .await??;
+        .ok_or("Element not found")?;
+    let element = Element::remove_tag_async(element.id, &params.tag_name, pool).await?;
     let log_message = format!(
-        "{} removed tag {} from element {} https://api.btcmap.org/v3/elements/{}",
+        "Admin {} removed tag {} from element {} https://api.btcmap.org/v4/elements/{}",
         admin.name,
-        args.tag,
+        params.tag_name,
         element.name(),
         element.id,
     );
-    info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
+    discord::post_message(&conf.discord_webhook_api, log_message).await;
     Ok(element)
 }
