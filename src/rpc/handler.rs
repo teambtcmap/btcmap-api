@@ -29,6 +29,7 @@ pub enum RpcMethod {
     GenerateElementIssues,
     // area
     AddArea,
+    GetArea,
 }
 
 #[derive(Serialize)]
@@ -144,6 +145,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
             super::add_area::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::GetArea => RpcResponse::from(
+            req.id.clone(),
+            super::get_area::run_internal(params(req.params)?, &pool).await?,
         ),
     }?;
     Ok(Json(res))
