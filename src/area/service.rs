@@ -110,6 +110,14 @@ pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection)
     Area::remove_tag(area.id, tag_name, conn)
 }
 
+pub async fn soft_delete_async(area_id_or_alias: impl Into<String>, pool: &Pool) -> Result<Area> {
+    let area_id_or_alias = area_id_or_alias.into();
+    pool.get()
+        .await?
+        .interact(move |conn| soft_delete(&area_id_or_alias, conn))
+        .await?
+}
+
 pub fn soft_delete(area_id_or_alias: &str, conn: &Connection) -> Result<Area> {
     let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
     let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?;

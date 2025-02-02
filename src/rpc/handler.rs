@@ -32,6 +32,7 @@ pub enum RpcMethod {
     GetArea,
     SetAreaTag,
     RemoveAreaTag,
+    RemoveArea,
 }
 
 #[derive(Serialize)]
@@ -159,6 +160,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
             super::remove_area_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::RemoveArea => RpcResponse::from(
+            req.id.clone(),
+            super::remove_area::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))
