@@ -109,6 +109,7 @@ async fn main() -> Result<()> {
                         .with_method(rpc::get_area::NAME, rpc::get_area::run)
                         .with_method(rpc::set_area_tag::NAME, rpc::set_area_tag::run)
                         .with_method(rpc::remove_area_tag::NAME, rpc::remove_area_tag::run)
+                        .with_method(rpc::set_area_icon::NAME, rpc::set_area_icon::run)
                         .with_method(rpc::remove_area::NAME, rpc::remove_area::run)
                         .with_method(
                             rpc::get_trending_countries::NAME,
@@ -139,7 +140,6 @@ async fn main() -> Result<()> {
                         .with_method("remove_admin_action", rpc::remove_admin_action::run)
                         .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("search", rpc::search::run)
-                        .with_method("set_area_icon", rpc::set_area_icon::run)
                         .with_method("get_boosted_elements", rpc::get_boosted_elements::run)
                         .with_method("get_elements_snapshot", rpc::get_elements_snapshot::run)
                         .with_method("generate_invoice", rpc::generate_invoice::run)

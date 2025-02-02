@@ -33,6 +33,7 @@ pub enum RpcMethod {
     GetArea,
     SetAreaTag,
     RemoveAreaTag,
+    SetAreaIcon,
     RemoveArea,
     GetTrendingCountries,
     GetMostCommentedCountries,
@@ -168,6 +169,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
             super::remove_area_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::SetAreaIcon => RpcResponse::from(
+            req.id.clone(),
+            super::set_area_icon::run_internal(params(req.params)?, &pool).await?,
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),

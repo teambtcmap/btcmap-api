@@ -2,26 +2,33 @@ use super::model::RpcArea;
 use crate::{admin, area::Area, Result};
 use base64::prelude::*;
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::Deserialize;
 use serde_json::Map;
 use std::{fs::OpenOptions, io::Write, sync::Arc};
 
-const NAME: &str = "set_area_icon";
+pub const NAME: &str = "set_area_icon";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub id: String,
     pub icon_base64: String,
     pub icon_ext: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
-    admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let area = Area::select_by_id_or_alias_async(&args.id, &pool).await?;
-    let file_name = format!("{}.{}", area.id, args.icon_ext);
-    let bytes = BASE64_STANDARD.decode(args.icon_base64)?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+) -> Result<RpcArea> {
+    run_internal(params, &pool).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool) -> Result<RpcArea> {
+    admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let area = Area::select_by_id_or_alias_async(&params.id, &pool).await?;
+    let file_name = format!("{}.{}", area.id, params.icon_ext);
+    let bytes = BASE64_STANDARD.decode(params.icon_base64)?;
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
