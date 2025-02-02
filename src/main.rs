@@ -103,6 +103,7 @@ async fn main() -> Result<()> {
                             rpc::generate_element_issues::NAME,
                             rpc::generate_element_issues::run,
                         )
+                        .with_method(rpc::sync_elements::NAME, rpc::sync_elements::run)
                         // area
                         .with_method(rpc::add_area::NAME, rpc::add_area::run)
                         .with_method(rpc::get_area::NAME, rpc::get_area::run)
@@ -133,7 +134,6 @@ async fn main() -> Result<()> {
                             "generate_element_categories",
                             rpc::generate_element_categories::run,
                         )
-                        .with_method("sync_elements", rpc::sync_elements::run)
                         .with_method("add_admin", rpc::add_admin::run)
                         .with_method("add_admin_action", rpc::add_admin_action::run)
                         .with_method("remove_admin_action", rpc::remove_admin_action::run)

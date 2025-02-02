@@ -3,15 +3,14 @@ use crate::osm::overpass;
 use crate::{admin, sync::MergeResult};
 use crate::{db, discord, sync, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::info;
 
-const NAME: &str = "sync_elements";
+pub const NAME: &str = "sync_elements";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
 }
 
@@ -22,9 +21,16 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
-    info!(admin.name, "Admin requested element sync");
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Res> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
     let overpass_res = overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
     let mut conn = db::open_connection()?;
@@ -32,18 +38,18 @@ pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Re
     if merge_res.elements_created.len()
         + merge_res.elements_updated.len()
         + merge_res.elements_deleted.len()
-        > 3
+        > 5
     {
-        let log_message = format!(
-            "Admin {} ran a sync with high number of changes (created: {}, updated: {}, deleted: {})",
-            admin.name,
-            merge_res.elements_created.len(),
-            merge_res.elements_updated.len(),
-            merge_res.elements_deleted.len(),
-        );
-        info!(log_message);
-        let conf = Conf::select_async(&pool).await?;
-        discord::post_message(conf.discord_webhook_api, log_message).await;
+        discord::post_message(
+            &conf.discord_webhook_api,
+            format!(
+                "Admin {} ran a sync with a high number of changes (created: {}, updated: {}, deleted: {})",
+                admin.name,
+                merge_res.elements_created.len(),
+                merge_res.elements_updated.len(),
+                merge_res.elements_deleted.len()
+            )
+        ).await;
     }
     Ok(Res {
         overpass_query_time_s: overpass_res.time_s,

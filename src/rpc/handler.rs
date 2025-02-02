@@ -27,6 +27,7 @@ pub enum RpcMethod {
     BoostElement,
     AddElementComment,
     GenerateElementIssues,
+    SyncElements,
     // area
     AddArea,
     GetArea,
@@ -147,6 +148,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
             super::generate_element_issues::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::SyncElements => RpcResponse::from(
+            req.id.clone(),
+            super::sync_elements::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
