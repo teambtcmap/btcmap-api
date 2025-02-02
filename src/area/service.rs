@@ -172,6 +172,10 @@ pub fn get_trending_areas(
         }
     }
     let comments = ElementComment::select_created_between(period_start, period_end, conn)?;
+    let comments: Vec<ElementComment> = comments
+        .into_iter()
+        .filter(|it| it.deleted_at.is_none())
+        .collect();
     let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
     for comment in &comments {
         let element = Element::select_by_id(comment.element_id, conn)?.unwrap();
