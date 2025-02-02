@@ -136,6 +136,21 @@ pub struct TrendingArea {
     pub comments: i64,
 }
 
+pub async fn get_trending_areas_async(
+    r#type: impl Into<String>,
+    period_start: &OffsetDateTime,
+    period_end: &OffsetDateTime,
+    pool: &Pool,
+) -> Result<Vec<TrendingArea>> {
+    let r#type = r#type.into();
+    let period_start = period_start.clone();
+    let period_end = period_end.clone();
+    pool.get()
+        .await?
+        .interact(move |conn| get_trending_areas(&r#type, &period_start, &period_end, conn))
+        .await?
+}
+
 pub fn get_trending_areas(
     r#type: &str,
     period_start: &OffsetDateTime,
@@ -217,7 +232,7 @@ pub fn get_trending_areas(
         (b.created + b.updated + b.deleted + b.comments)
             .cmp(&(a.created + a.updated + a.deleted + a.comments))
     });
-    Ok(res)
+    Ok(res.into_iter().take(10).collect())
 }
 
 pub fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment>> {

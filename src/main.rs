@@ -109,9 +109,12 @@ async fn main() -> Result<()> {
                         .with_method(rpc::set_area_tag::NAME, rpc::set_area_tag::run)
                         .with_method(rpc::remove_area_tag::NAME, rpc::remove_area_tag::run)
                         .with_method(rpc::remove_area::NAME, rpc::remove_area::run)
+                        .with_method(
+                            rpc::get_trending_countries::NAME,
+                            rpc::get_trending_countries::run,
+                        )
                         .with_method("set_user_tag", rpc::set_user_tag::run)
                         .with_method("remove_user_tag", rpc::remove_user_tag::run)
-                        .with_method("get_trending_countries", rpc::get_trending_countries::run)
                         .with_method(
                             "get_most_commented_countries",
                             rpc::get_most_commented_countries::run,

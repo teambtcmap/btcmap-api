@@ -4,29 +4,31 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-const NAME: &str = "get_trending_countries";
+pub const NAME: &str = "get_trending_countries";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub period_start: String,
     pub period_end: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<TrendingArea>> {
-    admin::service::check_rpc(args.password, NAME, &pool).await?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+) -> Result<Vec<TrendingArea>> {
+    run_internal(params, &pool).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<TrendingArea>> {
+    admin::service::check_rpc(params.password, NAME, &pool).await?;
     let period_start =
-        OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_start), &Rfc3339)?;
-    let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_end), &Rfc3339)?;
-    pool.get()
-        .await?
-        .interact(move |conn| {
-            area::service::get_trending_areas("country", &period_start, &period_end, conn)
-        })
-        .await?
+        OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_start), &Rfc3339)?;
+    let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_end), &Rfc3339)?;
+    area::service::get_trending_areas_async("country", &period_start, &period_end, &pool).await
 }
