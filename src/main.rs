@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
                         .with_method(rpc::add_area::NAME, rpc::add_area::run)
                         .with_method(rpc::get_area::NAME, rpc::get_area::run)
                         .with_method(rpc::set_area_tag::NAME, rpc::set_area_tag::run)
-                        .with_method("remove_area_tag", rpc::remove_area_tag::run)
+                        .with_method(rpc::remove_area_tag::NAME, rpc::remove_area_tag::run)
                         .with_method("remove_area", rpc::remove_area::run)
                         .with_method("set_user_tag", rpc::set_user_tag::run)
                         .with_method("remove_user_tag", rpc::remove_user_tag::run)

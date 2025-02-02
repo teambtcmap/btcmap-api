@@ -86,6 +86,19 @@ pub fn patch_tags(
     }
 }
 
+pub async fn remove_tag_async(
+    area_id_or_alias: impl Into<String>,
+    tag_name: impl Into<String>,
+    pool: &Pool,
+) -> Result<Area> {
+    let area_id_or_alias = area_id_or_alias.into();
+    let tag_name = tag_name.into();
+    pool.get()
+        .await?
+        .interact(move |conn| remove_tag(&area_id_or_alias, &tag_name, conn))
+        .await?
+}
+
 pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection) -> Result<Area> {
     if tag_name == "url_alias" {
         return Err(Error::InvalidInput("url_alias can't be removed".into()));
