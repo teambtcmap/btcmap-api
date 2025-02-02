@@ -34,6 +34,7 @@ pub enum RpcMethod {
     RemoveAreaTag,
     RemoveArea,
     GetTrendingCountries,
+    GetMostCommentedCountries,
 }
 
 #[derive(Serialize)]
@@ -169,6 +170,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
             super::get_trending_countries::run_internal(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::GetMostCommentedCountries => RpcResponse::from(
+            req.id.clone(),
+            super::get_most_commented_countries::run_internal(params(req.params)?, &pool).await?,
         ),
     }?;
     Ok(Json(res))

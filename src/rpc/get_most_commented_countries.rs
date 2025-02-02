@@ -1,15 +1,15 @@
 use crate::{admin, area::Area, element::Element, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-const NAME: &str = "get_most_commented_countries";
+pub const NAME: &str = "get_most_commented_countries";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub period_start: String,
     pub period_end: String,
@@ -22,11 +22,18 @@ pub struct Res {
     comments: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Res>> {
-    admin::service::check_rpc(args.password, NAME, &pool).await?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+) -> Result<Vec<Res>> {
+    run_internal(params, &pool).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
+    admin::service::check_rpc(params.password, NAME, &pool).await?;
     let period_start =
-        OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_start), &Rfc3339)?;
-    let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", args.period_end), &Rfc3339)?;
+        OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_start), &Rfc3339)?;
+    let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_end), &Rfc3339)?;
     pool.get()
         .await?
         .interact(move |conn| get_most_commented_countries(&period_start, &period_end, conn))
@@ -39,6 +46,10 @@ fn get_most_commented_countries(
     conn: &Connection,
 ) -> Result<Vec<Res>> {
     let comments = ElementComment::select_updated_since(period_start, None, conn)?;
+    let comments: Vec<ElementComment> = comments
+        .into_iter()
+        .filter(|it| it.deleted_at.is_none())
+        .collect();
     let comments: Vec<ElementComment> = comments
         .into_iter()
         .filter(|it| it.created_at < *period_end)
@@ -77,5 +88,5 @@ fn get_most_commented_countries(
         })
         .collect();
     res.sort_by(|x, y| y.comments.cmp(&x.comments));
-    Ok(res)
+    Ok(res.into_iter().take(10).collect())
 }
