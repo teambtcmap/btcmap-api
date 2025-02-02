@@ -40,6 +40,18 @@ pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
     Ok(area)
 }
 
+pub async fn patch_tags_async(
+    area_id_or_alias: impl Into<String>,
+    patch_set: Map<String, Value>,
+    pool: &Pool,
+) -> Result<Area> {
+    let area_id_or_alias = area_id_or_alias.into();
+    pool.get()
+        .await?
+        .interact(move |conn| patch_tags(&area_id_or_alias, patch_set, conn))
+        .await?
+}
+
 pub fn patch_tags(
     area_id_or_alias: &str,
     tags: Map<String, Value>,

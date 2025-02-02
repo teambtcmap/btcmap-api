@@ -6,41 +6,45 @@ use crate::{
     discord, Result,
 };
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::sync::Arc;
-use tracing::info;
 
-const NAME: &str = "set_area_tag";
+pub const NAME: &str = "set_area_tag";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub id: String,
     pub name: String,
     pub value: Value,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<RpcArea> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let patch_set = Map::from_iter([(args.name.clone(), args.value.clone())].into_iter());
-    let area = pool
-        .get()
-        .await?
-        .interact(move |conn| area::service::patch_tags(&args.id, patch_set, conn))
-        .await??;
-    let log_message = format!(
-        "Admin {} set tag {} = {} for area {} https://api.btcmap.org/v3/areas/{}",
-        admin.name,
-        args.name,
-        serde_json::to_string(&args.value)?,
-        area.name(),
-        area.id,
-    );
-    info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<RpcArea> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
+    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())].into_iter());
+    let area = area::service::patch_tags_async(params.id, patch_set, &pool).await?;
+    discord::post_message(
+        &conf.discord_webhook_api,
+        format!(
+            "Admin {} set tag {} = {} for area {} ({})",
+            admin.name,
+            params.name,
+            serde_json::to_string(&params.value)?,
+            area.name(),
+            area.id
+        ),
+    )
+    .await;
     Ok(area.into())
 }
 
