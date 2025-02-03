@@ -155,7 +155,7 @@ async fn main() -> Result<()> {
                             rpc::generate_areas_elements_mapping::NAME,
                             rpc::generate_areas_elements_mapping::run,
                         )
-                        .with_method("generate_reports", rpc::generate_reports::run)
+                        .with_method(rpc::generate_reports::NAME, rpc::generate_reports::run)
                         // user
                         .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("set_user_tag", rpc::set_user_tag::run)

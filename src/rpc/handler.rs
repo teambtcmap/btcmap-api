@@ -46,6 +46,7 @@ pub enum RpcMethod {
     GetMostCommentedCountries,
     GetTrendingCommunities,
     GenerateAreasElementsMapping,
+    GenerateReports,
 }
 
 #[derive(Serialize)]
@@ -232,6 +233,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
             req.id.clone(),
             super::generate_areas_elements_mapping::run_internal(params(req.params)?, &pool, &conf)
                 .await?,
+        ),
+        RpcMethod::GenerateReports => RpcResponse::from(
+            req.id.clone(),
+            super::generate_reports::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))

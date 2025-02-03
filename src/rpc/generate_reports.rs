@@ -1,6 +1,6 @@
 use crate::{admin, area::Area, conf::Conf, discord, element::Element, report::Report, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -8,10 +8,10 @@ use std::{collections::HashMap, sync::Arc};
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use tracing::info;
 
-const NAME: &str = "generate_reports";
+pub const NAME: &str = "generate_reports";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
 }
 
@@ -25,19 +25,28 @@ pub struct Res {
     pub new_reports: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Res> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
     let started_at = OffsetDateTime::now_utc();
     let res = pool.get().await?.interact(generate_reports).await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     if res > 0 {
-        let log_message = format!(
-            "Admin {} generated {} daily reports in {} seconds",
-            admin.name, res, time_s,
-        );
-        info!(log_message);
-        let conf = Conf::select_async(&pool).await?;
-        discord::post_message(conf.discord_webhook_api, log_message).await;
+        discord::post_message(
+            &conf.discord_webhook_api,
+            format!(
+                "Admin {} generated {} reports in {} seconds",
+                admin.name, res, time_s
+            ),
+        )
+        .await;
     }
     Ok(Res {
         started_at: OffsetDateTime::now_utc(),
