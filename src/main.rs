@@ -104,6 +104,14 @@ async fn main() -> Result<()> {
                             rpc::add_element_comment::run,
                         )
                         .with_method(
+                            rpc::paywall_get_add_element_comment_quote::NAME,
+                            rpc::paywall_get_add_element_comment_quote::run,
+                        )
+                        .with_method(
+                            rpc::paywall_add_element_comment::NAME,
+                            rpc::paywall_add_element_comment::run,
+                        )
+                        .with_method(
                             rpc::generate_element_issues::NAME,
                             rpc::generate_element_issues::run,
                         )
@@ -150,14 +158,6 @@ async fn main() -> Result<()> {
                         .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
                         .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
-                        .with_method(
-                            rpc::paywall_get_add_element_comment_quote::NAME,
-                            rpc::paywall_get_add_element_comment_quote::run,
-                        )
-                        .with_method(
-                            rpc::paywall_add_element_comment::NAME,
-                            rpc::paywall_add_element_comment::run,
-                        )
                         .with_method(
                             rpc::paywall_get_boost_element_quote::NAME,
                             rpc::paywall_get_boost_element_quote::run,
