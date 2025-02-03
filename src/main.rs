@@ -157,7 +157,7 @@ async fn main() -> Result<()> {
                         )
                         .with_method(rpc::generate_reports::NAME, rpc::generate_reports::run)
                         // user
-                        .with_method("get_user_activity", rpc::get_user_activity::run)
+                        .with_method(rpc::get_user_activity::NAME, rpc::get_user_activity::run)
                         .with_method("set_user_tag", rpc::set_user_tag::run)
                         .with_method("remove_user_tag", rpc::remove_user_tag::run)
                         // admin

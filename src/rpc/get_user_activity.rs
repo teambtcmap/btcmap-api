@@ -1,14 +1,14 @@
 use crate::{admin, element::Element, event::Event, user::User, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use time::OffsetDateTime;
 
-const NAME: &str = "get_user_activity";
+pub const NAME: &str = "get_user_activity";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub id: String,
     pub limit: i64,
@@ -23,19 +23,26 @@ pub struct Res {
     pub btcmap_url: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Vec<Res>> {
-    admin::service::check_rpc(args.password, NAME, &pool).await?;
-    let cloned_args_id = args.id.clone();
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+) -> Result<Vec<Res>> {
+    run_internal(params, &pool).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
+    admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let cloned_args_id = params.id.clone();
     let user = pool
         .get()
         .await?
         .interact(move |conn| User::select_by_id_or_name(&cloned_args_id, conn))
         .await??
-        .ok_or(format!("There is no user with id or name = {}", args.id))?;
+        .ok_or(format!("There is no user with id or name = {}", params.id))?;
     let events = pool
         .get()
         .await?
-        .interact(move |conn| Event::select_by_user(user.id, args.limit, conn))
+        .interact(move |conn| Event::select_by_user(user.id, params.limit, conn))
         .await??;
     let events_elements: Vec<(Event, Element)> = pool
         .get()

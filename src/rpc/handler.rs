@@ -47,6 +47,8 @@ pub enum RpcMethod {
     GetTrendingCommunities,
     GenerateAreasElementsMapping,
     GenerateReports,
+    // user
+    GetUserActivity,
 }
 
 #[derive(Serialize)]
@@ -237,6 +239,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),
             super::generate_reports::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::GetUserActivity => RpcResponse::from(
+            req.id.clone(),
+            super::get_user_activity::run_internal(params(req.params)?, &pool).await?,
         ),
     }?;
     Ok(Json(res))
