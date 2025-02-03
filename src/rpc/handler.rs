@@ -57,6 +57,7 @@ pub enum RpcMethod {
     RemoveAdminAction,
     // invoice
     GetInvoice,
+    GenerateInvoice,
 }
 
 #[derive(Serialize)]
@@ -275,6 +276,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
             super::get_invoice::run_internal(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::GenerateInvoice => RpcResponse::from(
+            req.id.clone(),
+            super::generate_invoice::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))
