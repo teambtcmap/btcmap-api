@@ -58,6 +58,7 @@ pub enum RpcMethod {
     // invoice
     GetInvoice,
     GenerateInvoice,
+    SyncUnpaidInvoices,
 }
 
 #[derive(Serialize)]
@@ -280,6 +281,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::GenerateInvoice => RpcResponse::from(
             req.id.clone(),
             super::generate_invoice::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
+            req.id.clone(),
+            super::sync_unpaid_invoices::run_internal(params(req.params)?, &pool).await?,
         ),
     }?;
     Ok(Json(res))
