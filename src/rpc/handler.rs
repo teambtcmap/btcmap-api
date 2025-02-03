@@ -49,6 +49,7 @@ pub enum RpcMethod {
     GenerateReports,
     // user
     GetUserActivity,
+    SetUserTag,
 }
 
 #[derive(Serialize)]
@@ -243,6 +244,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::GetUserActivity => RpcResponse::from(
             req.id.clone(),
             super::get_user_activity::run_internal(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::SetUserTag => RpcResponse::from(
+            req.id.clone(),
+            super::set_user_tag::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))
