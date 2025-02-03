@@ -94,6 +94,10 @@ async fn main() -> Result<()> {
                         .with_method(rpc::get_element::NAME, rpc::get_element::run)
                         .with_method(rpc::set_element_tag::NAME, rpc::set_element_tag::run)
                         .with_method(rpc::remove_element_tag::NAME, rpc::remove_element_tag::run)
+                        .with_method(
+                            rpc::get_boosted_elements::NAME,
+                            rpc::get_boosted_elements::run,
+                        )
                         .with_method(rpc::boost_element::NAME, rpc::boost_element::run)
                         .with_method(
                             rpc::add_element_comment::NAME,
@@ -143,7 +147,6 @@ async fn main() -> Result<()> {
                         .with_method("add_admin_action", rpc::add_admin_action::run)
                         .with_method("remove_admin_action", rpc::remove_admin_action::run)
                         .with_method("search", rpc::search::run)
-                        .with_method("get_boosted_elements", rpc::get_boosted_elements::run)
                         .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
                         .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
