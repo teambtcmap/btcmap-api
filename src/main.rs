@@ -141,7 +141,6 @@ async fn main() -> Result<()> {
                         .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("search", rpc::search::run)
                         .with_method("get_boosted_elements", rpc::get_boosted_elements::run)
-                        .with_method("get_elements_snapshot", rpc::get_elements_snapshot::run)
                         .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
                         .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
