@@ -1,13 +1,13 @@
 use crate::{admin, invoice::model::Invoice, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub const NAME: &str = "get_invoice";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub id: i64,
 }
@@ -29,9 +29,16 @@ impl From<Invoice> for Res {
     }
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    admin::service::check_rpc(args.password, NAME, &pool).await?;
-    Invoice::select_by_id_async(args.id, &pool)
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+) -> Result<Res> {
+    run_internal(params, &pool).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool) -> Result<Res> {
+    admin::service::check_rpc(params.password, NAME, &pool).await?;
+    Invoice::select_by_id_async(params.id, &pool)
         .await
         .map(Into::into)
 }

@@ -168,8 +168,8 @@ async fn main() -> Result<()> {
                             rpc::remove_admin_action::run,
                         )
                         // invoice
-                        .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
+                        .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
                         // search
                         .with_method("search", rpc::search::run)
