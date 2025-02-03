@@ -1,15 +1,14 @@
 use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::info;
 
-const NAME: &str = "generate_element_categories";
+pub const NAME: &str = "generate_element_categories";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     password: String,
     from_element_id: i64,
     to_element_id: i64,
@@ -20,22 +19,31 @@ pub struct Res {
     pub changes: i64,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Res> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
     let res = pool
         .get()
         .await?
         .interact(move |conn| {
-            generate_element_categories(args.from_element_id, args.to_element_id, conn)
+            generate_element_categories(params.from_element_id, params.to_element_id, conn)
         })
         .await??;
-    let log_message = format!(
-        "Admin {} generated element categories, potentially affecting element ids {}..{}",
-        admin.name, args.from_element_id, args.to_element_id,
-    );
-    info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
+    discord::post_message(
+        &conf.discord_webhook_api,
+        format!(
+            "Admin {} generated element categories (id range {}..{})",
+            admin.name, params.from_element_id, params.to_element_id,
+        ),
+    )
+    .await;
     Ok(res)
 }
 

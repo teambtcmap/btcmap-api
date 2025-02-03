@@ -108,6 +108,10 @@ async fn main() -> Result<()> {
                             rpc::generate_element_icons::NAME,
                             rpc::generate_element_icons::run,
                         )
+                        .with_method(
+                            rpc::generate_element_categories::NAME,
+                            rpc::generate_element_categories::run,
+                        )
                         // area
                         .with_method(rpc::add_area::NAME, rpc::add_area::run)
                         .with_method(rpc::get_area::NAME, rpc::get_area::run)
@@ -127,6 +131,7 @@ async fn main() -> Result<()> {
                             rpc::get_trending_communities::NAME,
                             rpc::get_trending_communities::run,
                         )
+                        .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("set_user_tag", rpc::set_user_tag::run)
                         .with_method("remove_user_tag", rpc::remove_user_tag::run)
                         .with_method(
@@ -134,14 +139,9 @@ async fn main() -> Result<()> {
                             rpc::generate_areas_elements_mapping::run,
                         )
                         .with_method("generate_reports", rpc::generate_reports::run)
-                        .with_method(
-                            "generate_element_categories",
-                            rpc::generate_element_categories::run,
-                        )
                         .with_method("add_admin", rpc::add_admin::run)
                         .with_method("add_admin_action", rpc::add_admin_action::run)
                         .with_method("remove_admin_action", rpc::remove_admin_action::run)
-                        .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("search", rpc::search::run)
                         .with_method("get_boosted_elements", rpc::get_boosted_elements::run)
                         .with_method("generate_invoice", rpc::generate_invoice::run)
