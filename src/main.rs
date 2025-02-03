@@ -100,6 +100,14 @@ async fn main() -> Result<()> {
                         )
                         .with_method(rpc::boost_element::NAME, rpc::boost_element::run)
                         .with_method(
+                            rpc::paywall_get_boost_element_quote::NAME,
+                            rpc::paywall_get_boost_element_quote::run,
+                        )
+                        .with_method(
+                            rpc::paywall_boost_element::NAME,
+                            rpc::paywall_boost_element::run,
+                        )
+                        .with_method(
                             rpc::add_element_comment::NAME,
                             rpc::add_element_comment::run,
                         )
@@ -143,6 +151,7 @@ async fn main() -> Result<()> {
                             rpc::get_trending_communities::NAME,
                             rpc::get_trending_communities::run,
                         )
+                        // user
                         .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("set_user_tag", rpc::set_user_tag::run)
                         .with_method("remove_user_tag", rpc::remove_user_tag::run)
@@ -158,14 +167,6 @@ async fn main() -> Result<()> {
                         .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
                         .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
-                        .with_method(
-                            rpc::paywall_get_boost_element_quote::NAME,
-                            rpc::paywall_get_boost_element_quote::run,
-                        )
-                        .with_method(
-                            rpc::paywall_boost_element::NAME,
-                            rpc::paywall_boost_element::run,
-                        )
                         .finish()
                         .into_actix_web_service(),
                 ),

@@ -29,6 +29,8 @@ pub enum RpcMethod {
     AddElementComment,
     PaywallAddElementCommentQuote,
     PaywallAddElementComment,
+    PaywallGetBoostElementQuote,
+    PaywallBoostElement,
     GenerateElementIssues,
     SyncElements,
     GenerateElementIcons,
@@ -163,6 +165,14 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
             req.id.clone(),
             super::paywall_add_element_comment::run_internal(params(req.params)?, &pool, &conf)
                 .await?,
+        ),
+        RpcMethod::PaywallGetBoostElementQuote => RpcResponse::from(
+            req.id.clone(),
+            super::paywall_get_boost_element_quote::run_internal(&conf).await?,
+        ),
+        RpcMethod::PaywallBoostElement => RpcResponse::from(
+            req.id.clone(),
+            super::paywall_boost_element::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
