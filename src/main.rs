@@ -151,22 +151,25 @@ async fn main() -> Result<()> {
                             rpc::get_trending_communities::NAME,
                             rpc::get_trending_communities::run,
                         )
+                        .with_method(
+                            rpc::generate_areas_elements_mapping::NAME,
+                            rpc::generate_areas_elements_mapping::run,
+                        )
+                        .with_method("generate_reports", rpc::generate_reports::run)
                         // user
                         .with_method("get_user_activity", rpc::get_user_activity::run)
                         .with_method("set_user_tag", rpc::set_user_tag::run)
                         .with_method("remove_user_tag", rpc::remove_user_tag::run)
-                        .with_method(
-                            "generate_areas_elements_mapping",
-                            rpc::generate_areas_elements_mapping::run,
-                        )
-                        .with_method("generate_reports", rpc::generate_reports::run)
+                        // admin
                         .with_method("add_admin", rpc::add_admin::run)
                         .with_method("add_admin_action", rpc::add_admin_action::run)
                         .with_method("remove_admin_action", rpc::remove_admin_action::run)
-                        .with_method("search", rpc::search::run)
+                        // invoice
                         .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
                         .with_method("sync_unpaid_invoices", rpc::sync_unpaid_invoices::run)
+                        // search
+                        .with_method("search", rpc::search::run)
                         .finish()
                         .into_actix_web_service(),
                 ),
