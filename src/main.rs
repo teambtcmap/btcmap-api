@@ -163,7 +163,10 @@ async fn main() -> Result<()> {
                         // admin
                         .with_method(rpc::add_admin::NAME, rpc::add_admin::run)
                         .with_method(rpc::add_admin_action::NAME, rpc::add_admin_action::run)
-                        .with_method("remove_admin_action", rpc::remove_admin_action::run)
+                        .with_method(
+                            rpc::remove_admin_action::NAME,
+                            rpc::remove_admin_action::run,
+                        )
                         // invoice
                         .with_method("generate_invoice", rpc::generate_invoice::run)
                         .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
