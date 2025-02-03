@@ -51,6 +51,8 @@ pub enum RpcMethod {
     GetUserActivity,
     SetUserTag,
     RemoveUserTag,
+    // admin
+    AddAdmin,
 }
 
 #[derive(Serialize)]
@@ -253,6 +255,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
             super::remove_user_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::AddAdmin => RpcResponse::from(
+            req.id.clone(),
+            super::add_admin::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))

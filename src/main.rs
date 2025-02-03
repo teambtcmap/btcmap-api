@@ -161,7 +161,7 @@ async fn main() -> Result<()> {
                         .with_method(rpc::set_user_tag::NAME, rpc::set_user_tag::run)
                         .with_method(rpc::remove_user_tag::NAME, rpc::remove_user_tag::run)
                         // admin
-                        .with_method("add_admin", rpc::add_admin::run)
+                        .with_method(rpc::add_admin::NAME, rpc::add_admin::run)
                         .with_method("add_admin_action", rpc::add_admin_action::run)
                         .with_method("remove_admin_action", rpc::remove_admin_action::run)
                         // invoice

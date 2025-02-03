@@ -4,15 +4,14 @@ use crate::{
     discord, Result,
 };
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::info;
 
-const NAME: &str = "add_admin";
+pub const NAME: &str = "add_admin";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     pub password: String,
     pub new_admin_name: String,
     pub new_admin_password: String,
@@ -24,19 +23,23 @@ pub struct Res {
     pub allowed_actions: Vec<String>,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = check_rpc(args.password, NAME, &pool).await?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Res> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let admin = check_rpc(params.password, NAME, &pool).await?;
     let new_admin =
-        Admin::insert_async(args.new_admin_name, args.new_admin_password, &pool).await?;
-    let log_message = format!(
-        "Admin {} added new admin user {} with the following allowed actions: {}",
-        admin.name,
-        new_admin.name,
-        serde_json::to_string(&new_admin.allowed_actions)?,
-    );
-    info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
+        Admin::insert_async(params.new_admin_name, params.new_admin_password, &pool).await?;
+    discord::post_message(
+        &conf.discord_webhook_api,
+        format!("Admin {} added new admin {}", admin.name, new_admin.name),
+    )
+    .await;
     Ok(Res {
         name: new_admin.name,
         allowed_actions: new_admin.allowed_actions,
