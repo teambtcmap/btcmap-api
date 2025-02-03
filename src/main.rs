@@ -104,6 +104,10 @@ async fn main() -> Result<()> {
                             rpc::generate_element_issues::run,
                         )
                         .with_method(rpc::sync_elements::NAME, rpc::sync_elements::run)
+                        .with_method(
+                            rpc::generate_element_icons::NAME,
+                            rpc::generate_element_icons::run,
+                        )
                         // area
                         .with_method(rpc::add_area::NAME, rpc::add_area::run)
                         .with_method(rpc::get_area::NAME, rpc::get_area::run)
@@ -130,7 +134,6 @@ async fn main() -> Result<()> {
                             rpc::generate_areas_elements_mapping::run,
                         )
                         .with_method("generate_reports", rpc::generate_reports::run)
-                        .with_method("generate_element_icons", rpc::generate_element_icons::run)
                         .with_method(
                             "generate_element_categories",
                             rpc::generate_element_categories::run,

@@ -1,16 +1,15 @@
 use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::{Data, Params};
+use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use time::OffsetDateTime;
-use tracing::info;
 
-const NAME: &str = "generate_element_icons";
+pub const NAME: &str = "generate_element_icons";
 
 #[derive(Deserialize)]
-pub struct Args {
+pub struct Params {
     password: String,
     from_element_id: i64,
     to_element_id: i64,
@@ -30,24 +29,36 @@ pub struct UpdatedElement {
     pub new_icon: String,
 }
 
-pub async fn run(Params(args): Params<Args>, pool: Data<Arc<Pool>>) -> Result<Res> {
-    let admin = admin::service::check_rpc(args.password, NAME, &pool).await?;
+pub async fn run(
+    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
+    pool: Data<Arc<Pool>>,
+    conf: Data<Arc<Conf>>,
+) -> Result<Res> {
+    run_internal(params, &pool, &conf).await
+}
+
+pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
     let started_at = OffsetDateTime::now_utc();
     let updated_elements = pool
         .get()
         .await?
         .interact(move |conn| {
-            generate_element_icons(args.from_element_id, args.to_element_id, conn)
+            generate_element_icons(params.from_element_id, params.to_element_id, conn)
         })
         .await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
-    let log_message = format!(
-        "Admin {} generated element icons, potentially affecting element ids {}..{} ({} elements updated)",
-        admin.name, args.from_element_id, args.to_element_id, updated_elements.len(),
-    );
-    info!(log_message);
-    let conf = Conf::select_async(&pool).await?;
-    discord::post_message(conf.discord_webhook_api, log_message).await;
+    discord::post_message(
+        &conf.discord_webhook_api,
+        format!(
+            "Admin {} generated element icons (id range {}..{}, elements affected: {})",
+            admin.name,
+            params.from_element_id,
+            params.to_element_id,
+            updated_elements.len(),
+        ),
+    )
+    .await;
     Ok(Res {
         updated_elements,
         time_s,

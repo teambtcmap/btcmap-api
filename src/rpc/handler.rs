@@ -28,6 +28,7 @@ pub enum RpcMethod {
     AddElementComment,
     GenerateElementIssues,
     SyncElements,
+    GenerateElementIcons,
     // area
     AddArea,
     GetArea,
@@ -153,6 +154,10 @@ async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
             super::sync_elements::run_internal(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::GenerateElementIcons => RpcResponse::from(
+            req.id.clone(),
+            super::generate_element_icons::run_internal(params(req.params)?, &pool, &conf).await?,
         ),
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
