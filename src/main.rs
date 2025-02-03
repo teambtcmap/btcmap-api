@@ -175,7 +175,7 @@ async fn main() -> Result<()> {
                             rpc::sync_unpaid_invoices::run,
                         )
                         // search
-                        .with_method("search", rpc::search::run)
+                        .with_method(rpc::search::NAME, rpc::search::run)
                         .finish()
                         .into_actix_web_service(),
                 ),
