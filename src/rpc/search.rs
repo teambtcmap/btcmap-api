@@ -1,8 +1,6 @@
 use crate::{admin, area::Area, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 pub const NAME: &str = "search";
 
@@ -17,13 +15,6 @@ pub struct Res {
     pub name: String,
     pub r#type: String,
     pub id: i64,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Vec<Res>> {
-    run_internal(params, &pool).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {

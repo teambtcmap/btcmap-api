@@ -35,7 +35,7 @@ mod log;
 mod rpc;
 mod sync;
 use actix_web::http::header::HeaderValue;
-use actix_web::web::{scope, service, Data, QueryConfig};
+use actix_web::web::{scope, Data, QueryConfig};
 mod ban;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -81,104 +81,9 @@ async fn main() -> Result<()> {
             .app_data(Data::from(conf.clone()))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
-                scope("rpc_v2")
+                scope("rpc")
                     .wrap(ErrorHandlers::new().default_handler(rpc::handler::handle_rpc_error))
                     .service(rpc::handler::handle),
-            )
-            .service(
-                service("rpc").guard(actix_web::guard::Post()).finish(
-                    jsonrpc_v2::Server::new()
-                        .with_data(jsonrpc_v2::Data::new(pool.clone()))
-                        .with_data(jsonrpc_v2::Data::new(conf.clone()))
-                        // element
-                        .with_method(rpc::get_element::NAME, rpc::get_element::run)
-                        .with_method(rpc::set_element_tag::NAME, rpc::set_element_tag::run)
-                        .with_method(rpc::remove_element_tag::NAME, rpc::remove_element_tag::run)
-                        .with_method(
-                            rpc::get_boosted_elements::NAME,
-                            rpc::get_boosted_elements::run,
-                        )
-                        .with_method(rpc::boost_element::NAME, rpc::boost_element::run)
-                        .with_method(
-                            rpc::paywall_get_boost_element_quote::NAME,
-                            rpc::paywall_get_boost_element_quote::run,
-                        )
-                        .with_method(
-                            rpc::paywall_boost_element::NAME,
-                            rpc::paywall_boost_element::run,
-                        )
-                        .with_method(
-                            rpc::add_element_comment::NAME,
-                            rpc::add_element_comment::run,
-                        )
-                        .with_method(
-                            rpc::paywall_get_add_element_comment_quote::NAME,
-                            rpc::paywall_get_add_element_comment_quote::run,
-                        )
-                        .with_method(
-                            rpc::paywall_add_element_comment::NAME,
-                            rpc::paywall_add_element_comment::run,
-                        )
-                        .with_method(
-                            rpc::generate_element_issues::NAME,
-                            rpc::generate_element_issues::run,
-                        )
-                        .with_method(rpc::sync_elements::NAME, rpc::sync_elements::run)
-                        .with_method(
-                            rpc::generate_element_icons::NAME,
-                            rpc::generate_element_icons::run,
-                        )
-                        .with_method(
-                            rpc::generate_element_categories::NAME,
-                            rpc::generate_element_categories::run,
-                        )
-                        // area
-                        .with_method(rpc::add_area::NAME, rpc::add_area::run)
-                        .with_method(rpc::get_area::NAME, rpc::get_area::run)
-                        .with_method(rpc::set_area_tag::NAME, rpc::set_area_tag::run)
-                        .with_method(rpc::remove_area_tag::NAME, rpc::remove_area_tag::run)
-                        .with_method(rpc::set_area_icon::NAME, rpc::set_area_icon::run)
-                        .with_method(rpc::remove_area::NAME, rpc::remove_area::run)
-                        .with_method(
-                            rpc::get_trending_countries::NAME,
-                            rpc::get_trending_countries::run,
-                        )
-                        .with_method(
-                            rpc::get_most_commented_countries::NAME,
-                            rpc::get_most_commented_countries::run,
-                        )
-                        .with_method(
-                            rpc::get_trending_communities::NAME,
-                            rpc::get_trending_communities::run,
-                        )
-                        .with_method(
-                            rpc::generate_areas_elements_mapping::NAME,
-                            rpc::generate_areas_elements_mapping::run,
-                        )
-                        .with_method(rpc::generate_reports::NAME, rpc::generate_reports::run)
-                        // user
-                        .with_method(rpc::get_user_activity::NAME, rpc::get_user_activity::run)
-                        .with_method(rpc::set_user_tag::NAME, rpc::set_user_tag::run)
-                        .with_method(rpc::remove_user_tag::NAME, rpc::remove_user_tag::run)
-                        // admin
-                        .with_method(rpc::add_admin::NAME, rpc::add_admin::run)
-                        .with_method(rpc::add_admin_action::NAME, rpc::add_admin_action::run)
-                        .with_method(
-                            rpc::remove_admin_action::NAME,
-                            rpc::remove_admin_action::run,
-                        )
-                        // invoice
-                        .with_method(rpc::get_invoice::NAME, rpc::get_invoice::run)
-                        .with_method(rpc::generate_invoice::NAME, rpc::generate_invoice::run)
-                        .with_method(
-                            rpc::sync_unpaid_invoices::NAME,
-                            rpc::sync_unpaid_invoices::run,
-                        )
-                        // search
-                        .with_method(rpc::search::NAME, rpc::search::run)
-                        .finish()
-                        .into_actix_web_service(),
-                ),
             )
             .service(
                 scope("tiles")

@@ -1,8 +1,6 @@
 use crate::{admin, invoice::model::Invoice, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 pub const NAME: &str = "get_invoice";
 
@@ -27,13 +25,6 @@ impl From<Invoice> for Res {
             status: val.status,
         }
     }
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Res> {
-    run_internal(params, &pool).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<Res> {

@@ -6,9 +6,7 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::Deserialize;
-use std::sync::Arc;
 
 pub const NAME: &str = "generate_invoice";
 
@@ -17,14 +15,6 @@ pub struct Params {
     pub password: String,
     pub amount_sats: i64,
     pub description: String,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<Invoice> {
-    run_internal(params, &pool, &conf).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Invoice> {

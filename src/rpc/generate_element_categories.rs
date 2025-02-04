@@ -1,11 +1,7 @@
 use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-
-pub const NAME: &str = "generate_element_categories";
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -19,16 +15,9 @@ pub struct Res {
     pub changes: i64,
 }
 
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<Res> {
-    run_internal(params, &pool, &conf).await
-}
-
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let admin =
+        admin::service::check_rpc(params.password, "generate_element_categories", &pool).await?;
     let res = pool
         .get()
         .await?

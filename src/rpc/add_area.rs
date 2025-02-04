@@ -4,10 +4,8 @@ use crate::conf::Conf;
 use crate::Result;
 use crate::{area, discord};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::Deserialize;
 use serde_json::{Map, Value};
-use std::sync::Arc;
 
 pub const NAME: &str = "add_area";
 
@@ -15,14 +13,6 @@ pub const NAME: &str = "add_area";
 pub struct Params {
     pub password: String,
     pub tags: Map<String, Value>,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<RpcArea> {
-    run_internal(params, &pool, &conf).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<RpcArea> {

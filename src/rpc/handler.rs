@@ -136,7 +136,11 @@ impl RpcResponse {
 }
 
 #[post("")]
-async fn handle(req: Json<Value>, pool: Data<Pool>, conf: Data<Conf>) -> Result<Json<RpcResponse>> {
+pub async fn handle(
+    req: Json<Value>,
+    pool: Data<Pool>,
+    conf: Data<Conf>,
+) -> Result<Json<RpcResponse>> {
     let req: RpcRequest = match serde_json::from_value(req.into_inner()) {
         Ok(req) => req,
         Err(e) => {

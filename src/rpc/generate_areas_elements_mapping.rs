@@ -7,10 +7,8 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 pub const NAME: &str = "generate_areas_elements_mapping";
 
@@ -24,14 +22,6 @@ pub struct Params {
 #[derive(Serialize)]
 pub struct Res {
     pub affected_elements: Vec<Diff>,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<Res> {
-    run_internal(params, &pool, &conf).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {

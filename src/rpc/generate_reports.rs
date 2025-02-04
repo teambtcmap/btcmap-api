@@ -1,10 +1,9 @@
 use crate::{admin, area::Area, conf::Conf, discord, element::Element, report::Report, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use tracing::info;
 
@@ -23,14 +22,6 @@ pub struct Res {
     pub finished_at: OffsetDateTime,
     pub time_s: f64,
     pub new_reports: i64,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<Res> {
-    run_internal(params, &pool, &conf).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {

@@ -1,7 +1,6 @@
 use actix_web::{
     error::QueryPayloadError, http::StatusCode, HttpRequest, HttpResponse, ResponseError,
 };
-use jsonrpc_v2::ErrorLike;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
@@ -172,8 +171,6 @@ impl ResponseError for Error {
         }
     }
 }
-
-impl ErrorLike for Error {}
 
 pub fn action_is_not_allowed(action: impl Into<String>) -> Error {
     let action = action.into();

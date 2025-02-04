@@ -3,9 +3,7 @@ use crate::conf::Conf;
 use crate::Result;
 use crate::{admin, area, discord};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::Deserialize;
-use std::sync::Arc;
 
 pub const NAME: &str = "remove_area";
 
@@ -13,14 +11,6 @@ pub const NAME: &str = "remove_area";
 pub struct Params {
     pub password: String,
     pub id: String,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<RpcArea> {
-    run_internal(params, &pool, &conf).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<RpcArea> {

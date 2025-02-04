@@ -14,7 +14,7 @@ use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 
 #[get("/new-places")]
-async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
+pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
     let events: Vec<(Event, Element)> = pool
         .get()
         .await?
@@ -44,7 +44,7 @@ async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
 }
 
 #[get("/new-places/{area}")]
-async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
+pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
     let area = Area::select_by_id_or_alias_async(area.to_string(), &pool).await?;
     let area_elements = pool
         .get()
@@ -132,7 +132,7 @@ fn event_to_atom_entry(event: (Event, Element)) -> String {
 }
 
 #[get("/new-comments")]
-async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
+pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
     let comments: Vec<(ElementComment, Element)> = pool
         .get()
         .await?
@@ -166,7 +166,7 @@ async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
 }
 
 #[get("/new-comments/{area}")]
-async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
+pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
     let area = Area::select_by_id_or_alias_async(area.to_string(), &pool).await?;
     let area_id = area.id;
     let area_name = area.name();

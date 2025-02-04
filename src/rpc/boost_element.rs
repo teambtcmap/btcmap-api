@@ -1,14 +1,10 @@
 use crate::{admin, boost::Boost, conf::Conf, discord, element::Element, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::Value;
-use std::sync::Arc;
 use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
 use tracing::info;
-
-pub const NAME: &str = "boost_element";
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -17,16 +13,8 @@ pub struct Params {
     pub days: i64,
 }
 
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<Element> {
-    run_internal(params, &pool, &conf).await
-}
-
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Element> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let admin = admin::service::check_rpc(params.password, "boost_element", &pool).await?;
     let element = pool
         .get()
         .await?

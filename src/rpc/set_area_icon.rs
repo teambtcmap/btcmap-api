@@ -2,10 +2,9 @@ use super::model::RpcArea;
 use crate::{admin, area::Area, Result};
 use base64::prelude::*;
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::Deserialize;
 use serde_json::Map;
-use std::{fs::OpenOptions, io::Write, sync::Arc};
+use std::{fs::OpenOptions, io::Write};
 
 pub const NAME: &str = "set_area_icon";
 
@@ -15,13 +14,6 @@ pub struct Params {
     pub id: String,
     pub icon_base64: String,
     pub icon_ext: String,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-) -> Result<RpcArea> {
-    run_internal(params, &pool).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<RpcArea> {

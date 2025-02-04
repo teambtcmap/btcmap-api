@@ -1,12 +1,8 @@
 use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use time::OffsetDateTime;
-
-pub const NAME: &str = "generate_element_icons";
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -29,16 +25,8 @@ pub struct UpdatedElement {
     pub new_icon: String,
 }
 
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<Res> {
-    run_internal(params, &pool, &conf).await
-}
-
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let admin = admin::service::check_rpc(params.password, "generate_element_icons", &pool).await?;
     let started_at = OffsetDateTime::now_utc();
     let updated_elements = pool
         .get()

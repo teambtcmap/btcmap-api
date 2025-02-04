@@ -1,9 +1,7 @@
 use super::model::RpcArea;
 use crate::{admin, area::Area, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::Deserialize;
-use std::sync::Arc;
 
 pub const NAME: &str = "get_area";
 
@@ -11,13 +9,6 @@ pub const NAME: &str = "get_area";
 pub struct Params {
     pub password: String,
     pub id: String,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-) -> Result<RpcArea> {
-    run_internal(params, &pool).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<RpcArea> {

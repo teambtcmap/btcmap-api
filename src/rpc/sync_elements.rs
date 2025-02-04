@@ -3,11 +3,7 @@ use crate::osm::overpass;
 use crate::{admin, sync::MergeResult};
 use crate::{db, discord, sync, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-
-pub const NAME: &str = "sync_elements";
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -21,16 +17,8 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-    conf: Data<Arc<Conf>>,
-) -> Result<Res> {
-    run_internal(params, &pool, &conf).await
-}
-
 pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+    let admin = admin::service::check_rpc(params.password, "sync_elements", &pool).await?;
     let overpass_res = overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
     let mut conn = db::open_connection()?;

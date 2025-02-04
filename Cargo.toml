@@ -13,15 +13,11 @@ panic = "abort"
 
 # This is the main dependency, providing a webserver and core infra
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
-actix-web = { version = "4.9.0", default-features = false, features = ["compress-brotli"] }
+actix-web = { version = "4.9.0", default-features = false, features = ["macros", "compress-brotli"] }
 
 # Experimental extractors
 # https://github.com/robjtede/actix-web-lab/releases
 actix-web-lab = { version = "0.23.0" }
-
-# JSON RPC support
-# https://crates.io/crates/jsonrpc-v2
-jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["actix-web-v4-integration"] }
 
 # Rate limiters
 # https://github.com/AaronErhardt/actix-governor/releases

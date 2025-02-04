@@ -1,9 +1,8 @@
 use crate::{admin, area::Area, element::Element, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
-use jsonrpc_v2::Data;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub const NAME: &str = "get_most_commented_countries";
@@ -20,13 +19,6 @@ pub struct Res {
     id: i64,
     name: String,
     comments: i64,
-}
-
-pub async fn run(
-    jsonrpc_v2::Params(params): jsonrpc_v2::Params<Params>,
-    pool: Data<Arc<Pool>>,
-) -> Result<Vec<Res>> {
-    run_internal(params, &pool).await
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
