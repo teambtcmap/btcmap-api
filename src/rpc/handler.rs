@@ -1,9 +1,11 @@
 use crate::{admin::Admin, conf::Conf, Result};
 use actix_web::{
     dev::ServiceResponse,
+    http::StatusCode,
     middleware::ErrorHandlerResponse,
     post,
     web::{Data, Json},
+    HttpResponseBuilder,
 };
 use deadpool_sqlite::Pool;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -438,7 +440,8 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
     let (req, res) = res.into_parts();
     let error_message = res.error().unwrap().to_string();
     let body = RpcResponse::error(RpcError::server_error(Some(Value::String(error_message))));
-    let res = res.set_body(serde_json::to_string(&body).unwrap());
+    let body = serde_json::to_string(&body).unwrap();
+    let res = HttpResponseBuilder::new(StatusCode::OK).body(body);
     let res = ServiceResponse::new(req, res)
         .map_into_boxed_body()
         .map_into_right_body();
