@@ -1,8 +1,8 @@
 use crate::{Error, Result};
 use geo::{coord, Coord};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::HashMap, hash::Hash, hash::Hasher};
+use serde_json::{Map, Value};
+use std::{hash::Hash, hash::Hasher};
 use time::{
     format_description::well_known::Iso8601, macros::format_description, Date, OffsetDateTime,
 };
@@ -42,7 +42,7 @@ pub struct OverpassElement {
     pub changeset: Option<i64>,
     pub user: Option<String>,
     pub uid: Option<i64>,
-    pub tags: Option<HashMap<String, String>>,
+    pub tags: Option<Map<String, Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bounds: Option<Bounds>, // for ways and relations only
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -138,7 +138,10 @@ impl OverpassElement {
 
     pub fn tag(&self, name: &str) -> &str {
         match &self.tags {
-            Some(tags) => tags.get(name).map(|it| it.as_str()).unwrap_or(""),
+            Some(tags) => tags
+                .get(name)
+                .map(|it| it.as_str().unwrap_or_default())
+                .unwrap_or_default(),
             None => "",
         }
     }
@@ -155,7 +158,7 @@ impl OverpassElement {
             changeset: Some(1),
             user: Some("".into()),
             uid: Some(1),
-            tags: Some(HashMap::new()),
+            tags: Some(Map::new()),
             bounds: None,
             nodes: None,
             geometry: None,
@@ -198,13 +201,12 @@ pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
     use super::OverpassElement;
+    use serde_json::Map;
 
     #[test]
     fn get_tag_value() {
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("foo".into(), "bar".into());
         let element = OverpassElement {
             tags: Some(tags),

@@ -38,7 +38,7 @@ serde = { version = "1.0.210", default-features = false, features = ["derive"] }
 
 # JSON is heavily used in this project
 # https://github.com/serde-rs/json/releases
-serde_json = { version = "1.0.128", default-features = false }
+serde_json = { version = "1.0.128", default-features = false, features = ["preserve_order"] }
 
 # That's an industry starnard for working with time
 # TODO consider switching to std alternatives, if/when present

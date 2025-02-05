@@ -208,6 +208,14 @@ impl Element {
         }
     }
 
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Element> {
+        pool.get()
+            .await?
+            .interact(move |conn| Element::select_by_id(id, conn))
+            .await??
+            .ok_or(Error::NotFound("Element not found".into()))
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Element>> {
         let query = format!(
             r#"
@@ -443,6 +451,14 @@ impl Element {
             "https://www.openstreetmap.org/{}/{}",
             self.overpass_data.r#type, self.overpass_data.id,
         )
+    }
+
+    pub fn lat(&self) -> f64 {
+        self.overpass_data.coord().y
+    }
+
+    pub fn lon(&self) -> f64 {
+        self.overpass_data.coord().x
     }
 }
 

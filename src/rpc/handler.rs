@@ -212,7 +212,7 @@ pub async fn handle(
     let res: RpcResponse = match req.method {
         RpcMethod::GetElement => RpcResponse::from(
             req.id.clone(),
-            super::get_element::run_internal(params(req.params)?, &pool).await?,
+            super::get_element::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::SetElementTag => RpcResponse::from(
             req.id.clone(),

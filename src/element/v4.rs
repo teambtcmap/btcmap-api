@@ -144,10 +144,7 @@ pub fn generate_tags(element: &Element, include_tags: &Vec<String>) -> Map<Strin
                 continue;
             }
             if osm_tags.contains_key(tag.as_str()) {
-                res.insert(
-                    tag.to_string(),
-                    Value::String(osm_tags[tag.as_str()].clone()),
-                );
+                res.insert(tag.to_string(), osm_tags[tag.as_str()].clone());
             }
         }
     }
