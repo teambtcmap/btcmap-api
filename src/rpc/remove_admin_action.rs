@@ -1,16 +1,9 @@
-use crate::{
-    admin::{self, Admin},
-    conf::Conf,
-    discord, Result,
-};
+use crate::{admin::Admin, conf::Conf, discord, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
-pub const NAME: &str = "remove_admin_action";
-
 #[derive(Deserialize)]
 pub struct Params {
-    pub password: String,
     pub admin: String,
     pub action: String,
 }
@@ -21,8 +14,12 @@ pub struct Res {
     pub allowed_actions: Vec<String>,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let source_admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+pub async fn run_internal(
+    params: Params,
+    source_admin: &Admin,
+    pool: &Pool,
+    conf: &Conf,
+) -> Result<Res> {
     let target_admin = Admin::select_by_name_async(&params.admin, &pool).await?;
     let allowed_actions: Vec<String> = target_admin
         .allowed_actions

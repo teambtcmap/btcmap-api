@@ -1,6 +1,6 @@
 use super::model::RpcArea;
 use crate::{
-    admin,
+    admin::Admin,
     area::{self},
     conf::Conf,
     discord, Result,
@@ -9,18 +9,19 @@ use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-pub const NAME: &str = "set_area_tag";
-
 #[derive(Deserialize)]
 pub struct Params {
-    pub password: String,
     pub id: String,
     pub name: String,
     pub value: Value,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+pub async fn run_internal(
+    params: Params,
+    admin: &Admin,
+    pool: &Pool,
+    conf: &Conf,
+) -> Result<RpcArea> {
     let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())].into_iter());
     let area = area::service::patch_tags_async(params.id, patch_set, &pool).await?;
     discord::post_message(

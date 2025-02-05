@@ -1,4 +1,4 @@
-use crate::{conf::Conf, Result};
+use crate::{admin::Admin, conf::Conf, Result};
 use actix_web::{
     dev::ServiceResponse,
     middleware::ErrorHandlerResponse,
@@ -7,7 +7,8 @@ use actix_web::{
 };
 use deadpool_sqlite::Pool;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
+use tracing::info;
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -17,7 +18,7 @@ pub struct RpcRequest {
     pub id: Value,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
     // element
@@ -135,19 +136,75 @@ impl RpcResponse {
     }
 }
 
+const PUBLIC_METHODS: &'static [RpcMethod] = &[
+    RpcMethod::GetElement,
+    RpcMethod::PaywallAddElementCommentQuote,
+    RpcMethod::PaywallAddElementComment,
+    RpcMethod::PaywallGetBoostElementQuote,
+    RpcMethod::PaywallBoostElement,
+];
+
 #[post("")]
 pub async fn handle(
     req: Json<Value>,
     pool: Data<Pool>,
     conf: Data<Conf>,
 ) -> Result<Json<RpcResponse>> {
-    let req: RpcRequest = match serde_json::from_value(req.into_inner()) {
-        Ok(req) => req,
+    info!("Got RPC request");
+    let Some(req) = req.as_object() else {
+        let error_data = json!("Request body is not a valid JSON object");
+        return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
+            error_data,
+        )))));
+    };
+    let Some(method) = req.get("method").map(|it| it.as_str()) else {
+        let error_data = json!("Invalid field: method");
+        return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
+            error_data,
+        )))));
+    };
+    let Some(method) = method else {
+        let error_data = json!("Invalid field: method");
+        return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
+            error_data,
+        )))));
+    };
+    let req: RpcRequest = match serde_json::from_value(Value::Object(req.clone())) {
+        Ok(val) => val,
         Err(e) => {
             let data = Value::String(e.to_string());
             let e = RpcError::parse_error(Some(data));
             return Ok(Json(RpcResponse::error(e)));
         }
+    };
+    let admin: Option<Admin> = if !PUBLIC_METHODS.contains(&req.method) {
+        let Some(params) = req.params.as_ref().map(|it| it.as_object()) else {
+            let error_data = json!("Invalid field: params");
+            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
+                error_data,
+            )))));
+        };
+        let Some(params) = params else {
+            let error_data = json!("Invalid field: params");
+            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
+                error_data,
+            )))));
+        };
+        let Some(password) = params.get("password") else {
+            let error_data = json!("Missing param: password");
+            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
+                error_data,
+            )))));
+        };
+        let Some(password) = password.as_str() else {
+            let error_data = json!("Password is not a string");
+            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
+                error_data,
+            )))));
+        };
+        Some(crate::admin::service::check_rpc(password, method, &pool).await?)
+    } else {
+        None
     };
     if req.jsonrpc != "2.0" {
         return Ok(Json(RpcResponse::invalid_request(Value::Null)));
@@ -159,23 +216,42 @@ pub async fn handle(
         ),
         RpcMethod::SetElementTag => RpcResponse::from(
             req.id.clone(),
-            super::set_element_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::set_element_tag::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::RemoveElementTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_element_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::remove_element_tag::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::GetBoostedElements => RpcResponse::from(
             req.id.clone(),
-            super::get_boosted_elements::run_internal(params(req.params)?, &pool).await?,
+            super::get_boosted_elements::run_internal(&pool).await?,
         ),
         RpcMethod::BoostElement => RpcResponse::from(
             req.id.clone(),
-            super::boost_element::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::boost_element::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::AddElementComment => RpcResponse::from(
             req.id.clone(),
-            super::add_element_comment::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::add_element_comment::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::PaywallAddElementCommentQuote => RpcResponse::from(
             req.id.clone(),
@@ -196,24 +272,36 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_issues::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::generate_element_issues::run_internal(&admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
-            super::sync_elements::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::sync_elements::run_internal(&admin.unwrap(), &conf).await?,
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_icons::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::generate_element_icons::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_categories::run_internal(params(req.params)?, &pool, &conf)
-                .await?,
+            super::generate_element_categories::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
-            super::add_area::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::add_area::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::GetArea => RpcResponse::from(
             req.id.clone(),
@@ -221,11 +309,18 @@ pub async fn handle(
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::set_area_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::set_area_tag::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_area_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::remove_area_tag::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::SetAreaIcon => RpcResponse::from(
             req.id.clone(),
@@ -233,7 +328,8 @@ pub async fn handle(
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
-            super::remove_area::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::remove_area::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
@@ -249,12 +345,17 @@ pub async fn handle(
         ),
         RpcMethod::GenerateAreasElementsMapping => RpcResponse::from(
             req.id.clone(),
-            super::generate_areas_elements_mapping::run_internal(params(req.params)?, &pool, &conf)
-                .await?,
+            super::generate_areas_elements_mapping::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),
-            super::generate_reports::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::generate_reports::run_internal(&admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetUserActivity => RpcResponse::from(
             req.id.clone(),
@@ -262,23 +363,43 @@ pub async fn handle(
         ),
         RpcMethod::SetUserTag => RpcResponse::from(
             req.id.clone(),
-            super::set_user_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::set_user_tag::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_user_tag::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::remove_user_tag::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),
-            super::add_admin::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::add_admin::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::add_admin_action::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::add_admin_action::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::RemoveAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::remove_admin_action::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::remove_admin_action::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
@@ -286,11 +407,17 @@ pub async fn handle(
         ),
         RpcMethod::GenerateInvoice => RpcResponse::from(
             req.id.clone(),
-            super::generate_invoice::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::generate_invoice::run_internal(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),
-            super::sync_unpaid_invoices::run_internal(params(req.params)?, &pool).await?,
+            super::sync_unpaid_invoices::run_internal(&pool).await?,
         ),
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),

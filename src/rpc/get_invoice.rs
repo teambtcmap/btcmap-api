@@ -1,12 +1,9 @@
-use crate::{admin, invoice::model::Invoice, Result};
+use crate::{invoice::model::Invoice, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
-pub const NAME: &str = "get_invoice";
-
 #[derive(Deserialize)]
 pub struct Params {
-    pub password: String,
     pub id: i64,
 }
 
@@ -28,7 +25,6 @@ impl From<Invoice> for Res {
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<Res> {
-    admin::service::check_rpc(params.password, NAME, &pool).await?;
     Invoice::select_by_id_async(params.id, &pool)
         .await
         .map(Into::into)

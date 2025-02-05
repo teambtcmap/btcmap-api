@@ -1,20 +1,22 @@
 use super::model::RpcArea;
+use crate::admin::Admin;
 use crate::conf::Conf;
 use crate::Result;
-use crate::{admin, area, discord};
+use crate::{area, discord};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 
-pub const NAME: &str = "remove_area";
-
 #[derive(Deserialize)]
 pub struct Params {
-    pub password: String,
     pub id: String,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+pub async fn run_internal(
+    params: Params,
+    admin: &Admin,
+    pool: &Pool,
+    conf: &Conf,
+) -> Result<RpcArea> {
     let area = area::service::soft_delete_async(params.id, &pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,

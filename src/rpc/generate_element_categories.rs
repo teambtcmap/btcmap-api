@@ -1,11 +1,12 @@
-use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
+use crate::{
+    admin::Admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result,
+};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct Params {
-    password: String,
     from_element_id: i64,
     to_element_id: i64,
 }
@@ -15,9 +16,7 @@ pub struct Res {
     pub changes: i64,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin =
-        admin::service::check_rpc(params.password, "generate_element_categories", &pool).await?;
+pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res = pool
         .get()
         .await?

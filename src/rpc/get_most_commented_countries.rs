@@ -1,15 +1,12 @@
-use crate::{admin, area::Area, element::Element, element_comment::ElementComment, Result};
+use crate::{area::Area, element::Element, element_comment::ElementComment, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-pub const NAME: &str = "get_most_commented_countries";
-
 #[derive(Deserialize)]
 pub struct Params {
-    pub password: String,
     pub period_start: String,
     pub period_end: String,
 }
@@ -22,7 +19,6 @@ pub struct Res {
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
-    admin::service::check_rpc(params.password, NAME, &pool).await?;
     let period_start =
         OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_start), &Rfc3339)?;
     let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_end), &Rfc3339)?;

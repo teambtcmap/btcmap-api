@@ -1,5 +1,5 @@
 use crate::{
-    admin,
+    admin::Admin,
     area_element::{self, service::Diff},
     conf::Conf,
     discord,
@@ -10,11 +10,8 @@ use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-pub const NAME: &str = "generate_areas_elements_mapping";
-
 #[derive(Deserialize)]
 pub struct Params {
-    password: String,
     from_element_id: i64,
     to_element_id: i64,
 }
@@ -24,8 +21,7 @@ pub struct Res {
     pub affected_elements: Vec<Diff>,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res = pool
         .get()
         .await?

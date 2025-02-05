@@ -1,16 +1,8 @@
-use crate::admin;
 use crate::boost::Boost;
 use crate::Result;
 use deadpool_sqlite::Pool;
-use serde::Deserialize;
 
-#[derive(Deserialize)]
-pub struct Params {
-    pub password: String,
-}
-
-pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Boost>> {
-    admin::service::check_rpc(params.password, "get_boosted_elements", &pool).await?;
+pub async fn run_internal(pool: &Pool) -> Result<Vec<Boost>> {
     let boosts = pool
         .get()
         .await?

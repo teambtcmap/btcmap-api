@@ -1,18 +1,13 @@
 use crate::{
-    admin,
+    admin::Admin,
     conf::Conf,
     discord,
     element::{self, Element},
     Result,
 };
 use deadpool_sqlite::Pool;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use time::OffsetDateTime;
-
-#[derive(Deserialize)]
-pub struct Params {
-    pub password: String,
-}
 
 #[derive(Serialize)]
 pub struct Res {
@@ -24,9 +19,7 @@ pub struct Res {
     pub affected_elements: i64,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin =
-        admin::service::check_rpc(params.password, "generate_element_issues", &pool).await?;
+pub async fn run_internal(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let elements = Element::select_all_except_deleted_async(&pool).await?;
     let res = element::service::generate_issues_async(elements, &pool).await?;
     discord::post_message(

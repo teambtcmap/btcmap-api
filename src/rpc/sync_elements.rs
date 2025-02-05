@@ -1,14 +1,9 @@
+use crate::admin::Admin;
 use crate::conf::Conf;
 use crate::osm::overpass;
-use crate::{admin, sync::MergeResult};
+use crate::sync::MergeResult;
 use crate::{db, discord, sync, Result};
-use deadpool_sqlite::Pool;
-use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize)]
-pub struct Params {
-    pub password: String,
-}
+use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct Res {
@@ -17,8 +12,7 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, "sync_elements", &pool).await?;
+pub async fn run_internal(admin: &Admin, conf: &Conf) -> Result<Res> {
     let overpass_res = overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
     let mut conn = db::open_connection()?;

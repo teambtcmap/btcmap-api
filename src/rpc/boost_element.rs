@@ -1,4 +1,4 @@
-use crate::{admin, boost::Boost, conf::Conf, discord, element::Element, Result};
+use crate::{admin::Admin, boost::Boost, conf::Conf, discord, element::Element, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::Deserialize;
@@ -8,17 +8,21 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Params {
-    pub password: String,
     pub id: String,
     pub days: i64,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Element> {
-    let admin = admin::service::check_rpc(params.password, "boost_element", &pool).await?;
+pub async fn run_internal(
+    params: Params,
+    admin: &Admin,
+    pool: &Pool,
+    conf: &Conf,
+) -> Result<Element> {
+    let admin_id = admin.id;
     let element = pool
         .get()
         .await?
-        .interact(move |conn| _boost(admin.id, &params.id, params.days, conn))
+        .interact(move |conn| _boost(admin_id, &params.id, params.days, conn))
         .await??;
     let log_message = format!(
         "Admin {} boosted element {} ({}) for {} days",

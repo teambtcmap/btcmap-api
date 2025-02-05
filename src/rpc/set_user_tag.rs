@@ -1,13 +1,10 @@
-use crate::{admin, conf::Conf, discord, user::User, Result};
+use crate::{admin::Admin, conf::Conf, discord, user::User, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub const NAME: &str = "set_user_tag";
-
 #[derive(Deserialize, Clone)]
 pub struct Params {
-    pub password: String,
     pub user_name: String,
     pub tag_name: String,
     pub tag_value: Value,
@@ -19,8 +16,7 @@ pub struct Res {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let cloned_args_user_name = params.user_name.clone();
     let cloned_args_tag_name = params.tag_name.clone();
     let cloned_args_tag_value = params.tag_value.clone();

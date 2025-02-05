@@ -1,13 +1,11 @@
-use crate::{admin, element::Element, event::Event, user::User, Result};
+use crate::{element::Element, event::Event, user::User, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
-
-pub const NAME: &str = "get_user_activity";
+use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Params {
-    pub password: String,
     pub id: String,
     pub limit: i64,
 }
@@ -22,7 +20,7 @@ pub struct Res {
 }
 
 pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
-    admin::service::check_rpc(params.password, NAME, &pool).await?;
+    info!("GET USER ACTIVIRY");
     let cloned_args_id = params.id.clone();
     let user = pool
         .get()

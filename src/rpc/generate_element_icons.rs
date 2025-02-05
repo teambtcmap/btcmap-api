@@ -1,4 +1,6 @@
-use crate::{admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result};
+use crate::{
+    admin::Admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result,
+};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -6,7 +8,6 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
-    password: String,
     from_element_id: i64,
     to_element_id: i64,
 }
@@ -25,8 +26,7 @@ pub struct UpdatedElement {
     pub new_icon: String,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, "generate_element_icons", &pool).await?;
+pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let updated_elements = pool
         .get()

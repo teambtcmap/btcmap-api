@@ -1,18 +1,13 @@
-use crate::{admin, area::Area, conf::Conf, discord, element::Element, report::Report, Result};
+use crate::{
+    admin::Admin, area::Area, conf::Conf, discord, element::Element, report::Report, Result,
+};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use tracing::info;
-
-pub const NAME: &str = "generate_reports";
-
-#[derive(Deserialize)]
-pub struct Params {
-    pub password: String,
-}
 
 #[derive(Serialize)]
 pub struct Res {
@@ -24,8 +19,7 @@ pub struct Res {
     pub new_reports: i64,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let admin = admin::service::check_rpc(params.password, NAME, &pool).await?;
+pub async fn run_internal(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let res = pool.get().await?.interact(generate_reports).await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
