@@ -8,27 +8,23 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Params {
-    pub id: String,
-    pub tag: String,
+    pub element_id: i64,
+    pub tag_name: String,
 }
 
-pub async fn run_internal(
-    params: Params,
-    admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<Element> {
-    let element = Element::select_by_id_or_osm_id_async(params.id, pool)
-        .await?
-        .ok_or("Element not found")?;
-    let element = Element::remove_tag_async(element.id, &params.tag, pool).await?;
-    let log_message = format!(
-        "Admin {} removed tag {} from element {} https://api.btcmap.org/v4/elements/{}",
-        admin.name,
-        params.tag,
-        element.name(),
-        element.id,
-    );
-    discord::post_message(&conf.discord_webhook_api, log_message).await;
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Element> {
+    let element = Element::select_by_id_async(params.element_id, pool).await?;
+    let element = Element::remove_tag_async(element.id, &params.tag_name, pool).await?;
+    discord::post_message(
+        &conf.discord_webhook_api,
+        format!(
+            "Admin {} removed tag {} from element {} ({})",
+            admin.name,
+            params.tag_name,
+            element.name(),
+            element.id,
+        ),
+    )
+    .await;
     Ok(element)
 }

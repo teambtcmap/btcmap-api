@@ -13,7 +13,7 @@ pub struct Res {
     pub payment_request: String,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     Element::select_by_id_or_osm_id_async(&params.element_id, &pool)
         .await?
         .ok_or("Element not found")?;

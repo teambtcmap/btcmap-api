@@ -9,8 +9,7 @@ use actix_web::{
 };
 use deadpool_sqlite::Pool;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::{json, Value};
-use tracing::info;
+use serde_json::{json, Map, Value};
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -29,11 +28,11 @@ pub enum RpcMethod {
     RemoveElementTag,
     GetBoostedElements,
     BoostElement,
-    AddElementComment,
-    PaywallAddElementCommentQuote,
-    PaywallAddElementComment,
     PaywallGetBoostElementQuote,
     PaywallBoostElement,
+    AddElementComment,
+    PaywallGetAddElementCommentQuote,
+    PaywallAddElementComment,
     GenerateElementIssues,
     SyncElements,
     GenerateElementIcons,
@@ -140,20 +139,15 @@ impl RpcResponse {
 
 const PUBLIC_METHODS: &'static [RpcMethod] = &[
     RpcMethod::GetElement,
-    RpcMethod::PaywallAddElementCommentQuote,
+    RpcMethod::PaywallGetAddElementCommentQuote,
     RpcMethod::PaywallAddElementComment,
     RpcMethod::PaywallGetBoostElementQuote,
     RpcMethod::PaywallBoostElement,
 ];
 
 #[post("")]
-pub async fn handle(
-    req: Json<Value>,
-    pool: Data<Pool>,
-    conf: Data<Conf>,
-) -> Result<Json<RpcResponse>> {
-    info!("Got RPC request");
-    let Some(req) = req.as_object() else {
+pub async fn handle(req: String, pool: Data<Pool>, conf: Data<Conf>) -> Result<Json<RpcResponse>> {
+    let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req) else {
         let error_data = json!("Request body is not a valid JSON object");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
             error_data,
@@ -218,59 +212,41 @@ pub async fn handle(
         ),
         RpcMethod::SetElementTag => RpcResponse::from(
             req.id.clone(),
-            super::set_element_tag::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::set_element_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::RemoveElementTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_element_tag::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::remove_element_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::GetBoostedElements => RpcResponse::from(
             req.id.clone(),
-            super::get_boosted_elements::run_internal(&pool).await?,
+            super::get_boosted_elements::run(&pool).await?,
         ),
         RpcMethod::BoostElement => RpcResponse::from(
             req.id.clone(),
-            super::boost_element::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
-        ),
-        RpcMethod::AddElementComment => RpcResponse::from(
-            req.id.clone(),
-            super::add_element_comment::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
-        ),
-        RpcMethod::PaywallAddElementCommentQuote => RpcResponse::from(
-            req.id.clone(),
-            super::paywall_get_add_element_comment_quote::run_internal(&conf).await?,
-        ),
-        RpcMethod::PaywallAddElementComment => RpcResponse::from(
-            req.id.clone(),
-            super::paywall_add_element_comment::run_internal(params(req.params)?, &pool, &conf)
-                .await?,
+            super::boost_element::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::PaywallGetBoostElementQuote => RpcResponse::from(
             req.id.clone(),
-            super::paywall_get_boost_element_quote::run_internal(&conf).await?,
+            super::paywall_get_boost_element_quote::run(&conf).await?,
         ),
         RpcMethod::PaywallBoostElement => RpcResponse::from(
             req.id.clone(),
-            super::paywall_boost_element::run_internal(params(req.params)?, &pool, &conf).await?,
+            super::paywall_boost_element::run(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::AddElementComment => RpcResponse::from(
+            req.id.clone(),
+            super::add_element_comment::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
+        ),
+        RpcMethod::PaywallGetAddElementCommentQuote => RpcResponse::from(
+            req.id.clone(),
+            super::paywall_get_add_element_comment_quote::run(&conf).await?,
+        ),
+        RpcMethod::PaywallAddElementComment => RpcResponse::from(
+            req.id.clone(),
+            super::paywall_add_element_comment::run(params(req.params)?, &pool, &conf).await?,
         ),
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),

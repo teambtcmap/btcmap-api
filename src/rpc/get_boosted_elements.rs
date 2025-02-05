@@ -2,7 +2,7 @@ use crate::boost::Boost;
 use crate::Result;
 use deadpool_sqlite::Pool;
 
-pub async fn run_internal(pool: &Pool) -> Result<Vec<Boost>> {
+pub async fn run(pool: &Pool) -> Result<Vec<Boost>> {
     let boosts = pool
         .get()
         .await?

@@ -4,7 +4,6 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::Value;
 use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
-use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -12,27 +11,24 @@ pub struct Params {
     pub days: i64,
 }
 
-pub async fn run_internal(
-    params: Params,
-    admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<Element> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Element> {
     let admin_id = admin.id;
     let element = pool
         .get()
         .await?
         .interact(move |conn| _boost(admin_id, &params.id, params.days, conn))
         .await??;
-    let log_message = format!(
-        "Admin {} boosted element {} ({}) for {} days",
-        admin.name,
-        element.name(),
-        element.id,
-        params.days,
-    );
-    info!(log_message);
-    discord::post_message(&conf.discord_webhook_api, log_message).await;
+    discord::post_message(
+        &conf.discord_webhook_api,
+        format!(
+            "Admin {} boosted element {} ({}) for {} days",
+            admin.name,
+            element.name(),
+            element.id,
+            params.days
+        ),
+    )
+    .await;
     Ok(element)
 }
 

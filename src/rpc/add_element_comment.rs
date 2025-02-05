@@ -6,27 +6,28 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Params {
-    pub id: String,
+    pub element_id: i64,
     pub comment: String,
 }
 
-pub async fn run_internal(
+pub async fn run(
     params: Params,
     admin: &Admin,
     pool: &Pool,
     conf: &Conf,
 ) -> Result<ElementComment> {
-    let element = Element::select_by_id_or_osm_id_async(params.id, &pool)
-        .await?
-        .ok_or("Element not found")?;
+    let element = Element::select_by_id_async(params.element_id, &pool).await?;
     let comment = ElementComment::insert_async(element.id, &params.comment, &pool).await?;
-    let log_message = format!(
-        "Admin {} added a comment to element {} ({}): {}",
-        admin.name,
-        element.name(),
-        element.id,
-        params.comment,
-    );
-    discord::post_message(&conf.discord_webhook_api, log_message).await;
+    discord::post_message(
+        &conf.discord_webhook_api,
+        format!(
+            "Admin {} added a comment to element {} ({}): {}",
+            admin.name,
+            element.name(),
+            element.id,
+            params.comment,
+        ),
+    )
+    .await;
     Ok(comment)
 }
