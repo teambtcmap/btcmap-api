@@ -14,12 +14,7 @@ pub struct Params {
     pub tag: String,
 }
 
-pub async fn run_internal(
-    params: Params,
-    admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<RpcArea> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
     let area = area::service::remove_tag_async(params.id, &params.tag, &pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,

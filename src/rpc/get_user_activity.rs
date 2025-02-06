@@ -2,7 +2,6 @@ use crate::{element::Element, event::Event, user::User, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
-use tracing::info;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -19,8 +18,7 @@ pub struct Res {
     pub btcmap_url: String,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
-    info!("GET USER ACTIVIRY");
+pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let cloned_args_id = params.id.clone();
     let user = pool
         .get()

@@ -12,12 +12,7 @@ pub struct Params {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run_internal(
-    params: Params,
-    admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<RpcArea> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
     let area = area::service::insert_async(params.tags, &pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,

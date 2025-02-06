@@ -14,7 +14,7 @@ pub struct Res {
     pub id: i64,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let areas = Area::select_by_search_query_async(params.query, &pool).await?;
     let res = areas
         .into_iter()

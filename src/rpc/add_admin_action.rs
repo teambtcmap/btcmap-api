@@ -14,12 +14,7 @@ pub struct Res {
     pub allowed_actions: Vec<String>,
 }
 
-pub async fn run_internal(
-    params: Params,
-    source_admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<Res> {
+pub async fn run(params: Params, source_admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let target_admin = Admin::select_by_name_async(&params.admin, &pool).await?;
     let mut allowed_actions = target_admin.allowed_actions;
     if !allowed_actions.contains(&params.action) {

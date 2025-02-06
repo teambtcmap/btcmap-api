@@ -15,7 +15,7 @@ pub struct Res {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let cloned_args_user_name = params.user_name.clone();
     let cloned_args_tag_name = params.tag_name.clone();
     let user = pool

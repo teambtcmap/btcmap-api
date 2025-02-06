@@ -21,7 +21,7 @@ pub struct Res {
     pub affected_elements: Vec<Diff>,
 }
 
-pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res = pool
         .get()
         .await?

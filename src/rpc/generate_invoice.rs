@@ -14,12 +14,7 @@ pub struct Params {
     pub description: String,
 }
 
-pub async fn run_internal(
-    params: Params,
-    admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<Invoice> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Invoice> {
     let invoice = invoice::service::create(params.description, params.amount_sats, &pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,

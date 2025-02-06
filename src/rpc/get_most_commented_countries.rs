@@ -18,7 +18,7 @@ pub struct Res {
     comments: i64,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool) -> Result<Vec<Res>> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let period_start =
         OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_start), &Rfc3339)?;
     let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_end), &Rfc3339)?;

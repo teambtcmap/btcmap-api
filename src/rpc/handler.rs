@@ -206,6 +206,7 @@ pub async fn handle(req: String, pool: Data<Pool>, conf: Data<Conf>) -> Result<J
         return Ok(Json(RpcResponse::invalid_request(Value::Null)));
     }
     let res: RpcResponse = match req.method {
+        // element
         RpcMethod::GetElement => RpcResponse::from(
             req.id.clone(),
             super::get_element::run(params(req.params)?, &pool).await?,
@@ -271,54 +272,46 @@ pub async fn handle(req: String, pool: Data<Pool>, conf: Data<Conf>) -> Result<J
             )
             .await?,
         ),
+        // area
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
-            super::add_area::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::add_area::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetArea => RpcResponse::from(
             req.id.clone(),
-            super::get_area::run_internal(params(req.params)?, &pool).await?,
+            super::get_area::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::set_area_tag::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::set_area_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_area_tag::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::remove_area_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::SetAreaIcon => RpcResponse::from(
             req.id.clone(),
-            super::set_area_icon::run_internal(params(req.params)?, &pool).await?,
+            super::set_area_icon::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
-            super::remove_area::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::remove_area::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
-            super::get_trending_countries::run_internal(params(req.params)?, &pool).await?,
+            super::get_trending_countries::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetMostCommentedCountries => RpcResponse::from(
             req.id.clone(),
-            super::get_most_commented_countries::run_internal(params(req.params)?, &pool).await?,
+            super::get_most_commented_countries::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetTrendingCommunities => RpcResponse::from(
             req.id.clone(),
-            super::get_trending_communities::run_internal(params(req.params)?, &pool).await?,
+            super::get_trending_communities::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GenerateAreasElementsMapping => RpcResponse::from(
             req.id.clone(),
-            super::generate_areas_elements_mapping::run_internal(
+            super::generate_areas_elements_mapping::run(
                 params(req.params)?,
                 &admin.unwrap(),
                 &pool,
@@ -328,73 +321,50 @@ pub async fn handle(req: String, pool: Data<Pool>, conf: Data<Conf>) -> Result<J
         ),
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),
-            super::generate_reports::run_internal(&admin.unwrap(), &pool, &conf).await?,
+            super::generate_reports::run(&admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetUserActivity => RpcResponse::from(
             req.id.clone(),
-            super::get_user_activity::run_internal(params(req.params)?, &pool).await?,
+            super::get_user_activity::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::SetUserTag => RpcResponse::from(
             req.id.clone(),
-            super::set_user_tag::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::set_user_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_user_tag::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::remove_user_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),
-            super::add_admin::run_internal(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::add_admin::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::add_admin_action::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::add_admin_action::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::RemoveAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::remove_admin_action::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::remove_admin_action::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
-            super::get_invoice::run_internal(params(req.params)?, &pool).await?,
+            super::get_invoice::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GenerateInvoice => RpcResponse::from(
             req.id.clone(),
-            super::generate_invoice::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::generate_invoice::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),
-            super::sync_unpaid_invoices::run_internal(&pool).await?,
+            super::sync_unpaid_invoices::run(&pool).await?,
         ),
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),
-            super::search::run_internal(params(req.params)?, &pool).await?,
+            super::search::run(params(req.params)?, &pool).await?,
         ),
     }?;
     Ok(Json(res))

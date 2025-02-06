@@ -11,12 +11,7 @@ pub struct Params {
     pub id: String,
 }
 
-pub async fn run_internal(
-    params: Params,
-    admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<RpcArea> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
     let area = area::service::soft_delete_async(params.id, &pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,

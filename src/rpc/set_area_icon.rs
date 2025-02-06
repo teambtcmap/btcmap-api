@@ -13,7 +13,7 @@ pub struct Params {
     pub icon_ext: String,
 }
 
-pub async fn run_internal(params: Params, pool: &Pool) -> Result<RpcArea> {
+pub async fn run(params: Params, pool: &Pool) -> Result<RpcArea> {
     let area = Area::select_by_id_or_alias_async(&params.id, &pool).await?;
     let file_name = format!("{}.{}", area.id, params.icon_ext);
     let bytes = BASE64_STANDARD.decode(params.icon_base64)?;

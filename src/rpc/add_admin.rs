@@ -14,7 +14,7 @@ pub struct Res {
     pub allowed_actions: Vec<String>,
 }
 
-pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let new_admin =
         Admin::insert_async(params.new_admin_name, params.new_admin_password, &pool).await?;
     discord::post_message(

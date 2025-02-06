@@ -16,12 +16,7 @@ pub struct Params {
     pub value: Value,
 }
 
-pub async fn run_internal(
-    params: Params,
-    admin: &Admin,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<RpcArea> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
     let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())].into_iter());
     let area = area::service::patch_tags_async(params.id, patch_set, &pool).await?;
     discord::post_message(
@@ -32,7 +27,7 @@ pub async fn run_internal(
             params.name,
             serde_json::to_string(&params.value)?,
             area.name(),
-            area.id
+            area.id,
         ),
     )
     .await;

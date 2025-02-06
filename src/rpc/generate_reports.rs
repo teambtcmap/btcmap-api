@@ -19,7 +19,7 @@ pub struct Res {
     pub new_reports: i64,
 }
 
-pub async fn run_internal(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let res = pool.get().await?.interact(generate_reports).await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
