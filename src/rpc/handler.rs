@@ -250,25 +250,20 @@ pub async fn handle(req: String, pool: Data<Pool>, conf: Data<Conf>) -> Result<J
         ),
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_issues::run_internal(&admin.unwrap(), &pool, &conf).await?,
+            super::generate_element_issues::run(&admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
-            super::sync_elements::run_internal(&admin.unwrap(), &conf).await?,
+            super::sync_elements::run(&admin.unwrap(), &conf).await?,
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_icons::run_internal(
-                params(req.params)?,
-                &admin.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::generate_element_icons::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_categories::run_internal(
+            super::generate_element_categories::run(
                 params(req.params)?,
                 &admin.unwrap(),
                 &pool,

@@ -19,13 +19,13 @@ pub struct Res {
     pub affected_elements: i64,
 }
 
-pub async fn run_internal(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let elements = Element::select_all_except_deleted_async(&pool).await?;
     let res = element::service::generate_issues_async(elements, &pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} generated element issues, affecting {} elements",
+            "Admin {} generated element issues. Affected elements: {}",
             admin.name, res.affected_elements
         ),
     )

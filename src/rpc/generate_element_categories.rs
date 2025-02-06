@@ -16,7 +16,7 @@ pub struct Res {
     pub changes: i64,
 }
 
-pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res = pool
         .get()
         .await?

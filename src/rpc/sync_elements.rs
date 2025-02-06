@@ -12,7 +12,7 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
-pub async fn run_internal(admin: &Admin, conf: &Conf) -> Result<Res> {
+pub async fn run(admin: &Admin, conf: &Conf) -> Result<Res> {
     let overpass_res = overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
     let mut conn = db::open_connection()?;

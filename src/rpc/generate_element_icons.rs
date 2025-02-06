@@ -26,7 +26,7 @@ pub struct UpdatedElement {
     pub new_icon: String,
 }
 
-pub async fn run_internal(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let updated_elements = pool
         .get()
