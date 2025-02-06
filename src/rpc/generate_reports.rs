@@ -293,7 +293,7 @@ mod test {
             .ok_or("Date overflow")?;
         element_2.tags.as_mut().ok_or("No tags")?.insert(
             "check_date:currency:XBT".into(),
-            today_plus_year.to_string(),
+            today_plus_year.to_string().into(),
         );
 
         let element_1 = Element {

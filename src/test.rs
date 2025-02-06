@@ -1,11 +1,8 @@
 use crate::db;
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
-use serde_json::{json, Value};
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use serde_json::{json, Map, Value};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 static MEM_DB_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
@@ -46,8 +43,8 @@ fn _mock_db() -> (Connection, Pool) {
     )
 }
 
-pub fn mock_osm_tags(kv_pairs: &[&str]) -> HashMap<String, String> {
-    let mut res = HashMap::new();
+pub fn mock_osm_tags(kv_pairs: &[&str]) -> Map<String, Value> {
+    let mut res = Map::new();
     for chunk in kv_pairs.chunks(2) {
         res.insert(chunk[0].into(), chunk[1].into());
     }

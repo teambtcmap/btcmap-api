@@ -97,14 +97,14 @@ mod test {
     use crate::osm::overpass::OverpassElement;
     use crate::Result;
     use rusqlite::Connection;
-    use std::collections::HashMap;
+    use serde_json::Map;
 
     #[actix_web::test]
     async fn run() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
         db::migrate(&mut conn)?;
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("amenity".into(), "atm".into());
         Element::insert(
             &OverpassElement {
@@ -114,7 +114,7 @@ mod test {
             &conn,
         )?;
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("amenity".into(), "cafe".into());
         Element::insert(
             &OverpassElement {
@@ -136,7 +136,7 @@ mod test {
 
     #[test]
     fn generate_category() {
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("amenity".into(), "atm".into());
         let element = OverpassElement {
             tags: Some(tags),
@@ -144,7 +144,7 @@ mod test {
         };
         assert_eq!("atm", &element.generate_category());
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("amenity".into(), "cafe".into());
         let element = OverpassElement {
             tags: Some(tags),
@@ -152,7 +152,7 @@ mod test {
         };
         assert_eq!("cafe", &element.generate_category());
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("amenity".into(), "restaurant".into());
         let element = OverpassElement {
             tags: Some(tags),
@@ -160,7 +160,7 @@ mod test {
         };
         assert_eq!("restaurant", &element.generate_category());
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("amenity".into(), "bar".into());
         let element = OverpassElement {
             tags: Some(tags),
@@ -168,7 +168,7 @@ mod test {
         };
         assert_eq!("bar", &element.generate_category());
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("amenity".into(), "pub".into());
         let element = OverpassElement {
             tags: Some(tags),
@@ -176,7 +176,7 @@ mod test {
         };
         assert_eq!("pub", &element.generate_category());
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("tourism".into(), "hotel".into());
         let element = OverpassElement {
             tags: Some(tags),
@@ -184,7 +184,7 @@ mod test {
         };
         assert_eq!("hotel", &element.generate_category());
 
-        let mut tags = HashMap::new();
+        let mut tags = Map::new();
         tags.insert("foo".into(), "bar".into());
         let element = OverpassElement {
             tags: Some(tags),
