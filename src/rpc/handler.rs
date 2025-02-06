@@ -1,11 +1,14 @@
 use crate::{admin::Admin, conf::Conf, Result};
 use actix_web::{
     dev::ServiceResponse,
-    http::StatusCode,
+    http::{
+        header::{self, HeaderMap},
+        StatusCode,
+    },
     middleware::ErrorHandlerResponse,
     post,
     web::{Data, Json},
-    HttpResponseBuilder,
+    HttpRequest, HttpResponseBuilder,
 };
 use deadpool_sqlite::Pool;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -146,21 +149,27 @@ const PUBLIC_METHODS: &'static [RpcMethod] = &[
 ];
 
 #[post("")]
-pub async fn handle(req: String, pool: Data<Pool>, conf: Data<Conf>) -> Result<Json<RpcResponse>> {
-    let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req) else {
+pub async fn handle(
+    req: HttpRequest,
+    req_body: String,
+    pool: Data<Pool>,
+    conf: Data<Conf>,
+) -> Result<Json<RpcResponse>> {
+    let headers = req.headers();
+    let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
         let error_data = json!("Request body is not a valid JSON object");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
             error_data,
         )))));
     };
-    let Some(method) = req.get("method").map(|it| it.as_str()) else {
-        let error_data = json!("Invalid field: method");
+    let Some(method) = req.get("method") else {
+        let error_data = json!("Missing field: method");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
             error_data,
         )))));
     };
-    let Some(method) = method else {
-        let error_data = json!("Invalid field: method");
+    let Some(method) = method.as_str() else {
+        let error_data = json!("Field method is not a string");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
             error_data,
         )))));
@@ -174,31 +183,11 @@ pub async fn handle(req: String, pool: Data<Pool>, conf: Data<Conf>) -> Result<J
         }
     };
     let admin: Option<Admin> = if !PUBLIC_METHODS.contains(&req.method) {
-        let Some(params) = req.params.as_ref().map(|it| it.as_object()) else {
-            let error_data = json!("Invalid field: params");
-            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
-                error_data,
-            )))));
-        };
-        let Some(params) = params else {
-            let error_data = json!("Invalid field: params");
-            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
-                error_data,
-            )))));
-        };
-        let Some(password) = params.get("password") else {
-            let error_data = json!("Missing param: password");
-            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
-                error_data,
-            )))));
-        };
-        let Some(password) = password.as_str() else {
-            let error_data = json!("Password is not a string");
-            return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
-                error_data,
-            )))));
-        };
-        Some(crate::admin::service::check_rpc(password, method, &pool).await?)
+        Some(
+            crate::admin::service::check_rpc(extract_password(headers, &req.params), method, &pool)
+                .await
+                .map_err(|_| "Auth failure")?,
+        )
     } else {
         None
     };
@@ -387,4 +376,25 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
         .map_into_boxed_body()
         .map_into_right_body();
     Ok(ErrorHandlerResponse::Response(res))
+}
+
+fn extract_password(headers: &HeaderMap, params: &Option<Value>) -> String {
+    if headers.contains_key(header::AUTHORIZATION) {
+        let header = headers
+            .get(header::AUTHORIZATION)
+            .unwrap()
+            .to_str()
+            .unwrap_or_default();
+        return header.replace("Bearer ", "");
+    }
+    let Some(params) = params else {
+        return "".into();
+    };
+    let Some(password) = params.get("password") else {
+        return "".into();
+    };
+    let Some(password) = password.as_str() else {
+        return "".into();
+    };
+    password.into()
 }
