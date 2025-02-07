@@ -1,9 +1,8 @@
-use crate::element::model::Element;
+use crate::element::{self, model::Element};
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -20,16 +19,7 @@ pub struct ResElement {
     pub id: i64,
     pub lat: f64,
     pub lon: f64,
-    pub osm_url: String,
-    pub osm_tags: Map<String, Value>,
-    pub btcmap_tags: Map<String, Value>,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
-    #[serde(default)]
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub deleted_at: Option<OffsetDateTime>,
+    pub tags: Map<String, Value>,
 }
 
 impl From<Element> for ResElement {
@@ -42,12 +32,7 @@ impl From<Element> for ResElement {
             id: val.id,
             lat: val.lat(),
             lon: val.lon(),
-            osm_url: val.osm_url(),
-            osm_tags,
-            btcmap_tags,
-            created_at: val.created_at,
-            updated_at: val.updated_at,
-            deleted_at: val.deleted_at,
+            tags: element::service::generate_tags(&val, &element::service::TAGS),
         }
     }
 }

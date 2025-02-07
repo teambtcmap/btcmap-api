@@ -53,6 +53,7 @@ pub async fn get(
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
     let include_tags = args.include_tags.clone().unwrap_or(vec![]);
+    let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
     info!(tags = serde_json::to_string(&include_tags)?);
     let elements = pool
         .get()
@@ -76,7 +77,7 @@ pub async fn get(
             id: it.id,
             lat: it.overpass_data.coord().y,
             lon: it.overpass_data.coord().x,
-            tags: generate_tags(&it, &include_tags),
+            tags: super::service::generate_tags(&it, &include_tags),
             updated_at: it.updated_at,
             deleted_at: it.deleted_at,
         })
@@ -91,6 +92,7 @@ pub async fn get_by_id(
     pool: Data<Pool>,
 ) -> Result<Json<GetItem>, Error> {
     let include_tags = args.include_tags.clone().unwrap_or(vec![]);
+    let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
     let id_clone = id.clone();
     pool.get()
         .await?
@@ -103,77 +105,11 @@ pub async fn get_by_id(
             id: it.id,
             lat: it.overpass_data.coord().y,
             lon: it.overpass_data.coord().x,
-            tags: generate_tags(&it, &include_tags),
+            tags: super::service::generate_tags(&it, &include_tags),
             updated_at: it.updated_at,
             deleted_at: it.deleted_at,
         })
         .map(|it| Json(it))
-}
-
-pub fn generate_tags(element: &Element, include_tags: &Vec<String>) -> Map<String, Value> {
-    let mut res = Map::new();
-    let whitelisted_tags = vec![
-        "btcmap:icon",
-        "btcmap:boost:expires",
-        "osm:type",
-        "osm:id",
-        "name",
-        "phone",
-        "website",
-        "check_date",
-        "survey:date",
-        "check_date:currency:XBT",
-        "addr:street",
-        "addr:housenumber",
-        "contact:website",
-        "opening_hours",
-        "contact:phone",
-        "contact:email",
-        "contact:twitter",
-        "contact:instagram",
-        "contact:facebook",
-        "contact:line",
-    ];
-    let include_tags: Vec<&String> = include_tags
-        .into_iter()
-        .filter(|it| whitelisted_tags.contains(&it.as_str()))
-        .collect();
-    if let Some(osm_tags) = &element.overpass_data.tags {
-        for tag in &include_tags {
-            if tag.starts_with("btcmap:") || tag.starts_with("osm:") {
-                continue;
-            }
-            if osm_tags.contains_key(tag.as_str()) {
-                res.insert(tag.to_string(), osm_tags[tag.as_str()].clone());
-            }
-        }
-    }
-    if element.tags.contains_key("icon:android")
-        && include_tags.contains(&&"btcmap:icon".to_string())
-    {
-        res.insert("btcmap:icon".into(), element.tags["icon:android"].clone());
-    }
-    if element.tags.contains_key("boost:expires")
-        && include_tags.contains(&&"btcmap:boost:expires".to_string())
-    {
-        res.insert(
-            "btcmap:boost:expires".into(),
-            element.tags["boost:expires"].clone(),
-        );
-    }
-    if include_tags.contains(&&"osm:type".to_string()) {
-        res.insert(
-            "osm:type".into(),
-            Value::String(element.overpass_data.r#type.clone()),
-        );
-    }
-    if include_tags.contains(&&"osm:id".to_string()) {
-        res.insert(
-            "osm:id".into(),
-            Value::Number(element.overpass_data.id.into()),
-        );
-    }
-    res
 }
 
 #[cfg(test)]

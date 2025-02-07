@@ -9,7 +9,9 @@ use geo::Polygon;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
+use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
@@ -285,4 +287,99 @@ fn get_soon_out_of_date_issue(element: &Element) -> Option<Issue> {
     }
 
     None
+}
+
+pub const TAGS: &'static [&str] = &[
+    "name",
+    "phone",
+    "website",
+    "check_date",
+    "survey:date",
+    "check_date:currency:XBT",
+    "addr:street",
+    "addr:housenumber",
+    "contact:website",
+    "opening_hours",
+    "contact:phone",
+    "contact:email",
+    "contact:twitter",
+    "contact:instagram",
+    "contact:facebook",
+    "contact:line",
+    "btcmap:icon",
+    "btcmap:boost:expires",
+    "btcmap:osm:type",
+    "btcmap:osm:id",
+    "btcmap:osm:url",
+    "btcmap:created_at",
+    "btcmap:updated_at",
+    "btcmap:deleted_at",
+];
+
+pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Value> {
+    let mut res = Map::new();
+    let include_tags: Vec<&str> = include_tags
+        .to_vec()
+        .into_iter()
+        .filter(|it| TAGS.contains(it))
+        .collect();
+    if let Some(osm_tags) = &element.overpass_data.tags {
+        for tag in &include_tags {
+            if tag.starts_with("btcmap:") || tag.starts_with("osm:") {
+                continue;
+            }
+            if osm_tags.contains_key(*tag) {
+                res.insert(tag.to_string(), osm_tags[*tag].clone());
+            }
+        }
+    }
+    if element.tags.contains_key("icon:android") && include_tags.contains(&"btcmap:icon") {
+        res.insert("btcmap:icon".into(), element.tags["icon:android"].clone());
+    }
+    if element.tags.contains_key("boost:expires") && include_tags.contains(&"btcmap:boost:expires")
+    {
+        res.insert(
+            "btcmap:boost:expires".into(),
+            element.tags["boost:expires"].clone(),
+        );
+    }
+    if include_tags.contains(&"btcmap:osm:type") {
+        res.insert(
+            "btcmap:osm:type".into(),
+            Value::String(element.overpass_data.r#type.clone()),
+        );
+    }
+    if include_tags.contains(&"btcmap:osm:id") {
+        res.insert(
+            "btcmap:osm:id".into(),
+            Value::Number(element.overpass_data.id.into()),
+        );
+    }
+    if include_tags.contains(&"btcmap:osm:url") {
+        res.insert("btcmap:osm:url".into(), Value::String(element.osm_url()));
+    }
+    if include_tags.contains(&"btcmap:created_at") {
+        res.insert(
+            "btcmap:created_at".into(),
+            Value::String(element.created_at.format(&Rfc3339).unwrap_or_default()),
+        );
+    }
+    if include_tags.contains(&"btcmap:updated_at") {
+        res.insert(
+            "btcmap:updated_at".into(),
+            Value::String(element.updated_at.format(&Rfc3339).unwrap_or_default()),
+        );
+    }
+    if include_tags.contains(&"btcmap:deleted_at") {
+        match element.deleted_at {
+            Some(deleted_at) => {
+                res.insert(
+                    "btcmap:deleted_at".into(),
+                    Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
+                );
+            }
+            None => {}
+        }
+    }
+    res
 }
