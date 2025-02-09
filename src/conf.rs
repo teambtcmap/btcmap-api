@@ -2,6 +2,7 @@ use crate::Result;
 use deadpool_sqlite::Pool;
 use rusqlite::{Connection, Row};
 
+#[derive(Clone)]
 pub struct Conf {
     pub paywall_add_element_comment_price_sat: i64,
     pub paywall_boost_element_30d_price_sat: i64,

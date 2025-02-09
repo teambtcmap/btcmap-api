@@ -72,6 +72,7 @@ pub enum RpcMethod {
 pub struct RpcResponse {
     pub jsonrpc: String,
     pub result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<RpcError>,
     pub id: Value,
 }

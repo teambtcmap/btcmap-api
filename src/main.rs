@@ -19,7 +19,6 @@ mod user;
 use std::env;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -52,11 +51,11 @@ async fn main() -> Result<()> {
         .init();
 
     // All the worker threads share a single connection pool
-    let pool = Arc::new(db::pool()?);
+    let pool = db::pool()?;
 
     pool.get().await?.interact(db::migrate).await??;
 
-    let conf = Arc::new(Conf::select_async(&pool).await?);
+    let conf = Conf::select_async(&pool).await?;
 
     let rate_limit_conf = GovernorConfigBuilder::default()
         .milliseconds_per_request(500)
@@ -77,8 +76,8 @@ async fn main() -> Result<()> {
             .wrap(from_fn(log::middleware))
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
-            .app_data(Data::from(pool.clone()))
-            .app_data(Data::from(conf.clone()))
+            .app_data(Data::new(pool.clone()))
+            .app_data(Data::new(conf.clone()))
             .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
                 scope("rpc")
