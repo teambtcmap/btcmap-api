@@ -1,4 +1,9 @@
-use actix_governor::{Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError};
+use actix_governor::governor::clock::QuantaInstant;
+use actix_governor::governor::middleware::NoOpMiddleware;
+use actix_governor::{
+    Governor, GovernorConfig, GovernorConfigBuilder, KeyExtractor, PeerIpKeyExtractor,
+    SimpleKeyExtractionError,
+};
 use actix_web::dev::ServiceRequest;
 use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
 use actix_web::{App, HttpServer};
@@ -34,43 +39,17 @@ mod log;
 mod rpc;
 mod sync;
 use actix_web::http::header::HeaderValue;
-use actix_web::web::{scope, Data, QueryConfig};
+use actix_web::web::{scope, Data};
 mod ban;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
-    if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "info");
-    }
-
-    tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env())
-        .with(Layer::new().json())
-        .init();
-
-    // All the worker threads share a single connection pool
+    init_env();
     let pool = db::pool()?;
-
-    pool.get().await?.interact(db::migrate).await??;
-
+    db::migrate_async(&pool).await?;
     let conf = Conf::select_async(&pool).await?;
-
-    let rate_limit_conf = GovernorConfigBuilder::default()
-        .milliseconds_per_request(500)
-        .burst_size(50)
-        .key_extractor(get_key_extractor())
-        .finish()
-        .unwrap();
-
-    let tile_rate_limit_conf = GovernorConfigBuilder::default()
-        .milliseconds_per_request(500)
-        .burst_size(1000)
-        .key_extractor(get_key_extractor())
-        .finish()
-        .unwrap();
-
     HttpServer::new(move || {
         App::new()
             .wrap(from_fn(log::middleware))
@@ -78,16 +57,10 @@ async fn main() -> Result<()> {
             .wrap(Compress::default())
             .app_data(Data::new(pool.clone()))
             .app_data(Data::new(conf.clone()))
-            .app_data(QueryConfig::default().error_handler(error::query_error_handler))
             .service(
                 scope("rpc")
                     .wrap(ErrorHandlers::new().default_handler(rpc::handler::handle_rpc_error))
                     .service(rpc::handler::handle),
-            )
-            .service(
-                scope("tiles")
-                    .wrap(Governor::new(&tile_rate_limit_conf))
-                    .service(tile::controller::get),
             )
             .service(
                 scope("feeds")
@@ -98,7 +71,7 @@ async fn main() -> Result<()> {
             )
             .service(
                 scope("v2")
-                    .wrap(Governor::new(&rate_limit_conf))
+                    .wrap(Governor::new(&get_rate_limit_conf()))
                     .wrap(from_fn(ban::check_if_banned))
                     .service(
                         scope("elements")
@@ -128,7 +101,7 @@ async fn main() -> Result<()> {
             )
             .service(
                 scope("v3")
-                    .wrap(Governor::new(&rate_limit_conf))
+                    .wrap(Governor::new(&get_rate_limit_conf()))
                     .service(
                         scope("elements")
                             .service(element::v3::get)
@@ -166,11 +139,13 @@ async fn main() -> Result<()> {
                     ),
             )
             .service(
-                scope("v4").wrap(Governor::new(&rate_limit_conf)).service(
-                    scope("elements")
-                        .service(element::v4::get)
-                        .service(element::v4::get_by_id),
-                ),
+                scope("v4")
+                    .wrap(Governor::new(&get_rate_limit_conf()))
+                    .service(
+                        scope("elements")
+                            .service(element::v4::get)
+                            .service(element::v4::get_by_id),
+                    ),
             )
     })
     .bind(("127.0.0.1", 8000))?
@@ -178,6 +153,26 @@ async fn main() -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+fn init_env() {
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info");
+    }
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(Layer::new().json())
+        .init();
+}
+
+fn get_rate_limit_conf() -> GovernorConfig<PeerIpKeyExtractor, NoOpMiddleware<QuantaInstant>> {
+    GovernorConfigBuilder::default()
+        .milliseconds_per_request(500)
+        .burst_size(50)
+        .key_extractor(get_key_extractor())
+        .finish()
+        .unwrap()
 }
 
 pub fn data_dir_file(name: &str) -> Result<PathBuf> {

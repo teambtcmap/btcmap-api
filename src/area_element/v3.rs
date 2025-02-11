@@ -79,11 +79,10 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>> {
-    let not_found = Error::NotFound(format!("Area-element mapping with id {id} doesn't exist"));
     pool.get()
         .await?
         .interact(move |conn| AreaElement::select_by_id(*id, conn))
         .await??
-        .ok_or(not_found)
+        .ok_or(Error::not_found())
         .map(|it| it.into())
 }

@@ -99,21 +99,18 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
         .interact(move |conn| Report::select_by_id(id, conn))
         .await??
         .map(|it| it.into())
-        .ok_or(Error::NotFound(format!(
-            "Report with id = {id} doesn't exist"
-        )))
+        .ok_or(Error::not_found())
 }
 
 #[cfg(test)]
 mod test {
     use crate::area::Area;
-    use crate::error::{self, SyncAPIErrorResponseBody};
     use crate::report::Report;
     use crate::test::mock_db;
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
-    use actix_web::web::{scope, Data, QueryConfig};
+    use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use serde_json::Map;
     use time::macros::datetime;
@@ -123,16 +120,13 @@ mod test {
     async fn get_no_updated_since() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(QueryConfig::default().error_handler(error::query_error_handler))
                 .app_data(Data::new(mock_db().await.pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
         let req = TestRequest::get().uri("/?limit=1").to_request();
-        let res: SyncAPIErrorResponseBody =
-            test::try_call_and_read_body_json(&app, req).await.unwrap();
-        assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
-        assert!(res.message.contains("missing field `updated_since`"));
+        let res = test::call_service(&app, req).await;
+        assert_eq!(StatusCode::BAD_REQUEST, res.status());
         Ok(())
     }
 
@@ -140,7 +134,6 @@ mod test {
     async fn get_no_limit() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(QueryConfig::default().error_handler(error::query_error_handler))
                 .app_data(Data::new(mock_db().await.pool))
                 .service(scope("/").service(super::get)),
         )
@@ -148,10 +141,8 @@ mod test {
         let req = TestRequest::get()
             .uri("/?updated_since=2020-01-01T00:00:00Z")
             .to_request();
-        let res: SyncAPIErrorResponseBody =
-            test::try_call_and_read_body_json(&app, req).await.unwrap();
-        assert_eq!(StatusCode::BAD_REQUEST.as_u16(), res.http_code);
-        assert!(res.message.contains("missing field `limit`"));
+        let res = test::call_service(&app, req).await;
+        assert_eq!(StatusCode::BAD_REQUEST, res.status());
         Ok(())
     }
 

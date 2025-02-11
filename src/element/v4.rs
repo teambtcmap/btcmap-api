@@ -98,9 +98,7 @@ pub async fn get_by_id(
         .await?
         .interact(move |conn| Element::select_by_id_or_osm_id(&id_clone, conn))
         .await??
-        .ok_or(Error::NotFound(format!(
-            "Element with id {id} doesn't exist"
-        )))
+        .ok_or(Error::not_found())
         .map(|it| GetItem {
             id: it.id,
             lat: it.overpass_data.coord().y,

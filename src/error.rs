@@ -1,7 +1,4 @@
-use actix_web::{
-    error::QueryPayloadError, http::StatusCode, HttpRequest, HttpResponse, ResponseError,
-};
-use serde::{Deserialize, Serialize};
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
@@ -9,7 +6,6 @@ pub enum Error {
     NotFound(String),
     Unauthorized(String),
     InvalidInput(String),
-    Conflict(String),
     OsmApi(String),
     OverpassApi(String),
     Other(String),
@@ -32,7 +28,6 @@ impl Display for Error {
         match self {
             Error::NotFound(err) => write!(f, "{}", err),
             Error::InvalidInput(err) => write!(f, "{}", err),
-            Error::Conflict(err) => write!(f, "{}", err),
             Error::Unauthorized(err) => write!(f, "{}", err),
             Error::Other(err) => write!(f, "{}", err),
             Error::Parse(err) => write!(f, "{}", err),
@@ -137,28 +132,9 @@ impl From<geojson::Error> for Error {
     }
 }
 
-pub fn query_error_handler(err: QueryPayloadError, _req: &HttpRequest) -> actix_web::Error {
-    Error::InvalidInput(format!("Invalid arguments: {err}")).into()
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SyncAPIErrorResponseBody {
-    pub http_code: u16,
-    pub message: String,
-}
-
-impl SyncAPIErrorResponseBody {
-    fn new(http_code: u16, message: String) -> Self {
-        SyncAPIErrorResponseBody { http_code, message }
-    }
-}
-
 impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(SyncAPIErrorResponseBody::new(
-            self.status_code().as_u16(),
-            self.to_string(),
-        ))
+        HttpResponse::build(self.status_code()).body(self.to_string())
     }
 
     fn status_code(&self) -> StatusCode {
@@ -166,7 +142,6 @@ impl ResponseError for Error {
             Error::InvalidInput(_) => StatusCode::BAD_REQUEST,
             Error::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Error::NotFound(_) => StatusCode::NOT_FOUND,
-            Error::Conflict(_) => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -179,4 +154,10 @@ pub fn action_is_not_allowed(action: impl Into<String>) -> Error {
 
 pub fn invalid_arg(msg: &str) -> Error {
     Error::InvalidInput(msg.into())
+}
+
+impl Error {
+    pub fn not_found() -> Self {
+        Error::NotFound("Requested entity not found".into())
+    }
 }

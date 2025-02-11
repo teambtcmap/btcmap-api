@@ -94,11 +94,10 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let not_found_err = Error::NotFound(format!("Element comment with id {id} doesn't exist"));
     pool.get()
         .await?
         .interact(move |conn| ElementComment::select_by_id(*id, conn))
         .await??
-        .ok_or(not_found_err)
+        .ok_or(Error::not_found())
         .map(|it| it.into())
 }

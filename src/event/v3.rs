@@ -126,9 +126,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
         .interact(move |conn| Event::select_by_id(id, conn))
         .await??
         .map(|it| it.into())
-        .ok_or(Error::NotFound(format!(
-            "Event with id = {id} doesn't exist"
-        )))
+        .ok_or(Error::not_found())
 }
 
 #[cfg(test)]

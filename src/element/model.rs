@@ -213,7 +213,7 @@ impl Element {
             .await?
             .interact(move |conn| Element::select_by_id(id, conn))
             .await??
-            .ok_or(Error::NotFound("Element not found".into()))
+            .ok_or(Error::not_found())
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Element>> {

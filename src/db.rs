@@ -29,6 +29,10 @@ impl fmt::Display for Migration {
     }
 }
 
+pub async fn migrate_async(pool: &Pool) -> Result<()> {
+    pool.get().await?.interact(migrate).await?
+}
+
 pub fn migrate(db: &mut Connection) -> Result<()> {
     execute_migrations(&get_migrations()?, db)
 }
