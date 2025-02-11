@@ -1,30 +1,83 @@
-use super::{request, summary};
-use crate::{data_dir_file, Result};
+use super::db::{self};
+use crate::Result;
 use actix_web::{
-    body::MessageBody,
-    dev::{ServiceRequest, ServiceResponse},
-    http::StatusCode,
-    middleware::Next,
-    Error, HttpMessage, HttpRequest,
+    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
+    Error, HttpMessage,
 };
-use rusqlite::Connection;
-use std::time::Instant;
-use time::OffsetDateTime;
+use futures_util::future::LocalBoxFuture;
+use std::{
+    future::{ready, Ready},
+    time::Instant,
+};
 
-thread_local! {
-    static CONN: Connection = open_conn().unwrap_or_else(|e| {
-        eprintln!("Failed to open logger connection: {e}");
-        std::process::exit(1)
-    });
+// There are two steps in middleware processing.
+// 1. Middleware initialization, middleware factory gets called with
+//    next service in chain as parameter.
+// 2. Middleware's call method gets called with normal request.
+pub struct Log;
+
+// Middleware factory is `Transform` trait
+// `S` - type of the next service
+// `B` - type of response's body
+impl<S, B> Transform<S, ServiceRequest> for Log
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type InitError = ();
+    type Transform = LogMiddleware<S>;
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        ready(Ok(LogMiddleware { service }))
+    }
 }
 
-fn open_conn() -> Result<Connection> {
-    let conn = Connection::open(data_dir_file("log.db")?)?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.pragma_update(None, "synchronous", "NORMAL")?;
-    request::init(&conn)?;
-    summary::init(&conn)?;
-    Ok(conn)
+pub struct LogMiddleware<S> {
+    service: S,
+}
+
+impl<S, B> Service<ServiceRequest> for LogMiddleware<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    forward_ready!(service);
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let fut = self.service.call(req);
+        Box::pin(async move {
+            let started_at = Instant::now();
+            let res = fut.await?;
+            let extensions = res.request().extensions();
+            let entities = extensions.get::<RequestExtension>().map(|it| it.entities);
+            drop(extensions);
+            let time_ns = Instant::now().duration_since(started_at).as_nanos();
+            let conn_info = res.request().connection_info();
+            let Some(addr) = conn_info.realip_remote_addr() else {
+                drop(conn_info);
+                return Ok(res);
+            };
+            db::insert(
+                addr,
+                res.request().path(),
+                res.request().query_string(),
+                res.status().as_u16() as i64,
+                entities,
+                time_ns as i64,
+            )?;
+            drop(conn_info);
+            Ok(res)
+        })
+    }
 }
 
 pub struct RequestExtension {
@@ -37,75 +90,4 @@ impl RequestExtension {
             entities: entities as i64,
         }
     }
-}
-
-pub async fn handle_request(
-    req: ServiceRequest,
-    next: Next<impl MessageBody>,
-) -> Result<ServiceResponse<impl MessageBody>, Error> {
-    let started_at = Instant::now();
-    let res = next.call(req).await;
-    let Ok(res) = res else { return res };
-    let extensions = res.request().extensions();
-    let entities = extensions.get::<RequestExtension>().map(|it| it.entities);
-    drop(extensions);
-    let time_ns = Instant::now().duration_since(started_at).as_nanos();
-    log_request(
-        res.request(),
-        res.response().status(),
-        entities,
-        time_ns as i64,
-    )?;
-    log_summary(
-        res.request(),
-        res.request().path(),
-        entities.unwrap_or_default(),
-        time_ns as i64,
-    )?;
-    Ok(res)
-}
-
-fn log_request(
-    req: &HttpRequest,
-    code: StatusCode,
-    entities: Option<i64>,
-    time_ns: i64,
-) -> Result<()> {
-    let conn_info = req.connection_info();
-    let Some(addr) = conn_info.realip_remote_addr() else {
-        return Ok(());
-    };
-    CONN.with(|conn| {
-        request::insert(
-            addr,
-            req.path(),
-            req.query_string(),
-            code.as_u16() as i64,
-            entities,
-            time_ns,
-            conn,
-        )?;
-        Ok(())
-    })
-}
-
-fn log_summary(req: &HttpRequest, endpoint_id: &str, entities: i64, time_ns: i64) -> Result<()> {
-    let conn_info = req.connection_info();
-    let Some(addr) = conn_info.realip_remote_addr() else {
-        return Ok(());
-    };
-    let today = OffsetDateTime::now_utc().date().to_string();
-    CONN.with(|conn| {
-        match summary::select(&today, addr, endpoint_id, conn)? {
-            Some(entry) => summary::update(
-                entry.id,
-                entry.reqests + 1,
-                entry.entities + entities,
-                entry.time_ns + time_ns,
-                conn,
-            ),
-            None => summary::insert(&today, addr, endpoint_id, 1, entities, time_ns, conn),
-        }?;
-        Ok(())
-    })
 }

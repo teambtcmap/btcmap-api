@@ -41,6 +41,7 @@ mod sync;
 use actix_web::http::header::HeaderValue;
 use actix_web::web::{scope, Data};
 mod ban;
+use log::Log;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -52,7 +53,7 @@ async fn main() -> Result<()> {
     let conf = Conf::select_async(&pool).await?;
     HttpServer::new(move || {
         App::new()
-            .wrap(from_fn(log::middleware))
+            .wrap(Log)
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .app_data(Data::new(pool.clone()))

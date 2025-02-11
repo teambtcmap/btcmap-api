@@ -23,6 +23,8 @@ actix-web-lab = { version = "0.23.0" }
 # https://github.com/AaronErhardt/actix-governor/releases
 actix-governor = { version = "0.6.0", default-features = false }
 
+futures-util = "0.3.31"
+
 # We're using SQLite because it's portable and it requires no maintenance
 # SQLite is fast enough for our needs and we aren't aiming for infinite scalability
 # https://github.com/rusqlite/rusqlite/releases

@@ -380,6 +380,7 @@ dependencies = [
  "actix-web-lab",
  "base64",
  "deadpool-sqlite",
+ "futures-util",
  "geo",
  "geojson",
  "include_dir",
