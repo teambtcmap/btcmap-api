@@ -1,4 +1,5 @@
-use crate::{data_dir_file, Result};
+use crate::db::data_dir_file;
+use crate::Result;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use tracing::error;

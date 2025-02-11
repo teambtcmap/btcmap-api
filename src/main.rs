@@ -1,10 +1,3 @@
-use actix_governor::governor::clock::QuantaInstant;
-use actix_governor::governor::middleware::NoOpMiddleware;
-use actix_governor::{
-    Governor, GovernorConfig, GovernorConfigBuilder, KeyExtractor, PeerIpKeyExtractor,
-    SimpleKeyExtractionError,
-};
-use actix_web::dev::ServiceRequest;
 use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
 use actix_web::{App, HttpServer};
 use conf::Conf;
@@ -22,8 +15,6 @@ mod test;
 mod tile;
 mod user;
 use std::env;
-use std::fs::create_dir_all;
-use std::path::PathBuf;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -38,7 +29,6 @@ mod invoice;
 mod log;
 mod rpc;
 mod sync;
-use actix_web::http::header::HeaderValue;
 use actix_web::web::{scope, Data};
 mod ban;
 use log::Log;
@@ -72,7 +62,6 @@ async fn main() -> Result<()> {
             )
             .service(
                 scope("v2")
-                    .wrap(Governor::new(&get_rate_limit_conf()))
                     .wrap(from_fn(ban::check_if_banned))
                     .service(
                         scope("elements")
@@ -102,7 +91,6 @@ async fn main() -> Result<()> {
             )
             .service(
                 scope("v3")
-                    .wrap(Governor::new(&get_rate_limit_conf()))
                     .service(
                         scope("elements")
                             .service(element::v3::get)
@@ -140,13 +128,11 @@ async fn main() -> Result<()> {
                     ),
             )
             .service(
-                scope("v4")
-                    .wrap(Governor::new(&get_rate_limit_conf()))
-                    .service(
-                        scope("elements")
-                            .service(element::v4::get)
-                            .service(element::v4::get_by_id),
-                    ),
+                scope("v4").service(
+                    scope("elements")
+                        .service(element::v4::get)
+                        .service(element::v4::get_by_id),
+                ),
             )
     })
     .bind(("127.0.0.1", 8000))?
@@ -165,51 +151,4 @@ fn init_env() {
         .with(EnvFilter::from_default_env())
         .with(Layer::new().json())
         .init();
-}
-
-fn get_rate_limit_conf() -> GovernorConfig<PeerIpKeyExtractor, NoOpMiddleware<QuantaInstant>> {
-    GovernorConfigBuilder::default()
-        .milliseconds_per_request(500)
-        .burst_size(50)
-        .key_extractor(get_key_extractor())
-        .finish()
-        .unwrap()
-}
-
-pub fn data_dir_file(name: &str) -> Result<PathBuf> {
-    #[allow(deprecated)]
-    let data_dir = std::env::home_dir()
-        .ok_or("Home directory does not exist")?
-        .join(".local/share/btcmap");
-    if !data_dir.exists() {
-        create_dir_all(&data_dir)?;
-    }
-    Ok(data_dir.join(name))
-}
-
-#[cfg(not(debug_assertions))]
-pub fn get_key_extractor() -> RealIpKeyExtractor {
-    RealIpKeyExtractor
-}
-
-#[cfg(debug_assertions)]
-pub fn get_key_extractor() -> actix_governor::PeerIpKeyExtractor {
-    actix_governor::PeerIpKeyExtractor
-}
-
-#[derive(Clone)]
-pub struct RealIpKeyExtractor;
-
-impl KeyExtractor for RealIpKeyExtractor {
-    type Key = HeaderValue;
-    type KeyExtractionError = SimpleKeyExtractionError<&'static str>;
-
-    fn extract(&self, req: &ServiceRequest) -> Result<Self::Key, Self::KeyExtractionError> {
-        req.headers()
-            .get("x-forwarded-for")
-            .cloned()
-            .ok_or_else(|| {
-                SimpleKeyExtractionError::new("Could not extract real IP address from request")
-            })
-    }
 }
