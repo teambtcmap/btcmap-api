@@ -175,6 +175,13 @@ impl Area {
         }
     }
 
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Area> {
+        pool.get()
+            .await?
+            .interact(move |conn| Area::select_by_id(id, conn))
+            .await?
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Area> {
         let sql = format!(
             r#"

@@ -52,6 +52,7 @@ pub enum RpcMethod {
     GetTrendingCommunities,
     GenerateAreasElementsMapping,
     GenerateReports,
+    GetAreaDashboard,
     // user
     GetUserActivity,
     SetUserTag,
@@ -147,6 +148,7 @@ const PUBLIC_METHODS: &'static [RpcMethod] = &[
     RpcMethod::PaywallAddElementComment,
     RpcMethod::PaywallGetBoostElementQuote,
     RpcMethod::PaywallBoostElement,
+    RpcMethod::GetAreaDashboard,
 ];
 
 #[post("")]
@@ -312,6 +314,10 @@ pub async fn handle(
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),
             super::generate_reports::run(&admin.unwrap(), &pool, &conf).await?,
+        ),
+        RpcMethod::GetAreaDashboard => RpcResponse::from(
+            req.id.clone(),
+            super::get_area_dashboard::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetUserActivity => RpcResponse::from(
             req.id.clone(),

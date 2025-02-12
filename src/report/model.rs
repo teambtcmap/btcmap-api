@@ -1,5 +1,6 @@
 use crate::Error;
 use crate::Result;
+use deadpool_sqlite::Pool;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
@@ -129,6 +130,50 @@ impl Report {
             .collect::<Result<Vec<Report>, _>>()?)
     }
 
+    pub async fn select_by_area_id_async(
+        area_id: i64,
+        limit: Option<i64>,
+        pool: &Pool,
+    ) -> Result<Vec<Report>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Report::select_by_area_id(area_id, limit, conn))
+            .await?
+    }
+
+    pub fn select_by_area_id(
+        area_id: i64,
+        limit: Option<i64>,
+        conn: &Connection,
+    ) -> Result<Vec<Report>> {
+        let query = r#"
+            SELECT
+                r.rowid,
+                r.area_id,
+                json_extract(a.tags, '$.url_alias'),
+                r.date,
+                r.tags,
+                r.created_at,
+                r.updated_at,
+                r.deleted_at
+            FROM report r
+            LEFT JOIN area a ON a.rowid = r.area_id
+            WHERE r.area_id = :area_id
+            ORDER BY r.updated_at, r.rowid
+            LIMIT :limit
+        "#;
+        Ok(conn
+            .prepare(query)?
+            .query_map(
+                named_params! {
+                    ":area_id": area_id,
+                    ":limit": limit.unwrap_or(i64::MAX),
+                },
+                mapper(),
+            )?
+            .collect::<Result<Vec<Report>, _>>()?)
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Report>> {
         let query = r#"
             SELECT
@@ -246,6 +291,33 @@ impl Report {
             },
         )?;
         Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+    }
+
+    pub fn total_elements(&self) -> i64 {
+        self.tags
+            .get("total_elements")
+            .map(|it| it.as_i64().unwrap_or_default())
+            .unwrap_or_default()
+    }
+
+    pub fn up_to_date_elements(&self) -> i64 {
+        self.tags
+            .get("up_to_date_elements")
+            .map(|it| it.as_i64().unwrap_or_default())
+            .unwrap_or_default()
+    }
+
+    pub fn days_since_verified(&self) -> i64 {
+        let now = OffsetDateTime::now_utc();
+        let now_str = now.format(&Rfc3339).unwrap();
+        match self.tags.get("avg_verification_date") {
+            Some(date) => {
+                let date =
+                    OffsetDateTime::parse(date.as_str().unwrap_or(&now_str), &Rfc3339).unwrap();
+                (now - date).whole_days()
+            }
+            None => 0,
+        }
     }
 }
 

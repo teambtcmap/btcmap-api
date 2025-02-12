@@ -10,6 +10,7 @@ pub mod generate_element_issues;
 pub mod generate_invoice;
 pub mod generate_reports;
 pub mod get_area;
+pub mod get_area_dashboard;
 pub mod get_boosted_elements;
 pub mod get_element;
 pub mod get_invoice;
