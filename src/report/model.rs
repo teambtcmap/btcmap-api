@@ -7,15 +7,10 @@ use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Map;
 use serde_json::Value;
-#[cfg(not(test))]
-use std::thread::sleep;
-#[cfg(not(test))]
-use std::time::Duration;
 use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
-use tracing::debug;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Report {
@@ -36,7 +31,7 @@ impl Report {
         tags: &Map<String, Value>,
         conn: &Connection,
     ) -> Result<Report> {
-        let query = r#"
+        let sql = r#"
             INSERT INTO report (
                 area_id,
                 date,
@@ -47,10 +42,8 @@ impl Report {
                 :tags
             )
         "#;
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            query,
+            sql,
             named_params! {
                 ":area_id" : area_id,
                 ":date" : date.to_string(),
@@ -67,7 +60,7 @@ impl Report {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Report>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 r.rowid,
                 r.area_id,
@@ -83,9 +76,8 @@ impl Report {
             ORDER BY r.updated_at, r.rowid
             LIMIT :limit
         "#;
-
         Ok(conn
-            .prepare(query)?
+            .prepare(sql)?
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
@@ -101,7 +93,7 @@ impl Report {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Report>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 r.rowid,
                 r.area_id,
@@ -119,7 +111,7 @@ impl Report {
         "#;
 
         Ok(conn
-            .prepare(query)?
+            .prepare(sql)?
             .query_map(
                 named_params! {
                     ":date": date.to_string(),
@@ -146,7 +138,7 @@ impl Report {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Report>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 r.rowid,
                 r.area_id,
@@ -163,7 +155,7 @@ impl Report {
             LIMIT :limit
         "#;
         Ok(conn
-            .prepare(query)?
+            .prepare(sql)?
             .query_map(
                 named_params! {
                     ":area_id": area_id,
@@ -175,7 +167,7 @@ impl Report {
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Report>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 r.rowid,
                 r.area_id,
@@ -189,14 +181,13 @@ impl Report {
             LEFT JOIN area a ON a.rowid = r.area_id
             WHERE r.rowid = :id
         "#;
-        debug!(query);
         Ok(conn
-            .query_row(query, named_params! { ":id": id }, mapper())
+            .query_row(sql, named_params! { ":id": id }, mapper())
             .optional()?)
     }
 
     pub fn select_latest_by_area_id(area_id: i64, conn: &Connection) -> Result<Option<Report>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 r.rowid,
                 r.area_id,
@@ -212,23 +203,20 @@ impl Report {
             ORDER BY r.created_at DESC, r.id DESC
             LIMIT 1
         "#;
-        debug!(query);
         Ok(conn
-            .query_row(query, named_params! { ":area_id": area_id }, mapper())
+            .query_row(sql, named_params! { ":area_id": area_id }, mapper())
             .optional()?)
     }
 
     #[cfg(test)]
     pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Report> {
-        let query = r#"
+        let sql = r#"
             UPDATE report
             SET tags = json_patch(tags, :tags)
             WHERE rowid = :id
         "#;
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            query,
+            sql,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
         Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
@@ -249,17 +237,14 @@ impl Report {
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Report> {
-        let query = r#"
+        let sql = r#"
                 UPDATE report
                 SET updated_at = :updated_at
                 WHERE id = :id
             "#
         .to_string();
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":updated_at": updated_at.format(&time::format_description::well_known::Rfc3339)?,
@@ -274,17 +259,14 @@ impl Report {
         deleted_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Report> {
-        let query = r#"
+        let sql = r#"
                 UPDATE report
                 SET deleted_at = :deleted_at
                 WHERE id = :id
             "#
         .to_string();
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":deleted_at": deleted_at.format(&time::format_description::well_known::Rfc3339)?,
