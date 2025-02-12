@@ -1,5 +1,5 @@
 use super::Admin;
-use crate::{conf::Conf, discord, error, Result};
+use crate::{conf::Conf, discord, error::Error, Result};
 use deadpool_sqlite::Pool;
 
 pub async fn check_rpc(
@@ -21,7 +21,7 @@ pub async fn check_rpc(
             ),
         )
         .await;
-        Err(error::action_is_not_allowed(action))
+        Err(Error::unauthorized(action))
     }
 }
 

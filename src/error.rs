@@ -147,17 +147,19 @@ impl ResponseError for Error {
     }
 }
 
-pub fn action_is_not_allowed(action: impl Into<String>) -> Error {
-    let action = action.into();
-    Error::Unauthorized(format!("you are not allowed to perform action {action}"))
-}
-
-pub fn invalid_arg(msg: &str) -> Error {
-    Error::InvalidInput(msg.into())
-}
-
 impl Error {
     pub fn not_found() -> Self {
         Error::NotFound("Requested entity not found".into())
+    }
+
+    pub fn unauthorized(action: impl Into<String>) -> Error {
+        Error::Unauthorized(format!(
+            "you are not allowed to perform action {}",
+            action.into(),
+        ))
+    }
+
+    pub fn invalid_input(msg: &str) -> Error {
+        Error::InvalidInput(msg.into())
     }
 }

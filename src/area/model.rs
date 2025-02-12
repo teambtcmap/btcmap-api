@@ -1,4 +1,4 @@
-use crate::{error, Result};
+use crate::{error::Error, Result};
 use deadpool_sqlite::Pool;
 use geojson::{GeoJson, Geometry};
 use rusqlite::{named_params, Connection, Row};
@@ -27,17 +27,17 @@ impl Area {
         let alias = tags
             .get("url_alias")
             .cloned()
-            .ok_or(error::invalid_arg("url_alias is missing"))?;
+            .ok_or(Error::invalid_input("url_alias is missing"))?;
         let alias = alias
             .as_str()
-            .ok_or(error::invalid_arg("url_alias is not a string"))?;
+            .ok_or(Error::invalid_input("url_alias is not a string"))?;
         let _ = tags
             .get("geo_json")
-            .ok_or(error::invalid_arg("geo_json is missing"))?;
+            .ok_or(Error::invalid_input("geo_json is missing"))?;
         let geo_json = tags["geo_json"].clone();
         serde_json::to_string(&geo_json)?
             .parse::<GeoJson>()
-            .map_err(|_| error::invalid_arg("invalid geo_json"))?;
+            .map_err(|_| Error::invalid_input("invalid geo_json"))?;
         let sql = format!(
             r#"
                 INSERT INTO {TABLE_NAME} ({COL_TAGS}, {COL_ALIAS})
