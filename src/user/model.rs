@@ -2,13 +2,7 @@ use crate::{osm::api::OsmUser, Error, Result};
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-#[cfg(not(test))]
-use std::thread::sleep;
-#[cfg(not(test))]
-use std::time::Duration;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-#[cfg(test)]
-use tracing::debug;
 
 pub struct User {
     pub id: i64,
@@ -23,7 +17,7 @@ const TABLE_NAME: &str = "user";
 
 impl User {
     pub fn insert(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<User> {
-        let query = r#"
+        let sql = r#"
             INSERT INTO user (
                 rowid,
                 osm_data
@@ -32,22 +26,19 @@ impl User {
                 :osm_data
             )
         "#;
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            query,
+            sql,
             named_params! {
                 ":id": id,
                 ":osm_data": serde_json::to_string(osm_data)?,
             },
         )?;
-
         User::select_by_id(conn.last_insert_rowid(), conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<User>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 id,
                 osm_data,
@@ -59,9 +50,8 @@ impl User {
             ORDER BY updated_at, id
             LIMIT :limit
         "#;
-
         Ok(conn
-            .prepare(query)?
+            .prepare(sql)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
@@ -74,7 +64,7 @@ impl User {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<User>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 rowid,
                 osm_data,
@@ -87,9 +77,8 @@ impl User {
             ORDER BY updated_at, rowid
             LIMIT :limit
         "#;
-
         Ok(conn
-            .prepare(query)?
+            .prepare(sql)?
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
@@ -108,7 +97,7 @@ impl User {
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<User>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 rowid,
                 osm_data,
@@ -119,14 +108,13 @@ impl User {
             FROM user
             WHERE rowid = :id
         "#;
-
         Ok(conn
-            .query_row(query, named_params! { ":id": id }, mapper())
+            .query_row(sql, named_params! { ":id": id }, mapper())
             .optional()?)
     }
 
     pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<User>> {
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT                 
                     rowid,
@@ -140,7 +128,7 @@ impl User {
             "#
         );
         let res = conn
-            .query_row(&query, named_params! { ":name": name }, mapper())
+            .query_row(&sql, named_params! { ":name": name }, mapper())
             .optional()?;
         Ok(res)
     }
@@ -156,34 +144,30 @@ impl User {
         tags: &HashMap<String, Value>,
         conn: &Connection,
     ) -> crate::Result<User> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE_NAME}
                 SET tags = json_patch(tags, :tags)
                 WHERE rowid = :id
             "#
         );
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
         User::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<User>> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE_NAME}
                 SET tags = json_remove(tags, :name)
                 WHERE id = :id
             "#
         );
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":name": format!("$.{name}"),
@@ -194,21 +178,18 @@ impl User {
     }
 
     pub fn set_osm_data(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             UPDATE user
             SET osm_data = json(:osm_data)
             WHERE rowid = :id
         "#;
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            query,
+            sql,
             named_params! {
                 ":id": id,
                 ":osm_data": serde_json::to_string(osm_data)?,
             },
         )?;
-
         Ok(())
     }
 
@@ -218,17 +199,14 @@ impl User {
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<User> {
-        let query = r#"
+        let sql = r#"
                 UPDATE user
                 SET updated_at = :updated_at
                 WHERE rowid = :id
             "#
         .to_string();
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":updated_at": updated_at.format(&Rfc3339)?,

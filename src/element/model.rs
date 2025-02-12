@@ -6,13 +6,7 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use std::hash::Hash;
 use std::hash::Hasher;
-#[cfg(not(test))]
-use std::thread::sleep;
-#[cfg(not(test))]
-use std::time::Duration;
-use std::time::Instant;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tracing::{debug, info};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Element {
@@ -52,17 +46,14 @@ const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
     pub fn insert(overpass_data: &OverpassElement, conn: &Connection) -> Result<Element> {
-        let query = format!(
+        let sql = format!(
             r#"
                 INSERT INTO {TABLE} ({COL_OVERPASS_DATA}) 
                 VALUES (json(:overpass_data))
             "#
         );
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! { ":overpass_data": serde_json::to_string(overpass_data)?},
         )?;
         Element::select_by_id(conn.last_insert_rowid(), conn)?
@@ -77,8 +68,7 @@ impl Element {
     }
 
     pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
-        let start = Instant::now();
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT {ALL_COLUMNS} 
                 FROM {TABLE} 
@@ -86,23 +76,13 @@ impl Element {
                 LIMIT :limit
             "#
         );
-        debug!(query);
         let res = conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?;
-
-        let time_ms = start.elapsed().as_millis();
-        info!(
-            count = res.len(),
-            time_ms,
-            "Loaded all elements ({}) in {} ms",
-            res.len(),
-            time_ms,
-        );
         Ok(res)
     }
 
@@ -114,8 +94,7 @@ impl Element {
     }
 
     pub fn select_all_except_deleted(conn: &Connection) -> Result<Vec<Element>> {
-        let start = Instant::now();
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT {ALL_COLUMNS} 
                 FROM {TABLE}
@@ -123,20 +102,10 @@ impl Element {
                 ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
             "#
         );
-        debug!(query);
         let res = conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map({}, mapper())?
             .collect::<Result<Vec<_>, _>>()?;
-
-        let time_ms = start.elapsed().as_millis();
-        info!(
-            count = res.len(),
-            time_ms,
-            "Loaded all elements except deleted ({}) in {} ms",
-            res.len(),
-            time_ms,
-        );
         Ok(res)
     }
 
@@ -146,7 +115,7 @@ impl Element {
         include_deleted: bool,
         conn: &Connection,
     ) -> Result<Vec<Element>> {
-        let query = if include_deleted {
+        let sql = if include_deleted {
             format!(
                 r#"
                 SELECT {ALL_COLUMNS}
@@ -167,9 +136,8 @@ impl Element {
             "#
             )
         };
-        debug!(query);
         Ok(conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
@@ -217,16 +185,15 @@ impl Element {
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Element>> {
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
                 WHERE {COL_ROWID} = :id
             "#
         );
-        debug!(query);
         Ok(conn
-            .query_row(&query, named_params! { ":id": id }, mapper())
+            .query_row(&sql, named_params! { ":id": id }, mapper())
             .optional()?)
     }
 
@@ -235,7 +202,7 @@ impl Element {
         id: i64,
         conn: &Connection,
     ) -> Result<Option<Element>> {
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
@@ -243,10 +210,9 @@ impl Element {
                 AND json_extract({COL_OVERPASS_DATA}, '$.id') = :id
             "#
         );
-        debug!(query);
         Ok(conn
             .query_row(
-                &query,
+                &sql,
                 named_params! {
                     ":type": r#type,
                     ":id": id,
@@ -261,16 +227,13 @@ impl Element {
         tags: &Map<String, Value>,
         conn: &Connection,
     ) -> crate::Result<Element> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE} SET {COL_TAGS} = json_patch({COL_TAGS}, :tags) WHERE {COL_ROWID} = :id
             "#
         );
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":tags": &serde_json::to_string(tags)?,
@@ -285,18 +248,15 @@ impl Element {
         overpass_data: &OverpassElement,
         conn: &Connection,
     ) -> Result<Element> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE}
                 SET {COL_OVERPASS_DATA} = json(:overpass_data)
                 WHERE {COL_ROWID} = :id
             "#
         );
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": self.id,
                 ":overpass_data": serde_json::to_string(overpass_data)?,
@@ -339,24 +299,20 @@ impl Element {
     }
 
     pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Element> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE}
                 SET {COL_TAGS} = json_remove(tags, :name)
                 WHERE {COL_ROWID} = :id
             "#
         );
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":name": format!("$.{name}"),
             },
         )?;
-        info!("Removed {name} tag from element {id}");
         Element::select_by_id(id, conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
@@ -376,16 +332,15 @@ impl Element {
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Element> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE}
                 SET {COL_UPDATED_AT} = :updated_at
                 WHERE {COL_ROWID} = :id
             "#
         );
-        debug!(query);
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":updated_at": updated_at.format(&Rfc3339).unwrap(),
@@ -402,18 +357,15 @@ impl Element {
     ) -> Result<Element> {
         match deleted_at {
             Some(deleted_at) => {
-                let query = format!(
+                let sql = format!(
                     r#"
                         UPDATE {TABLE}
                         SET {COL_DELETED_AT} = :deleted_at
                         WHERE {COL_ROWID} = :id
                     "#
                 );
-                debug!(query);
-                #[cfg(not(test))]
-                sleep(Duration::from_millis(10));
                 conn.execute(
-                    &query,
+                    &sql,
                     named_params! {
                         ":id": self.id,
                         ":deleted_at": deleted_at.format(&Rfc3339)?,
@@ -421,17 +373,14 @@ impl Element {
                 )?;
             }
             None => {
-                let query = format!(
+                let sql = format!(
                     r#"
                         UPDATE {TABLE}
                         SET {COL_DELETED_AT} = NULL
                         WHERE {COL_ROWID} = :id
                     "#
                 );
-                debug!(query);
-                #[cfg(not(test))]
-                sleep(Duration::from_millis(10));
-                conn.execute(&query, named_params! { ":id": self.id })?;
+                conn.execute(&sql, named_params! { ":id": self.id })?;
             }
         };
         Element::select_by_id(self.id, conn)?

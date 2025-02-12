@@ -6,15 +6,8 @@ use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Value;
 use std::collections::HashMap;
-#[cfg(not(test))]
-use std::thread::sleep;
-#[cfg(not(test))]
-use std::time::Duration;
-use std::time::Instant;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-use tracing::debug;
-use tracing::info;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Event {
@@ -44,7 +37,7 @@ const COL_DELETED_AT: &str = "deleted_at";
 
 impl Event {
     pub fn insert(user_id: i64, element_id: i64, r#type: &str, conn: &Connection) -> Result<Event> {
-        let query = format!(
+        let sql = format!(
             r#"
                 INSERT INTO {TABLE} (
                     {COL_USER_ID},
@@ -57,11 +50,8 @@ impl Event {
                 )
             "#
         );
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":user_id": user_id,
                 ":element_id": element_id,
@@ -78,7 +68,7 @@ impl Event {
         conn: &Connection,
     ) -> Result<Vec<Event>> {
         let sort_order = sort_order.unwrap_or("ASC".into());
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT
                     ev.{COL_ROWID},
@@ -97,9 +87,8 @@ impl Event {
                 LIMIT :limit
             "#
         );
-        debug!(query);
         Ok(conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map(
                 named_params! { ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
@@ -114,7 +103,7 @@ impl Event {
         conn: &Connection,
     ) -> Result<Vec<Event>> {
         let sort_order = sort_order.unwrap_or("ASC".into());
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT
                     ev.{COL_ROWID},
@@ -134,9 +123,8 @@ impl Event {
                 LIMIT :limit
             "#
         );
-        debug!(query);
         Ok(conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map(
                 named_params! { ":type": r#type, ":limit": limit.unwrap_or(i64::MAX) },
                 mapper(),
@@ -149,7 +137,7 @@ impl Event {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Event>> {
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT
                     ev.{COL_ROWID},
@@ -169,9 +157,8 @@ impl Event {
                 LIMIT :limit
             "#
         );
-        debug!(query);
         Ok(conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
@@ -187,8 +174,7 @@ impl Event {
         period_end: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Vec<Event>> {
-        let start = Instant::now();
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT
                     ev.{COL_ROWID},
@@ -207,9 +193,8 @@ impl Event {
                 ORDER BY ev.{COL_UPDATED_AT}, ev.{COL_ROWID}
             "#
         );
-        debug!(query);
         let res = conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map(
                 named_params! {
                     ":period_start": period_start.format(&Rfc3339)?,
@@ -218,19 +203,11 @@ impl Event {
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?;
-        let time_ms = start.elapsed().as_millis();
-        info!(
-            count = res.len(),
-            time_ms,
-            "Loaded {} events in {} ms",
-            res.len(),
-            time_ms,
-        );
         Ok(res)
     }
 
     pub fn select_by_user(id: i64, limit: i64, conn: &Connection) -> Result<Vec<Event>> {
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT
                     ev.{COL_ROWID},
@@ -251,14 +228,14 @@ impl Event {
             "#
         );
         let res = conn
-            .prepare(&query)?
+            .prepare(&sql)?
             .query_map(named_params! {":id": id, ":limit": limit }, mapper())?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(res)
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Event>> {
-        let query = format!(
+        let sql = format!(
             r#"
                 SELECT
                     ev.{COL_ROWID},
@@ -276,9 +253,8 @@ impl Event {
                 WHERE ev.{COL_ROWID} = :id
             "#
         );
-        debug!(query);
         Ok(conn
-            .query_row(&query, named_params! { ":id": id }, mapper())
+            .query_row(&sql, named_params! { ":id": id }, mapper())
             .optional()?)
     }
 
@@ -287,18 +263,15 @@ impl Event {
     }
 
     pub fn _patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE}
                 SET {COL_TAGS} = json_patch({COL_TAGS}, :tags)
                 WHERE {COL_ROWID} = :id
             "#
         );
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":tags": &serde_json::to_string(tags)?,
@@ -313,18 +286,15 @@ impl Event {
         updated_at: &OffsetDateTime,
         conn: &Connection,
     ) -> Result<Event> {
-        let query = format!(
+        let sql = format!(
             r#"
                 UPDATE {TABLE}
                 SET {COL_UPDATED_AT} = :updated_at
                 WHERE {COL_ROWID} = :id
             "#
         );
-        debug!(query);
-        #[cfg(not(test))]
-        sleep(Duration::from_millis(10));
         conn.execute(
-            &query,
+            &sql,
             named_params! {
                 ":id": id,
                 ":updated_at": updated_at.format(&Rfc3339)?,
