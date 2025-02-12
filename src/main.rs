@@ -46,6 +46,7 @@ async fn main() -> Result<()> {
             .wrap(Log)
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
+            .wrap(from_fn(ban::check_if_banned))
             .app_data(Data::new(pool.clone()))
             .app_data(Data::new(conf.clone()))
             .service(
@@ -62,7 +63,6 @@ async fn main() -> Result<()> {
             )
             .service(
                 scope("v2")
-                    .wrap(from_fn(ban::check_if_banned))
                     .service(
                         scope("elements")
                             .service(element::v2::get)

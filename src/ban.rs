@@ -8,7 +8,6 @@ use actix_web::{
 };
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
-use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[allow(dead_code)]
@@ -30,7 +29,7 @@ pub async fn check_if_banned(
         drop(conn_info);
         return next.call(req).await;
     };
-    let Some(pool) = req.app_data::<Data<Arc<Pool>>>() else {
+    let Some(pool) = req.app_data::<Data<Pool>>() else {
         drop(conn_info);
         return next.call(req).await;
     };
