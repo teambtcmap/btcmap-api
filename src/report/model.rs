@@ -24,33 +24,55 @@ pub struct Report {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
+const TABLE: &str = "report";
+const COL_ID: &str = "id";
+const COL_AREA_ID: &str = "area_id";
+const COL_DATE: &str = "date";
+const COL_TAGS: &str = "tags";
+const COL_CREATED_AT: &str = "created_at";
+const COL_UPDATED_AT: &str = "updated_at";
+const COL_DELETED_AT: &str = "deleted_at";
+
 impl Report {
+    pub async fn insert_async(
+        area_id: i64,
+        date: Date,
+        tags: Map<String, Value>,
+        pool: &Pool,
+    ) -> Result<Report> {
+        pool.get()
+            .await?
+            .interact(move |conn| Report::insert(area_id, &date, &tags, conn))
+            .await?
+    }
+
     pub fn insert(
         area_id: i64,
         date: &Date,
         tags: &Map<String, Value>,
         conn: &Connection,
     ) -> Result<Report> {
-        let sql = r#"
-            INSERT INTO report (
-                area_id,
-                date,
-                tags
+        let sql = format!(
+            r#"
+            INSERT INTO {TABLE} (
+                {COL_AREA_ID},
+                {COL_DATE},
+                {COL_TAGS}
             ) VALUES (
                 :area_id,
                 :date,
                 :tags
             )
-        "#;
+            "#
+        );
         conn.execute(
-            sql,
+            &sql,
             named_params! {
                 ":area_id" : area_id,
                 ":date" : date.to_string(),
                 ":tags" : serde_json::to_string(&tags)?,
             },
         )?;
-
         Report::select_by_id(conn.last_insert_rowid(), conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
@@ -60,24 +82,26 @@ impl Report {
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<Report>> {
-        let sql = r#"
+        let sql = format!(
+            r#"
             SELECT
-                r.rowid,
-                r.area_id,
+                r.{COL_ID},
+                r.{COL_AREA_ID},
                 a.alias,
-                r.date,
-                r.tags,
-                r.created_at,
-                r.updated_at,
-                r.deleted_at
+                r.{COL_DATE},
+                r.{COL_TAGS},
+                r.{COL_CREATED_AT},
+                r.{COL_UPDATED_AT},
+                r.{COL_DELETED_AT}
             FROM report r
-            LEFT JOIN area a ON a.rowid = r.area_id
-            WHERE r.updated_at > :updated_since
-            ORDER BY r.updated_at, r.rowid
+            LEFT JOIN area a ON a.id = r.{COL_AREA_ID}
+            WHERE r.{COL_UPDATED_AT} > :updated_since
+            ORDER BY r.{COL_UPDATED_AT}, r.{COL_ID}
             LIMIT :limit
-        "#;
+        "#
+        );
         Ok(conn
-            .prepare(sql)?
+            .prepare(&sql)?
             .query_map(
                 named_params! {
                     ":updated_since": updated_since.format(&Rfc3339)?,
@@ -325,11 +349,28 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 
 #[cfg(test)]
 mod test {
+    use crate::test::mock_db;
     use crate::{area::Area, report::Report, test::mock_conn, Result};
     use actix_web::test;
     use serde_json::Map;
+    use serde_json::Value;
     use std::ops::Add;
+    use time::macros::date;
     use time::{macros::datetime, Duration, OffsetDateTime};
+
+    #[actix_web::test]
+    async fn insert_async() -> Result<()> {
+        let db = mock_db().await;
+        let area = Area::insert(Area::mock_tags(), &db.conn)?;
+        let date = date!(2023 - 01 - 01);
+        let mut tags = Map::new();
+        tags.insert("key".to_string(), Value::String("value".to_string()));
+        let report = Report::insert_async(area.id, date.clone(), tags.clone(), &db.pool).await?;
+        assert_eq!(report.area_id, area.id);
+        assert_eq!(report.date, date);
+        assert_eq!(report.tags, tags);
+        Ok(())
+    }
 
     #[test]
     async fn insert() -> Result<()> {
