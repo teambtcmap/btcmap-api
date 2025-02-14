@@ -320,7 +320,7 @@ impl Report {
             Some(date) => {
                 let date =
                     OffsetDateTime::parse(date.as_str().unwrap_or(&now_str), &Rfc3339).unwrap();
-                (now - date).whole_days()
+                (self.date - date.date()).whole_days()
             }
             None => 0,
         }
