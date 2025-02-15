@@ -1,5 +1,6 @@
 use super::Element;
 use crate::area::Area;
+use crate::element_issue::model::ElementIssue;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use geo::Contains;
@@ -119,11 +120,62 @@ pub async fn generate_issues_async(
         .await?
 }
 
+impl Issue {
+    fn code(&self) -> String {
+        match self.description.as_str() {
+            "survey:date is not formatted properly" => "invalid_tag_value:survey:date",
+            "check_date is not formatted properly" => "invalid_tag_value:check_date",
+            "check_date:currency:XBT is not formatted properly" => {
+                "invalid_tag_value:check_date:currency:XBT"
+            }
+            "Spelling issue: payment:lighting" => "misspelled_tag_name:payment:lighting",
+            "Spelling issue: payment:lightning_contacless" => {
+                "misspelled_tag_name:lightning_contacless"
+            }
+            "Spelling issue: payment:lighting_contactless" => {
+                "misspelled_tag_name:lighting_contactless"
+            }
+            "Icon is missing" => "missing_icon",
+            "Not verified" => "not_verified",
+            "Out of date" => "outdated",
+            "Soon to be outdated" => "outdated_soon",
+            _ => "unknown",
+        }
+        .to_string()
+    }
+}
+
 pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<GenerateIssuesResult> {
     let started_at = OffsetDateTime::now_utc();
     let mut affected_elements = 0;
     for element in elements {
         let issues = crate::element::service::get_issues(element);
+        let old_issues = ElementIssue::select_by_element_id(element.id, conn)?;
+        for old_issue in &old_issues {
+            let still_exists = issues.iter().find(|it| it.code() == old_issue.code);
+            if old_issue.deleted_at.is_none() && still_exists.is_none() {
+                ElementIssue::set_deleted_at(old_issue.id, Some(OffsetDateTime::now_utc()), conn)?;
+            }
+        }
+        for issue in &issues {
+            let old_issue = old_issues.iter().find(|it| it.code == issue.code());
+            match old_issue {
+                Some(old_issue) => {
+                    match old_issue.deleted_at {
+                        Some(_) => {
+                            ElementIssue::set_deleted_at(old_issue.id, None, conn)?;
+                        }
+                        None => {}
+                    }
+                    if old_issue.severity != issue.severity {
+                        ElementIssue::set_severity(old_issue.id, issue.severity, conn)?;
+                    }
+                }
+                None => {
+                    ElementIssue::insert(element.id, issue.code(), issue.severity, conn)?;
+                }
+            }
+        }
         // No current issues, no saved issues, nothing to do here
         if issues.is_empty() && !element.tags.contains_key("issues") {
             continue;

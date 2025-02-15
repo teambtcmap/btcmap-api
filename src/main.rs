@@ -32,6 +32,7 @@ mod sync;
 use actix_web::web::{scope, Data};
 mod ban;
 use log::Log;
+mod element_issue;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -128,11 +129,17 @@ async fn main() -> Result<()> {
                     ),
             )
             .service(
-                scope("v4").service(
-                    scope("elements")
-                        .service(element::v4::get)
-                        .service(element::v4::get_by_id),
-                ),
+                scope("v4")
+                    .service(
+                        scope("elements")
+                            .service(element::v4::get)
+                            .service(element::v4::get_by_id),
+                    )
+                    .service(
+                        scope("element-issues")
+                            .service(element_issue::v4::get)
+                            .service(element_issue::v4::get_by_id),
+                    ),
             )
     })
     .bind(("127.0.0.1", 8000))?
