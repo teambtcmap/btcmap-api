@@ -40,6 +40,7 @@ pub enum RpcMethod {
     SyncElements,
     GenerateElementIcons,
     GenerateElementCategories,
+    GetElementIssues,
     // area
     AddArea,
     GetArea,
@@ -148,6 +149,7 @@ const PUBLIC_METHODS: &'static [RpcMethod] = &[
     RpcMethod::PaywallAddElementComment,
     RpcMethod::PaywallGetBoostElementQuote,
     RpcMethod::PaywallBoostElement,
+    RpcMethod::GetElementIssues,
     RpcMethod::GetAreaDashboard,
 ];
 
@@ -263,6 +265,10 @@ pub async fn handle(
                 &conf,
             )
             .await?,
+        ),
+        RpcMethod::GetElementIssues => RpcResponse::from(
+            req.id.clone(),
+            super::get_element_issues::run(params(req.params)?, &pool).await?,
         ),
         // area
         RpcMethod::AddArea => RpcResponse::from(
