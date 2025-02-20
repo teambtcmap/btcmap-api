@@ -40,9 +40,11 @@ pub struct GetItem {
 
 impl From<Area> for GetItem {
     fn from(val: Area) -> Self {
+        let mut tags = val.tags;
+        tags.insert("btcmap:id".into(), val.id.into());
         GetItem {
-            id: val.tags["url_alias"].as_str().unwrap().into(),
-            tags: val.tags,
+            id: tags["url_alias"].as_str().unwrap().into(),
+            tags: tags,
             created_at: val.created_at,
             updated_at: val.updated_at,
             deleted_at: val
