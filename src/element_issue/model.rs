@@ -51,6 +51,16 @@ impl ElementIssue {
         ElementIssue::select_by_id(conn.last_insert_rowid(), conn)
     }
 
+    pub async fn select_by_element_id_async(
+        element_id: i64,
+        pool: &Pool,
+    ) -> Result<Vec<ElementIssue>> {
+        pool.get()
+            .await?
+            .interact(move |conn| ElementIssue::select_by_element_id(element_id, conn))
+            .await?
+    }
+
     pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementIssue>> {
         let sql = format!(
             r#"
@@ -93,25 +103,33 @@ impl ElementIssue {
     }
 
     pub async fn select_ordered_by_severity_async(
+        area_id: i64,
         limit: i64,
         offset: i64,
         pool: &Pool,
     ) -> Result<Vec<SelectOrderedBySeverityRes>> {
         pool.get()
             .await?
-            .interact(move |conn| ElementIssue::select_ordered_by_severity(limit, offset, conn))
+            .interact(move |conn| {
+                ElementIssue::select_ordered_by_severity(area_id, limit, offset, conn)
+            })
             .await?
     }
 
     pub fn select_ordered_by_severity(
+        area_id: i64,
         limit: i64,
         offset: i64,
         conn: &Connection,
     ) -> Result<Vec<SelectOrderedBySeverityRes>> {
+        let area_join = match area_id {
+            662 => "".into(),
+            _ => format!("INNER JOIN area_element ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}")
+        };
         let sql = format!(
             r#"
                 SELECT json_extract(e.overpass_data, '$.type'), json_extract(e.overpass_data, '$.id'), json_extract(e.overpass_data, '$.tags.name'), ei.{COL_CODE}
-                FROM {TABLE_NAME} ei join element e ON e.id = ei.{COL_ELEMENT_ID}
+                FROM {TABLE_NAME} ei join element e ON e.id = ei.{COL_ELEMENT_ID} {area_join}
                 WHERE ei.{COL_DELETED_AT} IS NULL
                 ORDER BY ei.{COL_SEVERITY} DESC
                 LIMIT :limit
@@ -142,27 +160,35 @@ impl ElementIssue {
             .map_err(Into::into)
     }
 
-    pub async fn select_count_async(include_deleted: bool, pool: &Pool) -> Result<i64> {
+    pub async fn select_count_async(
+        area_id: i64,
+        include_deleted: bool,
+        pool: &Pool,
+    ) -> Result<i64> {
         pool.get()
             .await?
-            .interact(move |conn| ElementIssue::select_count(include_deleted, conn))
+            .interact(move |conn| ElementIssue::select_count(area_id, include_deleted, conn))
             .await?
     }
 
-    pub fn select_count(include_deleted: bool, conn: &Connection) -> Result<i64> {
+    pub fn select_count(area_id: i64, include_deleted: bool, conn: &Connection) -> Result<i64> {
+        let area_join = match area_id {
+            662 => "".into(),
+            _ => format!("INNER JOIN area_element ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}")
+        };
         let sql = if include_deleted {
             format!(
                 r#"
-                    SELECT count({COL_ID})
-                    FROM {TABLE_NAME};
+                    SELECT count(ei.{COL_ID})
+                    FROM {TABLE_NAME} ei {area_join};
                 "#
             )
         } else {
             format!(
                 r#"
-                    SELECT count({COL_ID})
-                    FROM {TABLE_NAME}
-                    WHERE deleted_at IS NULL;
+                    SELECT count(ei.{COL_ID})
+                    FROM {TABLE_NAME} ei {area_join}
+                    WHERE ei.{COL_DELETED_AT} IS NULL;
                 "#
             )
         };
@@ -186,6 +212,17 @@ impl ElementIssue {
             },
         )?;
         Self::select_by_id(id, conn)
+    }
+
+    pub async fn set_deleted_at_async(
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+        pool: &Pool,
+    ) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| ElementIssue::set_deleted_at(id, deleted_at, conn))
+            .await?
     }
 
     pub fn set_deleted_at(

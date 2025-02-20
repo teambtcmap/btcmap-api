@@ -3,6 +3,7 @@ use crate::{
     conf::Conf,
     discord,
     element::{self, Element},
+    element_issue::model::ElementIssue,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -20,6 +21,16 @@ pub struct Res {
 }
 
 pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let elements = Element::select_all_async(None, &pool).await?;
+    for element in elements {
+        if element.deleted_at.is_some() {
+            let issues = ElementIssue::select_by_element_id_async(element.id, pool).await?;
+            for issue in issues {
+                ElementIssue::set_deleted_at_async(issue.id, Some(OffsetDateTime::now_utc()), pool)
+                    .await?;
+            }
+        }
+    }
     let elements = Element::select_all_except_deleted_async(&pool).await?;
     let res = element::service::generate_issues_async(elements, &pool).await?;
     discord::post_message(

@@ -1,6 +1,7 @@
 use crate::area_element::service::Diff;
 use crate::conf::Conf;
 use crate::element::{self, Element};
+use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
@@ -157,7 +158,7 @@ pub async fn sync_deleted_elements(
 fn mark_element_as_deleted(
     element: &Element,
     fresh_osm_element: &OsmElement,
-    conn: &mut Connection,
+    conn: &Connection,
 ) -> Result<Event> {
     let mut event_tags: HashMap<String, Value> = HashMap::new();
     event_tags.insert(
@@ -169,11 +170,13 @@ fn mark_element_as_deleted(
     if element.tags.contains_key("areas") {
         event_tags.insert("areas".into(), element.tags["areas"].clone());
     }
-    let sp = conn.savepoint()?;
-    element.set_deleted_at(Some(OffsetDateTime::now_utc()), &sp)?;
-    let event = Event::insert(fresh_osm_element.uid, element.id, "delete", &sp)?;
-    let event = event.patch_tags(&event_tags, &sp)?;
-    sp.commit()?;
+    element.set_deleted_at(Some(OffsetDateTime::now_utc()), conn)?;
+    let element_issues = ElementIssue::select_by_element_id(element.id, conn)?;
+    for issue in element_issues {
+        ElementIssue::set_deleted_at(issue.id, Some(OffsetDateTime::now_utc()), conn)?;
+    }
+    let event = Event::insert(fresh_osm_element.uid, element.id, "delete", conn)?;
+    let event = event.patch_tags(&event_tags, conn)?;
     Ok(event)
 }
 

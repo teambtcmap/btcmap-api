@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct Params {
+    pub area_id: i64,
     pub limit: i64,
     pub offset: i64,
 }
@@ -37,9 +38,14 @@ impl From<SelectOrderedBySeverityRes> for ResItem {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let total_issues = ElementIssue::select_count_async(false, pool).await?;
-    let requested_issues =
-        ElementIssue::select_ordered_by_severity_async(params.limit, params.offset, pool).await?;
+    let total_issues = ElementIssue::select_count_async(params.area_id, false, pool).await?;
+    let requested_issues = ElementIssue::select_ordered_by_severity_async(
+        params.area_id,
+        params.limit,
+        params.offset,
+        pool,
+    )
+    .await?;
     Ok(Res {
         total_issues,
         requested_issues: requested_issues.into_iter().map(Into::into).collect(),
