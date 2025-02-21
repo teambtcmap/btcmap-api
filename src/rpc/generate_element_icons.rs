@@ -1163,6 +1163,10 @@ impl OverpassElement {
             icon_id = "museum"
         }
 
+        if amenity == "dancing_school" {
+            icon_id = "nightlife"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
