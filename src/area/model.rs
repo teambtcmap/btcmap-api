@@ -127,18 +127,18 @@ impl Area {
     pub async fn select_by_search_query_async(
         search_query: impl Into<String>,
         pool: &Pool,
-    ) -> Result<Vec<Area>> {
+    ) -> Result<Vec<Self>> {
         let search_query = search_query.into();
         pool.get()
             .await?
-            .interact(move |conn| Area::select_by_search_query(&search_query, conn))
+            .interact(move |conn| Self::select_by_search_query(&search_query, conn))
             .await?
     }
 
     pub fn select_by_search_query(
         search_query: impl Into<String>,
         conn: &Connection,
-    ) -> Result<Vec<Area>> {
+    ) -> Result<Vec<Self>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}

@@ -1,4 +1,4 @@
-use crate::{area::Area, Result};
+use crate::{area::Area, element::Element, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -15,8 +15,8 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
-    let areas = Area::select_by_search_query_async(params.query, &pool).await?;
-    let res = areas
+    let areas = Area::select_by_search_query_async(&params.query, &pool).await?;
+    let mut res_areas: Vec<Res> = areas
         .into_iter()
         .map(|it| Res {
             name: it.name(),
@@ -24,5 +24,17 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
             id: it.id,
         })
         .collect();
+    let elements = Element::select_by_search_query_async(params.query, &pool).await?;
+    let mut res_elements: Vec<Res> = elements
+        .into_iter()
+        .map(|it| Res {
+            name: it.name(),
+            r#type: "element".into(),
+            id: it.id,
+        })
+        .collect();
+    let mut res = vec![];
+    res.append(&mut res_areas);
+    res.append(&mut res_elements);
     Ok(res)
 }
