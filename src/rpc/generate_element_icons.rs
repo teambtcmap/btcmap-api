@@ -1355,6 +1355,10 @@ impl OverpassElement {
             icon_id = "bedroom_baby"
         }
 
+        if sport == "dance" {
+            icon_id = "nightlife"
+        }
+
         if craft == "blacksmith" {
             icon_id = "hardware"
         }
