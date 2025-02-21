@@ -1167,6 +1167,10 @@ impl OverpassElement {
             icon_id = "fitness_center"
         }
 
+        if leisure == "stadium" {
+            icon_id = "stadium"
+        }
+
         if leisure == "hackerspace" {
             icon_id = "computer"
         }
