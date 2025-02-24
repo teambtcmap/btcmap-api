@@ -1,20 +1,76 @@
 use crate::Result;
 use deadpool_sqlite::Pool;
-use rusqlite::{named_params, Connection, Row};
+use rusqlite::{params, Connection, Row};
 
-#[derive(Debug, PartialEq, Eq)]
+const TABLE_NAME: &str = "admin";
+
+enum Columns {
+    Id,
+    Name,
+    Password,
+    AllowedActions,
+    CreatedAt,
+    UpdatedAt,
+    DeletedAt,
+}
+
+impl Columns {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Columns::Id => "id",
+            Columns::Name => "name",
+            Columns::Password => "password",
+            Columns::AllowedActions => "allowed_actions",
+            Columns::CreatedAt => "created_at",
+            Columns::UpdatedAt => "updated_at",
+            Columns::DeletedAt => "deleted_at",
+        }
+    }
+
+    fn projection_full() -> String {
+        vec![
+            Self::Id,
+            Self::Name,
+            Self::Password,
+            Self::AllowedActions,
+            Self::CreatedAt,
+            Self::UpdatedAt,
+            Self::DeletedAt,
+        ]
+        .iter()
+        .map(Self::as_str)
+        .collect::<Vec<_>>()
+        .join(", ")
+    }
+
+    fn mapper_full() -> fn(&Row) -> rusqlite::Result<Admin> {
+        |row: &Row| -> rusqlite::Result<Admin> {
+            Ok(Admin {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                password: row.get(2)?,
+                allowed_actions: serde_json::from_value(row.get(3)?).unwrap_or_default(),
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+                deleted_at: row.get(6)?,
+            })
+        }
+    }
+}
+
 pub struct Admin {
     pub id: i64,
     pub name: String,
+    #[allow(dead_code)]
+    pub password: String,
     pub allowed_actions: Vec<String>,
+    #[allow(dead_code)]
+    pub created_at: String,
+    #[allow(dead_code)]
+    pub updated_at: String,
+    #[allow(dead_code)]
+    pub deleted_at: Option<String>,
 }
-
-const TABLE_NAME: &str = "admin";
-const COL_ID: &str = "id";
-const COL_NAME: &str = "name";
-const COL_PASSWORD: &str = "password";
-const COL_ALLOWED_ACTIONS: &str = "allowed_actions";
-const MAPPER_PROJECTION: &str = "id, name, allowed_actions";
 
 impl Admin {
     pub async fn insert_async(
@@ -26,46 +82,36 @@ impl Admin {
         let password = password.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::insert(name, password, conn))
+            .interact(move |conn| Admin::insert(&name, &password, conn))
             .await?
     }
 
-    pub fn insert(
-        name: impl Into<String>,
-        password: impl Into<String>,
-        conn: &Connection,
-    ) -> Result<Admin> {
-        let password = password.into();
+    pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<Admin> {
         let sql = format!(
             r#"
-                INSERT INTO {TABLE_NAME} (
-                    {COL_NAME},
-                    {COL_PASSWORD}
-                ) VALUES (
-                    :{COL_NAME},
-                    :{COL_PASSWORD}
-                );
-            "#
+                INSERT INTO {table} ({name}, {password})
+                VALUES (?1, ?2)
+            "#,
+            table = TABLE_NAME,
+            name = Columns::Name.as_str(),
+            password = Columns::Password.as_str(),
         );
-        conn.execute(
-            &sql,
-            named_params! {
-                ":name": name.into(),
-                ":password": &password,
-            },
-        )?;
-        Admin::select_by_password(&password, conn)
+        conn.execute(&sql, params![name, password])?;
+        Admin::select_by_id(conn.last_insert_rowid(), conn)
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Admin> {
         let sql = format!(
             r#"
-                SELECT {MAPPER_PROJECTION}
-                FROM {TABLE_NAME}
-                WHERE {COL_ID} = :{COL_ID};
-            "#
+                SELECT {projection}
+                FROM {table}
+                WHERE {id} = ?1
+            "#,
+            projection = Columns::projection_full(),
+            table = TABLE_NAME,
+            id = Columns::Id.as_str(),
         );
-        conn.query_row(&sql, named_params! { ":id": id }, mapper())
+        conn.query_row(&sql, params![id], Columns::mapper_full())
             .map_err(Into::into)
     }
 
@@ -73,19 +119,22 @@ impl Admin {
         let name = name.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::select_by_name(name, conn))
+            .interact(move |conn| Admin::select_by_name(&name, conn))
             .await?
     }
 
-    pub fn select_by_name(name: impl Into<String>, conn: &Connection) -> Result<Admin> {
+    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Admin> {
         let sql = format!(
             r#"
-                SELECT {MAPPER_PROJECTION}
-                FROM {TABLE_NAME}
-                WHERE {COL_NAME} = :{COL_NAME};
-            "#
+                SELECT {projection}
+                FROM {table}
+                WHERE {name} = ?1
+            "#,
+            projection = Columns::projection_full(),
+            table = TABLE_NAME,
+            name = Columns::Name.as_str(),
         );
-        conn.query_row(&sql, named_params! { ":name": name.into() }, mapper())
+        conn.query_row(&sql, params![name], Columns::mapper_full())
             .map_err(Into::into)
     }
 
@@ -96,24 +145,23 @@ impl Admin {
         let password = password.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::select_by_password(password, conn))
+            .interact(move |conn| Admin::select_by_password(&password, conn))
             .await?
     }
 
-    pub fn select_by_password(password: impl Into<String>, conn: &Connection) -> Result<Admin> {
+    pub fn select_by_password(password: &str, conn: &Connection) -> Result<Admin> {
         let sql = format!(
             r#"
-                SELECT {MAPPER_PROJECTION}
-                FROM {TABLE_NAME}
-                WHERE {COL_PASSWORD} = :{COL_PASSWORD}
-            "#
+                SELECT {projection}
+                FROM {table}
+                WHERE {password} = ?1
+            "#,
+            projection = Columns::projection_full(),
+            table = TABLE_NAME,
+            password = Columns::Password.as_str(),
         );
-        conn.query_row(
-            &sql,
-            named_params! { ":password": password.into() },
-            mapper(),
-        )
-        .map_err(Into::into)
+        conn.query_row(&sql, params![password], Columns::mapper_full())
+            .map_err(Into::into)
     }
 
     pub async fn update_allowed_actions_async(
@@ -129,35 +177,25 @@ impl Admin {
     }
 
     pub fn update_allowed_actions(
-        admin_id: i64,
+        id: i64,
         allowed_actions: &[String],
         conn: &Connection,
     ) -> Result<Admin> {
         let sql = format!(
             r#"
-                UPDATE {TABLE_NAME}
-                SET {COL_ALLOWED_ACTIONS} = json(:{COL_ALLOWED_ACTIONS})
-                WHERE {COL_ID} = :{COL_ID}
-            "#
+                UPDATE {table}
+                SET {allowed_actions} = json(?1)
+                WHERE {id} = ?2
+            "#,
+            table = TABLE_NAME,
+            allowed_actions = Columns::AllowedActions.as_str(),
+            id = Columns::Id.as_str(),
         );
         conn.execute(
             &sql,
-            named_params! {
-                ":id": admin_id,
-                ":allowed_actions": serde_json::to_string(allowed_actions)?,
-            },
+            params![serde_json::to_string(allowed_actions)?, id],
         )?;
-        Admin::select_by_id(admin_id, conn)
-    }
-}
-
-const fn mapper() -> fn(&Row) -> rusqlite::Result<Admin> {
-    |row: &Row| -> rusqlite::Result<Admin> {
-        Ok(Admin {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            allowed_actions: serde_json::from_value(row.get(2)?).unwrap_or_default(),
-        })
+        Admin::select_by_id(id, conn)
     }
 }
 
@@ -170,7 +208,10 @@ mod test {
     fn insert() -> Result<()> {
         let conn = mock_conn();
         let admin = Admin::insert("name", "pwd", &conn)?;
-        assert_eq!(admin, Admin::select_by_id(1, &conn)?);
+        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+        assert_eq!(admin.id, res_admin.id);
+        assert_eq!(admin.name, res_admin.name);
+        assert_eq!(admin.password, res_admin.password);
         Ok(())
     }
 
@@ -178,25 +219,28 @@ mod test {
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
         let admin = Admin::insert("name", "pwd", &conn)?;
-        assert_eq!(admin, Admin::select_by_id(1, &conn)?);
+        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+        assert_eq!(admin.id, res_admin.id);
         Ok(())
     }
 
     #[test]
     fn select_by_name() -> Result<()> {
         let conn = mock_conn();
-        let name = "name";
-        let admin = Admin::insert(name, "pwd", &conn)?;
-        assert_eq!(admin, Admin::select_by_name(name, &conn)?);
+        let admin = Admin::insert("name", "pwd", &conn)?;
+        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+        assert_eq!(admin.id, res_admin.id);
+        assert_eq!(admin.name, res_admin.name);
         Ok(())
     }
 
     #[test]
     fn select_by_password() -> Result<()> {
         let conn = mock_conn();
-        let password = "pwd";
-        let admin = Admin::insert("name", password, &conn)?;
-        assert_eq!(admin, Admin::select_by_password(password, &conn)?);
+        let admin = Admin::insert("name", "pwd", &conn)?;
+        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+        assert_eq!(admin.id, res_admin.id);
+        assert_eq!(admin.password, res_admin.password);
         Ok(())
     }
 
