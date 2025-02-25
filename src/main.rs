@@ -33,6 +33,7 @@ use actix_web::web::{scope, Data};
 mod ban;
 use log::Log;
 mod element_issue;
+mod og;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -50,6 +51,7 @@ async fn main() -> Result<()> {
             .wrap(from_fn(ban::check_if_banned))
             .app_data(Data::new(pool.clone()))
             .app_data(Data::new(conf.clone()))
+            .service(og::get_element)
             .service(
                 scope("rpc")
                     .wrap(ErrorHandlers::new().default_handler(rpc::handler::handle_rpc_error))

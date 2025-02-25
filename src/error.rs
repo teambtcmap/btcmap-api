@@ -21,6 +21,7 @@ pub enum Error {
     Parse(time::error::Parse),
     Decode(base64::DecodeError),
     GeoJson(geojson::Error),
+    Staticmap(staticmap::Error),
 }
 
 impl Display for Error {
@@ -44,6 +45,7 @@ impl Display for Error {
             Error::DeadpoolInteract(err) => err.fmt(f),
             Error::DeadpoolConfig(err) => err.fmt(f),
             Error::DeadpoolBuild(err) => err.fmt(f),
+            Error::Staticmap(err) => err.fmt(f),
         }
     }
 }
@@ -129,6 +131,12 @@ impl From<base64::DecodeError> for Error {
 impl From<geojson::Error> for Error {
     fn from(error: geojson::Error) -> Self {
         Error::GeoJson(error)
+    }
+}
+
+impl From<staticmap::Error> for Error {
+    fn from(error: staticmap::Error) -> Self {
+        Error::Staticmap(error)
     }
 }
 
