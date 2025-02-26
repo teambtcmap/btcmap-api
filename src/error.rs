@@ -22,6 +22,7 @@ pub enum Error {
     Decode(base64::DecodeError),
     GeoJson(geojson::Error),
     Staticmap(staticmap::Error),
+    Blocking(actix_web::error::BlockingError),
 }
 
 impl Display for Error {
@@ -46,6 +47,7 @@ impl Display for Error {
             Error::DeadpoolConfig(err) => err.fmt(f),
             Error::DeadpoolBuild(err) => err.fmt(f),
             Error::Staticmap(err) => err.fmt(f),
+            Error::Blocking(err) => err.fmt(f),
         }
     }
 }
@@ -137,6 +139,12 @@ impl From<geojson::Error> for Error {
 impl From<staticmap::Error> for Error {
     fn from(error: staticmap::Error) -> Self {
         Error::Staticmap(error)
+    }
+}
+
+impl From<actix_web::error::BlockingError> for Error {
+    fn from(error: actix_web::error::BlockingError) -> Self {
+        Error::Blocking(error)
     }
 }
 

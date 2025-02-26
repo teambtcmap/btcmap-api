@@ -191,10 +191,7 @@ impl Admin {
             allowed_actions = Columns::AllowedActions.as_str(),
             id = Columns::Id.as_str(),
         );
-        conn.execute(
-            &sql,
-            params![serde_json::to_string(allowed_actions)?, id],
-        )?;
+        conn.execute(&sql, params![serde_json::to_string(allowed_actions)?, id])?;
         Admin::select_by_id(id, conn)
     }
 }
