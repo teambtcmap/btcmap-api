@@ -16,7 +16,7 @@ This document describes the available RPC methods for interacting with areas.
 
 Retrieves areas based on query parameters.
 
-**Required Role**: None
+**Required Admin Action**: None
 
 #### Request
 
@@ -62,7 +62,7 @@ Retrieves areas based on query parameters.
 
 Retrieves a specific area by its ID.
 
-**Required Role**: None
+**Required Admin Action**: None
 
 #### Request
 
@@ -105,7 +105,7 @@ Retrieves a specific area by its ID.
 
 Retrieves elements within a specific area.
 
-**Required Role**: None
+**Required Admin Action**: None
 
 #### Request
 
@@ -148,7 +148,7 @@ Retrieves elements within a specific area.
 
 Adds a new geographic area.
 
-**Required Role**: `area:add`
+**Required Admin Action**: `area:add`
 
 #### Request
 
@@ -190,7 +190,7 @@ Adds a new geographic area.
 
 Updates an existing area.
 
-**Required Role**: `area:edit`
+**Required Admin Action**: `area:edit`
 
 #### Request
 
@@ -231,7 +231,7 @@ Updates an existing area.
 
 Removes an area from the database.
 
-**Required Role**: `area:remove`
+**Required Admin Action**: `area:remove`
 
 #### Request
 

@@ -1,4 +1,3 @@
-
 # User Methods
 
 This document describes the available RPC methods for interacting with users.
@@ -18,7 +17,7 @@ This document describes the available RPC methods for interacting with users.
 
 Retrieves users based on query parameters.
 
-**Required Role**: None
+**Required Admin Action**: None
 
 #### Request
 
@@ -56,7 +55,7 @@ Retrieves users based on query parameters.
 
 Retrieves a specific user by their ID.
 
-**Required Role**: None
+**Required Admin Action**: None
 
 #### Request
 
@@ -91,7 +90,7 @@ Retrieves a specific user by their ID.
 
 Retrieves the most active users on the platform.
 
-**Required Role**: None
+**Required Admin Action**: None
 
 #### Request
 
@@ -130,7 +129,7 @@ Retrieves the most active users on the platform.
 
 Bans a user from the platform.
 
-**Required Role**: `user:ban`
+**Required Admin Action**: `user:ban`
 
 #### Request
 
@@ -165,7 +164,7 @@ Bans a user from the platform.
 
 Removes a ban from a user.
 
-**Required Role**: `user:unban`
+**Required Admin Action**: `user:unban`
 
 #### Request
 
@@ -191,4 +190,3 @@ Removes a ban from a user.
   },
   "id": 1
 }
-```

@@ -46,7 +46,7 @@ Retrieves an invoice by its ID.
 
 ## GenerateInvoice
 
-Generates a new invoice. Requires admin authentication.
+Generates a new invoice. 
 
 ### Request
 

@@ -25,7 +25,7 @@ This document describes the available RPC methods for interacting with elements.
 
 Retrieves a specific element by its ID.
 
-**Required Role**: None
+**Required Admin Action**: None (publicly accessible)
 
 ### Request
 
@@ -65,7 +65,7 @@ Retrieves a specific element by its ID.
 
 Adds a tag to an element.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 
@@ -90,7 +90,7 @@ Adds a tag to an element.
 
 Removes a tag from an element.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 
@@ -115,7 +115,7 @@ Removes a tag from an element.
 
 Get elements that have been boosted
 
-**Required Role**: None
+**Required Admin Action**: None (publicly accessible)
 
 ### Request
 
@@ -156,7 +156,7 @@ Get elements that have been boosted
 
 Boosts an element.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 
@@ -182,7 +182,7 @@ Boosts an element.
 
 Get a quote for boosting an element
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 
@@ -199,7 +199,7 @@ Get a quote for boosting an element
 
 Boosts an element through the paywall system.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 
@@ -226,7 +226,7 @@ Boosts an element through the paywall system.
 
 Adds a comment to an element.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 
@@ -253,7 +253,7 @@ Adds a comment to an element.
 
 Get a quote for adding a comment
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**: (Needs definition)
 
@@ -264,7 +264,7 @@ Get a quote for adding a comment
 
 Adds a comment to an element through the paywall system.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 
@@ -292,7 +292,7 @@ Adds a comment to an element through the paywall system.
 
 Generates issues for elements.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 None
@@ -313,7 +313,7 @@ None
 
 Synchronizes elements from an external source.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 None
@@ -334,7 +334,7 @@ None
 
 Generates icons for elements.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 None
@@ -355,7 +355,7 @@ None
 
 Generates categories for elements.
 
-**Required Role**: `element_admin`
+**Required Admin Action**: `element_admin`
 
 **Parameters**:
 None
@@ -376,7 +376,7 @@ None
 
 Get issues associated with elements.
 
-**Required Role**: None
+**Required Admin Action**: None (publicly accessible)
 
 ### Request
 

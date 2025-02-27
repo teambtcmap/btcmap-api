@@ -1,7 +1,7 @@
-
 # Admin RPC Methods
 
-This page documents all RPC methods related to administrative tasks. For details on which admin roles can use these methods, see the [Admin Roles and Permissions](admin-roles.md) documentation.
+This page documents all RPC methods related to administrative tasks.  All users of these RPC calls are considered Admins and authorization is handled via the `allowed_actions` parameter.
+
 
 ## Available Methods
 
@@ -11,7 +11,7 @@ This page documents all RPC methods related to administrative tasks. For details
 
 ## add_admin
 
-Adds a new admin. Requires `super_admin` role.
+Adds a new admin.  Requires `allowed_actions` including "add_admin".
 
 ### Request
 
@@ -42,7 +42,7 @@ Adds a new admin. Requires `super_admin` role.
 
 ## add_admin_action
 
-Records an admin action. Requires `super_admin`, `moderator`, `content_manager`, or `reviewer` role.
+Records an admin action. Requires `allowed_actions` including "add_admin_action".
 
 ### Request
 
@@ -73,7 +73,7 @@ Records an admin action. Requires `super_admin`, `moderator`, `content_manager`,
 
 ## remove_admin_action
 
-Removes an admin action. Requires `super_admin` role.
+Removes an admin action. Requires `allowed_actions` including "remove_admin_action".
 
 ### Request
 
@@ -98,4 +98,3 @@ Removes an admin action. Requires `super_admin` role.
   },
   "id": 1
 }
-```

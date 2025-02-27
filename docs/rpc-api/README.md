@@ -1,4 +1,3 @@
-
 # BTCMap RPC API
 
 The RPC API provides a JSON-RPC interface for interacting with BTCMap services.
@@ -14,10 +13,9 @@ The RPC API provides a JSON-RPC interface for interacting with BTCMap services.
 
 ## Authentication
 
-Most RPC methods require authentication with an admin password. This can be provided either:
+Most RPC methods require appropriate admin authentication and authorization. Authentication is handled via an API key that must be included in the request headers.
 
-1. In the request parameters as `password`
-2. As a `Bearer` token in the `Authorization` header
+Admins must have the appropriate `allowed_actions` set for the specific methods they want to call. Public methods can be called without authentication.
 
 ## Request Format
 
@@ -61,4 +59,3 @@ Or in case of an error:
   },
   "id": 1
 }
-```
