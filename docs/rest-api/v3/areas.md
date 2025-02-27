@@ -1,79 +1,95 @@
 
 # Areas API (v3)
 
-Endpoints for retrieving area data in the v3 API. This version provides enhanced filtering and more detailed area information.
+The Areas API allows you to retrieve information about geographic areas defined in the BTCMap platform.
 
-## Get Areas
+## Endpoints
 
-Retrieves a list of areas with enhanced filtering.
+### Get Areas List
 
 ```
 GET /v3/areas
 ```
 
-### Query Parameters
+Retrieves a list of geographic areas that have been updated since a specific time.
 
-| Parameter      | Type   | Description |
-|----------------|--------|-------------|
-| updated_since  | string | Return areas updated since this timestamp (RFC3339 format) |
-| limit          | int    | Maximum number of areas to return |
+#### Query Parameters
 
-### Example Response
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `updated_since` | ISO 8601 datetime | **Required**. Filter areas updated since this time (RFC3339 format). |
+| `limit` | Integer | **Required**. Limit the number of areas returned. |
+
+#### Response
 
 ```json
 [
   {
-    "id": 1,
-    "name": "Example Area",
-    "url_alias": "example-area",
-    "bounds": {
-      "min_lat": 51.4,
-      "min_lon": -0.2,
-      "max_lat": 51.6,
-      "max_lon": -0.1
-    },
+    "id": 123,
+    "name": "New York City",
+    "url_alias": "nyc",
+    "osm_id": 175905,
+    "osm_type": "relation",
     "tags": {
-      "featured": true
+      "name": "New York City",
+      "place": "city"
     },
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-01T00:00:00Z",
-    "deleted_at": null
+    "bounds": {
+      "min_lon": -74.25909,
+      "min_lat": 40.477399,
+      "max_lon": -73.700272,
+      "max_lat": 40.916178
+    },
+    "updated_at": "2023-01-15T00:00:00Z"
   }
 ]
 ```
 
-## Get Area by ID
+#### Example Request
 
-Retrieves a specific area by its ID with enhanced details.
+```
+GET /v3/areas?updated_since=2023-01-01T00:00:00Z&limit=10
+```
+
+### Get Area by ID
 
 ```
 GET /v3/areas/{id}
 ```
 
-### Path Parameters
+Retrieves a specific geographic area by its ID.
+
+#### Path Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| id        | int  | The ID of the area |
+| `id` | Integer | **Required**. The area ID |
 
-### Example Response
+#### Response
 
 ```json
 {
-  "id": 1,
-  "name": "Example Area",
-  "url_alias": "example-area",
-  "bounds": {
-    "min_lat": 51.4,
-    "min_lon": -0.2,
-    "max_lat": 51.6,
-    "max_lon": -0.1
-  },
+  "id": 123,
+  "name": "New York City",
+  "url_alias": "nyc",
+  "osm_id": 175905,
+  "osm_type": "relation",
   "tags": {
-    "featured": true
+    "name": "New York City",
+    "place": "city"
   },
-  "created_at": "2023-01-01T00:00:00Z",
-  "updated_at": "2023-01-01T00:00:00Z",
-  "deleted_at": null
+  "bounds": {
+    "min_lon": -74.25909,
+    "min_lat": 40.477399,
+    "max_lon": -73.700272,
+    "max_lat": 40.916178
+  },
+  "updated_at": "2023-01-15T00:00:00Z"
 }
+```
+
+#### Example Request
+
+```
+GET /v3/areas/123
 ```

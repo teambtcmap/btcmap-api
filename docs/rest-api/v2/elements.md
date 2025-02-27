@@ -1,72 +1,89 @@
 
 # Elements API (v2)
 
-Endpoints for retrieving element data in the v2 API.
+The Elements API allows you to retrieve information about map elements (businesses, ATMs, etc.) that support Bitcoin.
 
-## Get Elements
+## Endpoints
 
-Retrieves a list of elements.
+### Get Elements List
 
 ```
 GET /v2/elements
 ```
 
-### Query Parameters
+Retrieves a list of elements that have been updated since a specific time.
+
+#### Query Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| limit     | int  | Maximum number of elements to return |
-| offset    | int  | Number of elements to skip |
+| `updated_since` | ISO 8601 datetime | **Required**. Filter elements updated since this time (RFC3339 format). |
+| `limit` | Integer | **Required**. Limit the number of elements returned. |
 
-### Example Response
+#### Response
 
 ```json
-{
-  "elements": [
-    {
-      "id": "1",
-      "name": "Example Element",
-      "description": "Description of the element",
-      "tags": ["tag1", "tag2"],
-      "location": {
-        "lat": 51.5074,
-        "lon": -0.1278
-      },
-      "created_at": "2023-01-01T00:00:00Z",
-      "updated_at": "2023-01-01T00:00:00Z"
-    }
-  ],
-  "total": 100
-}
+[
+  {
+    "id": 123456,
+    "osm_type": "node",
+    "osm_id": 123456,
+    "geolocation": {
+      "latitude": 40.7128,
+      "longitude": -74.0060
+    },
+    "tags": {
+      "name": "Bitcoin Coffee",
+      "amenity": "cafe",
+      "currency:XBT": "yes"
+    },
+    "updated_at": "2023-01-15T00:00:00Z"
+  }
+]
 ```
 
-## Get Element by ID
+#### Example Request
 
-Retrieves a specific element by its ID.
+```
+GET /v2/elements?updated_since=2023-01-01T00:00:00Z&limit=10
+```
+
+### Get Element by ID
 
 ```
 GET /v2/elements/{id}
 ```
 
-### Path Parameters
+Retrieves a specific element by its ID.
+
+#### Path Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| id        | string | The ID of the element |
+| `id` | Integer | **Required**. The element ID |
 
-### Example Response
+#### Response
 
 ```json
 {
-  "id": "1",
-  "name": "Example Element",
-  "description": "Description of the element",
-  "tags": ["tag1", "tag2"],
-  "location": {
-    "lat": 51.5074,
-    "lon": -0.1278
+  "id": 123456,
+  "osm_type": "node",
+  "osm_id": 123456,
+  "geolocation": {
+    "latitude": 40.7128,
+    "longitude": -74.0060
   },
-  "created_at": "2023-01-01T00:00:00Z",
-  "updated_at": "2023-01-01T00:00:00Z"
+  "tags": {
+    "name": "Bitcoin Coffee",
+    "amenity": "cafe",
+    "currency:XBT": "yes"
+  },
+  "updated_at": "2023-01-15T00:00:00Z"
 }
+```
+
+#### Example Request
+
+```
+GET /v2/elements/123456
 ```

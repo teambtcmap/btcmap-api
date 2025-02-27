@@ -1,99 +1,103 @@
 
 # Elements API (v4)
 
-Endpoints for retrieving element data in the v4 API. This version provides the most advanced filtering and query capabilities.
+The Elements API allows you to retrieve information about map elements (businesses, ATMs, etc.) that support Bitcoin.
 
-## Get Elements
+## Endpoints
 
-Retrieves a list of elements with advanced filtering options.
+### Get Elements List
 
 ```
 GET /v4/elements
 ```
 
-### Query Parameters
+Retrieves a list of elements that have been updated since a specific time.
 
-| Parameter      | Type   | Description |
-|----------------|--------|-------------|
-| updated_since  | string | Return elements updated since this timestamp (RFC3339 format) |
-| limit          | int    | Maximum number of elements to return |
-| tags           | string | Comma-separated list of tags to filter by |
-| bbox           | string | Bounding box to filter by (format: minLon,minLat,maxLon,maxLat) |
-| status         | string | Filter by element status (active, deleted, all) |
-| has_issues     | bool   | Filter elements that have open issues |
+#### Query Parameters
 
-### Example Response
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `updated_since` | ISO 8601 datetime | **Required**. Filter elements updated since this time (RFC3339 format). |
+| `limit` | Integer | **Required**. Limit the number of elements returned. |
+
+#### Response
 
 ```json
 [
   {
-    "id": 1,
+    "id": 123456,
     "osm_type": "node",
-    "osm_id": 123456789,
-    "tags": {
-      "name": "Example Element",
-      "amenity": "cafe",
-      "currency:BTC": "yes"
+    "osm_id": 123456,
+    "geolocation": {
+      "latitude": 40.7128,
+      "longitude": -74.0060
     },
-    "lon": -0.1278,
-    "lat": 51.5074,
-    "updated_at": "2023-01-01T00:00:00Z",
-    "deleted_at": null,
-    "issues_count": 0,
-    "last_verified": "2023-01-15T00:00:00Z"
+    "tags": {
+      "name": "Bitcoin Coffee",
+      "amenity": "cafe",
+      "currency:XBT": "yes"
+    },
+    "issues": [
+      {
+        "id": 1,
+        "type": "closed",
+        "created_at": "2023-02-10T12:00:00Z"
+      }
+    ],
+    "updated_at": "2023-01-15T00:00:00Z"
   }
 ]
 ```
 
-## Get Element by ID
+#### Example Request
 
-Retrieves a specific element by its ID with comprehensive details.
+```
+GET /v4/elements?updated_since=2023-01-01T00:00:00Z&limit=10
+```
+
+### Get Element by ID
 
 ```
 GET /v4/elements/{id}
 ```
 
-### Path Parameters
+Retrieves a specific element by its ID.
+
+#### Path Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| id        | int  | The ID of the element |
+| `id` | Integer | **Required**. The element ID |
 
-### Example Response
+#### Response
 
 ```json
 {
-  "id": 1,
+  "id": 123456,
   "osm_type": "node",
-  "osm_id": 123456789,
-  "tags": {
-    "name": "Example Element",
-    "amenity": "cafe",
-    "currency:BTC": "yes"
+  "osm_id": 123456,
+  "geolocation": {
+    "latitude": 40.7128,
+    "longitude": -74.0060
   },
-  "lon": -0.1278,
-  "lat": 51.5074,
-  "updated_at": "2023-01-01T00:00:00Z",
-  "deleted_at": null,
+  "tags": {
+    "name": "Bitcoin Coffee",
+    "amenity": "cafe",
+    "currency:XBT": "yes"
+  },
   "issues": [
     {
       "id": 1,
-      "type": "verification_needed",
-      "created_at": "2023-01-10T00:00:00Z"
+      "type": "closed",
+      "created_at": "2023-02-10T12:00:00Z"
     }
   ],
-  "history": [
-    {
-      "timestamp": "2022-12-01T00:00:00Z",
-      "user_id": 123,
-      "change_type": "created"
-    },
-    {
-      "timestamp": "2023-01-01T00:00:00Z",
-      "user_id": 456,
-      "change_type": "updated"
-    }
-  ],
-  "last_verified": "2023-01-15T00:00:00Z"
+  "updated_at": "2023-01-15T00:00:00Z"
 }
+```
+
+#### Example Request
+
+```
+GET /v4/elements/123456
 ```

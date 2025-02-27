@@ -15,10 +15,10 @@ Retrieves a list of users that have been updated since a specific time.
 
 #### Query Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `updated_since` | ISO 8601 datetime | **Yes** | Filter users updated since this time (RFC3339 format) |
-| `limit` | Integer | **Yes** | Limit the number of users returned |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `updated_since` | ISO 8601 datetime | **Required**. Filter users updated since this time (RFC3339 format). |
+| `limit` | Integer | **Required**. Limit the number of users returned. |
 
 #### Response
 
@@ -39,6 +39,12 @@ Retrieves a list of users that have been updated since a specific time.
 ]
 ```
 
+#### Example Request
+
+```
+GET /v3/users?updated_since=2023-01-01T00:00:00Z&limit=10
+```
+
 ### Get User by ID
 
 ```
@@ -51,7 +57,7 @@ Retrieves a specific user by their ID.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `id` | Integer | The user ID |
+| `id` | Integer | **Required**. The user ID |
 
 #### Response
 
@@ -70,15 +76,7 @@ Retrieves a specific user by their ID.
 }
 ```
 
-## Examples
-
-### Get all users updated since January 2023 with a limit of 10
-
-```
-GET /v3/users?updated_since=2023-01-01T00:00:00Z&limit=10
-```
-
-### Get a specific user
+#### Example Request
 
 ```
 GET /v3/users/123

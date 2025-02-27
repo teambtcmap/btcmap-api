@@ -1,66 +1,30 @@
 # Element Methods
 
-Methods for managing map elements in the BTCMap platform.
+This document describes the available RPC methods for interacting with elements (locations that accept Bitcoin).
 
-## Public Methods
+## Methods
 
-### get_element
+### get_elements
 
-Retrieves a specific element by its ID.
+Retrieves elements based on query parameters.
 
-**Required Role**: None (Public)
+**Required Role**: None
 
-**Parameters**:
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `id` | String | Yes | The element ID |
-
-**Response**:
+#### Request
 
 ```json
 {
-  "id": "123",
-  "type": "node",
-  "tags": {
-    "name": "Example Shop",
-    "amenity": "cafe"
+  "jsonrpc": "2.0",
+  "method": "get_elements",
+  "params": {
+    "updated_since": "2023-01-01T00:00:00Z",
+    "limit": 10
   },
-  "geometry": {
-    "type": "Point",
-    "coordinates": [13.37, 42.0]
-  },
-  "updated_at": "2023-01-15T00:00:00Z"
+  "id": 1
 }
 ```
 
-### get_elements_in_area
-
-Retrieves elements within a specified geographic area.
-
-**Required Role**: None (Public)
-
-**Parameters**:
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `area_id` | String or Integer | Yes | The area ID or URL alias |
-
-**Response**:
-
-Array of element objects.
-
-
-### GetBoostedElements
-
-Retrieves a list of boosted elements.
-
-**Required Role**: None (Public)
-
-**Parameters**:
-None
-
-**Response**:
+#### Response
 
 ```json
 {
@@ -68,10 +32,14 @@ None
   "result": {
     "elements": [
       {
-        "id": "element_id",
-        "name": "Element Name",
-        "boost_amount": 100,
-        "boost_expiration": "2023-01-01T00:00:00Z"
+        "id": 123456,
+        "osm_type": "node",
+        "osm_id": 123456,
+        "tags": {
+          "name": "Bitcoin Coffee",
+          "amenity": "cafe",
+          "currency:XBT": "yes"
+        }
       }
     ]
   },
@@ -79,96 +47,197 @@ None
 }
 ```
 
-### PaywallGetBoostElementQuote
+### get_element_by_id
 
-Gets a quote for boosting an element.
+Retrieves a specific element by its ID.
 
-**Required Role**: None (Public)
+**Required Role**: None
 
-**Parameters**:
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `amount` | Integer | Yes | The boost amount |
-
-
-**Response**:
+#### Request
 
 ```json
 {
   "jsonrpc": "2.0",
-  "result": {
-    "quote": {
-      "amount": 100,
-      "price_btc": 0.001,
-      "price_usd": 50
-    }
+  "method": "get_element_by_id",
+  "params": {
+    "id": 123456
   },
   "id": 1
 }
 ```
 
-### PaywallGetAddElementCommentQuote
-
-Gets a quote for adding a comment to an element.
-
-**Required Role**: None (Public)
-
-**Parameters**:
-None
-
-**Response**:
+#### Response
 
 ```json
 {
   "jsonrpc": "2.0",
   "result": {
-    "quote": {
-      "price_btc": 0.0001,
-      "price_usd": 5
-    }
-  },
-  "id": 1
-}
-```
-
-### GetElementIssues
-
-Retrieves issues for an element.
-
-**Required Role**: None (Public)
-
-**Parameters**:
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-
-**Response**:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "issues": [
-      {
-        "id": "issue_id",
-        "element_id": "element_id",
-        "type": "issue_type",
-        "description": "Issue description",
-        "created_at": "2023-01-01T00:00:00Z"
+    "element": {
+      "id": 123456,
+      "osm_type": "node",
+      "osm_id": 123456,
+      "tags": {
+        "name": "Bitcoin Coffee",
+        "amenity": "cafe",
+        "currency:XBT": "yes"
       }
-    ]
+    }
   },
   "id": 1
 }
 ```
 
+### update_element
+
+Updates an element's tags.
+
+**Required Role**: `element:edit`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "update_element",
+  "params": {
+    "password": "your_admin_password",
+    "id": 123456,
+    "tags": {
+      "name": "Bitcoin Coffee Shop",
+      "amenity": "cafe",
+      "currency:XBT": "yes",
+      "opening_hours": "Mo-Fr 08:00-17:00"
+    }
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "element": {
+      "id": 123456,
+      "osm_type": "node",
+      "osm_id": 123456,
+      "tags": {
+        "name": "Bitcoin Coffee Shop",
+        "amenity": "cafe",
+        "currency:XBT": "yes",
+        "opening_hours": "Mo-Fr 08:00-17:00"
+      }
+    }
+  },
+  "id": 1
+}
+```
+
+### remove_element
+
+Removes an element from the database.
+
+**Required Role**: `element:remove`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "remove_element",
+  "params": {
+    "password": "your_admin_password",
+    "id": 123456
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
+
+### report_element_issue
+
+Reports an issue with an element.
+
+**Required Role**: None
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "report_element_issue",
+  "params": {
+    "element_id": 123456,
+    "issue_type": "closed",
+    "comment": "This location is permanently closed"
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "issue_id": 42
+  },
+  "id": 1
+}
+```
+
+### resolve_element_issue
+
+Resolves a reported issue with an element.
+
+**Required Role**: `issue:resolve`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "resolve_element_issue",
+  "params": {
+    "password": "your_admin_password",
+    "issue_id": 42,
+    "resolution_comment": "Updated element information"
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
 
 ## Admin Methods
 
 ### update_element_tags
-
 Updates the tags of a specific element.
 
 **Required Role**: `element_admin`
@@ -185,7 +254,6 @@ Updates the tags of a specific element.
 The updated element object.
 
 ### delete_element
-
 Marks an element as deleted.
 
 **Required Role**: `element_admin`
@@ -205,7 +273,6 @@ Marks an element as deleted.
 ```
 
 ### SetElementTag
-
 Adds a tag to an element.
 
 **Required Role**: `element_admin`
@@ -230,7 +297,6 @@ Adds a tag to an element.
 ```
 
 ### RemoveElementTag
-
 Removes a tag from an element.
 
 **Required Role**: `element_admin`
@@ -255,7 +321,6 @@ Removes a tag from an element.
 ```
 
 ### BoostElement
-
 Boosts an element.
 
 **Required Role**: `element_admin`
@@ -281,7 +346,6 @@ Boosts an element.
 ```
 
 ### PaywallBoostElement
-
 Boosts an element through the paywall system.
 
 **Required Role**: `element_admin`
@@ -308,7 +372,6 @@ Boosts an element through the paywall system.
 ```
 
 ### AddElementComment
-
 Adds a comment to an element.
 
 **Required Role**: `element_admin`
@@ -335,7 +398,6 @@ Adds a comment to an element.
 ```
 
 ### PaywallAddElementComment
-
 Adds a comment to an element through the paywall system.
 
 **Required Role**: `element_admin`
@@ -363,7 +425,6 @@ Adds a comment to an element through the paywall system.
 ```
 
 ### GenerateElementIssues
-
 Generates issues for elements.
 
 **Required Role**: `element_admin`
@@ -384,7 +445,6 @@ None
 ```
 
 ### SyncElements
-
 Synchronizes elements from an external source.
 
 **Required Role**: `element_admin`
@@ -405,7 +465,6 @@ None
 ```
 
 ### GenerateElementIcons
-
 Generates icons for elements.
 
 **Required Role**: `element_admin`
@@ -426,7 +485,6 @@ None
 ```
 
 ### GenerateElementCategories
-
 Generates categories for elements.
 
 **Required Role**: `element_admin`

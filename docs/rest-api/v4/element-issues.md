@@ -1,78 +1,79 @@
 
 # Element Issues API (v4)
 
-Endpoints for retrieving element issue data in the v4 API.
+The Element Issues API allows you to retrieve information about issues associated with map elements.
 
-## Get Element Issues
+## Endpoints
 
-Retrieves a list of element issues.
+### Get Element Issues List
 
 ```
 GET /v4/element-issues
 ```
 
-### Query Parameters
+Retrieves a list of element issues that have been updated since a specific time.
 
-| Parameter      | Type   | Description |
-|----------------|--------|-------------|
-| element_id     | int    | Filter issues by element ID |
-| updated_since  | string | Return issues updated since this timestamp (RFC3339 format) |
-| limit          | int    | Maximum number of issues to return |
-| status         | string | Filter by issue status (open, closed, all) |
-| type           | string | Filter by issue type |
+#### Query Parameters
 
-### Example Response
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `updated_since` | ISO 8601 datetime | **Required**. Filter issues updated since this time (RFC3339 format). |
+| `limit` | Integer | **Required**. Limit the number of issues returned. |
+
+#### Response
 
 ```json
 [
   {
     "id": 1,
-    "element_id": 123,
-    "type": "verification_needed",
-    "status": "open",
-    "description": "This place needs verification",
-    "created_by": 456,
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-01T00:00:00Z",
-    "closed_at": null
+    "element_id": 123456,
+    "type": "closed",
+    "created_at": "2023-02-10T12:00:00Z",
+    "updated_at": "2023-02-15T00:00:00Z",
+    "reporter_id": 789,
+    "resolver_id": null,
+    "resolved_at": null
   }
 ]
 ```
 
-## Get Element Issue by ID
+#### Example Request
 
-Retrieves a specific element issue by its ID.
+```
+GET /v4/element-issues?updated_since=2023-01-01T00:00:00Z&limit=10
+```
+
+### Get Element Issue by ID
 
 ```
 GET /v4/element-issues/{id}
 ```
 
-### Path Parameters
+Retrieves a specific element issue by its ID.
+
+#### Path Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| id        | int  | The ID of the element issue |
+| `id` | Integer | **Required**. The element issue ID |
 
-### Example Response
+#### Response
 
 ```json
 {
   "id": 1,
-  "element_id": 123,
-  "type": "verification_needed",
-  "status": "open",
-  "description": "This place needs verification",
-  "created_by": 456,
-  "created_at": "2023-01-01T00:00:00Z",
-  "updated_at": "2023-01-01T00:00:00Z",
-  "closed_at": null,
-  "comments": [
-    {
-      "id": 789,
-      "user_id": 456,
-      "content": "I will verify this next week",
-      "created_at": "2023-01-02T00:00:00Z"
-    }
-  ]
+  "element_id": 123456,
+  "type": "closed",
+  "created_at": "2023-02-10T12:00:00Z",
+  "updated_at": "2023-02-15T00:00:00Z",
+  "reporter_id": 789,
+  "resolver_id": null,
+  "resolved_at": null
 }
+```
+
+#### Example Request
+
+```
+GET /v4/element-issues/1
 ```
