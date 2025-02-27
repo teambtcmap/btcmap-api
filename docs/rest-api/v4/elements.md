@@ -24,6 +24,38 @@ Retrieves a list of elements that have been updated since a specific time.
 | `include_deleted` | Boolean | Optional. Whether to include deleted elements. Default is `true`. |
 | `include_tag` | String | Optional. Can be specified multiple times to include specific tags in the response. |
 
+### Incremental Sync Approach
+
+The `/v4/elements` endpoint is designed for efficient incremental synchronization. Clients should:
+
+1. Store the timestamp of their last sync locally
+2. Request elements that have been updated since that timestamp using the `updated_since` parameter
+3. Process only the changes since the last sync
+4. Update their local timestamp for the next sync
+
+This approach minimizes data transfer and processing requirements, making it ideal for mobile applications and other bandwidth-constrained environments.
+
+#### Example Incremental Sync Flow:
+
+```
+// Initial sync - store returned timestamp
+GET /v4/elements?updated_since=2020-01-01T00:00:00Z&limit=1000
+
+// Subsequent sync - use timestamp from previous response
+GET /v4/elements?updated_since=2023-09-15T14:30:45Z&limit=1000
+```
+
+### Limits
+
+The following limits apply to the `/v4/elements` endpoint:
+
+- **Rate Limit**: 60 requests per minute per IP address
+- **Maximum Limit Parameter**: 1000 elements per request
+- **Default Limit**: 100 elements if not specified
+- **Maximum Response Size**: 10MB
+
+Exceeding these limits will result in a `429 Too Many Requests` or `413 Payload Too Large` error response.
+
 #### Tag Selection
 
 The `include_tag` parameter allows you to request specific tags to be included in the response, which can improve performance for large requests. You can specify the parameter multiple times to include multiple tags.
