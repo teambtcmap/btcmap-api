@@ -35,6 +35,17 @@ The following table shows which admin roles are allowed to use each admin method
 | `get_admin_logs` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `get_admin_stats` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
+## Methods Without Role Restrictions
+
+The following admin methods require admin authentication but don't have specific role requirements beyond having the method name in the admin's `allowed_actions` list (or having the special "all" permission):
+
+| Method | Description |
+|--------|-------------|
+| `generate_reports` | Generates statistical reports about elements |
+| `generate_element_issues` | Analyzes elements and generates issues for those with problems |
+| `generate_areas_elements_mapping` | Creates mappings between areas and elements based on geographic boundaries |
+| `sync_unpaid_invoices` | Synchronizes unpaid invoice statuses with payment processors |
+
 ## How Permissions Are Enforced
 
 When an admin makes an RPC request, the system checks:
