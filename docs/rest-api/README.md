@@ -5,9 +5,9 @@ The BTCMap API provides REST endpoints for retrieving data about elements, event
 ## API Versions
 
 The API has multiple versions:
-- v2: Older version of the API
-- v3: Current stable version
-- v4: Latest version with newer endpoints
+- [v2](v2/README.md): Original API with basic endpoints
+- [v3](v3/README.md): Enhanced API with additional resources and improved filtering
+- [v4](v4/README.md): Latest version with newer endpoints and advanced features
 
 ## Authentication
 
