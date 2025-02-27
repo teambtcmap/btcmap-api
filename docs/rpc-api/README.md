@@ -1,56 +1,51 @@
-# RPC API
 
-The BTCMap RPC API provides a set of methods for interacting with the BTCMap platform.
+# BTCMap RPC API
 
-## Overview
-
-The RPC API is accessed through HTTP POST requests to the endpoint:
-
-```
-https://api.btcmap.org/rpc
-```
+The RPC API provides a JSON-RPC interface for interacting with BTCMap services.
 
 ## Method Categories
 
-Methods are grouped by the type of resource they operate on:
+- [Element Methods](element-methods.md) - Methods for working with map elements
+- [Area Methods](area-methods.md) - Methods for working with geographic areas
+- [User Methods](user-methods.md) - Methods for working with user data
+- [Admin Methods](admin-methods.md) - Methods for administrative operations
+- [Invoice Methods](invoice-methods.md) - Methods for handling payments
+- [Search Methods](search-methods.md) - Methods for searching
 
-- [Element Methods](element-methods.md) - Methods for managing map elements
-- [Area Methods](area-methods.md) - Methods for managing geographic areas
-- [User Methods](user-methods.md) - Methods for user operations
-- [Search Methods](search-methods.md) - Methods for searching various resources
+## Authentication
 
-## Authentication and Permissions
+Most RPC methods require authentication with an admin password. This can be provided either:
 
-Some methods require authentication and specific roles. Each method documentation includes:
-
-- **Required Role**: The role needed to execute the method (if any)
-- **Parameters**: The required and optional parameters
-- **Response**: The expected response format
+1. In the request parameters as `password`
+2. As a `Bearer` token in the `Authorization` header
 
 ## Request Format
 
-RPC requests should be made with the following format:
+All RPC requests should be POST requests to the `/rpc` endpoint with a JSON body following the JSON-RPC 2.0 specification:
 
 ```json
 {
-  "id": "1",
+  "jsonrpc": "2.0",
   "method": "method_name",
   "params": {
     "param1": "value1",
     "param2": "value2"
-  }
+  },
+  "id": 1
 }
 ```
 
 ## Response Format
 
-RPC responses will be in the following format:
+Responses follow the JSON-RPC 2.0 specification:
 
 ```json
 {
-  "id": "1",
-  "result": { ... },
-  "error": null
+  "jsonrpc": "2.0",
+  "result": {
+    "key": "value"
+  },
+  "id": 1
 }
 ```
 
@@ -58,10 +53,12 @@ Or in case of an error:
 
 ```json
 {
-  "id": "1",
-  "result": null,
+  "jsonrpc": "2.0",
   "error": {
     "code": -32000,
-    "message": "Error message"
-  }
+    "message": "Server error",
+    "data": "Error details"
+  },
+  "id": 1
 }
+```

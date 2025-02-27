@@ -2,63 +2,37 @@
 
 This document describes the available RPC methods for interacting with elements (locations that accept Bitcoin).
 
-## Methods
+## Available Methods
 
-### get_elements
+- [get_element](#get_element) - Retrieve a specific element by ID
+- [set_element_tag](#set_element_tag) - Set a tag on an element
+- [remove_element_tag](#remove_element_tag) - Remove a tag from an element
+- [get_boosted_elements](#get_boosted_elements) - Get elements that have been boosted
+- [boost_element](#boost_element) - Boost an element
+- [paywall_get_boost_element_quote](#paywall_get_boost_element_quote) - Get a quote for boosting an element
+- [paywall_boost_element](#paywall_boost_element) - Boost an element with payment
+- [add_element_comment](#add_element_comment) - Add a comment to an element
+- [paywall_get_add_element_comment_quote](#paywall_get_add_element_comment_quote) - Get a quote for adding a comment
+- [paywall_add_element_comment](#paywall_add_element_comment) - Add a comment with payment
+- [generate_element_issues](#generate_element_issues) - Generate issues for elements
+- [sync_elements](#sync_elements) - Synchronize elements with external source
+- [generate_element_icons](#generate_element_icons) - Generate icons for elements
+- [generate_element_categories](#generate_element_categories) - Generate categories for elements
+- [get_element_issues](#get_element_issues) - Get issues associated with elements
 
-Retrieves elements based on query parameters.
 
-**Required Role**: None
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "get_elements",
-  "params": {
-    "updated_since": "2023-01-01T00:00:00Z",
-    "limit": 10
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "elements": [
-      {
-        "id": 123456,
-        "osm_type": "node",
-        "osm_id": 123456,
-        "tags": {
-          "name": "Bitcoin Coffee",
-          "amenity": "cafe",
-          "currency:XBT": "yes"
-        }
-      }
-    ]
-  },
-  "id": 1
-}
-```
-
-### get_element_by_id
+## get_element
 
 Retrieves a specific element by its ID.
 
 **Required Role**: None
 
-#### Request
+### Request
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "get_element_by_id",
+  "method": "get_element",
   "params": {
     "id": 123456
   },
@@ -66,7 +40,7 @@ Retrieves a specific element by its ID.
 }
 ```
 
-#### Response
+### Response
 
 ```json
 {
@@ -87,192 +61,8 @@ Retrieves a specific element by its ID.
 }
 ```
 
-### update_element
+## set_element_tag
 
-Updates an element's tags.
-
-**Required Role**: `element:edit`
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "update_element",
-  "params": {
-    "password": "your_admin_password",
-    "id": 123456,
-    "tags": {
-      "name": "Bitcoin Coffee Shop",
-      "amenity": "cafe",
-      "currency:XBT": "yes",
-      "opening_hours": "Mo-Fr 08:00-17:00"
-    }
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "element": {
-      "id": 123456,
-      "osm_type": "node",
-      "osm_id": 123456,
-      "tags": {
-        "name": "Bitcoin Coffee Shop",
-        "amenity": "cafe",
-        "currency:XBT": "yes",
-        "opening_hours": "Mo-Fr 08:00-17:00"
-      }
-    }
-  },
-  "id": 1
-}
-```
-
-### remove_element
-
-Removes an element from the database.
-
-**Required Role**: `element:remove`
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "remove_element",
-  "params": {
-    "password": "your_admin_password",
-    "id": 123456
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true
-  },
-  "id": 1
-}
-```
-
-### report_element_issue
-
-Reports an issue with an element.
-
-**Required Role**: None
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "report_element_issue",
-  "params": {
-    "element_id": 123456,
-    "issue_type": "closed",
-    "comment": "This location is permanently closed"
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "issue_id": 42
-  },
-  "id": 1
-}
-```
-
-### resolve_element_issue
-
-Resolves a reported issue with an element.
-
-**Required Role**: `issue:resolve`
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "resolve_element_issue",
-  "params": {
-    "password": "your_admin_password",
-    "issue_id": 42,
-    "resolution_comment": "Updated element information"
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true
-  },
-  "id": 1
-}
-```
-
-## Admin Methods
-
-### update_element_tags
-Updates the tags of a specific element.
-
-**Required Role**: `element_admin`
-
-**Parameters**:
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `id` | String | Yes | The element ID |
-| `tags` | Object | Yes | The updated tags |
-
-**Response**:
-
-The updated element object.
-
-### delete_element
-Marks an element as deleted.
-
-**Required Role**: `element_admin`
-
-**Parameters**:
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `id` | String | Yes | The element ID |
-
-**Response**:
-
-```json
-{
-  "success": true
-}
-```
-
-### SetElementTag
 Adds a tag to an element.
 
 **Required Role**: `element_admin`
@@ -296,7 +86,8 @@ Adds a tag to an element.
 }
 ```
 
-### RemoveElementTag
+## remove_element_tag
+
 Removes a tag from an element.
 
 **Required Role**: `element_admin`
@@ -320,7 +111,49 @@ Removes a tag from an element.
 }
 ```
 
-### BoostElement
+## get_boosted_elements
+
+Get elements that have been boosted
+
+**Required Role**: None
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_boosted_elements",
+  "params": {},
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "elements": [
+      {
+        "id": 123456,
+        "osm_type": "node",
+        "osm_id": 123456,
+        "tags": {
+          "name": "Bitcoin Coffee",
+          "amenity": "cafe",
+          "currency:XBT": "yes"
+        }
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+
+## boost_element
+
 Boosts an element.
 
 **Required Role**: `element_admin`
@@ -345,7 +178,25 @@ Boosts an element.
 }
 ```
 
-### PaywallBoostElement
+## paywall_get_boost_element_quote
+
+Get a quote for boosting an element
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+| `amount` | Integer | Yes | The boost amount |
+
+
+**Response**:  (Example response -  needs to be defined)
+
+
+## paywall_boost_element
+
 Boosts an element through the paywall system.
 
 **Required Role**: `element_admin`
@@ -371,7 +222,8 @@ Boosts an element through the paywall system.
 }
 ```
 
-### AddElementComment
+## add_element_comment
+
 Adds a comment to an element.
 
 **Required Role**: `element_admin`
@@ -397,7 +249,19 @@ Adds a comment to an element.
 }
 ```
 
-### PaywallAddElementComment
+## paywall_get_add_element_comment_quote
+
+Get a quote for adding a comment
+
+**Required Role**: `element_admin`
+
+**Parameters**: (Needs definition)
+
+**Response**: (Needs definition)
+
+
+## paywall_add_element_comment
+
 Adds a comment to an element through the paywall system.
 
 **Required Role**: `element_admin`
@@ -424,7 +288,8 @@ Adds a comment to an element through the paywall system.
 }
 ```
 
-### GenerateElementIssues
+## generate_element_issues
+
 Generates issues for elements.
 
 **Required Role**: `element_admin`
@@ -444,7 +309,8 @@ None
 }
 ```
 
-### SyncElements
+## sync_elements
+
 Synchronizes elements from an external source.
 
 **Required Role**: `element_admin`
@@ -464,7 +330,8 @@ None
 }
 ```
 
-### GenerateElementIcons
+## generate_element_icons
+
 Generates icons for elements.
 
 **Required Role**: `element_admin`
@@ -484,7 +351,8 @@ None
 }
 ```
 
-### GenerateElementCategories
+## generate_element_categories
+
 Generates categories for elements.
 
 **Required Role**: `element_admin`
@@ -500,5 +368,43 @@ None
   "result": {
     "categories_generated": 20
   },
+  "id": 1
+}
+```
+
+## get_element_issues
+
+Get issues associated with elements.
+
+**Required Role**: None
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_element_issues",
+  "params": {
+    "element_id": 123456
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "id": 42,
+      "element_id": 123456,
+      "issue_type": "closed",
+      "comment": "This location is permanently closed",
+      "resolved": true,
+      "resolution_comment": "Updated element information"
+    }
+  ],
   "id": 1
 }

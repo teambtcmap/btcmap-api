@@ -1,45 +1,49 @@
 
-# REST API
+# BTCMap REST API
 
-The BTCMap REST API provides access to various resources through standard HTTP methods.
+The REST API provides HTTP endpoints for accessing BTCMap data.
 
-## API Base URL
+## API Versions
 
-All API endpoints are relative to the base URL: `https://api.btcmap.org/`
+The REST API is versioned to ensure backward compatibility as new features are added.
 
-## Versioned Endpoints
+- [v2 API](v2/README.md)
+- [v3 API](v3/README.md)
+- [v4 API](v4/README.md)
 
-The API is versioned with prefixes `/v2/`, `/v3/`, and `/v4/`. Always use the latest stable version when possible.
+## Common Endpoints
 
-## Common Query Parameters
+### Elements
 
-Many endpoints share these common query parameters:
+Elements are locations on the map that accept Bitcoin.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `updated_since` | ISO 8601 datetime | **Yes** | Filter resources updated since this time (RFC3339 format, e.g. `2023-01-01T00:00:00Z`) |
-| `limit` | Integer | **Yes** | Limit the number of resources returned |
+- [v2 Elements](v2/elements.md)
+- [v3 Elements](v3/elements.md)
+- [v4 Elements](v4/elements.md)
 
-## Available Endpoints
+### Users
 
-- [Elements API](v3/elements.md) - Access and manage map elements
-- [Events API](v3/events.md) - Access events related to map elements
-- [Users API](v3/users.md) - Access user information
-- [Areas API](v3/areas.md) - Access geographical area information
-- [Element Issues API](v3/element-issues.md) - Retrieve issues associated with elements
-- [Feeds API](v3/feeds.md) - Access feed information
+- [v3 Users](v3/users.md)
+- [v4 Users](v4/users.md)
 
-## Error Handling
+### Areas
 
-The API returns appropriate HTTP status codes:
+- [v3 Areas](v3/areas.md)
+- [v4 Areas](v4/areas.md)
 
-| Status Code | Description |
-|-------------|-------------|
-| 200 | Success |
-| 400 | Bad Request - Missing required parameters |
-| 404 | Not Found - Resource not found |
-| 500 | Internal Server Error |
+### Events
 
-## Rate Limiting
+- [v3 Events](v3/events.md)
+- [v4 Events](v4/events.md)
 
-The API implements rate limiting to ensure fair usage. Clients should respect these limits and implement appropriate backoff strategies.
+### Element Issues
+
+- [v4 Element Issues](v4/element-issues.md)
+
+## Request Format
+
+All endpoints accept and return JSON unless otherwise specified.
+
+## Authentication
+
+Some endpoints require authentication, which is typically done via query parameters or HTTP headers.

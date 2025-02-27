@@ -1,11 +1,10 @@
-
 # BTCMap API Documentation
 
-This documentation provides details about all available API endpoints and RPC methods in the BTCMap API.
+This documentation provides details about the BTCMap API.
 
-## Contents
+## API Types
 
-- [REST API](rest-api/README.md)
+- [REST API](rest-api/README.md) - HTTP-based API for accessing BTCMap data
   - [Elements API](rest-api/elements.md)
   - [Events API](rest-api/events.md)
   - [Users API](rest-api/users.md)
@@ -14,7 +13,7 @@ This documentation provides details about all available API endpoints and RPC me
   - [Element Comments API](rest-api/element-comments.md)
   - [Element Issues API](rest-api/element-issues.md)
   - [Feeds API](rest-api/feeds.md)
-- [RPC API](rpc-api/README.md)
+- [RPC API](rpc-api/README.md) - JSON-RPC interface for interacting with BTCMap services
   - [Element Methods](rpc-api/element-methods.md)
   - [Area Methods](rpc-api/area-methods.md)
   - [User Methods](rpc-api/user-methods.md)

@@ -3,9 +3,13 @@
 
 This page documents all RPC methods related to administrative tasks. For details on which admin roles can use these methods, see the [Admin Roles and Permissions](admin-roles.md) documentation.
 
-> **Note:** Some methods require admin authentication but don't have specific role requirements beyond having the method name in the admin's `allowed_actions` list (or having the special "all" permission). These are documented in the [Admin Roles and Permissions](admin-roles.md) document under "Methods Without Role Restrictions".
+## Available Methods
 
-## AddAdmin
+- [add_admin](#add_admin) - Add a new admin user
+- [add_admin_action](#add_admin_action) - Record an admin action
+- [remove_admin_action](#remove_admin_action) - Remove an admin action
+
+## add_admin
 
 Adds a new admin. Requires `super_admin` role.
 
@@ -36,7 +40,7 @@ Adds a new admin. Requires `super_admin` role.
 }
 ```
 
-## AddAdminAction
+## add_admin_action
 
 Records an admin action. Requires `super_admin`, `moderator`, `content_manager`, or `reviewer` role.
 
@@ -61,14 +65,13 @@ Records an admin action. Requires `super_admin`, `moderator`, `content_manager`,
 {
   "jsonrpc": "2.0",
   "result": {
-    "success": true,
-    "action_id": "action_id"
+    "success": true
   },
   "id": 1
 }
 ```
 
-## RemoveAdminAction
+## remove_admin_action
 
 Removes an admin action. Requires `super_admin` role.
 
