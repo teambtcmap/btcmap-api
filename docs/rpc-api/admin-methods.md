@@ -1,19 +1,23 @@
+
 # Admin RPC Methods
 
-This page documents all RPC methods related to administrative tasks.  All users of these RPC calls are considered Admins and authorization is handled via the `allowed_actions` parameter.
+This document describes the available RPC methods for administrative tasks. All users of these RPC calls are considered Admins and authorization is handled via the `allowed_actions` parameter.
 
-
-## Available Methods
+## Table of Contents
 
 - [add_admin](#add_admin) - Add a new admin user
 - [add_admin_action](#add_admin_action) - Record an admin action
 - [remove_admin_action](#remove_admin_action) - Remove an admin action
 
-## add_admin
+## Methods
 
-Adds a new admin.  Requires `allowed_actions` including "add_admin".
+### add_admin
 
-### Request
+Adds a new admin.
+
+**Required Admin Action**: `add_admin`
+
+#### Request
 
 ```json
 {
@@ -27,7 +31,7 @@ Adds a new admin.  Requires `allowed_actions` including "add_admin".
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -40,11 +44,13 @@ Adds a new admin.  Requires `allowed_actions` including "add_admin".
 }
 ```
 
-## add_admin_action
+### add_admin_action
 
-Records an admin action. Requires `allowed_actions` including "add_admin_action".
+Records an admin action.
 
-### Request
+**Required Admin Action**: `add_admin_action`
+
+#### Request
 
 ```json
 {
@@ -59,7 +65,7 @@ Records an admin action. Requires `allowed_actions` including "add_admin_action"
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -71,11 +77,13 @@ Records an admin action. Requires `allowed_actions` including "add_admin_action"
 }
 ```
 
-## remove_admin_action
+### remove_admin_action
 
-Removes an admin action. Requires `allowed_actions` including "remove_admin_action".
+Removes an admin action.
 
-### Request
+**Required Admin Action**: `remove_admin_action`
+
+#### Request
 
 ```json
 {
@@ -88,7 +96,7 @@ Removes an admin action. Requires `allowed_actions` including "remove_admin_acti
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -98,3 +106,4 @@ Removes an admin action. Requires `allowed_actions` including "remove_admin_acti
   },
   "id": 1
 }
+```

@@ -1,32 +1,47 @@
+
 # Area Methods
 
-This document describes the available RPC methods for interacting with areas.
+This document describes the available RPC methods for interacting with geographic areas.
 
-## Available Methods
+## Table of Contents
 
-- [get_areas](#get_areas) - Retrieve areas based on query parameters
-- [get_area_by_id](#get_area_by_id) - Retrieve a specific area by ID
-- [get_area_elements](#get_area_elements) - Get elements within an area
-- [add_area](#add_area) - Adds a new geographic area.
-- [update_area](#update_area) - Updates an existing area.
-- [remove_area](#remove_area) - Removes an area from the database.
+- [add_area](#add_area) - Add a new geographic area
+- [get_area](#get_area) - Retrieve a specific area by ID
+- [set_area_tag](#set_area_tag) - Set a tag on an area
+- [remove_area_tag](#remove_area_tag) - Remove a tag from an area
+- [set_area_icon](#set_area_icon) - Set an icon for an area
+- [remove_area](#remove_area) - Remove an area
+- [get_trending_countries](#get_trending_countries) - Get trending countries
+- [get_most_commented_countries](#get_most_commented_countries) - Get most commented countries
+- [get_trending_communities](#get_trending_communities) - Get trending communities
+- [generate_areas_elements_mapping](#generate_areas_elements_mapping) - Generate mappings between areas and elements
+- [generate_reports](#generate_reports) - Generate reports for areas
+- [get_area_dashboard](#get_area_dashboard) - Get dashboard data for an area
 
+## Methods
 
-### <a name="get_areas"></a>get_areas
+### add_area
 
-Retrieves areas based on query parameters.
+Adds a new geographic area.
 
-**Required Admin Action**: None
+**Required Admin Action**: `area_admin`
 
 #### Request
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "get_areas",
+  "method": "add_area",
   "params": {
-    "updated_since": "2023-01-01T00:00:00Z",
-    "limit": 10
+    "name": "City Center",
+    "polygon": [
+      {"lat": 37.7749, "lon": -122.4194},
+      {"lat": 37.7749, "lon": -122.4184},
+      {"lat": 37.7739, "lon": -122.4184},
+      {"lat": 37.7739, "lon": -122.4194},
+      {"lat": 37.7749, "lon": -122.4194}
+    ],
+    "type": "neighborhood"
   },
   "id": 1
 }
@@ -38,38 +53,24 @@ Retrieves areas based on query parameters.
 {
   "jsonrpc": "2.0",
   "result": {
-    "areas": [
-      {
-        "id": 123,
-        "name": "New York City",
-        "url_alias": "nyc",
-        "osm_id": 175905,
-        "osm_type": "relation",
-        "bounds": {
-          "min_lon": -74.25909,
-          "min_lat": 40.477399,
-          "max_lon": -73.700272,
-          "max_lat": 40.916178
-        }
-      }
-    ]
+    "area_id": 123
   },
   "id": 1
 }
 ```
 
-### <a name="get_area_by_id"></a>get_area_by_id
+### get_area
 
-Retrieves a specific area by its ID.
+Retrieves a specific area by ID.
 
-**Required Admin Action**: None
+**Required Admin Action**: None (publicly accessible)
 
 #### Request
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "get_area_by_id",
+  "method": "get_area",
   "params": {
     "id": 123
   },
@@ -83,165 +84,37 @@ Retrieves a specific area by its ID.
 {
   "jsonrpc": "2.0",
   "result": {
-    "area": {
-      "id": 123,
-      "name": "New York City",
-      "url_alias": "nyc",
-      "osm_id": 175905,
-      "osm_type": "relation",
-      "bounds": {
-        "min_lon": -74.25909,
-        "min_lat": 40.477399,
-        "max_lon": -73.700272,
-        "max_lat": 40.916178
-      }
-    }
+    "id": 123,
+    "name": "City Center",
+    "polygon": [
+      {"lat": 37.7749, "lon": -122.4194},
+      {"lat": 37.7749, "lon": -122.4184},
+      {"lat": 37.7739, "lon": -122.4184},
+      {"lat": 37.7739, "lon": -122.4194},
+      {"lat": 37.7749, "lon": -122.4194}
+    ],
+    "type": "neighborhood",
+    "created_at": "2023-01-01T00:00:00Z"
   },
   "id": 1
 }
 ```
 
-### <a name="get_area_elements"></a>get_area_elements
+### set_area_tag
 
-Retrieves elements within a specific area.
+Sets a tag on an area.
 
-**Required Admin Action**: None
+**Required Admin Action**: `area_admin`
 
 #### Request
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "get_area_elements",
+  "method": "set_area_tag",
   "params": {
     "area_id": 123,
-    "limit": 10
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "elements": [
-      {
-        "id": 123456,
-        "osm_type": "node",
-        "osm_id": 123456,
-        "tags": {
-          "name": "Bitcoin Coffee",
-          "amenity": "cafe",
-          "currency:XBT": "yes"
-        }
-      }
-    ]
-  },
-  "id": 1
-}
-```
-
-### <a name="add_area"></a>add_area
-
-Adds a new geographic area.
-
-**Required Admin Action**: `area:add`
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "add_area",
-  "params": {
-    "password": "your_admin_password",
-    "osm_id": 123456,
-    "osm_type": "relation",
-    "name": "San Francisco",
-    "url_alias": "sf"
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "area": {
-      "id": 789,
-      "name": "San Francisco",
-      "url_alias": "sf",
-      "osm_id": 123456,
-      "osm_type": "relation"
-    }
-  },
-  "id": 1
-}
-```
-
-### <a name="update_area"></a>update_area
-
-Updates an existing area.
-
-**Required Admin Action**: `area:edit`
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "update_area",
-  "params": {
-    "password": "your_admin_password",
-    "id": 789,
-    "name": "San Francisco Bay Area",
-    "url_alias": "sf-bay"
-  },
-  "id": 1
-}
-```
-
-#### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "area": {
-      "id": 789,
-      "name": "San Francisco Bay Area",
-      "url_alias": "sf-bay",
-      "osm_id": 123456,
-      "osm_type": "relation"
-    }
-  },
-  "id": 1
-}
-```
-
-### <a name="remove_area"></a>remove_area
-
-Removes an area from the database.
-
-**Required Admin Action**: `area:remove`
-
-#### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "remove_area",
-  "params": {
-    "password": "your_admin_password",
-    "id": 789
+    "tag": "featured"
   },
   "id": 1
 }
@@ -257,3 +130,310 @@ Removes an area from the database.
   },
   "id": 1
 }
+```
+
+### remove_area_tag
+
+Removes a tag from an area.
+
+**Required Admin Action**: `area_admin`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "remove_area_tag",
+  "params": {
+    "area_id": 123,
+    "tag": "featured"
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
+
+### set_area_icon
+
+Sets an icon for an area.
+
+**Required Admin Action**: `area_admin`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "set_area_icon",
+  "params": {
+    "area_id": 123,
+    "icon_url": "https://example.com/icon.png"
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
+
+### remove_area
+
+Removes an area.
+
+**Required Admin Action**: `area_admin`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "remove_area",
+  "params": {
+    "area_id": 123
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
+
+### get_trending_countries
+
+Gets trending countries.
+
+**Required Admin Action**: None (publicly accessible)
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_trending_countries",
+  "params": {
+    "limit": 10
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "countries": [
+      {
+        "id": 123,
+        "name": "United States",
+        "element_count": 500,
+        "trend_score": 95.5
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+### get_most_commented_countries
+
+Gets most commented countries.
+
+**Required Admin Action**: None (publicly accessible)
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_most_commented_countries",
+  "params": {
+    "limit": 10
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "countries": [
+      {
+        "id": 123,
+        "name": "United States",
+        "comment_count": 350
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+### get_trending_communities
+
+Gets trending communities.
+
+**Required Admin Action**: None (publicly accessible)
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_trending_communities",
+  "params": {
+    "limit": 10
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "communities": [
+      {
+        "id": 456,
+        "name": "Austin",
+        "element_count": 120,
+        "trend_score": 87.3
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+### generate_areas_elements_mapping
+
+Generates mappings between areas and elements.
+
+**Required Admin Action**: `area_admin`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "generate_areas_elements_mapping",
+  "params": {},
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "mappings_generated": 250
+  },
+  "id": 1
+}
+```
+
+### generate_reports
+
+Generates reports for areas.
+
+**Required Admin Action**: `area_admin`
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "generate_reports",
+  "params": {},
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "reports_generated": 15
+  },
+  "id": 1
+}
+```
+
+### get_area_dashboard
+
+Gets dashboard data for an area.
+
+**Required Admin Action**: None (publicly accessible)
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_area_dashboard",
+  "params": {
+    "area_id": 123
+  },
+  "id": 1
+}
+```
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "area_id": 123,
+    "name": "City Center",
+    "element_count": 120,
+    "comment_count": 75,
+    "recent_activity": [
+      {
+        "type": "element_added",
+        "timestamp": "2023-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "id": 1
+}
+```

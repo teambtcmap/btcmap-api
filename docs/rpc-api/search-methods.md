@@ -1,31 +1,36 @@
+
 # Search Methods
 
 This document describes the available RPC methods for searching.
 
-## Available Methods
+## Table of Contents
 
 - [search](#search) - Search for elements, areas, or users
 
-## Search
+## Methods
 
-Searches for elements, areas, users, and other entities.
+### search
 
-### Request
+Searches for elements, areas, or users.
+
+**Required Admin Action**: None (publicly accessible)
+
+#### Request
 
 ```json
 {
   "jsonrpc": "2.0",
   "method": "search",
   "params": {
-    "query": "search term",
-    "types": ["elements", "areas", "users"],
+    "query": "coffee",
+    "type": "element",
     "limit": 10
   },
   "id": 1
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -33,27 +38,19 @@ Searches for elements, areas, users, and other entities.
   "result": {
     "elements": [
       {
-        "id": "element_id",
-        "name": "Element Name",
-        "description": "Element Description",
-        "relevance_score": 0.95
+        "id": 123456,
+        "name": "Bitcoin Coffee",
+        "osm_type": "node",
+        "osm_id": 123456,
+        "tags": {
+          "name": "Bitcoin Coffee",
+          "amenity": "cafe",
+          "currency:XBT": "yes"
+        }
       }
     ],
-    "areas": [
-      {
-        "id": "area_id",
-        "name": "Area Name",
-        "url_alias": "area-name",
-        "relevance_score": 0.85
-      }
-    ],
-    "users": [
-      {
-        "id": "user_id",
-        "name": "User Name",
-        "relevance_score": 0.75
-      }
-    ]
+    "total_count": 1
   },
   "id": 1
 }
+```

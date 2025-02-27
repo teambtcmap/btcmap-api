@@ -1,18 +1,23 @@
+
 # Invoice RPC Methods
 
 This document describes the available RPC methods for interacting with invoices.
 
-## Available Methods
+## Table of Contents
 
-- [GetInvoice](#getinvoice) - Retrieve a specific invoice by ID
-- [GenerateInvoice](#generateinvoice) - Generate a new invoice
-- [SyncUnpaidInvoices](#syncunpaidinvoices) - Synchronize status of unpaid invoices
+- [get_invoice](#get_invoice) - Retrieve a specific invoice by ID
+- [generate_invoice](#generate_invoice) - Generate a new invoice
+- [sync_unpaid_invoices](#sync_unpaid_invoices) - Synchronize status of unpaid invoices
 
-## GetInvoice
+## Methods
+
+### get_invoice
 
 Retrieves an invoice by its ID.
 
-### Request
+**Required Admin Action**: None (publicly accessible)
+
+#### Request
 
 ```json
 {
@@ -25,7 +30,7 @@ Retrieves an invoice by its ID.
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -44,11 +49,13 @@ Retrieves an invoice by its ID.
 }
 ```
 
-## GenerateInvoice
+### generate_invoice
 
-Generates a new invoice. 
+Generates a new invoice.
 
-### Request
+**Required Admin Action**: `generate_invoice`
+
+#### Request
 
 ```json
 {
@@ -64,7 +71,7 @@ Generates a new invoice.
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -82,11 +89,13 @@ Generates a new invoice.
 }
 ```
 
-## SyncUnpaidInvoices
+### sync_unpaid_invoices
 
 Synchronizes the status of unpaid invoices.
 
-### Request
+**Required Admin Action**: `sync_unpaid_invoices`
+
+#### Request
 
 ```json
 {
@@ -97,14 +106,15 @@ Synchronizes the status of unpaid invoices.
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
   "jsonrpc": "2.0",
   "result": {
-    "invoices_synced": 10,
-    "newly_paid": 3
+    "invoices_synced": 5,
+    "invoices_paid": 2
   },
   "id": 1
 }
+```

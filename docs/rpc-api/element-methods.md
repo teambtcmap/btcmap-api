@@ -1,3 +1,4 @@
+
 # Element Methods
 
 This document describes the available RPC methods for interacting with elements.
@@ -20,14 +21,15 @@ This document describes the available RPC methods for interacting with elements.
 - [generate_element_categories](#generate_element_categories) - Generate categories for elements
 - [get_element_issues](#get_element_issues) - Get issues associated with elements
 
+## Methods
 
-## get_element
+### get_element
 
 Retrieves a specific element by its ID.
 
 **Required Admin Action**: None (publicly accessible)
 
-### Request
+#### Request
 
 ```json
 {
@@ -40,7 +42,7 @@ Retrieves a specific element by its ID.
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -61,20 +63,27 @@ Retrieves a specific element by its ID.
 }
 ```
 
-## set_element_tag
+### set_element_tag
 
 Adds a tag to an element.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
+#### Request
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-| `tag` | String | Yes | The tag name |
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "set_element_tag",
+  "params": {
+    "element_id": "123456",
+    "tag": "featured"
+  },
+  "id": 1
+}
+```
 
-**Response**:
+#### Response
 
 ```json
 {
@@ -86,20 +95,27 @@ Adds a tag to an element.
 }
 ```
 
-## remove_element_tag
+### remove_element_tag
 
 Removes a tag from an element.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
+#### Request
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-| `tag` | String | Yes | The tag name |
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "remove_element_tag",
+  "params": {
+    "element_id": "123456",
+    "tag": "featured"
+  },
+  "id": 1
+}
+```
 
-**Response**:
+#### Response
 
 ```json
 {
@@ -111,13 +127,13 @@ Removes a tag from an element.
 }
 ```
 
-## get_boosted_elements
+### get_boosted_elements
 
-Get elements that have been boosted
+Get elements that have been boosted.
 
 **Required Admin Action**: None (publicly accessible)
 
-### Request
+#### Request
 
 ```json
 {
@@ -128,7 +144,7 @@ Get elements that have been boosted
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -151,21 +167,27 @@ Get elements that have been boosted
 }
 ```
 
-
-## boost_element
+### boost_element
 
 Boosts an element.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
+#### Request
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-| `amount` | Integer | Yes | The boost amount |
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "boost_element",
+  "params": {
+    "element_id": "123456",
+    "amount": 1000
+  },
+  "id": 1
+}
+```
 
-**Response**:
+#### Response
 
 ```json
 {
@@ -178,38 +200,61 @@ Boosts an element.
 }
 ```
 
-## paywall_get_boost_element_quote
+### paywall_get_boost_element_quote
 
-Get a quote for boosting an element
+Get a quote for boosting an element.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
+#### Request
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-| `amount` | Integer | Yes | The boost amount |
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "paywall_get_boost_element_quote",
+  "params": {
+    "element_id": "123456",
+    "amount": 1000
+  },
+  "id": 1
+}
+```
 
+#### Response
 
-**Response**:  (Example response -  needs to be defined)
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "amount_sats": 100,
+    "description": "Boost element 123456"
+  },
+  "id": 1
+}
+```
 
-
-## paywall_boost_element
+### paywall_boost_element
 
 Boosts an element through the paywall system.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
+#### Request
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-| `amount` | Integer | Yes | The boost amount |
-| `payment_hash` | String | Yes | The payment hash |
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "paywall_boost_element",
+  "params": {
+    "element_id": "123456",
+    "amount": 1000,
+    "payment_hash": "abcdef123456"
+  },
+  "id": 1
+}
+```
 
-**Response**:
+#### Response
 
 ```json
 {
@@ -222,21 +267,28 @@ Boosts an element through the paywall system.
 }
 ```
 
-## add_element_comment
+### add_element_comment
 
 Adds a comment to an element.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
+#### Request
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-| `content` | String | Yes | The comment content |
-| `user_id` | String | Yes | The user ID |
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "add_element_comment",
+  "params": {
+    "element_id": "123456",
+    "content": "This is a great place!",
+    "user_id": "789"
+  },
+  "id": 1
+}
+```
 
-**Response**:
+#### Response
 
 ```json
 {
@@ -249,33 +301,63 @@ Adds a comment to an element.
 }
 ```
 
-## paywall_get_add_element_comment_quote
+### paywall_get_add_element_comment_quote
 
-Get a quote for adding a comment
+Get a quote for adding a comment.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**: (Needs definition)
+#### Request
 
-**Response**: (Needs definition)
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "paywall_get_add_element_comment_quote",
+  "params": {
+    "element_id": "123456",
+    "content": "This is a great place!",
+    "user_id": "789"
+  },
+  "id": 1
+}
+```
 
+#### Response
 
-## paywall_add_element_comment
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "amount_sats": 10,
+    "description": "Add comment to element 123456"
+  },
+  "id": 1
+}
+```
+
+### paywall_add_element_comment
 
 Adds a comment to an element through the paywall system.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
+#### Request
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `element_id` | String | Yes | The element ID |
-| `content` | String | Yes | The comment content |
-| `user_id` | String | Yes | The user ID |
-| `payment_hash` | String | Yes | The payment hash |
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "paywall_add_element_comment",
+  "params": {
+    "element_id": "123456",
+    "content": "This is a great place!",
+    "user_id": "789",
+    "payment_hash": "abcdef123456"
+  },
+  "id": 1
+}
+```
 
-**Response**:
+#### Response
 
 ```json
 {
@@ -288,16 +370,24 @@ Adds a comment to an element through the paywall system.
 }
 ```
 
-## generate_element_issues
+### generate_element_issues
 
 Generates issues for elements.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
-None
+#### Request
 
-**Response**:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "generate_element_issues",
+  "params": {},
+  "id": 1
+}
+```
+
+#### Response
 
 ```json
 {
@@ -309,16 +399,24 @@ None
 }
 ```
 
-## sync_elements
+### sync_elements
 
 Synchronizes elements from an external source.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
-None
+#### Request
 
-**Response**:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sync_elements",
+  "params": {},
+  "id": 1
+}
+```
+
+#### Response
 
 ```json
 {
@@ -330,16 +428,24 @@ None
 }
 ```
 
-## generate_element_icons
+### generate_element_icons
 
 Generates icons for elements.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
-None
+#### Request
 
-**Response**:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "generate_element_icons",
+  "params": {},
+  "id": 1
+}
+```
+
+#### Response
 
 ```json
 {
@@ -351,16 +457,24 @@ None
 }
 ```
 
-## generate_element_categories
+### generate_element_categories
 
 Generates categories for elements.
 
 **Required Admin Action**: `element_admin`
 
-**Parameters**:
-None
+#### Request
 
-**Response**:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "generate_element_categories",
+  "params": {},
+  "id": 1
+}
+```
+
+#### Response
 
 ```json
 {
@@ -372,13 +486,13 @@ None
 }
 ```
 
-## get_element_issues
+### get_element_issues
 
 Get issues associated with elements.
 
 **Required Admin Action**: None (publicly accessible)
 
-### Request
+#### Request
 
 ```json
 {
@@ -391,7 +505,7 @@ Get issues associated with elements.
 }
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -408,3 +522,4 @@ Get issues associated with elements.
   ],
   "id": 1
 }
+```
