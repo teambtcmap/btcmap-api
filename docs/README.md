@@ -24,4 +24,4 @@ This documentation provides details about all available API endpoints and RPC me
 
 ## API Base URL
 
-All API endpoints are relative to the base URL: `http://127.0.0.1:8000/`
+All API endpoints are relative to the base URL: `https://api.btcmap.org/`
