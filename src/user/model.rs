@@ -1,5 +1,6 @@
 use crate::{osm::api::OsmUser, Error, Result};
-use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use deadpool_sqlite::Pool;
+use rusqlite::{named_params, params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -11,6 +12,15 @@ pub struct User {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
+}
+
+pub struct SelectMostActive {
+    pub id: i64,
+    pub name: String,
+    pub edits: i64,
+    pub created: i64,
+    pub updated: i64,
+    pub deleted: i64,
 }
 
 const TABLE_NAME: &str = "user";
@@ -87,6 +97,50 @@ impl User {
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub async fn select_most_active_async(
+        period_start: OffsetDateTime,
+        period_end: OffsetDateTime,
+        limit: i64,
+        pool: &Pool,
+    ) -> Result<Vec<SelectMostActive>> {
+        pool.get()
+            .await?
+            .interact(move |conn| User::select_most_active(period_start, period_end, limit, conn))
+            .await?
+    }
+
+    pub fn select_most_active(
+        period_start: OffsetDateTime,
+        period_end: OffsetDateTime,
+        limit: i64,
+        conn: &Connection,
+    ) -> Result<Vec<SelectMostActive>> {
+        let sql = r#"
+            select 
+                u.id,
+                json_extract(u.osm_data, '$.display_name') as name,
+                count(*) as edits,
+                (select count(*) from event where user_id = u.id and created_at between ?1 and ?2 and type = 'create') as created,
+                (select count(*) from event where user_id = u.id and created_at between ?1 and ?2 and type = 'update') as updated,
+                (select count(*) from event where user_id = u.id and created_at between ?1 and ?2 and type = 'delete') as deleted
+            from event e join user u on u.id = e.user_id where e.created_at between ?1 and ?2
+            group by e.user_id
+            order by edits desc
+            limit ?3
+        "#;
+        conn.prepare(&sql)?
+            .query_map(
+                params![
+                    period_start.format(&Rfc3339)?,
+                    period_end.format(&Rfc3339)?,
+                    limit,
+                ],
+                mapper_select_ordered_by_severity(),
+            )?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     pub fn select_by_id_or_name(id_or_name: &str, conn: &Connection) -> Result<Option<User>> {
@@ -228,6 +282,19 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
             created_at: row.get(3)?,
             updated_at: row.get(4)?,
             deleted_at: row.get(5)?,
+        })
+    }
+}
+
+const fn mapper_select_ordered_by_severity() -> fn(&Row) -> rusqlite::Result<SelectMostActive> {
+    |row: &Row| -> rusqlite::Result<SelectMostActive> {
+        Ok(SelectMostActive {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            edits: row.get(2)?,
+            created: row.get(3)?,
+            updated: row.get(4)?,
+            deleted: row.get(5)?,
         })
     }
 }

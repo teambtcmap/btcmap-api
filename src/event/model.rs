@@ -1,5 +1,6 @@
 use crate::Error;
 use crate::Result;
+use deadpool_sqlite::Pool;
 use rusqlite::named_params;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
@@ -167,6 +168,19 @@ impl Event {
                 mapper(),
             )?
             .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub async fn select_created_between_async(
+        period_start: &OffsetDateTime,
+        period_end: &OffsetDateTime,
+        pool: &Pool,
+    ) -> Result<Vec<Event>> {
+        let period_start = period_start.clone();
+        let period_end = period_end.clone();
+        pool.get()
+            .await?
+            .interact(move |conn| Event::select_created_between(&period_start, &period_end, conn))
+            .await?
     }
 
     pub fn select_created_between(

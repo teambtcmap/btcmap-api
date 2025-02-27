@@ -58,6 +58,7 @@ pub enum RpcMethod {
     GetUserActivity,
     SetUserTag,
     RemoveUserTag,
+    GetMostActiveUsers,
     // admin
     AddAdmin,
     AddAdminAction,
@@ -151,6 +152,7 @@ const PUBLIC_METHODS: &'static [RpcMethod] = &[
     RpcMethod::PaywallBoostElement,
     RpcMethod::GetElementIssues,
     RpcMethod::GetAreaDashboard,
+    RpcMethod::GetMostActiveUsers,
 ];
 
 #[post("")]
@@ -336,6 +338,10 @@ pub async fn handle(
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
             super::remove_user_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+        ),
+        RpcMethod::GetMostActiveUsers => RpcResponse::from(
+            req.id.clone(),
+            super::get_most_active_users::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),

@@ -24,26 +24,18 @@ pub struct GetListArgs {
     updated_since: Option<OffsetDateTime>,
     limit: Option<i64>,
     include_deleted: Option<bool>,
-    include_tags: Option<Vec<String>>,
+    include_tag: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
 pub struct GetSingleArgs {
-    include_tags: Option<Vec<String>>,
+    include_tag: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct GetItem {
     pub id: i64,
-    pub lat: f64,
-    pub lon: f64,
     pub tags: Map<String, Value>,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub deleted_at: Option<OffsetDateTime>,
 }
 
 #[get("")]
@@ -52,7 +44,7 @@ pub async fn get(
     args: Query<GetListArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let include_tags = args.include_tags.clone().unwrap_or(vec![]);
+    let include_tags = args.include_tag.clone().unwrap_or(vec![]);
     let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
     info!(tags = serde_json::to_string(&include_tags)?);
     let elements = pool
@@ -75,11 +67,7 @@ pub async fn get(
         .into_iter()
         .map(|it| GetItem {
             id: it.id,
-            lat: it.overpass_data.coord().y,
-            lon: it.overpass_data.coord().x,
             tags: super::service::generate_tags(&it, &include_tags),
-            updated_at: it.updated_at,
-            deleted_at: it.deleted_at,
         })
         .collect();
     Ok(Json(items))
@@ -91,7 +79,7 @@ pub async fn get_by_id(
     args: Query<GetSingleArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<GetItem>, Error> {
-    let include_tags = args.include_tags.clone().unwrap_or(vec![]);
+    let include_tags = args.include_tag.clone().unwrap_or(vec![]);
     let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
     let id_clone = id.clone();
     pool.get()
@@ -101,11 +89,7 @@ pub async fn get_by_id(
         .ok_or(Error::not_found())
         .map(|it| GetItem {
             id: it.id,
-            lat: it.overpass_data.coord().y,
-            lon: it.overpass_data.coord().x,
             tags: super::service::generate_tags(&it, &include_tags),
-            updated_at: it.updated_at,
-            deleted_at: it.deleted_at,
         })
         .map(|it| Json(it))
 }

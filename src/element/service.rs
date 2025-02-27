@@ -10,6 +10,7 @@ use geo::Polygon;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
 use time::format_description::well_known::Rfc3339;
@@ -366,6 +367,8 @@ pub const TAGS: &'static [&str] = &[
     "btcmap:created_at",
     "btcmap:updated_at",
     "btcmap:deleted_at",
+    "btcmap:lat",
+    "btcmap:lon",
 ];
 
 pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Value> {
@@ -432,6 +435,12 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
             }
             None => {}
         }
+    }
+    if include_tags.contains(&"btcmap:lat") {
+        res.insert("btcmap:lat".into(), json! {element.lat()});
+    }
+    if include_tags.contains(&"btcmap:lon") {
+        res.insert("btcmap:lon".into(), json! {element.lon()});
     }
     res
 }
