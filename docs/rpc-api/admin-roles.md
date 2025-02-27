@@ -45,6 +45,50 @@ When an admin makes an RPC request, the system checks:
 
 If any of these checks fail, the request will be rejected with an appropriate error message.
 
+## Public Methods
+
+The following RPC methods are publicly accessible and do not require any admin authentication:
+
+| Method | Description |
+|--------|-------------|
+| `get_element` | Retrieves element details |
+| `paywall_get_add_element_comment_quote` | Gets a quote for adding an element comment |
+| `paywall_add_element_comment` | Adds a comment to an element via paywall |
+| `paywall_get_boost_element_quote` | Gets a quote for boosting an element |
+| `paywall_boost_element` | Boosts an element via paywall |
+| `get_element_issues` | Retrieves issues related to an element |
+| `get_area_dashboard` | Gets dashboard information for an area |
+| `get_most_active_users` | Retrieves a list of most active users |
+
+## Methods Without Role Restrictions
+
+The following methods require admin authentication but do not have specific role requirements beyond having the method name in the admin's `allowed_actions` list (or having the special "all" permission):
+
+| Method | Description |
+|--------|-------------|
+| `get_user_activity` | Gets activity data for a user |
+| `get_invoice` | Retrieves invoice details |
+| `search` | Performs a search query |
+| `set_element_tag` | Sets a tag on an element |
+| `remove_element_tag` | Removes a tag from an element |
+| `boost_element` | Boosts an element (admin version) |
+| `sync_elements` | Syncs elements data |
+| `generate_element_icons` | Generates icons for elements |
+| `generate_element_categories` | Generates categories for elements |
+| `generate_element_issues` | Generates issues for elements |
+| `add_area` | Adds a new area |
+| `get_area` | Gets details of an area |
+| `set_area_tag` | Sets a tag on an area |
+| `remove_area_tag` | Removes a tag from an area |
+| `set_area_icon` | Sets an icon for an area |
+| `remove_area` | Removes an area |
+| `generate_areas_elements_mapping` | Generates mappings between areas and elements |
+| `generate_reports` | Generates reports |
+| `set_user_tag` | Sets a tag on a user |
+| `remove_user_tag` | Removes a tag from a user |
+| `generate_invoice` | Generates a new invoice |
+| `sync_unpaid_invoices` | Syncs status of unpaid invoices |
+
 ## Adding Role Requirements to Admin Accounts
 
 Roles are stored in the `allowed_actions` field of the Admin database record. To assign roles to an admin, use the `set_admin_role` RPC method (restricted to super_admin):

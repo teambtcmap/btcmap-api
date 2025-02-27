@@ -3,6 +3,8 @@
 
 This page documents all RPC methods related to administrative tasks. For details on which admin roles can use these methods, see the [Admin Roles and Permissions](admin-roles.md) documentation.
 
+> **Note:** Some methods require admin authentication but don't have specific role requirements beyond having the method name in the admin's `allowed_actions` list (or having the special "all" permission). These are documented in the [Admin Roles and Permissions](admin-roles.md) document under "Methods Without Role Restrictions".
+
 ## AddAdmin
 
 Adds a new admin. Requires `super_admin` role.
