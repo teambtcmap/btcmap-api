@@ -1,4 +1,3 @@
-
 # REST API
 
 The BTCMap API provides REST endpoints for retrieving data about elements, events, users, areas, reports, element comments, and element issues.
@@ -30,7 +29,8 @@ Common status codes:
 - [Events API](events.md)
 - [Users API](users.md)
 - [Areas API](areas.md)
-- [Reports API](reports.md)
+- [Reports API](reports.md) - Access user reports about elements
 - [Element Comments API](element-comments.md)
 - [Element Issues API](element-issues.md)
-- [Feeds API](feeds.md)
+- [Feeds API](feeds.md) - Access Atom feeds for various activities
+- [Area Elements API](area-elements.md) - Access elements within geographic areas
