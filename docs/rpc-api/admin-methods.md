@@ -1,0 +1,96 @@
+
+# Admin RPC Methods
+
+This page documents all RPC methods related to administrative tasks.
+
+## AddAdmin
+
+Adds a new admin. Requires existing admin authentication.
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "add_admin",
+  "params": {
+    "username": "admin_username",
+    "password": "admin_password"
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "admin_id": "admin_id"
+  },
+  "id": 1
+}
+```
+
+## AddAdminAction
+
+Records an admin action. Requires admin authentication.
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "add_admin_action",
+  "params": {
+    "action_type": "action_type",
+    "entity_id": "entity_id",
+    "description": "Action description"
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "action_id": "action_id"
+  },
+  "id": 1
+}
+```
+
+## RemoveAdminAction
+
+Removes an admin action. Requires admin authentication.
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "remove_admin_action",
+  "params": {
+    "action_id": "action_id"
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
