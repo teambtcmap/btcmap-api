@@ -1,8 +1,8 @@
 # Element Methods
 
-This document describes the available RPC methods for interacting with elements (locations that accept Bitcoin).
+This document describes the available RPC methods for interacting with elements.
 
-## Available Methods
+## Table of Contents
 
 - [get_element](#get_element) - Retrieve a specific element by ID
 - [set_element_tag](#set_element_tag) - Set a tag on an element

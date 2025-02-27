@@ -1,10 +1,18 @@
 # Area Methods
 
-This document describes the available RPC methods for interacting with geographic areas.
+This document describes the available RPC methods for interacting with areas.
 
-## Methods
+## Available Methods
 
-### get_areas
+- [get_areas](#get_areas) - Retrieve areas based on query parameters
+- [get_area_by_id](#get_area_by_id) - Retrieve a specific area by ID
+- [get_area_elements](#get_area_elements) - Get elements within an area
+- [add_area](#add_area) - Adds a new geographic area.
+- [update_area](#update_area) - Updates an existing area.
+- [remove_area](#remove_area) - Removes an area from the database.
+
+
+### <a name="get_areas"></a>get_areas
 
 Retrieves areas based on query parameters.
 
@@ -50,7 +58,7 @@ Retrieves areas based on query parameters.
 }
 ```
 
-### get_area_by_id
+### <a name="get_area_by_id"></a>get_area_by_id
 
 Retrieves a specific area by its ID.
 
@@ -93,7 +101,7 @@ Retrieves a specific area by its ID.
 }
 ```
 
-### get_area_elements
+### <a name="get_area_elements"></a>get_area_elements
 
 Retrieves elements within a specific area.
 
@@ -136,7 +144,7 @@ Retrieves elements within a specific area.
 }
 ```
 
-### add_area
+### <a name="add_area"></a>add_area
 
 Adds a new geographic area.
 
@@ -178,7 +186,7 @@ Adds a new geographic area.
 }
 ```
 
-### update_area
+### <a name="update_area"></a>update_area
 
 Updates an existing area.
 
@@ -219,7 +227,7 @@ Updates an existing area.
 }
 ```
 
-### remove_area
+### <a name="remove_area"></a>remove_area
 
 Removes an area from the database.
 

@@ -1,7 +1,12 @@
-
 # Element Issues API (v4)
 
-The Element Issues API allows you to retrieve information about issues associated with map elements.
+This document describes the endpoints for interacting with element issues in API v4.
+
+## Available Endpoints
+
+- [GET /v4/element-issues](#get-v4element-issues) - Retrieve element issues based on query parameters
+- [GET /v4/element-issues/{id}](#get-v4element-issuesid) - Retrieve a specific element issue by ID
+
 
 ## Endpoints
 
@@ -76,4 +81,3 @@ Retrieves a specific element issue by its ID.
 
 ```
 GET /v4/element-issues/1
-```

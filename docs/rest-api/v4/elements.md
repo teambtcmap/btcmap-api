@@ -1,9 +1,11 @@
-
 # Elements API (v4)
 
-The Elements API allows you to retrieve information about map elements (businesses, ATMs, etc.) that support Bitcoin.
+This document describes the endpoints for interacting with elements in API v4.
 
-## Endpoints
+## Available Endpoints
+
+- [Get Elements List](#get-elements-list)
+- [Get Element by ID](#get-element-by-id)
 
 ### Get Elements List
 
@@ -100,4 +102,3 @@ Retrieves a specific element by its ID.
 
 ```
 GET /v4/elements/123456
-```

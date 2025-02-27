@@ -1,7 +1,11 @@
-
 # Users API (v3)
 
-The Users API allows you to retrieve information about users of the BTCMap platform.
+This document describes the endpoints for interacting with users in API v3.
+
+## Available Endpoints
+
+- [GET /v3/users](#get-users) - Retrieve users based on query parameters
+- [GET /v3/users/{id}](#get-user-by-id) - Retrieve a specific user by ID
 
 ## Endpoints
 
@@ -80,4 +84,3 @@ Retrieves a specific user by their ID.
 
 ```
 GET /v3/users/123
-```

@@ -1,7 +1,10 @@
+# Search Methods
 
-# Search RPC Methods
+This document describes the available RPC methods for searching.
 
-This page documents all RPC methods related to searching.
+## Available Methods
+
+- [search](#search) - Search for elements, areas, or users
 
 ## Search
 
@@ -54,4 +57,3 @@ Searches for elements, areas, users, and other entities.
   },
   "id": 1
 }
-```

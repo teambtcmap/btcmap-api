@@ -1,11 +1,13 @@
-
 # Areas API (v3)
 
-The Areas API allows you to retrieve information about geographic areas defined in the BTCMap platform.
+This document describes the endpoints for interacting with areas in API v3.
 
-## Endpoints
+## Available Endpoints
 
-### Get Areas List
+- [GET /v3/areas](#get-areas) - Retrieve areas based on query parameters
+- [GET /v3/areas/{id}](#get-area-by-id) - Retrieve a specific area by ID
+
+### <a name="get-areas"></a>Get Areas List
 
 ```
 GET /v3/areas
@@ -51,7 +53,7 @@ Retrieves a list of geographic areas that have been updated since a specific tim
 GET /v3/areas?updated_since=2023-01-01T00:00:00Z&limit=10
 ```
 
-### Get Area by ID
+### <a name="get-area-by-id"></a>Get Area by ID
 
 ```
 GET /v3/areas/{id}
@@ -92,4 +94,3 @@ Retrieves a specific geographic area by its ID.
 
 ```
 GET /v3/areas/123
-```

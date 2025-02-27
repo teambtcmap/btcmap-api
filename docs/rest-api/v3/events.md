@@ -1,7 +1,11 @@
-
 # Events API (v3)
 
-The Events API allows you to retrieve information about events that occur on the BTCMap platform.
+This document describes the endpoints for interacting with events in API v3.
+
+## Available Endpoints
+
+- [GET /v3/events](#get-v3events) - Retrieve events based on query parameters
+- [GET /v3/events/{id}](#get-v3eventsid) - Retrieve a specific event by ID
 
 ## Endpoints
 
@@ -86,4 +90,3 @@ Retrieves a specific event by its ID.
 
 ```
 GET /v3/events/123
-```

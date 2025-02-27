@@ -3,6 +3,15 @@
 
 This document describes the available RPC methods for interacting with users.
 
+## Available Methods
+
+- [get_users](#get_users) - Retrieve users based on query parameters
+- [get_user_by_id](#get_user_by_id) - Retrieve a specific user by ID
+- [get_most_active_users](#get_most_active_users) - Get the most active users
+- [get_user_activity](#get_user_activity) - Get activity data for a specific user
+- [set_user_tag](#set_user_tag) - Set a tag for a user
+- [remove_user_tag](#remove_user_tag) - Remove a tag from a user
+
 ## Methods
 
 ### get_users

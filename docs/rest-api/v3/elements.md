@@ -1,7 +1,14 @@
-
 # Elements API (v3)
 
-The Elements API allows you to retrieve information about map elements (businesses, ATMs, etc.) that support Bitcoin.
+This document describes the endpoints for interacting with elements in API v3.
+
+## Available Endpoints
+
+- [GET /v3/elements](#get-v3elements) - Retrieve elements based on query parameters
+- [GET /v3/elements/{id}](#get-v3elementsid) - Retrieve a specific element by ID
+- [POST /v3/elements](#post-v3elements) - Create a new element
+- [PUT /v3/elements/{id}](#put-v3elementsid) - Update an existing element
+- [DELETE /v3/elements/{id}](#delete-v3elementsid) - Delete an element
 
 ## Endpoints
 
@@ -86,4 +93,3 @@ Retrieves a specific element by its ID.
 
 ```
 GET /v3/elements/123456
-```

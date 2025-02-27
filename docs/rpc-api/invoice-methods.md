@@ -1,7 +1,12 @@
-
 # Invoice RPC Methods
 
-This page documents all RPC methods related to invoices.
+This document describes the available RPC methods for interacting with invoices.
+
+## Available Methods
+
+- [GetInvoice](#getinvoice) - Retrieve a specific invoice by ID
+- [GenerateInvoice](#generateinvoice) - Generate a new invoice
+- [SyncUnpaidInvoices](#syncunpaidinvoices) - Synchronize status of unpaid invoices
 
 ## GetInvoice
 
@@ -103,4 +108,3 @@ Synchronizes the status of unpaid invoices.
   },
   "id": 1
 }
-```
