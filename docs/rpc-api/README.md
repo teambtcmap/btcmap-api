@@ -3,6 +3,10 @@
 
 The BTCMap API provides a JSON-RPC 2.0 interface for accessing various functionalities.
 
+- [Admin Methods](admin-methods.md) - Methods for administrative tasks
+- [Admin Roles and Permissions](admin-roles.md) - Details about admin roles and their permissions
+
+
 ## Base Endpoint
 
 ```

@@ -1,11 +1,11 @@
 
 # Admin RPC Methods
 
-This page documents all RPC methods related to administrative tasks.
+This page documents all RPC methods related to administrative tasks. For details on which admin roles can use these methods, see the [Admin Roles and Permissions](admin-roles.md) documentation.
 
 ## AddAdmin
 
-Adds a new admin. Requires existing admin authentication.
+Adds a new admin. Requires `super_admin` role.
 
 ### Request
 
@@ -36,7 +36,7 @@ Adds a new admin. Requires existing admin authentication.
 
 ## AddAdminAction
 
-Records an admin action. Requires admin authentication.
+Records an admin action. Requires `super_admin`, `moderator`, `content_manager`, or `reviewer` role.
 
 ### Request
 
@@ -68,7 +68,7 @@ Records an admin action. Requires admin authentication.
 
 ## RemoveAdminAction
 
-Removes an admin action. Requires admin authentication.
+Removes an admin action. Requires `super_admin` role.
 
 ### Request
 
