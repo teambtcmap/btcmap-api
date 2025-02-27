@@ -13,32 +13,23 @@ The API is versioned with the paths `/v2/`, `/v3/`, and `/v4/`. When a new incom
 
 ## Available Endpoints
 
-- **Elements** - Access map elements (locations) data
-  - [v2](v2/elements.md), [v3](v3/elements.md), [v4](v4/elements.md)
+- **Elements ([v2](v2/elements.md)|[v3](v3/elements.md)|[v4](v4/elements.md))** - Access map elements (locations) data
 
-- **Element Issues** - Manage issues related to elements
-  - [v4](v4/element-issues.md)
+- **Element Issues ([v4](v4/element-issues.md))** - Manage issues related to elements
 
-- **Element Comments** - Manage comments on elements
-  - [v3](v3/element-comments.md)
+- **Element Comments ([v3](v3/element-comments.md))** - Manage comments on elements
 
-- **Users** - Access user data
-  - [v2](v2/users.md), [v3](v3/users.md), [v4](v4/users.md)
+- **Users ([v2](v2/users.md)|[v3](v3/users.md)|[v4](v4/users.md))** - Access user data
 
-- **Areas** - Access geographic areas data
-  - [v2](v2/areas.md), [v3](v3/areas.md), [v4](v4/areas.md)
+- **Areas ([v2](v2/areas.md)|[v3](v3/areas.md)|[v4](v4/areas.md))** - Access geographic areas data
 
-- **Events** - Access events data
-  - [v2](v2/events.md), [v3](v3/events.md), [v4](v4/events.md)
+- **Events ([v2](v2/events.md)|[v3](v3/events.md)|[v4](v4/events.md))** - Access events data
 
-- **Reports** - Access reports data
-  - [v2](v2/reports.md), [v3](v3/reports.md)
+- **Reports ([v2](v2/reports.md)|[v3](v3/reports.md))** - Access reports data
 
-- **Feeds** - Access feed data
-  - [v3](v3/feeds.md), [v4](v4/feeds.md)
+- **Feeds ([v3](v3/feeds.md)|[v4](v4/feeds.md))** - Access feed data
 
-- **Area Elements** - Access relationships between areas and elements
-  - [v3](v3/area-elements.md)
+- **Area Elements ([v3](v3/area-elements.md))** - Access relationships between areas and elements
 
 ## Authentication
 

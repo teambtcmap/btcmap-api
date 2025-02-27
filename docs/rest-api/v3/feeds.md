@@ -62,28 +62,3 @@ GET /feeds/new-comments/{area_url_alias}
 ### Example Response
 
 Returns an Atom feed XML with entries for new comments on places in the specified area.
-# Feeds API (v3)
-
-The Feeds API provides access to various activity feeds in Atom format.
-
-## Endpoints
-
-### GET /feeds/new-comments
-
-Provides an Atom feed of the latest comments on elements.
-
-#### Response Format
-
-Atom XML feed containing the most recent comments with the following information:
-- Comment content
-- Author information (if available)
-- Timestamp
-- Link to the associated element
-
-#### Example Usage
-
-```
-curl https://api.btcmap.org/feeds/new-comments
-```
-
-This endpoint is designed to be consumed by feed readers and services that support the Atom format.
