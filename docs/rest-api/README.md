@@ -1,19 +1,45 @@
-# REST API Documentation
 
-The BTC Map REST API is available in multiple versions. Each version has specific endpoints and features.
+# REST API
 
-## Available Versions
+The BTCMap REST API provides access to various resources through standard HTTP methods.
 
-- [Version 2 (v2)](./v2/README.md) - Legacy API version
-- [Version 3 (v3)](./v3/README.md) - Current stable API version
-- [Version 4 (v4)](./v4/README.md) - Latest API version with enhanced features
+## API Base URL
 
-Each version has its own documentation. Please refer to the appropriate version documentation for details.
+All API endpoints are relative to the base URL: `https://api.btcmap.org/`
 
-## API Versioning Policy
+## Versioned Endpoints
 
-API versions are maintained for backward compatibility. New features and improvements are added to newer versions.
+The API is versioned with prefixes `/v2/`, `/v3/`, and `/v4/`. Always use the latest stable version when possible.
 
-## Deprecation Notice
+## Common Query Parameters
 
-Non-versioned endpoints have been deprecated and removed. Please use the versioned endpoints instead.
+Many endpoints share these common query parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `updated_since` | ISO 8601 datetime | **Yes** | Filter resources updated since this time (RFC3339 format, e.g. `2023-01-01T00:00:00Z`) |
+| `limit` | Integer | **Yes** | Limit the number of resources returned |
+
+## Available Endpoints
+
+- [Elements API](v3/elements.md) - Access and manage map elements
+- [Events API](v3/events.md) - Access events related to map elements
+- [Users API](v3/users.md) - Access user information
+- [Areas API](v3/areas.md) - Access geographical area information
+- [Element Issues API](v3/element-issues.md) - Retrieve issues associated with elements
+- [Feeds API](v3/feeds.md) - Access feed information
+
+## Error Handling
+
+The API returns appropriate HTTP status codes:
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 400 | Bad Request - Missing required parameters |
+| 404 | Not Found - Resource not found |
+| 500 | Internal Server Error |
+
+## Rate Limiting
+
+The API implements rate limiting to ensure fair usage. Clients should respect these limits and implement appropriate backoff strategies.

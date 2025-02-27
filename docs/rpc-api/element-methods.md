@@ -1,122 +1,66 @@
+# Element Methods
 
-# Element RPC Methods
+Methods for managing map elements in the BTCMap platform.
 
-This page documents all RPC methods related to elements.
+## Public Methods
 
-## GetElement
+### get_element
 
 Retrieves a specific element by its ID.
 
-### Request
+**Required Role**: None (Public)
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `id` | String | Yes | The element ID |
+
+**Response**:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "get_element",
-  "params": {
-    "id": "element_id"
+  "id": "123",
+  "type": "node",
+  "tags": {
+    "name": "Example Shop",
+    "amenity": "cafe"
   },
-  "id": 1
+  "geometry": {
+    "type": "Point",
+    "coordinates": [13.37, 42.0]
+  },
+  "updated_at": "2023-01-15T00:00:00Z"
 }
 ```
 
-### Response
+### get_elements_in_area
 
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "id": "element_id",
-    "name": "Element Name",
-    "description": "Element Description",
-    "tags": ["tag1", "tag2"],
-    "location": {
-      "lat": 51.5074,
-      "lon": -0.1278
-    },
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-01T00:00:00Z"
-  },
-  "id": 1
-}
-```
+Retrieves elements within a specified geographic area.
 
-## SetElementTag
+**Required Role**: None (Public)
 
-Adds a tag to an element. Requires admin authentication.
+**Parameters**:
 
-### Request
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `area_id` | String or Integer | Yes | The area ID or URL alias |
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "set_element_tag",
-  "params": {
-    "element_id": "element_id",
-    "tag": "tag_name"
-  },
-  "id": 1
-}
-```
+**Response**:
 
-### Response
+Array of element objects.
 
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true
-  },
-  "id": 1
-}
-```
 
-## RemoveElementTag
-
-Removes a tag from an element. Requires admin authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "remove_element_tag",
-  "params": {
-    "element_id": "element_id",
-    "tag": "tag_name"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true
-  },
-  "id": 1
-}
-```
-
-## GetBoostedElements
+### GetBoostedElements
 
 Retrieves a list of boosted elements.
 
-### Request
+**Required Role**: None (Public)
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "get_boosted_elements",
-  "params": {},
-  "id": 1
-}
-```
+**Parameters**:
+None
 
-### Response
+**Response**:
 
 ```json
 {
@@ -135,55 +79,20 @@ Retrieves a list of boosted elements.
 }
 ```
 
-## BoostElement
-
-Boosts an element. Requires admin authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "boost_element",
-  "params": {
-    "element_id": "element_id",
-    "amount": 100
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "boost_expiration": "2023-01-01T00:00:00Z"
-  },
-  "id": 1
-}
-```
-
-## PaywallGetBoostElementQuote
+### PaywallGetBoostElementQuote
 
 Gets a quote for boosting an element.
 
-### Request
+**Required Role**: None (Public)
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_get_boost_element_quote",
-  "params": {
-    "amount": 100
-  },
-  "id": 1
-}
-```
+**Parameters**:
 
-### Response
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `amount` | Integer | Yes | The boost amount |
+
+
+**Response**:
 
 ```json
 {
@@ -199,86 +108,16 @@ Gets a quote for boosting an element.
 }
 ```
 
-## PaywallBoostElement
-
-Boosts an element through the paywall system.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_boost_element",
-  "params": {
-    "element_id": "element_id",
-    "amount": 100,
-    "payment_hash": "payment_hash"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "boost_expiration": "2023-01-01T00:00:00Z"
-  },
-  "id": 1
-}
-```
-
-## AddElementComment
-
-Adds a comment to an element. Requires admin authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "add_element_comment",
-  "params": {
-    "element_id": "element_id",
-    "content": "Comment content",
-    "user_id": "user_id"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "comment_id": "comment_id"
-  },
-  "id": 1
-}
-```
-
-## PaywallGetAddElementCommentQuote
+### PaywallGetAddElementCommentQuote
 
 Gets a quote for adding a comment to an element.
 
-### Request
+**Required Role**: None (Public)
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_get_add_element_comment_quote",
-  "params": {},
-  "id": 1
-}
-```
+**Parameters**:
+None
 
-### Response
+**Response**:
 
 ```json
 {
@@ -293,165 +132,19 @@ Gets a quote for adding a comment to an element.
 }
 ```
 
-## PaywallAddElementComment
-
-Adds a comment to an element through the paywall system.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_add_element_comment",
-  "params": {
-    "element_id": "element_id",
-    "content": "Comment content",
-    "user_id": "user_id",
-    "payment_hash": "payment_hash"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "comment_id": "comment_id"
-  },
-  "id": 1
-}
-```
-
-## GenerateElementIssues
-
-Generates issues for elements. Requires admin authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "generate_element_issues",
-  "params": {},
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "issues_generated": 10
-  },
-  "id": 1
-}
-```
-
-## SyncElements
-
-Synchronizes elements from an external source. Requires admin authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "sync_elements",
-  "params": {},
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "elements_synced": 100
-  },
-  "id": 1
-}
-```
-
-## GenerateElementIcons
-
-Generates icons for elements. Requires admin authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "generate_element_icons",
-  "params": {},
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "icons_generated": 50
-  },
-  "id": 1
-}
-```
-
-## GenerateElementCategories
-
-Generates categories for elements. Requires admin authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "generate_element_categories",
-  "params": {},
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "categories_generated": 20
-  },
-  "id": 1
-}
-```
-
-## GetElementIssues
+### GetElementIssues
 
 Retrieves issues for an element.
 
-### Request
+**Required Role**: None (Public)
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "get_element_issues",
-  "params": {
-    "element_id": "element_id"
-  },
-  "id": 1
-}
-```
+**Parameters**:
 
-### Response
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+
+**Response**:
 
 ```json
 {
@@ -470,3 +163,284 @@ Retrieves issues for an element.
   "id": 1
 }
 ```
+
+
+## Admin Methods
+
+### update_element_tags
+
+Updates the tags of a specific element.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `id` | String | Yes | The element ID |
+| `tags` | Object | Yes | The updated tags |
+
+**Response**:
+
+The updated element object.
+
+### delete_element
+
+Marks an element as deleted.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `id` | String | Yes | The element ID |
+
+**Response**:
+
+```json
+{
+  "success": true
+}
+```
+
+### SetElementTag
+
+Adds a tag to an element.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+| `tag` | String | Yes | The tag name |
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
+
+### RemoveElementTag
+
+Removes a tag from an element.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+| `tag` | String | Yes | The tag name |
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
+
+### BoostElement
+
+Boosts an element.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+| `amount` | Integer | Yes | The boost amount |
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "boost_expiration": "2023-01-01T00:00:00Z"
+  },
+  "id": 1
+}
+```
+
+### PaywallBoostElement
+
+Boosts an element through the paywall system.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+| `amount` | Integer | Yes | The boost amount |
+| `payment_hash` | String | Yes | The payment hash |
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "boost_expiration": "2023-01-01T00:00:00Z"
+  },
+  "id": 1
+}
+```
+
+### AddElementComment
+
+Adds a comment to an element.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+| `content` | String | Yes | The comment content |
+| `user_id` | String | Yes | The user ID |
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "comment_id": "comment_id"
+  },
+  "id": 1
+}
+```
+
+### PaywallAddElementComment
+
+Adds a comment to an element through the paywall system.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `element_id` | String | Yes | The element ID |
+| `content` | String | Yes | The comment content |
+| `user_id` | String | Yes | The user ID |
+| `payment_hash` | String | Yes | The payment hash |
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "comment_id": "comment_id"
+  },
+  "id": 1
+}
+```
+
+### GenerateElementIssues
+
+Generates issues for elements.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+None
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "issues_generated": 10
+  },
+  "id": 1
+}
+```
+
+### SyncElements
+
+Synchronizes elements from an external source.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+None
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "elements_synced": 100
+  },
+  "id": 1
+}
+```
+
+### GenerateElementIcons
+
+Generates icons for elements.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+None
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "icons_generated": 50
+  },
+  "id": 1
+}
+```
+
+### GenerateElementCategories
+
+Generates categories for elements.
+
+**Required Role**: `element_admin`
+
+**Parameters**:
+None
+
+**Response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "categories_generated": 20
+  },
+  "id": 1
+}

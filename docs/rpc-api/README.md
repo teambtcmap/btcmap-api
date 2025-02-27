@@ -1,83 +1,67 @@
-
 # RPC API
 
-The BTCMap API provides a JSON-RPC 2.0 interface for accessing various functionalities.
+The BTCMap RPC API provides a set of methods for interacting with the BTCMap platform.
 
-- [Public Methods](public-methods.md) - Methods available without authentication
-- [Admin Methods](admin-methods.md) - Methods for administrative tasks
-- [Admin Roles and Permissions](admin-roles.md) - Details about admin roles and their permissions
+## Overview
 
-
-## Base Endpoint
+The RPC API is accessed through HTTP POST requests to the endpoint:
 
 ```
-POST /rpc
+https://api.btcmap.org/rpc
 ```
 
-## RPC Request Format
+## Method Categories
 
-All RPC calls follow the JSON-RPC 2.0 specification:
+Methods are grouped by the type of resource they operate on:
+
+- [Element Methods](element-methods.md) - Methods for managing map elements
+- [Area Methods](area-methods.md) - Methods for managing geographic areas
+- [User Methods](user-methods.md) - Methods for user operations
+- [Search Methods](search-methods.md) - Methods for searching various resources
+
+## Authentication and Permissions
+
+Some methods require authentication and specific roles. Each method documentation includes:
+
+- **Required Role**: The role needed to execute the method (if any)
+- **Parameters**: The required and optional parameters
+- **Response**: The expected response format
+
+## Request Format
+
+RPC requests should be made with the following format:
 
 ```json
 {
-  "jsonrpc": "2.0",
+  "id": "1",
   "method": "method_name",
   "params": {
     "param1": "value1",
     "param2": "value2"
-  },
-  "id": 1
+  }
 }
 ```
 
-## RPC Response Format
+## Response Format
 
-Successful responses:
+RPC responses will be in the following format:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "result": {
-    "key1": "value1",
-    "key2": "value2"
-  },
-  "id": 1
+  "id": "1",
+  "result": { ... },
+  "error": null
 }
 ```
 
-Error responses:
+Or in case of an error:
 
 ```json
 {
-  "jsonrpc": "2.0",
+  "id": "1",
+  "result": null,
   "error": {
     "code": -32000,
-    "message": "Error message",
-    "data": {}
-  },
-  "id": 1
+    "message": "Error message"
+  }
 }
-```
-
-## Authentication
-
-Most RPC methods require authentication. For those methods, you need to include authentication credentials in the request headers or parameters.
-
-The following methods are publicly accessible without authentication:
-- GetElement
-- PaywallGetAddElementCommentQuote
-- PaywallAddElementComment
-- PaywallGetBoostElementQuote
-- PaywallBoostElement
-- GetElementIssues
-- GetAreaDashboard
-- GetMostActiveUsers
-
-## Available Methods
-
-- [Element Methods](element-methods.md)
-- [Area Methods](area-methods.md)
-- [User Methods](user-methods.md)
-- [Admin Methods](admin-methods.md)
-- [Invoice Methods](invoice-methods.md)
-- [Search Methods](search-methods.md)

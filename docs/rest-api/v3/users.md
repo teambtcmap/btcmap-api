@@ -1,73 +1,85 @@
 
 # Users API (v3)
 
-Endpoints for retrieving user data in the v3 API. This version provides enhanced filtering and more detailed user information.
+The Users API allows you to retrieve information about users of the BTCMap platform.
 
-## Get Users
+## Endpoints
 
-Retrieves a list of users with enhanced filtering.
+### Get Users List
 
 ```
 GET /v3/users
 ```
 
-### Query Parameters
+Retrieves a list of users that have been updated since a specific time.
 
-| Parameter      | Type   | Description |
-|----------------|--------|-------------|
-| updated_since  | string | Return users updated since this timestamp (RFC3339 format) |
-| limit          | int    | Maximum number of users to return |
+#### Query Parameters
 
-### Example Response
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `updated_since` | ISO 8601 datetime | **Yes** | Filter users updated since this time (RFC3339 format) |
+| `limit` | Integer | **Yes** | Limit the number of users returned |
+
+#### Response
 
 ```json
 [
   {
     "id": 123,
     "osm_data": {
-      "id": 987654321,
-      "display_name": "ExampleUser",
-      "account_created": "2022-01-01T00:00:00Z"
+      "id": 123,
+      "display_name": "username",
+      "account_created": "2020-01-01T00:00:00Z"
     },
     "tags": {
-      "admin": true,
-      "moderator": false
+      "role": "contributor"
     },
-    "updated_at": "2023-01-01T00:00:00Z",
-    "deleted_at": null
+    "updated_at": "2023-01-15T00:00:00Z"
   }
 ]
 ```
 
-## Get User by ID
-
-Retrieves a specific user by their ID with enhanced details.
+### Get User by ID
 
 ```
 GET /v3/users/{id}
 ```
 
-### Path Parameters
+Retrieves a specific user by their ID.
+
+#### Path Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| id        | int  | The ID of the user |
+| `id` | Integer | The user ID |
 
-### Example Response
+#### Response
 
 ```json
 {
   "id": 123,
   "osm_data": {
-    "id": 987654321,
-    "display_name": "ExampleUser",
-    "account_created": "2022-01-01T00:00:00Z"
+    "id": 123,
+    "display_name": "username",
+    "account_created": "2020-01-01T00:00:00Z"
   },
   "tags": {
-    "admin": true,
-    "moderator": false
+    "role": "contributor"
   },
-  "updated_at": "2023-01-01T00:00:00Z",
-  "deleted_at": null
+  "updated_at": "2023-01-15T00:00:00Z"
 }
+```
+
+## Examples
+
+### Get all users updated since January 2023 with a limit of 10
+
+```
+GET /v3/users?updated_since=2023-01-01T00:00:00Z&limit=10
+```
+
+### Get a specific user
+
+```
+GET /v3/users/123
 ```
