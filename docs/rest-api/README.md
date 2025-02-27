@@ -1,49 +1,53 @@
 
 # BTCMap REST API
 
-The REST API provides HTTP endpoints for accessing BTCMap data.
+The BTCMap REST API provides HTTP-based access to BTC Map data.
 
-## API Versions
+## Base URL
 
-The REST API is versioned to ensure backward compatibility as new features are added.
+All REST API endpoints are relative to the base URL: `https://api.btcmap.org/`
 
-- [v2 API](v2/README.md)
-- [v3 API](v3/README.md)
-- [v4 API](v4/README.md)
+## API Versioning
 
-## Common Endpoints
+The API is versioned with the paths `/v2/`, `/v3/`, and `/v4/`. When a new incompatible API version is released, the old versions remain available for backwards compatibility.
 
-### Elements
+## Available Endpoints
 
-Elements are locations on the map that accept Bitcoin.
+- **Elements** - Access map elements (locations) data
+  - [v2](v2/elements.md), [v3](v3/elements.md), [v4](v4/elements.md)
 
-- [v2 Elements](v2/elements.md)
-- [v3 Elements](v3/elements.md)
-- [v4 Elements](v4/elements.md)
+- **Element Issues** - Manage issues related to elements
+  - [v4](v4/element-issues.md)
 
-### Users
+- **Element Comments** - Manage comments on elements
+  - [v3](v3/element-comments.md)
 
-- [v3 Users](v3/users.md)
-- [v4 Users](v4/users.md)
+- **Users** - Access user data
+  - [v2](v2/users.md), [v3](v3/users.md), [v4](v4/users.md)
 
-### Areas
+- **Areas** - Access geographic areas data
+  - [v2](v2/areas.md), [v3](v3/areas.md), [v4](v4/areas.md)
 
-- [v3 Areas](v3/areas.md)
-- [v4 Areas](v4/areas.md)
+- **Events** - Access events data
+  - [v2](v2/events.md), [v3](v3/events.md), [v4](v4/events.md)
 
-### Events
+- **Reports** - Access reports data
+  - [v2](v2/reports.md), [v3](v3/reports.md)
 
-- [v3 Events](v3/events.md)
-- [v4 Events](v4/events.md)
+- **Feeds** - Access feed data
+  - [v3](v3/feeds.md), [v4](v4/feeds.md)
 
-### Element Issues
-
-- [v4 Element Issues](v4/element-issues.md)
-
-## Request Format
-
-All endpoints accept and return JSON unless otherwise specified.
+- **Area Elements** - Access relationships between areas and elements
+  - [v3](v3/area-elements.md)
 
 ## Authentication
 
-Some endpoints require authentication, which is typically done via query parameters or HTTP headers.
+Most REST API endpoints are publicly accessible without authentication. However, some administrative endpoints may require authentication.
+
+## Rate Limiting
+
+The API is rate-limited to protect against abuse. Please be respectful with your API calls.
+
+## Response Format
+
+All API responses are in JSON format unless otherwise specified. Successful responses typically return a 200 OK status code, while failures return an appropriate HTTP error code.
