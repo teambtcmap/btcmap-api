@@ -431,6 +431,10 @@ impl OverpassElement {
             icon_id = "airport_shuttle";
         }
 
+        if tourism == "zoo" {
+            icon_id = "pets";
+        }
+
         if shop == "general" {
             icon_id = "storefront";
         }
