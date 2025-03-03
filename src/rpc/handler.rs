@@ -61,6 +61,7 @@ pub enum RpcMethod {
     GetMostActiveUsers,
     // admin
     AddAdmin,
+    GetAdmin,
     AddAdminAction,
     RemoveAdminAction,
     // invoice
@@ -343,9 +344,14 @@ pub async fn handle(
             req.id.clone(),
             super::get_most_active_users::run(params(req.params)?, &pool).await?,
         ),
+        // admin
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),
             super::add_admin::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+        ),
+        RpcMethod::GetAdmin => RpcResponse::from(
+            req.id.clone(),
+            super::admin::get_admin::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),

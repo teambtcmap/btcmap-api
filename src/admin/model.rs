@@ -77,7 +77,7 @@ impl Admin {
         name: impl Into<String>,
         password: impl Into<String>,
         pool: &Pool,
-    ) -> Result<Admin> {
+    ) -> Result<Self> {
         let name = name.into();
         let password = password.into();
         pool.get()
@@ -86,7 +86,7 @@ impl Admin {
             .await?
     }
 
-    pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<Admin> {
+    pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 INSERT INTO {table} ({name}, {password})
@@ -98,6 +98,13 @@ impl Admin {
         );
         conn.execute(&sql, params![name, password])?;
         Admin::select_by_id(conn.last_insert_rowid(), conn)
+    }
+
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_id(id, conn))
+            .await?
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Admin> {
