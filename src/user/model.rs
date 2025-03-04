@@ -17,6 +17,8 @@ pub struct User {
 pub struct SelectMostActive {
     pub id: i64,
     pub name: String,
+    pub image_url: Option<String>,
+    pub description: String,
     pub edits: i64,
     pub created: i64,
     pub updated: i64,
@@ -121,6 +123,8 @@ impl User {
             select 
                 u.id,
                 json_extract(u.osm_data, '$.display_name') as name,
+                json_extract(u.osm_data, '$.img.href') as image_url,
+                json_extract(u.osm_data, '$.description') as description,
                 count(*) as edits,
                 (select count(*) from event where user_id = u.id and created_at between ?1 and ?2 and type = 'create') as created,
                 (select count(*) from event where user_id = u.id and created_at between ?1 and ?2 and type = 'update') as updated,
@@ -291,10 +295,12 @@ const fn mapper_select_ordered_by_severity() -> fn(&Row) -> rusqlite::Result<Sel
         Ok(SelectMostActive {
             id: row.get(0)?,
             name: row.get(1)?,
-            edits: row.get(2)?,
-            created: row.get(3)?,
-            updated: row.get(4)?,
-            deleted: row.get(5)?,
+            image_url: row.get(2)?,
+            description: row.get(3)?,
+            edits: row.get(4)?,
+            created: row.get(5)?,
+            updated: row.get(6)?,
+            deleted: row.get(7)?,
         })
     }
 }

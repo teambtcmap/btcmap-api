@@ -402,6 +402,7 @@ dependencies = [
  "geo",
  "geojson",
  "include_dir",
+ "regex",
  "reqwest",
  "rusqlite",
  "serde",
