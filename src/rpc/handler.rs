@@ -347,7 +347,8 @@ pub async fn handle(
         // admin
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),
-            super::add_admin::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::admin::add_admin::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::GetAdmin => RpcResponse::from(
             req.id.clone(),
@@ -355,13 +356,18 @@ pub async fn handle(
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::add_admin_action::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+            super::admin::add_admin_action::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
                 .await?,
         ),
         RpcMethod::RemoveAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::remove_admin_action::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::admin::remove_admin_action::run(
+                params(req.params)?,
+                &admin.unwrap(),
+                &pool,
+                &conf,
+            )
+            .await?,
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),

@@ -1,5 +1,3 @@
-pub mod add_admin;
-pub mod add_admin_action;
 pub mod add_area;
 pub mod add_element_comment;
 pub mod admin;
@@ -27,7 +25,6 @@ pub mod paywall_add_element_comment;
 pub mod paywall_boost_element;
 pub mod paywall_get_add_element_comment_quote;
 pub mod paywall_get_boost_element_quote;
-pub mod remove_admin_action;
 pub mod remove_area;
 pub mod remove_area_tag;
 pub mod remove_element_tag;

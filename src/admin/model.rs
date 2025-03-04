@@ -64,11 +64,8 @@ pub struct Admin {
     #[allow(dead_code)]
     pub password: String,
     pub allowed_actions: Vec<String>,
-    #[allow(dead_code)]
     pub created_at: String,
-    #[allow(dead_code)]
     pub updated_at: String,
-    #[allow(dead_code)]
     pub deleted_at: Option<String>,
 }
 
@@ -107,7 +104,7 @@ impl Admin {
             .await?
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Admin> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -122,7 +119,7 @@ impl Admin {
             .map_err(Into::into)
     }
 
-    pub async fn select_by_name_async(name: impl Into<String>, pool: &Pool) -> Result<Admin> {
+    pub async fn select_by_name_async(name: impl Into<String>, pool: &Pool) -> Result<Self> {
         let name = name.into();
         pool.get()
             .await?
@@ -130,7 +127,7 @@ impl Admin {
             .await?
     }
 
-    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Admin> {
+    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -148,7 +145,7 @@ impl Admin {
     pub async fn select_by_password_async(
         password: impl Into<String>,
         pool: &Pool,
-    ) -> Result<Admin> {
+    ) -> Result<Self> {
         let password = password.into();
         pool.get()
             .await?
@@ -156,7 +153,7 @@ impl Admin {
             .await?
     }
 
-    pub fn select_by_password(password: &str, conn: &Connection) -> Result<Admin> {
+    pub fn select_by_password(password: &str, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -175,7 +172,7 @@ impl Admin {
         admin_id: i64,
         allowed_actions: &[String],
         pool: &Pool,
-    ) -> Result<Admin> {
+    ) -> Result<Self> {
         let allowed_actions = allowed_actions.to_vec();
         pool.get()
             .await?
