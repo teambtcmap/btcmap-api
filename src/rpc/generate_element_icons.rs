@@ -1603,6 +1603,10 @@ impl OverpassElement {
             icon_id = "water_pump"
         }
 
+        if man_made == "charge_point" {
+            icon_id = "electrical_services"
+        }
+
         if waterway == "boatyard" {
             icon_id = "directions_boat"
         }
