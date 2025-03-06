@@ -6,3 +6,8 @@ channel = "stable-24_05"
 
 [deployment]
 run = ["sh", "-c", "cargo run"]
+
+[[ports]]
+localPort = 8000
+externalPort = 80
+exposeLocalhost = true
