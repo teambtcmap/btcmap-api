@@ -5,7 +5,9 @@ use rusqlite::{named_params, Connection, Row};
 use serde_json::{Map, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+const TABLE_NAME: &str = "area";
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Area {
     pub id: i64,
     pub tags: Map<String, Value>,
@@ -14,7 +16,6 @@ pub struct Area {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-const TABLE_NAME: &str = "area";
 const COL_ID: &str = "id";
 const COL_TAGS: &str = "tags";
 const COL_ALIAS: &str = "alias";

@@ -21,7 +21,11 @@ pub struct Res {
 
 pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let res = pool.get().await?.interact(generate_reports).await??;
+    let res = pool
+        .get()
+        .await?
+        .interact(|conn| generate_reports(&conn))
+        .await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     if res > 0 {
         discord::post_message(
@@ -41,7 +45,7 @@ pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     })
 }
 
-pub fn generate_reports(conn: &mut Connection) -> Result<usize> {
+pub fn generate_reports(conn: &Connection) -> Result<usize> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
     let today_reports = Report::select_by_date(&today, None, conn)?;
@@ -51,18 +55,16 @@ pub fn generate_reports(conn: &mut Connection) -> Result<usize> {
     }
     let all_areas = Area::select_all_except_deleted(conn)?;
     let all_elements = Element::select_all_except_deleted(conn)?;
-    let mut reports: HashMap<Area, Map<String, Value>> = HashMap::new();
+    let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
     for area in all_areas {
         let area_elements = crate::element::service::filter_by_area(&all_elements, &area)?;
         if let Some(report) = generate_new_report_if_necessary(&area, area_elements, conn)? {
-            reports.insert(area, report);
+            reports.insert(area.id, report);
         }
     }
-    let sp = conn.savepoint()?;
-    for (area, report) in &reports {
-        insert_report(area.id, report, &sp)?;
+    for (area_id, report) in &reports {
+        insert_report(*area_id, report, conn)?;
     }
-    sp.commit()?;
     Ok(reports.len())
 }
 
