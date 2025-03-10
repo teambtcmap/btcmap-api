@@ -1,3 +1,3 @@
-pub mod model;
-pub use model::Admin;
+pub mod db;
+pub use db::Admin;
 pub mod service;

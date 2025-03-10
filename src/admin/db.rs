@@ -119,15 +119,15 @@ impl Admin {
             .map_err(Into::into)
     }
 
-    pub async fn select_by_name_async(name: impl Into<String>, pool: &Pool) -> Result<Self> {
+    pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<Self> {
         let name = name.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::select_by_name(&name, conn))
+            .interact(move |conn| Self::_select_by_name(&name, conn))
             .await?
     }
 
-    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Self> {
+    fn _select_by_name(name: &str, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -142,18 +142,15 @@ impl Admin {
             .map_err(Into::into)
     }
 
-    pub async fn select_by_password_async(
-        password: impl Into<String>,
-        pool: &Pool,
-    ) -> Result<Self> {
+    pub async fn select_by_password(password: impl Into<String>, pool: &Pool) -> Result<Self> {
         let password = password.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::select_by_password(&password, conn))
+            .interact(move |conn| Self::_select_by_password(&password, conn))
             .await?
     }
 
-    pub fn select_by_password(password: &str, conn: &Connection) -> Result<Self> {
+    fn _select_by_password(password: &str, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -168,7 +165,7 @@ impl Admin {
             .map_err(Into::into)
     }
 
-    pub async fn update_allowed_actions_async(
+    pub async fn update_allowed_actions(
         admin_id: i64,
         allowed_actions: &[String],
         pool: &Pool,
@@ -176,15 +173,15 @@ impl Admin {
         let allowed_actions = allowed_actions.to_vec();
         pool.get()
             .await?
-            .interact(move |conn| Admin::update_allowed_actions(admin_id, &allowed_actions, conn))
+            .interact(move |conn| Self::_update_allowed_actions(admin_id, &allowed_actions, conn))
             .await?
     }
 
-    pub fn update_allowed_actions(
+    pub fn _update_allowed_actions(
         id: i64,
         allowed_actions: &[String],
         conn: &Connection,
-    ) -> Result<Admin> {
+    ) -> Result<Self> {
         let sql = format!(
             r#"
                 UPDATE {table}
@@ -239,8 +236,9 @@ mod test {
     #[test]
     async fn select_by_password() -> Result<()> {
         let pool = mock_pool().await;
-        let admin = Admin::insert("name", "pwd", &pool).await?;
-        let res_admin = Admin::select_by_id(admin.id, &pool).await?;
+        let password = "pwd";
+        let admin = Admin::insert("name", password, &pool).await?;
+        let res_admin = Admin::select_by_password(password, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         assert_eq!(admin.password, res_admin.password);
         Ok(())
@@ -251,7 +249,7 @@ mod test {
         let pool = mock_pool().await;
         let admin = Admin::insert("name", "pwd", &pool).await?;
         let actions = vec!["action_1".into(), "action_2".into()];
-        Admin::update_allowed_actions_async(admin.id, &actions, &pool).await?;
+        Admin::update_allowed_actions(admin.id, &actions, &pool).await?;
         assert_eq!(
             actions,
             Admin::select_by_id(admin.id, &pool).await?.allowed_actions,
