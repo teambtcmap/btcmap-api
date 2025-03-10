@@ -145,7 +145,7 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -162,7 +162,7 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let event = Event::insert(user.id, element.id, "", &db.conn)?;
@@ -182,7 +182,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let event_1 = Event::insert(user.id, element.id, "", &db.conn)?;
@@ -204,7 +204,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let event_1 = Event::insert(user.id, element.id, "", &db.conn)?;

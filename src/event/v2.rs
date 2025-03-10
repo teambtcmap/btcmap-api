@@ -126,7 +126,7 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -141,7 +141,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         Event::insert(user.id, element.id, "", &db.conn)?;
@@ -159,7 +159,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         User::insert(1, &OsmUser::mock(), &db.conn)?;
         Element::insert(&OverpassElement::mock(1), &db.conn)?;
         Event::insert(1, 1, "", &db.conn)?;
@@ -179,7 +179,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         User::insert(1, &OsmUser::mock(), &db.conn)?;
         Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let event_1 = Event::insert(1, 1, "", &db.conn)?;
@@ -202,7 +202,7 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let event_id = 1;
         let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;

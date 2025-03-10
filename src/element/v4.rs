@@ -107,7 +107,7 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -124,7 +124,7 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let _element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let app = test::init_service(
             App::new()
@@ -142,7 +142,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let _element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let _element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;
         let _element_3 = Element::insert(&OverpassElement::mock(3), &db.conn)?;
@@ -162,7 +162,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         Element::_set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
         let element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;

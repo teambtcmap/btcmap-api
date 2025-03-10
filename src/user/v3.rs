@@ -111,7 +111,7 @@ mod test {
     async fn get_no_updated_since() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_db().await.pool))
+                .app_data(Data::new(mock_db().pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -125,7 +125,7 @@ mod test {
     async fn get_no_limit() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_db().await.pool))
+                .app_data(Data::new(mock_db().pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -139,7 +139,7 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -156,7 +156,7 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
@@ -174,7 +174,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user_1 = User::insert(1, &OsmUser::mock(), &db.conn)?;
         let user_2 = User::insert(2, &OsmUser::mock(), &db.conn)?;
         let _user_3 = User::insert(3, &OsmUser::mock(), &db.conn)?;
@@ -194,7 +194,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user_1 = User::insert(1, &OsmUser::mock(), &db.conn)?;
         User::_set_updated_at(user_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
         let user_2 = User::insert(2, &OsmUser::mock(), &db.conn)?;

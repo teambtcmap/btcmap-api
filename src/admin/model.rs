@@ -70,7 +70,7 @@ pub struct Admin {
 }
 
 impl Admin {
-    pub async fn insert_async(
+    pub async fn insert(
         name: impl Into<String>,
         password: impl Into<String>,
         pool: &Pool,
@@ -79,11 +79,11 @@ impl Admin {
         let password = password.into();
         pool.get()
             .await?
-            .interact(move |conn| Admin::insert(&name, &password, conn))
+            .interact(move |conn| Self::_insert(&name, &password, conn))
             .await?
     }
 
-    pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<Self> {
+    fn _insert(name: &str, password: &str, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 INSERT INTO {table} ({name}, {password})
@@ -94,7 +94,7 @@ impl Admin {
             password = Columns::Password.as_str(),
         );
         conn.execute(&sql, params![name, password])?;
-        Admin::select_by_id(conn.last_insert_rowid(), conn)
+        Self::select_by_id(conn.last_insert_rowid(), conn)
     }
 
     pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Self> {
@@ -203,13 +203,14 @@ impl Admin {
 #[cfg(test)]
 mod test {
     use super::Admin;
-    use crate::{test::mock_conn, Result};
+    use crate::{test::mock_pool, Result};
+    use actix_web::test;
 
     #[test]
-    fn insert() -> Result<()> {
-        let conn = mock_conn();
-        let admin = Admin::insert("name", "pwd", &conn)?;
-        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+    async fn insert() -> Result<()> {
+        let pool = mock_pool().await;
+        let admin = Admin::insert("name", "pwd", &pool).await?;
+        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         assert_eq!(admin.name, res_admin.name);
         assert_eq!(admin.password, res_admin.password);
@@ -217,43 +218,45 @@ mod test {
     }
 
     #[test]
-    fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
-        let admin = Admin::insert("name", "pwd", &conn)?;
-        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+    async fn select_by_id() -> Result<()> {
+        let pool = mock_pool().await;
+        let admin = Admin::insert("name", "pwd", &pool).await?;
+        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         Ok(())
     }
 
     #[test]
-    fn select_by_name() -> Result<()> {
-        let conn = mock_conn();
-        let admin = Admin::insert("name", "pwd", &conn)?;
-        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+    async fn select_by_name() -> Result<()> {
+        let pool = mock_pool().await;
+        let admin = Admin::insert("name", "pwd", &pool).await?;
+        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         assert_eq!(admin.name, res_admin.name);
         Ok(())
     }
 
     #[test]
-    fn select_by_password() -> Result<()> {
-        let conn = mock_conn();
-        let admin = Admin::insert("name", "pwd", &conn)?;
-        let res_admin = Admin::select_by_id(admin.id, &conn)?;
+    async fn select_by_password() -> Result<()> {
+        let pool = mock_pool().await;
+        let admin = Admin::insert("name", "pwd", &pool).await?;
+        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         assert_eq!(admin.password, res_admin.password);
         Ok(())
     }
 
     #[test]
-    fn update_allowed_actions() -> Result<()> {
-        let conn = mock_conn();
-        let admin = Admin::insert("name", "pwd", &conn)?;
+    async fn update_allowed_actions() -> Result<()> {
+        let pool = mock_pool().await;
+        let admin = Admin::insert("name", "pwd", &pool).await?;
         let actions = vec!["action_1".into(), "action_2".into()];
-        Admin::update_allowed_actions(admin.id, &actions, &conn)?;
+        Admin::update_allowed_actions_async(admin.id, &actions, &pool).await?;
         assert_eq!(
             actions,
-            Admin::select_by_id(admin.id, &conn)?.allowed_actions,
+            Admin::select_by_id_async(admin.id, &pool)
+                .await?
+                .allowed_actions,
         );
         Ok(())
     }

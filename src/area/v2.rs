@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         Area::insert(Area::mock_tags(), &db.conn)?;
         let app = test::init_service(
             App::new()
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         Area::insert(Area::mock_tags(), &db.conn)?;
         Area::insert(Area::mock_tags(), &db.conn)?;
         Area::insert(Area::mock_tags(), &db.conn)?;
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let mut tags = Area::mock_tags();
         let area_url_alias = "test";
         tags.insert("url_alias".into(), area_url_alias.into());

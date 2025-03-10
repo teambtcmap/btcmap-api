@@ -120,7 +120,7 @@ mod test {
     async fn get_no_updated_since() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_db().await.pool))
+                .app_data(Data::new(mock_db().pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -134,7 +134,7 @@ mod test {
     async fn get_no_limit() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_db().await.pool))
+                .app_data(Data::new(mock_db().pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -148,7 +148,7 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -165,7 +165,7 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let report = Report::insert(
             area.id,
@@ -189,7 +189,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let report_1 = Report::insert(
             area.id,
@@ -225,7 +225,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let report_1 = Report::insert(
             area.id,

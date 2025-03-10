@@ -110,7 +110,7 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -127,7 +127,7 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let app = test::init_service(
             App::new()
@@ -145,7 +145,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let area_1 = Area::insert(Area::mock_tags(), &db.conn)?;
         let area_2 = Area::insert(Area::mock_tags(), &db.conn)?;
         let _area_3 = Area::insert(Area::mock_tags(), &db.conn)?;
@@ -165,7 +165,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let area_1 = Area::insert(Area::mock_tags(), &db.conn)?;
         Area::set_updated_at(area_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
         let area_2 = Area::insert(Area::mock_tags(), &db.conn)?;

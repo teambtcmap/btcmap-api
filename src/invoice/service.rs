@@ -180,7 +180,7 @@ mod test {
 
     #[test]
     async fn on_invoice_paid_on_unboosted_element() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let invoice = Invoice::insert("element_boost:1:10", 0, "", "", "", &db.conn)?;
         super::on_invoice_paid(&invoice, &db.pool).await?;
@@ -194,7 +194,7 @@ mod test {
 
     #[test]
     async fn on_invoice_paid_on_boosted_element() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let old_boost_expires = OffsetDateTime::now_utc().saturating_sub(Duration::days(5));
         let old_boost_expires = old_boost_expires.format(&Rfc3339)?;

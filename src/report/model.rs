@@ -360,7 +360,7 @@ mod test {
 
     #[actix_web::test]
     async fn insert_async() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let area = Area::insert(Area::mock_tags(), &db.conn)?;
         let date = date!(2023 - 01 - 01);
         let mut tags = Map::new();

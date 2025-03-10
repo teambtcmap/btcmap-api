@@ -112,7 +112,7 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -127,7 +127,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         User::insert(1, &OsmUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
@@ -143,7 +143,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         db.pool.get().await?.interact(|conn| {
             conn.execute(
                 "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
@@ -170,7 +170,7 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user_id = 1;
         User::insert(user_id, &OsmUser::mock(), &db.conn)?;
         let app = test::init_service(

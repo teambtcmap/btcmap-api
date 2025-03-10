@@ -313,7 +313,7 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;
         let element_3 = Element::insert(&OverpassElement::mock(2702291726), &db.conn)?;
@@ -347,7 +347,7 @@ mod test {
 
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
         assert!(user::service::insert_user_if_not_exists(user.id, &db.pool)
             .await
@@ -358,7 +358,7 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn insert_user_if_not_exists_when_exists_on_osm() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         let btc_map_user_id = 18545877;
         assert!(
             user::service::insert_user_if_not_exists(btc_map_user_id, &db.pool)

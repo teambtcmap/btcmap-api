@@ -36,11 +36,11 @@ mod test {
 
     #[actix_web::test]
     async fn check_rpc() -> Result<()> {
-        let db = mock_db().await;
+        let db = mock_db();
         assert!(super::check_rpc("pwd", "action", &db.pool).await.is_err());
         let password = "pwd";
         let action = "action";
-        Admin::insert("name", password, &db.conn)?;
+        Admin::insert("name", password, &db.pool).await?;
         Admin::update_allowed_actions(1, &["action".into()], &db.conn)?;
         assert!(super::check_rpc(password, action, &db.pool).await.is_ok());
         Ok(())
