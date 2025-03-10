@@ -94,17 +94,17 @@ impl Admin {
             password = Columns::Password.as_str(),
         );
         conn.execute(&sql, params![name, password])?;
-        Self::select_by_id(conn.last_insert_rowid(), conn)
+        Self::_select_by_id(conn.last_insert_rowid(), conn)
     }
 
-    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Self> {
+    pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Self> {
         pool.get()
             .await?
-            .interact(move |conn| Self::select_by_id(id, conn))
+            .interact(move |conn| Self::_select_by_id(id, conn))
             .await?
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Self> {
+    fn _select_by_id(id: i64, conn: &Connection) -> Result<Self> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -196,7 +196,7 @@ impl Admin {
             id = Columns::Id.as_str(),
         );
         conn.execute(&sql, params![serde_json::to_string(allowed_actions)?, id])?;
-        Admin::select_by_id(id, conn)
+        Self::_select_by_id(id, conn)
     }
 }
 
@@ -210,7 +210,7 @@ mod test {
     async fn insert() -> Result<()> {
         let pool = mock_pool().await;
         let admin = Admin::insert("name", "pwd", &pool).await?;
-        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
+        let res_admin = Admin::select_by_id(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         assert_eq!(admin.name, res_admin.name);
         assert_eq!(admin.password, res_admin.password);
@@ -221,7 +221,7 @@ mod test {
     async fn select_by_id() -> Result<()> {
         let pool = mock_pool().await;
         let admin = Admin::insert("name", "pwd", &pool).await?;
-        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
+        let res_admin = Admin::select_by_id(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         Ok(())
     }
@@ -230,7 +230,7 @@ mod test {
     async fn select_by_name() -> Result<()> {
         let pool = mock_pool().await;
         let admin = Admin::insert("name", "pwd", &pool).await?;
-        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
+        let res_admin = Admin::select_by_id(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         assert_eq!(admin.name, res_admin.name);
         Ok(())
@@ -240,7 +240,7 @@ mod test {
     async fn select_by_password() -> Result<()> {
         let pool = mock_pool().await;
         let admin = Admin::insert("name", "pwd", &pool).await?;
-        let res_admin = Admin::select_by_id_async(admin.id, &pool).await?;
+        let res_admin = Admin::select_by_id(admin.id, &pool).await?;
         assert_eq!(admin.id, res_admin.id);
         assert_eq!(admin.password, res_admin.password);
         Ok(())
@@ -254,9 +254,7 @@ mod test {
         Admin::update_allowed_actions_async(admin.id, &actions, &pool).await?;
         assert_eq!(
             actions,
-            Admin::select_by_id_async(admin.id, &pool)
-                .await?
-                .allowed_actions,
+            Admin::select_by_id(admin.id, &pool).await?.allowed_actions,
         );
         Ok(())
     }

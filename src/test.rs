@@ -11,7 +11,7 @@ pub struct Database {
     pub pool: Pool,
 }
 
-pub async  fn mock_pool() -> Pool {
+pub async fn mock_pool() -> Pool {
     let db = _mock_db();
     db::migrate_async(&db.1).await.unwrap();
     db.1

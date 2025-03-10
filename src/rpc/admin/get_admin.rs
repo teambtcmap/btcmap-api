@@ -17,14 +17,19 @@ pub struct Res {
     pub deleted_at: Option<String>,
 }
 
+impl From<Admin> for Res {
+    fn from(val: Admin) -> Self {
+        Self {
+            id: val.id,
+            name: val.name,
+            allowed_actions: val.allowed_actions,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
+        }
+    }
+}
+
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let res = Admin::select_by_id_async(params.id, pool).await?;
-    Ok(Res {
-        id: res.id,
-        name: res.name,
-        allowed_actions: res.allowed_actions,
-        created_at: res.created_at,
-        updated_at: res.updated_at,
-        deleted_at: res.deleted_at,
-    })
+    Admin::select_by_id(params.id, pool).await.map(Into::into)
 }
