@@ -1,6 +1,7 @@
 use super::model::AreaElement;
 use crate::{area::Area, element::Element};
 use crate::{element, Result};
+use deadpool_sqlite::Pool;
 use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
 use rusqlite::Connection;
@@ -13,6 +14,13 @@ pub struct Diff {
     pub element_osm_url: String,
     pub added_areas: Vec<i64>,
     pub removed_areas: Vec<i64>,
+}
+
+pub async fn generate_mapping_async(elements: Vec<Element>, pool: &Pool) -> Result<Vec<Diff>> {
+    pool.get()
+        .await?
+        .interact(move |conn| generate_mapping(&elements, conn))
+        .await?
 }
 
 pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Vec<Diff>> {

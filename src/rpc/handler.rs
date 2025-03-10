@@ -252,7 +252,7 @@ pub async fn handle(
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
-            super::sync_elements::run(&admin.unwrap(), &conf).await?,
+            super::sync_elements::run(&admin.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),

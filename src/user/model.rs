@@ -28,6 +28,13 @@ pub struct SelectMostActive {
 const TABLE_NAME: &str = "user";
 
 impl User {
+    pub async fn insert_async(id: i64, osm_data: OsmUser, pool: &Pool) -> Result<User> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::insert(id, &osm_data, conn))
+            .await?
+    }
+
     pub fn insert(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<User> {
         let sql = r#"
             INSERT INTO user (
@@ -154,6 +161,13 @@ impl User {
         }
     }
 
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<User>> {
+        pool.get()
+            .await?
+            .interact(move |conn| User::select_by_id(id, conn))
+            .await?
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<User>> {
         let sql = r#"
             SELECT
@@ -189,6 +203,13 @@ impl User {
             .query_row(&sql, named_params! { ":name": name }, mapper())
             .optional()?;
         Ok(res)
+    }
+
+    pub async fn set_tag_async(id: i64, name: String, value: Value, pool: &Pool) -> Result<User> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::set_tag(id, &name, &value, conn))
+            .await?
     }
 
     pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<User> {
@@ -233,6 +254,13 @@ impl User {
         )?;
         let res = User::select_by_id(id, conn)?;
         Ok(res)
+    }
+
+    pub async fn set_osm_data_async(id: i64, osm_data: OsmUser, pool: &Pool) -> Result<()> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::set_osm_data(id, &osm_data, conn))
+            .await?
     }
 
     pub fn set_osm_data(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {

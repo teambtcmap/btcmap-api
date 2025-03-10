@@ -5,7 +5,7 @@ use crate::osm;
 use crate::user;
 use crate::user::User;
 use crate::Result;
-use rusqlite::Connection;
+use deadpool_sqlite::Pool;
 use serde_json::Value;
 use std::ops::Add;
 use time::format_description::well_known::Rfc3339;
@@ -14,9 +14,11 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
-    user::service::insert_user_if_not_exists(event.user_id, conn).await?;
-    let user = User::select_by_id(event.user_id, conn)?.unwrap();
+pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
+    user::service::insert_user_if_not_exists(event.user_id, pool).await?;
+    let user = User::select_by_id_async(event.user_id, pool)
+        .await?
+        .unwrap();
 
     let message = match event.r#type.as_str() {
         "create" => format!(
@@ -34,7 +36,7 @@ pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
         _ => "".into(),
     };
     info!(message);
-    let conf = Conf::select(conn)?;
+    let conf = Conf::select_async(pool).await?;
     discord::post_message(conf.discord_webhook_osm_changes, message).await;
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {
@@ -66,18 +68,19 @@ pub async fn on_new_event(event: &Event, conn: &Connection) -> Result<()> {
                         new_osm_data = serde_json::to_string(&new_osm_data)?,
                         "User data changed",
                     );
-                    User::set_osm_data(user.id, &new_osm_data, conn)?;
+                    User::set_osm_data_async(user.id, new_osm_data, pool).await?;
                 } else {
                     info!("User data didn't change")
                 }
 
                 let now = OffsetDateTime::now_utc();
                 let now: String = now.format(&Rfc3339)?;
-                User::set_tag(user.id, "osm:sync:date", &Value::String(now), conn)?;
+                User::set_tag_async(user.id, "osm:sync:date".into(), Value::String(now), pool)
+                    .await?;
             }
             None => {
                 warn!(user.osm_data.id, "User no longer exists on OSM");
-                User::set_tag(user.id, "osm:missing", &Value::Bool(true), conn)?;
+                User::set_tag_async(user.id, "osm:missing".into(), Value::Bool(true), pool).await?;
             }
         },
         Err(e) => error!("Failed to fetch user {} {}", user.osm_data.id, e),

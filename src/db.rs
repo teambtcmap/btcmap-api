@@ -49,12 +49,6 @@ pub fn pool() -> Result<Pool> {
         .build()?)
 }
 
-pub fn open_connection() -> Result<Connection> {
-    let conn = Connection::open(data_dir_file("btcmap.db")?)?;
-    init_pragmas(&conn);
-    Ok(conn)
-}
-
 pub fn data_dir_file(name: &str) -> Result<PathBuf> {
     #[allow(deprecated)]
     let data_dir = std::env::home_dir()

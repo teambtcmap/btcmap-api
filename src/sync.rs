@@ -6,7 +6,7 @@ use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
 use crate::{area_element, discord, user, Error, Result};
-use rusqlite::Connection;
+use deadpool_sqlite::Pool;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -46,36 +46,37 @@ impl From<Element> for MergeResultElement {
 
 pub async fn merge_overpass_elements(
     fresh_overpass_elements: Vec<OverpassElement>,
-    conn: &mut Connection,
+    pool: &Pool,
 ) -> Result<MergeResult> {
     let started_at = OffsetDateTime::now_utc();
     // stage 1: find and process deleted elements
-    let deleted_element_events = sync_deleted_elements(&fresh_overpass_elements, conn).await?;
-    let deleted_elements: Vec<Element> = deleted_element_events
-        .iter()
-        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
-        .collect();
-    let deleted_elements: Vec<MergeResultElement> =
-        deleted_elements.into_iter().map(|it| it.into()).collect();
+    let deleted_element_events = sync_deleted_elements(&fresh_overpass_elements, pool).await?;
+    let mut deleted_elements: Vec<MergeResultElement> = vec![];
+    for event in &deleted_element_events {
+        let element = Element::select_by_id_async(event.element_id, pool).await?;
+        deleted_elements.push(element.into());
+    }
     let deleted_sync_time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
 
     // stage 2: find and process updated elements
     let updated_sync_started_at = OffsetDateTime::now_utc();
-    let updated_element_events = sync_updated_elements(&fresh_overpass_elements, conn).await?;
-    let updated_elements: Vec<Element> = updated_element_events
-        .iter()
-        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
-        .collect();
+    let updated_element_events = sync_updated_elements(&fresh_overpass_elements, pool).await?;
+    let mut updated_elements: Vec<Element> = vec![];
+    for event in &updated_element_events {
+        let element = Element::select_by_id_async(event.element_id, pool).await?;
+        updated_elements.push(element);
+    }
     let updated_sync_time_s =
         (OffsetDateTime::now_utc() - updated_sync_started_at).as_seconds_f64();
 
     // stage 3: find and process new elements
     let created_sync_started_at = OffsetDateTime::now_utc();
-    let created_element_events = sync_new_elements(&fresh_overpass_elements, conn).await?;
-    let created_elements: Vec<Element> = created_element_events
-        .iter()
-        .map(|it| Element::select_by_id(it.element_id, conn).unwrap().unwrap())
-        .collect();
+    let created_element_events = sync_new_elements(&fresh_overpass_elements, pool).await?;
+    let mut created_elements: Vec<Element> = vec![];
+    for event in &created_element_events {
+        let element = Element::select_by_id_async(event.element_id, pool).await?;
+        created_elements.push(element);
+    }
     let created_sync_time_s =
         (OffsetDateTime::now_utc() - created_sync_started_at).as_seconds_f64();
 
@@ -85,7 +86,7 @@ pub async fn merge_overpass_elements(
     all_events.extend(updated_element_events);
     all_events.extend(deleted_element_events);
     for event in all_events {
-        event::service::on_new_event(&event, conn).await?;
+        event::service::on_new_event(&event, pool).await?;
     }
     let events_processing_time_s =
         (OffsetDateTime::now_utc() - events_processing_started_at).as_seconds_f64();
@@ -94,7 +95,8 @@ pub async fn merge_overpass_elements(
     let mut area_mapping_elements: Vec<Element> = vec![];
     area_mapping_elements.extend(created_elements.clone());
     area_mapping_elements.extend(updated_elements.clone());
-    let area_mapping_diff = area_element::service::generate_mapping(&area_mapping_elements, conn)?;
+    let area_mapping_diff =
+        area_element::service::generate_mapping_async(area_mapping_elements, pool).await?;
     let area_mapping_processing_time_s =
         (OffsetDateTime::now_utc() - area_mapping_started_at).as_seconds_f64();
 
@@ -126,18 +128,19 @@ pub async fn merge_overpass_elements(
 /// Will return `Err` in many cases!
 pub async fn sync_deleted_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
-    conn: &mut Connection,
+    pool: &Pool,
 ) -> Result<Vec<Event>> {
     let fresh_overpass_element_ids: HashSet<String> = fresh_overpass_elements
         .iter()
         .map(|it| it.btcmap_id())
         .collect();
-    let absent_elements: Vec<Element> = Element::select_all_except_deleted(conn)?
+    let absent_elements: Vec<Element> = Element::select_all_except_deleted_async(pool)
+        .await?
         .into_iter()
         .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
         .collect();
     let mut res = vec![];
-    let conf = Conf::select(conn)?;
+    let conf = Conf::select_async(pool).await?;
     for absent_element in absent_elements {
         let fresh_osm_element = confirm_deleted(
             &absent_element.overpass_data.r#type,
@@ -145,20 +148,16 @@ pub async fn sync_deleted_elements(
             &conf,
         )
         .await?;
-        user::service::insert_user_if_not_exists(fresh_osm_element.uid, conn).await?;
-        res.push(mark_element_as_deleted(
-            &absent_element,
-            &fresh_osm_element,
-            conn,
-        )?);
+        user::service::insert_user_if_not_exists(fresh_osm_element.uid, pool).await?;
+        res.push(mark_element_as_deleted(&absent_element, &fresh_osm_element, pool).await?);
     }
     Ok(res)
 }
 
-fn mark_element_as_deleted(
+async fn mark_element_as_deleted(
     element: &Element,
     fresh_osm_element: &OsmElement,
-    conn: &Connection,
+    pool: &Pool,
 ) -> Result<Event> {
     let mut event_tags: HashMap<String, Value> = HashMap::new();
     event_tags.insert(
@@ -170,13 +169,13 @@ fn mark_element_as_deleted(
     if element.tags.contains_key("areas") {
         event_tags.insert("areas".into(), element.tags["areas"].clone());
     }
-    element.set_deleted_at(Some(OffsetDateTime::now_utc()), conn)?;
-    let element_issues = ElementIssue::select_by_element_id(element.id, conn)?;
+    Element::set_deleted_at_async(element.id, Some(OffsetDateTime::now_utc()), pool).await?;
+    let element_issues = ElementIssue::select_by_element_id_async(element.id, pool).await?;
     for issue in element_issues {
-        ElementIssue::set_deleted_at(issue.id, Some(OffsetDateTime::now_utc()), conn)?;
+        ElementIssue::set_deleted_at_async(issue.id, Some(OffsetDateTime::now_utc()), pool).await?;
     }
-    let event = Event::insert(fresh_osm_element.uid, element.id, "delete", conn)?;
-    let event = event.patch_tags(&event_tags, conn)?;
+    let event = Event::insert_async(fresh_osm_element.uid, element.id, "delete", pool).await?;
+    let event = Event::patch_tags_async(event.id, event_tags, pool).await?;
     Ok(event)
 }
 
@@ -202,10 +201,10 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<Osm
 
 pub async fn sync_updated_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
-    conn: &mut Connection,
+    pool: &Pool,
 ) -> Result<Vec<Event>> {
     let mut res = vec![];
-    let cached_elements = Element::select_all(None, conn)?;
+    let cached_elements = Element::select_all_async(None, pool).await?;
     for fresh_overpass_element in fresh_overpass_elements {
         let cached_element = cached_elements.iter().find(|cached_element| {
             cached_element.overpass_data.r#type == fresh_overpass_element.r#type
@@ -216,49 +215,54 @@ pub async fn sync_updated_elements(
         }
         let mut cached_element = cached_element.unwrap().clone();
         if cached_element.deleted_at.is_some() {
-            cached_element = cached_element.set_deleted_at(None, conn)?;
+            cached_element = Element::set_deleted_at_async(cached_element.id, None, pool).await?;
         }
         if *fresh_overpass_element == cached_element.overpass_data {
             continue;
         }
-        user::service::insert_user_if_not_exists(fresh_overpass_element.uid.unwrap(), conn).await?;
-        let sp = conn.savepoint()?;
+        user::service::insert_user_if_not_exists(fresh_overpass_element.uid.unwrap(), pool).await?;
         if fresh_overpass_element.changeset != cached_element.overpass_data.changeset {
-            let event = Event::insert(
+            let event = Event::insert_async(
                 fresh_overpass_element.uid.unwrap(),
                 cached_element.id,
                 "update",
-                &sp,
-            )?;
+                pool,
+            )
+            .await?;
             res.push(event);
         }
-        let mut updated_element = cached_element.set_overpass_data(fresh_overpass_element, &sp)?;
+        let mut updated_element = Element::set_overpass_data_async(
+            cached_element.id,
+            fresh_overpass_element.clone(),
+            pool,
+        )
+        .await?;
         let new_android_icon = updated_element.overpass_data.generate_android_icon();
         let old_android_icon = cached_element
             .tag("icon:android")
             .as_str()
             .unwrap_or_default();
         if new_android_icon != old_android_icon {
-            updated_element = Element::set_tag(
+            updated_element = Element::set_tag_async(
                 updated_element.id,
                 "icon:android",
                 &new_android_icon.clone().into(),
-                &sp,
-            )?;
+                pool,
+            )
+            .await?;
         }
-        element::service::generate_issues(vec![&updated_element], &sp)?;
+        element::service::generate_issues_async(vec![updated_element], pool).await?;
         //area_element::service::generate_mapping(&vec![updated_element], &sp)?;
-        sp.commit()?;
     }
     Ok(res)
 }
 
 pub async fn sync_new_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
-    conn: &mut Connection,
+    pool: &Pool,
 ) -> Result<Vec<Event>> {
     let mut res = vec![];
-    let cached_elements = Element::select_all(None, conn)?;
+    let cached_elements = Element::select_all_async(None, pool).await?;
     for fresh_element in fresh_overpass_elements {
         let btcmap_id = fresh_element.btcmap_id();
         let user_id = fresh_element.uid;
@@ -269,24 +273,25 @@ pub async fn sync_new_elements(
         {
             Some(_) => {}
             None => {
-                user::service::insert_user_if_not_exists(user_id.unwrap(), conn).await?;
-                let sp = conn.savepoint()?;
-                let element = Element::insert(fresh_element, &sp)?;
-                let event = Event::insert(user_id.unwrap(), element.id, "create", &sp)?;
+                user::service::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
+                let element = Element::insert_async(fresh_element.clone(), pool).await?;
+                let event =
+                    Event::insert_async(user_id.unwrap(), element.id, "create", pool).await?;
                 res.push(event);
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
                 let element =
-                    Element::set_tag(element.id, "category", &category.clone().into(), &sp)?;
-                let element = Element::set_tag(
+                    Element::set_tag_async(element.id, "category", &category.clone().into(), pool)
+                        .await?;
+                let element = Element::set_tag_async(
                     element.id,
                     "icon:android",
                     &android_icon.clone().into(),
-                    &sp,
-                )?;
-                element::service::generate_issues(vec![&element], &sp)?;
+                    pool,
+                )
+                .await?;
+                element::service::generate_issues_async(vec![element], pool).await?;
                 //area_element::service::generate_mapping(&vec![element], &sp)?;
-                sp.commit()?;
             }
         }
     }
@@ -299,7 +304,7 @@ mod test {
         conf::Conf,
         element::Element,
         osm::{api::OsmUser, overpass::OverpassElement},
-        test::mock_conn,
+        test::mock_db,
         user::{self, User},
         Result,
     };
@@ -308,13 +313,13 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
-        let mut conn = mock_conn();
-        let element_1 = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let element_2 = Element::insert(&OverpassElement::mock(2), &conn)?;
-        let element_3 = Element::insert(&OverpassElement::mock(2702291726), &conn)?;
+        let db = mock_db().await;
+        let element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;
+        let element_3 = Element::insert(&OverpassElement::mock(2702291726), &db.conn)?;
         let res = super::sync_deleted_elements(
             &vec![element_1.overpass_data, element_2.overpass_data],
-            &mut conn,
+            &db.pool,
         )
         .await;
         assert!(res.is_ok());
@@ -342,9 +347,9 @@ mod test {
 
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
-        let conn = mock_conn();
-        let user = User::insert(1, &OsmUser::mock(), &conn)?;
-        assert!(user::service::insert_user_if_not_exists(user.id, &conn)
+        let db = mock_db().await;
+        let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
+        assert!(user::service::insert_user_if_not_exists(user.id, &db.pool)
             .await
             .is_ok());
         Ok(())
@@ -353,14 +358,14 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn insert_user_if_not_exists_when_exists_on_osm() -> Result<()> {
-        let conn = mock_conn();
+        let db = mock_db().await;
         let btc_map_user_id = 18545877;
         assert!(
-            user::service::insert_user_if_not_exists(btc_map_user_id, &conn)
+            user::service::insert_user_if_not_exists(btc_map_user_id, &db.pool)
                 .await
                 .is_ok()
         );
-        assert!(User::select_by_id(btc_map_user_id, &conn)?.is_some());
+        assert!(User::select_by_id(btc_map_user_id, &db.conn)?.is_some());
         Ok(())
     }
 }

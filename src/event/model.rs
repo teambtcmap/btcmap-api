@@ -37,6 +37,19 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Event {
+    pub async fn insert_async(
+        user_id: i64,
+        element_id: i64,
+        r#type: &str,
+        pool: &Pool,
+    ) -> Result<Self> {
+        let r#type = r#type.to_string();
+        pool.get()
+            .await?
+            .interact(move |conn| Self::insert(user_id, element_id, &r#type, conn))
+            .await?
+    }
+
     pub fn insert(user_id: i64, element_id: i64, r#type: &str, conn: &Connection) -> Result<Event> {
         let sql = format!(
             r#"
@@ -272,8 +285,19 @@ impl Event {
             .optional()?)
     }
 
-    pub fn patch_tags(&self, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
-        Event::_patch_tags(self.id, tags, conn)
+    pub async fn patch_tags_async(
+        id: i64,
+        tags: HashMap<String, Value>,
+        pool: &Pool,
+    ) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::patch_tags(id, &tags, conn))
+            .await?
+    }
+
+    pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
+        Event::_patch_tags(id, tags, conn)
     }
 
     pub fn _patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
@@ -423,14 +447,14 @@ mod test {
         let event = Event::insert(user.id, element.id, "", &conn)?;
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value_1.clone());
-        let event = event.patch_tags(&tags, &conn)?;
+        let event = Event::patch_tags(event.id, &tags, &conn)?;
         assert_eq!(&tag_1_value_1, event.tag(tag_1_name));
         tags.insert(tag_1_name.into(), tag_1_value_2.clone());
-        let event = event.patch_tags(&tags, &conn)?;
+        let event = Event::patch_tags(event.id, &tags, &conn)?;
         assert_eq!(&tag_1_value_2, event.tag(tag_1_name));
         tags.clear();
         tags.insert(tag_2_name.into(), tag_2_value.clone());
-        let event = event.patch_tags(&tags, &conn)?;
+        let event = Event::patch_tags(event.id, &tags, &conn)?;
         assert!(event.tags.contains_key(tag_1_name));
         assert_eq!(&tag_2_value, event.tag(tag_2_name));
         Ok(())

@@ -45,6 +45,13 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
+    pub async fn insert_async(overpass_data: OverpassElement, pool: &Pool) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::insert(&overpass_data, conn))
+            .await?
+    }
+
     pub fn insert(overpass_data: &OverpassElement, conn: &Connection) -> Result<Element> {
         let sql = format!(
             r#"
@@ -272,8 +279,19 @@ impl Element {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub async fn set_overpass_data_async(
+        id: i64,
+        overpass_data: OverpassElement,
+        pool: &Pool,
+    ) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::set_overpass_data(id, &overpass_data, conn))
+            .await?
+    }
+
     pub fn set_overpass_data(
-        &self,
+        id: i64,
         overpass_data: &OverpassElement,
         conn: &Connection,
     ) -> Result<Element> {
@@ -287,11 +305,11 @@ impl Element {
         conn.execute(
             &sql,
             named_params! {
-                ":id": self.id,
+                ":id": id,
                 ":overpass_data": serde_json::to_string(overpass_data)?,
             },
         )?;
-        Element::select_by_id(self.id, conn)?
+        Element::select_by_id(id, conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
@@ -379,8 +397,19 @@ impl Element {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub async fn set_deleted_at_async(
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+        pool: &Pool,
+    ) -> Result<Element> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::set_deleted_at(id, deleted_at, conn))
+            .await?
+    }
+
     pub fn set_deleted_at(
-        &self,
+        id: i64,
         deleted_at: Option<OffsetDateTime>,
         conn: &Connection,
     ) -> Result<Element> {
@@ -396,7 +425,7 @@ impl Element {
                 conn.execute(
                     &sql,
                     named_params! {
-                        ":id": self.id,
+                        ":id": id,
                         ":deleted_at": deleted_at.format(&Rfc3339)?,
                     },
                 )?;
@@ -409,10 +438,10 @@ impl Element {
                         WHERE {COL_ROWID} = :id
                     "#
                 );
-                conn.execute(&sql, named_params! { ":id": self.id })?;
+                conn.execute(&sql, named_params! { ":id": id })?;
             }
         };
-        Element::select_by_id(self.id, conn)?
+        Element::select_by_id(id, conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
@@ -556,8 +585,8 @@ mod test {
         let conn = mock_conn();
         let orig_data = OverpassElement::mock(1);
         let override_data = OverpassElement::mock(2);
-        let element =
-            Element::insert(&orig_data, &conn)?.set_overpass_data(&override_data, &conn)?;
+        let element = Element::insert(&orig_data, &conn)?;
+        let element = Element::set_overpass_data(element.id, &override_data, &conn)?;
         assert_eq!(override_data, element.overpass_data);
         Ok(())
     }
@@ -603,8 +632,8 @@ mod test {
     fn set_deleted_at() -> Result<()> {
         let conn = mock_conn();
         let deleted_at = OffsetDateTime::now_utc();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?
-            .set_deleted_at(Some(deleted_at), &conn)?;
+        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = Element::set_deleted_at(element.id, Some(deleted_at), &conn)?;
         assert_eq!(
             deleted_at,
             Element::select_by_id(element.id, &conn)?
