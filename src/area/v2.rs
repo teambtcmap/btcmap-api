@@ -98,7 +98,7 @@ pub async fn get_by_url_alias(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test::mock_db;
+    use crate::test::{mock_db, mock_pool};
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -121,11 +121,11 @@ mod tests {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let db = mock_db();
-        Area::insert(Area::mock_tags(), &db.conn)?;
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -137,13 +137,13 @@ mod tests {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db();
-        Area::insert(Area::mock_tags(), &db.conn)?;
-        Area::insert(Area::mock_tags(), &db.conn)?;
-        Area::insert(Area::mock_tags(), &db.conn)?;
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        Area::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -157,14 +157,14 @@ mod tests {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool().await;
         let mut tags = Area::mock_tags();
         let area_url_alias = "test";
         tags.insert("url_alias".into(), area_url_alias.into());
-        Area::insert(tags, &db.conn)?;
+        Area::insert(tags, &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(super::get_by_url_alias),
         )
         .await;

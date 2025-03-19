@@ -77,6 +77,17 @@ impl Report {
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub async fn select_updated_since_async(
+        updated_since: OffsetDateTime,
+        limit: Option<i64>,
+        pool: &Pool,
+    ) -> Result<Vec<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_updated_since(&updated_since, limit, conn))
+            .await?
+    }
+
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
         limit: Option<i64>,
@@ -190,6 +201,13 @@ impl Report {
             .collect::<Result<Vec<Report>, _>>()?)
     }
 
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_id(id, conn))
+            .await?
+    }
+
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Report>> {
         let sql = r#"
             SELECT
@@ -208,6 +226,13 @@ impl Report {
         Ok(conn
             .query_row(sql, named_params! { ":id": id }, mapper())
             .optional()?)
+    }
+
+    pub async fn select_latest_by_area_id_async(area_id: i64, pool: &Pool) -> Result<Option<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_latest_by_area_id(area_id, conn))
+            .await?
     }
 
     pub fn select_latest_by_area_id(area_id: i64, conn: &Connection) -> Result<Option<Report>> {
@@ -233,7 +258,15 @@ impl Report {
     }
 
     #[cfg(test)]
-    pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Report> {
+    pub async fn patch_tags(id: i64, tags: Map<String, Value>, pool: &Pool) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::_patch_tags(id, &tags, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub fn _patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Report> {
         let sql = r#"
             UPDATE report
             SET tags = json_patch(tags, :tags)
@@ -247,20 +280,19 @@ impl Report {
     }
 
     #[cfg(test)]
-    pub fn __set_updated_at(
-        &self,
-        updated_at: &OffsetDateTime,
-        conn: &Connection,
+    pub async fn set_updated_at(
+        id: i64,
+        updated_at: OffsetDateTime,
+        pool: &Pool,
     ) -> Result<Report> {
-        Report::_set_updated_at(self.id, updated_at, conn)
+        pool.get()
+            .await?
+            .interact(move |conn| Self::_set_updated_at(id, &updated_at, conn))
+            .await?
     }
 
     #[cfg(test)]
-    pub fn _set_updated_at(
-        id: i64,
-        updated_at: &OffsetDateTime,
-        conn: &Connection,
-    ) -> Result<Report> {
+    fn _set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Report> {
         let sql = r#"
                 UPDATE report
                 SET updated_at = :updated_at
@@ -278,7 +310,19 @@ impl Report {
     }
 
     #[cfg(test)]
-    pub fn set_deleted_at(
+    pub async fn set_deleted_at(
+        id: i64,
+        deleted_at: OffsetDateTime,
+        pool: &Pool,
+    ) -> Result<Report> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::_set_deleted_at(id, &deleted_at, conn))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub fn _set_deleted_at(
         id: i64,
         deleted_at: &OffsetDateTime,
         conn: &Connection,
@@ -349,8 +393,8 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 
 #[cfg(test)]
 mod test {
-    use crate::test::mock_db;
-    use crate::{area::Area, report::Report, test::mock_conn, Result};
+    use crate::test::mock_pool;
+    use crate::{area::Area, report::Report, Result};
     use actix_web::test;
     use serde_json::Map;
     use serde_json::Value;
@@ -360,12 +404,12 @@ mod test {
 
     #[actix_web::test]
     async fn insert_async() -> Result<()> {
-        let db = mock_db();
-        let area = Area::insert(Area::mock_tags(), &db.conn)?;
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
         let date = date!(2023 - 01 - 01);
         let mut tags = Map::new();
         tags.insert("key".to_string(), Value::String("value".to_string()));
-        let report = Report::insert_async(area.id, date.clone(), tags.clone(), &db.pool).await?;
+        let report = Report::insert_async(area.id, date.clone(), tags.clone(), &pool).await?;
         assert_eq!(report.area_id, area.id);
         assert_eq!(report.date, date);
         assert_eq!(report.tags, tags);
@@ -374,96 +418,105 @@ mod test {
 
     #[test]
     async fn insert() -> Result<()> {
-        let conn = mock_conn();
-        Area::insert(Area::mock_tags(), &conn)?;
-        Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
-        let reports = Report::select_updated_since(&datetime!(2000-01-01 00:00 UTC), None, &conn)?;
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
+        let reports =
+            Report::select_updated_since_async(datetime!(2000-01-01 00:00 UTC), None, &pool)
+                .await?;
         assert_eq!(1, reports.len());
         Ok(())
     }
 
     #[test]
     async fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
-        Area::insert(Area::mock_tags(), &conn)?;
-        let report_1 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
-        Report::_set_updated_at(report_1.id, &datetime!(2020-01-01 00:00:00 UTC), &conn)?;
-        let report_2 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
-        Report::_set_updated_at(report_2.id, &datetime!(2020-01-02 00:00:00 UTC), &conn)?;
-        let report_3 = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
-        Report::_set_updated_at(report_3.id, &datetime!(2020-01-03 00:00:00 UTC), &conn)?;
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        let report_1 =
+            Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
+        Report::set_updated_at(report_1.id, datetime!(2020-01-01 00:00:00 UTC), &pool).await?;
+        let report_2 =
+            Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
+        Report::set_updated_at(report_2.id, datetime!(2020-01-02 00:00:00 UTC), &pool).await?;
+        let report_3 =
+            Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
+        Report::set_updated_at(report_3.id, datetime!(2020-01-03 00:00:00 UTC), &pool).await?;
         assert_eq!(
             2,
-            Report::select_updated_since(&datetime!(2020-01-01 00:00 UTC), None, &conn)?.len(),
+            Report::select_updated_since_async(datetime!(2020-01-01 00:00 UTC), None, &pool)
+                .await?
+                .len(),
         );
         Ok(())
     }
 
     #[test]
     async fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
-        Area::insert(Area::mock_tags(), &conn)?;
-        Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
-        assert!(Report::select_by_id(1, &conn)?.is_some());
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
+        assert!(Report::select_by_id_async(1, &pool).await?.is_some());
         Ok(())
     }
 
     #[test]
     async fn select_latest_by_area_id() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
-        Report::insert(
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        Report::insert_async(
             area.id,
-            &OffsetDateTime::now_utc().date().previous_day().unwrap(),
-            &Map::new(),
-            &conn,
-        )?;
-        let latest_report = Report::insert(
-            area.id,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &conn,
-        )?;
+            OffsetDateTime::now_utc().date().previous_day().unwrap(),
+            Map::new(),
+            &pool,
+        )
+        .await?;
+        let latest_report =
+            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
+                .await?;
         assert_eq!(
             latest_report,
-            Report::select_latest_by_area_id(area.id, &conn)?.unwrap(),
+            Report::select_latest_by_area_id_async(area.id, &pool)
+                .await?
+                .unwrap(),
         );
         Ok(())
     }
 
     #[test]
     async fn merge_tags() -> Result<()> {
-        let conn = mock_conn();
-        Area::insert(Area::mock_tags(), &conn)?;
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
         let tag_2_value = "test";
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
-        Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
-        let report = Report::select_by_id(1, &conn)?.unwrap();
+        Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
+        let report = Report::select_by_id_async(1, &pool).await?.unwrap();
         assert!(report.tags.is_empty());
-        Report::patch_tags(1, &tags, &conn)?;
-        let report = Report::select_by_id(1, &conn)?.unwrap();
+        Report::patch_tags(1, tags.clone(), &pool).await?;
+        let report = Report::select_by_id_async(1, &pool).await?.unwrap();
         assert_eq!(1, report.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
-        Report::patch_tags(1, &tags, &conn)?;
-        let report = Report::select_by_id(1, &conn)?.unwrap();
+        Report::patch_tags(1, tags, &pool).await?;
+        let report = Report::select_by_id_async(1, &pool).await?.unwrap();
         assert_eq!(2, report.tags.len());
         Ok(())
     }
 
     #[test]
     async fn set_deleted_at() -> Result<()> {
-        let conn = mock_conn();
-        Area::insert(Area::mock_tags(), &conn)?;
-        let report = Report::insert(1, &OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        let report =
+            Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         let new_deleted_at = OffsetDateTime::now_utc().add(Duration::days(1));
-        Report::set_deleted_at(report.id, &new_deleted_at, &conn)?;
+        Report::set_deleted_at(report.id, new_deleted_at, &pool).await?;
         assert_eq!(
             new_deleted_at,
-            Report::select_by_id(report.id, &conn)?
+            Report::select_by_id_async(report.id, &pool)
+                .await?
                 .unwrap()
                 .deleted_at
                 .unwrap(),

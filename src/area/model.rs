@@ -7,9 +7,60 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 const TABLE_NAME: &str = "area";
 
-#[derive(Debug, PartialEq, Eq)]
+enum Columns {
+    Id,
+    Alias,
+    Tags,
+    CreatedAt,
+    UpdatedAt,
+    DeletedAt,
+}
+
+impl Columns {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Columns::Id => "id",
+            Columns::Alias => "alias",
+            Columns::Tags => "tags",
+            Columns::CreatedAt => "created_at",
+            Columns::UpdatedAt => "updated_at",
+            Columns::DeletedAt => "deleted_at",
+        }
+    }
+
+    fn projection_full() -> String {
+        vec![
+            Self::Id,
+            Self::Alias,
+            Self::Tags,
+            Self::CreatedAt,
+            Self::UpdatedAt,
+            Self::DeletedAt,
+        ]
+        .iter()
+        .map(Self::as_str)
+        .collect::<Vec<_>>()
+        .join(", ")
+    }
+
+    fn mapper_full() -> fn(&Row) -> rusqlite::Result<Area> {
+        |row: &Row| -> rusqlite::Result<Area> {
+            let tags: String = row.get(2)?;
+            Ok(Area {
+                id: row.get(0)?,
+                alias: row.get(1)?,
+                tags: serde_json::from_str(&tags).unwrap(),
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+                deleted_at: row.get(5)?,
+            })
+        }
+    }
+}
+
 pub struct Area {
     pub id: i64,
+    pub alias: String,
     pub tags: Map<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
@@ -21,10 +72,17 @@ const COL_TAGS: &str = "tags";
 const COL_ALIAS: &str = "alias";
 const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
-const MAPPER_PROJECTION: &str = "id, tags, created_at, updated_at, deleted_at";
+const MAPPER_PROJECTION: &str = "id, alias, tags, created_at, updated_at, deleted_at";
 
 impl Area {
-    pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
+    pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(|conn| Self::_insert(tags, conn))
+            .await?
+    }
+
+    fn _insert(tags: Map<String, Value>, conn: &Connection) -> Result<Self> {
         let alias = tags
             .get("url_alias")
             .cloned()
@@ -68,9 +126,16 @@ impl Area {
             "#
         );
         conn.prepare(&sql)?
-            .query_map({}, mapper())?
+            .query_map({}, Columns::mapper_full())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
+    }
+
+    pub async fn select_all_except_deleted_async(pool: &Pool) -> Result<Vec<Self>> {
+        pool.get()
+            .await?
+            .interact(|conn| Self::select_all_except_deleted(conn))
+            .await?
     }
 
     pub fn select_all_except_deleted(conn: &Connection) -> Result<Vec<Area>> {
@@ -83,7 +148,7 @@ impl Area {
             "#
         );
         conn.prepare(&sql)?
-            .query_map({}, mapper())?
+            .query_map({}, Columns::mapper_full())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
     }
@@ -119,7 +184,7 @@ impl Area {
                     ":updated_since": updated_since.format(&Rfc3339)?,
                     ":limit": limit.unwrap_or(i64::MAX),
                 },
-                mapper(),
+                Columns::mapper_full(),
             )?
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
@@ -149,7 +214,10 @@ impl Area {
             "#
         );
         conn.prepare(&sql)?
-            .query_map(named_params! { ":query": search_query.into() }, mapper())?
+            .query_map(
+                named_params! { ":query": search_query.into() },
+                Columns::mapper_full(),
+            )?
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
     }
@@ -191,7 +259,7 @@ impl Area {
                 WHERE {COL_ID} = :{COL_ID};
             "#
         );
-        conn.query_row(&sql, named_params! { ":id": id }, mapper())
+        conn.query_row(&sql, named_params! { ":id": id }, Columns::mapper_full())
             .map_err(Into::into)
     }
 
@@ -211,8 +279,12 @@ impl Area {
                 WHERE {COL_ALIAS} = :{COL_ALIAS};
             "#
         );
-        conn.query_row(&sql, named_params! { ":alias": alias.into() }, mapper())
-            .map_err(Into::into)
+        conn.query_row(
+            &sql,
+            named_params! { ":alias": alias.into() },
+            Columns::mapper_full(),
+        )
+        .map_err(Into::into)
     }
 
     pub async fn patch_tags_async(
@@ -267,6 +339,17 @@ impl Area {
         Area::select_by_id(area_id, conn)
     }
 
+    pub async fn set_updated_at_async(
+        area_id: i64,
+        updated_at: OffsetDateTime,
+        pool: &Pool,
+    ) -> Result<Area> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::set_updated_at(area_id, &updated_at, conn))
+            .await?
+    }
+
     pub fn set_updated_at(
         area_id: i64,
         updated_at: &OffsetDateTime,
@@ -287,6 +370,17 @@ impl Area {
             },
         )?;
         Area::select_by_id(area_id, conn)
+    }
+
+    pub async fn set_deleted_at_async(
+        area_id: i64,
+        deleted_at: Option<OffsetDateTime>,
+        pool: &Pool,
+    ) -> Result<Area> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::set_deleted_at(area_id, deleted_at, conn))
+            .await?
     }
 
     pub fn set_deleted_at(
@@ -375,204 +469,224 @@ impl Area {
     }
 }
 
-const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
-    |row: &Row| -> rusqlite::Result<Area> {
-        let tags: String = row.get(1)?;
-        Ok(Area {
-            id: row.get(0)?,
-            tags: serde_json::from_str(&tags).unwrap(),
-            created_at: row.get(2)?,
-            updated_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-        })
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use crate::{area::Area, test::mock_conn, Result};
+    use crate::test::mock_pool;
+    use crate::{area::Area, Result};
+    use actix_web::test;
     use serde_json::{json, Map};
     use time::ext::NumericalDuration;
     use time::{macros::datetime, OffsetDateTime};
 
     #[test]
-    fn insert() -> Result<()> {
-        let conn = mock_conn();
+    async fn insert() -> Result<()> {
+        let pool = mock_pool().await;
         let tags = Area::mock_tags();
-        let area = Area::insert(tags, &conn)?;
-        assert_eq!(area, Area::select_by_id(area.id, &conn)?);
+        let area = Area::insert(tags, &pool).await?;
+        assert_eq!(area.id, Area::select_by_id_async(area.id, &pool).await?.id);
         Ok(())
     }
 
     #[test]
-    fn insert_without_alias() -> Result<()> {
-        let conn = mock_conn();
+    async fn insert_without_alias() -> Result<()> {
+        let pool = mock_pool().await;
         let mut tags = Area::mock_tags();
         tags.remove("url_alias");
-        assert!(Area::insert(tags, &conn).is_err());
+        assert!(Area::insert(tags, &pool).await.is_err());
         Ok(())
     }
 
     #[test]
-    fn insert_without_geo_json() -> Result<()> {
-        let conn = mock_conn();
+    async fn insert_without_geo_json() -> Result<()> {
+        let pool = mock_pool().await;
         let mut tags = Area::mock_tags();
         tags.remove("geo_json");
-        assert!(Area::insert(tags, &conn).is_err());
+        assert!(Area::insert(tags, &pool).await.is_err());
         Ok(())
     }
 
     #[test]
-    fn select_all() -> Result<()> {
-        let conn = mock_conn();
-        assert_eq!(
-            vec![
-                Area::insert(Area::mock_tags(), &conn)?,
-                Area::insert(Area::mock_tags(), &conn)?,
-                Area::insert(Area::mock_tags(), &conn)?,
-            ],
-            Area::select_all(&conn)?,
-        );
+    async fn select_all() -> Result<()> {
+        let pool = mock_pool().await;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        Area::insert(Area::mock_tags(), &pool).await?;
+        assert_eq!(3, Area::select_all_async(&pool).await?.len());
         Ok(())
     }
 
     #[test]
-    fn select_all_except_deleted() -> Result<()> {
-        let conn = mock_conn();
+    async fn select_all_except_deleted() -> Result<()> {
+        let pool = mock_pool().await;
         let mut areas = vec![
-            Area::insert(Area::mock_tags(), &conn)?,
-            Area::insert(Area::mock_tags(), &conn)?,
-            Area::insert(Area::mock_tags(), &conn)?,
+            Area::insert(Area::mock_tags(), &pool).await?,
+            Area::insert(Area::mock_tags(), &pool).await?,
+            Area::insert(Area::mock_tags(), &pool).await?,
         ];
-        Area::set_deleted_at(areas.remove(1).id, Some(OffsetDateTime::now_utc()), &conn)?;
-        assert_eq!(areas, Area::select_all_except_deleted(&conn)?);
+        Area::set_deleted_at_async(areas.remove(1).id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
+        assert_eq!(2, Area::select_all_except_deleted_async(&pool).await?.len());
         Ok(())
     }
 
     #[test]
-    fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
-        let _area_1 = Area::insert(Area::mock_tags(), &conn)?;
-        let _area_1 = Area::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
-        let area_2 = Area::insert(Area::mock_tags(), &conn)?;
-        let area_2 = Area::set_updated_at(area_2.id, &datetime!(2020-01-02 00:00 UTC), &conn)?;
-        let area_3 = Area::insert(Area::mock_tags(), &conn)?;
-        let area_3 = Area::set_updated_at(area_3.id, &datetime!(2020-01-03 00:00 UTC), &conn)?;
+    async fn select_updated_since() -> Result<()> {
+        let pool = mock_pool().await;
+        let _area_1 = Area::insert(Area::mock_tags(), &pool).await?;
+        let _area_1 =
+            Area::set_updated_at_async(_area_1.id, datetime!(2020-01-01 00:00 UTC), &pool).await?;
+        let area_2 = Area::insert(Area::mock_tags(), &pool).await?;
+        let _area_2 =
+            Area::set_updated_at_async(area_2.id, datetime!(2020-01-02 00:00 UTC), &pool).await?;
+        let area_3 = Area::insert(Area::mock_tags(), &pool).await?;
+        let _area_3 =
+            Area::set_updated_at_async(area_3.id, datetime!(2020-01-03 00:00 UTC), &pool).await?;
         assert_eq!(
-            vec![area_2, area_3],
-            Area::select_updated_since(datetime!(2020-01-01 00:00 UTC), None, &conn)?,
+            2,
+            Area::select_updated_since_async(datetime!(2020-01-01 00:00 UTC), None, &pool)
+                .await?
+                .len(),
         );
         Ok(())
     }
 
     #[test]
-    fn select_by_search_query() -> Result<()> {
-        let conn = mock_conn();
+    async fn select_by_search_query() -> Result<()> {
+        let pool = mock_pool().await;
         let areas = vec![
-            Area::insert(Area::mock_tags(), &conn)?,
-            Area::insert(Area::mock_tags(), &conn)?,
-            Area::insert(Area::mock_tags(), &conn)?,
+            Area::insert(Area::mock_tags(), &pool).await?,
+            Area::insert(Area::mock_tags(), &pool).await?,
+            Area::insert(Area::mock_tags(), &pool).await?,
         ];
-        Area::patch_tags(
+        Area::patch_tags_async(
             areas[1].id,
             Map::from_iter([("name".into(), "sushi".into())].into_iter()),
-            &conn,
-        )?;
-        assert_eq!(1, Area::select_by_search_query("sus", &conn)?.len());
-        assert_eq!(1, Area::select_by_search_query("hi", &conn)?.len());
-        assert_eq!(0, Area::select_by_search_query("sashimi", &conn)?.len());
-        Ok(())
-    }
-
-    #[test]
-    fn select_by_id_or_alias() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
+            &pool,
+        )
+        .await?;
         assert_eq!(
-            area,
-            Area::select_by_id_or_alias(area.id.to_string(), &conn)?
+            1,
+            Area::select_by_search_query_async("sus", &pool)
+                .await?
+                .len()
         );
-        assert_eq!(area, Area::select_by_id_or_alias(area.alias(), &conn)?);
+        assert_eq!(
+            1,
+            Area::select_by_search_query_async("hi", &pool).await?.len()
+        );
+        assert_eq!(
+            0,
+            Area::select_by_search_query_async("sashimi", &pool)
+                .await?
+                .len()
+        );
         Ok(())
     }
 
     #[test]
-    fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
-        assert_eq!(area, Area::select_by_id(area.id, &conn)?);
+    async fn select_by_id_or_alias() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        assert_eq!(
+            area.id,
+            Area::select_by_id_or_alias_async(area.id.to_string(), &pool)
+                .await?
+                .id
+        );
+        assert_eq!(
+            area.id,
+            Area::select_by_id_or_alias_async(area.alias(), &pool)
+                .await?
+                .id,
+        );
         Ok(())
     }
 
     #[test]
-    fn select_by_alias() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
-        assert_eq!(area, Area::select_by_id_or_alias(area.alias(), &conn)?);
+    async fn select_by_id() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        assert_eq!(area.id, Area::select_by_id_async(area.id, &pool).await?.id);
         Ok(())
     }
 
     #[test]
-    fn patch_tags() -> Result<()> {
-        let conn = mock_conn();
+    async fn select_by_alias() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        assert_eq!(
+            area.id,
+            Area::select_by_id_or_alias_async(area.alias(), &pool)
+                .await?
+                .id,
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_tags() -> Result<()> {
+        let pool = mock_pool().await;
         let tag_1_name = "tag_1_name";
         let tag_1_value = json!("tag_1_value");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
         let mut tags = Area::mock_tags();
         tags.insert(tag_1_name.into(), tag_1_value.clone());
-        let area = Area::insert(tags.clone(), &conn)?;
+        let area = Area::insert(tags.clone(), &pool).await?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         tags.insert(tag_2_name.into(), tag_2_value.clone());
-        let area = Area::patch_tags(area.id, tags, &conn)?;
+        let area = Area::patch_tags_async(area.id, tags, &pool).await?;
         assert_eq!(tag_1_value, area.tags[tag_1_name]);
         assert_eq!(tag_2_value, area.tags[tag_2_name]);
         Ok(())
     }
 
     #[test]
-    fn set_updated_at() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
-        let area = Area::set_updated_at(
+    async fn set_updated_at() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let area = Area::set_updated_at_async(
             area.id,
-            &OffsetDateTime::now_utc().checked_add(2.days()).unwrap(),
-            &conn,
-        )?;
+            OffsetDateTime::now_utc().checked_add(2.days()).unwrap(),
+            &pool,
+        )
+        .await?;
         assert!(area.updated_at > OffsetDateTime::now_utc().checked_add(1.days()).unwrap());
         Ok(())
     }
 
     #[test]
-    fn set_deleted_at() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
-        let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
+    async fn set_deleted_at() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let area =
+            Area::set_deleted_at_async(area.id, Some(OffsetDateTime::now_utc()), &pool).await?;
         assert!(area.deleted_at.is_some());
-        let area = Area::set_deleted_at(area.id, None, &conn)?;
+        let area = Area::set_deleted_at_async(area.id, None, &pool).await?;
         assert!(area.deleted_at.is_none());
         Ok(())
     }
 
     #[test]
-    fn name() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
+    async fn name() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
         assert_eq!(String::default(), area.name());
         let name = "foo";
-        let area = Area::patch_tags(
+        let area = Area::patch_tags_async(
             area.id,
             Map::from_iter([("name".into(), name.into())].into_iter()),
-            &conn,
-        )?;
+            &pool,
+        )
+        .await?;
         assert_eq!(name, area.name());
         Ok(())
     }
 
     #[test]
-    fn alias() -> Result<()> {
-        let conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
+    async fn alias() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
         assert_eq!(area.tags["url_alias"], area.alias());
         Ok(())
     }

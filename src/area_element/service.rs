@@ -85,6 +85,16 @@ pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Vec<D
     Ok(diffs)
 }
 
+pub async fn get_elements_within_geometries_async(
+    geometries: Vec<Geometry>,
+    pool: &Pool,
+) -> Result<Vec<Element>> {
+    pool.get()
+        .await?
+        .interact(|conn| get_elements_within_geometries(geometries, conn))
+        .await?
+}
+
 pub fn get_elements_within_geometries(
     geometries: Vec<Geometry>,
     conn: &Connection,

@@ -106,7 +106,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 mod test {
     use crate::area::Area;
     use crate::report::Report;
-    use crate::test::mock_db;
+    use crate::test::{mock_db, mock_pool};
     use crate::Result;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -165,17 +165,14 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let db = mock_db();
-        let area = Area::insert(Area::mock_tags(), &db.conn)?;
-        let report = Report::insert(
-            area.id,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &db.conn,
-        )?;
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let report =
+            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
+                .await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -189,29 +186,20 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db();
-        let area = Area::insert(Area::mock_tags(), &db.conn)?;
-        let report_1 = Report::insert(
-            area.id,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &db.conn,
-        )?;
-        let report_2 = Report::insert(
-            area.id,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &db.conn,
-        )?;
-        let _report_3 = Report::insert(
-            area.id,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &db.conn,
-        )?;
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let report_1 =
+            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
+                .await?;
+        let report_2 =
+            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
+                .await?;
+        let _report_3 =
+            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
+                .await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -225,26 +213,20 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db();
-        let area = Area::insert(Area::mock_tags(), &db.conn)?;
-        let report_1 = Report::insert(
-            area.id,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &db.conn,
-        )?;
-        Report::_set_updated_at(report_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
-        let report_2 = Report::insert(
-            area.id,
-            &OffsetDateTime::now_utc().date(),
-            &Map::new(),
-            &db.conn,
-        )?;
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let report_1 =
+            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
+                .await?;
+        Report::set_updated_at(report_1.id, datetime!(2022-01-05 00:00 UTC), &pool).await?;
         let report_2 =
-            Report::_set_updated_at(report_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?;
+            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
+                .await?;
+        let report_2 =
+            Report::set_updated_at(report_2.id, datetime!(2022-02-05 00:00 UTC), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

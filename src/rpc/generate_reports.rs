@@ -197,19 +197,19 @@ fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{osm::overpass::OverpassElement, test::mock_conn};
+    use crate::{osm::overpass::OverpassElement, test::mock_pool};
     use actix_web::test;
     use serde_json::{json, Map};
     use time::{macros::date, Duration};
 
     #[test]
     async fn insert_report() -> Result<()> {
-        let conn = mock_conn();
+        let pool = mock_pool().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
-        Area::insert(Area::mock_tags(), &conn)?;
+        Area::insert(Area::mock_tags(), &pool).await?;
         for _ in 1..100 {
-            Report::insert(1, &date!(2023 - 11 - 12), &Map::new(), &conn)?;
+            Report::insert_async(1, date!(2023 - 11 - 12), Map::new(), &pool).await?;
         }
         Ok(())
     }

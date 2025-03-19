@@ -13,13 +13,6 @@ use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
 
-pub async fn insert_async(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
-    pool.get()
-        .await?
-        .interact(move |conn| insert(tags, conn))
-        .await?
-}
-
 // it can take a long time to find area_elements
 // let's say it takes 10 minutes
 // on 7th minute a new element was added by osm sync
@@ -28,15 +21,19 @@ pub async fn insert_async(tags: Map<String, Value>, pool: &Pool) -> Result<Area>
 // but confilct seems unlikely since the place was added after get_elements_within_geometries queried elements snapshot
 // and if an element was deleted, that's not an issue since we never fully delete elements
 // but wat if an element was moved? It could change its area set... TODO
-pub fn insert(tags: Map<String, Value>, conn: &mut Connection) -> Result<Area> {
-    let area = Area::insert(tags, conn)?;
-    let area_elements =
-        area_element::service::get_elements_within_geometries(area.geo_json_geometries()?, conn)?;
-    AreaElement::insert_bulk(
+pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
+    let area = Area::insert(tags, pool).await?;
+    let area_elements = area_element::service::get_elements_within_geometries_async(
+        area.geo_json_geometries()?,
+        pool,
+    )
+    .await?;
+    AreaElement::insert_bulk_async(
         area.id,
         area_elements.into_iter().map(|it| it.id).collect(),
-        conn,
-    )?;
+        pool,
+    )
+    .await?;
     Ok(area)
 }
 
@@ -239,6 +236,13 @@ pub fn get_trending_areas(
     Ok(res.into_iter().take(10).collect())
 }
 
+pub async fn get_comments_async(area: Area, pool: &Pool) -> Result<Vec<ElementComment>> {
+    pool.get()
+        .await?
+        .interact(move |conn| get_comments(&area, conn))
+        .await?
+}
+
 pub fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment>> {
     let area_elements = AreaElement::select_by_area_id(area.id, conn)?;
     let mut comments: Vec<ElementComment> = vec![];
@@ -257,139 +261,170 @@ mod test {
     use crate::element::Element;
     use crate::element_comment::ElementComment;
     use crate::osm::overpass::OverpassElement;
-    use crate::test::{earth_geo_json, mock_conn, phuket_geo_json};
+    use crate::test::{earth_geo_json, mock_pool, phuket_geo_json};
     use crate::Result;
+    use actix_web::test;
     use serde_json::{json, Map};
 
     #[test]
-    fn insert() -> Result<()> {
-        let mut conn = mock_conn();
-        let area = super::insert(Area::mock_tags(), &mut conn)?;
-        assert_eq!(area, Area::select_by_id(1, &conn)?);
+    async fn insert() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = super::insert(Area::mock_tags(), &pool).await?;
+        assert_eq!(area.id, Area::select_by_id_async(1, &pool).await?.id);
         Ok(())
     }
 
     #[test]
-    fn insert_should_create_area_mappings() -> Result<()> {
-        let mut conn = mock_conn();
+    async fn insert_should_create_area_mappings() -> Result<()> {
+        let pool = mock_pool().await;
         let element_1 = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        Element::insert(&element_1, &conn)?;
+        Element::insert_async(element_1, &pool).await?;
         let element_2 = OverpassElement {
             lat: Some(50.0),
             lon: Some(1.0),
             ..OverpassElement::mock(2)
         };
-        Element::insert(&element_2, &conn)?;
+        Element::insert_async(element_2, &pool).await?;
         let mut tags = Area::mock_tags();
         tags.insert("geo_json".into(), phuket_geo_json());
-        super::insert(tags, &mut conn)?;
-        assert_eq!(1, AreaElement::select_by_area_id(1, &conn)?.len());
+        super::insert(tags, &pool).await?;
+        assert_eq!(
+            1,
+            AreaElement::select_by_area_id_async(1, &pool).await?.len()
+        );
         Ok(())
     }
 
     #[test]
-    fn patch_tags() -> Result<()> {
-        let mut conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &mut conn)?;
+    async fn patch_tags() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
         let mut patch_set = Map::new();
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
         patch_set.insert(new_tag_name.into(), new_tag_value.clone());
-        let area = super::patch_tags(&area.id.to_string(), patch_set, &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?;
-        assert_eq!(area, db_area);
+        let area = super::patch_tags_async(&area.id.to_string(), patch_set, &pool).await?;
+        let db_area = Area::select_by_id_async(area.id, &pool).await?;
+        assert_eq!(area.id, db_area.id);
         assert_eq!(new_tag_value, db_area.tags[new_tag_name]);
         Ok(())
     }
 
     #[test]
-    fn patch_tags_should_update_area_mappings() -> Result<()> {
-        let mut conn = mock_conn();
+    async fn patch_tags_should_update_area_mappings() -> Result<()> {
+        let pool = mock_pool().await;
         let element_in_phuket = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        Element::insert(&element_in_phuket, &conn)?;
+        Element::insert_async(element_in_phuket.clone(), &pool).await?;
         let element_in_london = OverpassElement {
             lat: Some(50.0),
             lon: Some(1.0),
             ..OverpassElement::mock(2)
         };
-        Element::insert(&element_in_london, &conn)?;
+        Element::insert_async(element_in_london.clone(), &pool).await?;
         let mut tags = Area::mock_tags();
         tags.insert("geo_json".into(), earth_geo_json());
-        let area = Area::insert(tags.clone(), &mut conn)?;
-        let area_element_phuket = AreaElement::insert(area.id, element_in_phuket.id, &conn)?;
-        let area_element_london = AreaElement::insert(area.id, element_in_london.id, &conn)?;
+        let area = Area::insert(tags.clone(), &pool).await?;
+        let area_element_phuket =
+            AreaElement::insert_async(area.id, element_in_phuket.id, &pool).await?;
+        let area_element_london =
+            AreaElement::insert_async(area.id, element_in_london.id, &pool).await?;
         tags.insert("geo_json".into(), phuket_geo_json());
         tags.remove("url_alias");
-        let area = super::patch_tags(&area.id.to_string(), tags.clone(), &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?;
-        assert_eq!(area, db_area);
-        assert!(AreaElement::select_by_id(area_element_phuket.id, &conn)?
-            .ok_or("failed to insert area element")?
-            .deleted_at
-            .is_none());
-        assert!(AreaElement::select_by_id(area_element_london.id, &conn)?
-            .ok_or("failed to insert area element")?
-            .deleted_at
-            .is_some());
-        assert_eq!(2, AreaElement::select_by_area_id(area.id, &conn)?.len());
+        let area = super::patch_tags_async(&area.id.to_string(), tags.clone(), &pool).await?;
+        let db_area = Area::select_by_id_async(area.id, &pool).await?;
+        assert_eq!(area.id, db_area.id);
+        assert!(
+            AreaElement::select_by_id_async(area_element_phuket.id, &pool)
+                .await?
+                .ok_or("failed to insert area element")?
+                .deleted_at
+                .is_none()
+        );
+        assert!(
+            AreaElement::select_by_id_async(area_element_london.id, &pool)
+                .await?
+                .ok_or("failed to insert area element")?
+                .deleted_at
+                .is_some()
+        );
+        assert_eq!(
+            2,
+            AreaElement::select_by_area_id_async(area.id, &pool)
+                .await?
+                .len()
+        );
         tags.insert("geo_json".into(), earth_geo_json());
-        let area = super::patch_tags(&area.id.to_string(), tags, &mut conn)?;
-        assert_eq!(2, AreaElement::select_by_area_id(area.id, &conn)?.len());
-        assert!(AreaElement::select_by_id(area_element_phuket.id, &conn)?
-            .ok_or("failed to insert area element")?
-            .deleted_at
-            .is_none());
-        assert!(AreaElement::select_by_id(area_element_london.id, &conn)?
-            .ok_or("failed to insert area element")?
-            .deleted_at
-            .is_none());
+        let area = super::patch_tags_async(&area.id.to_string(), tags, &pool).await?;
+        assert_eq!(
+            2,
+            AreaElement::select_by_area_id_async(area.id, &pool)
+                .await?
+                .len()
+        );
+        assert!(
+            AreaElement::select_by_id_async(area_element_phuket.id, &pool)
+                .await?
+                .ok_or("failed to insert area element")?
+                .deleted_at
+                .is_none()
+        );
+        assert!(
+            AreaElement::select_by_id_async(area_element_london.id, &pool)
+                .await?
+                .ok_or("failed to insert area element")?
+                .deleted_at
+                .is_none()
+        );
         Ok(())
     }
 
     #[test]
-    fn soft_delete() -> Result<()> {
-        let mut conn = mock_conn();
-        let area = Area::insert(Area::mock_tags(), &conn)?;
-        super::soft_delete(&area.id.to_string(), &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?;
+    async fn soft_delete() -> Result<()> {
+        let pool = mock_pool().await;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        super::soft_delete_async(&area.id.to_string(), &pool).await?;
+        let db_area = Area::select_by_id_async(area.id, &pool).await?;
         assert!(db_area.deleted_at.is_some());
         Ok(())
     }
 
     #[test]
-    fn soft_delete_should_update_areas_tags() -> Result<()> {
-        let mut conn = mock_conn();
+    async fn soft_delete_should_update_areas_tags() -> Result<()> {
+        let pool = mock_pool().await;
         let area_element = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        let area_element = Element::insert(&area_element, &conn)?;
-        Element::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &conn)?;
-        let area = Area::insert(Area::mock_tags(), &mut conn)?;
-        super::soft_delete(&area.id.to_string(), &mut conn)?;
-        let db_area = Area::select_by_id(area.id, &conn)?;
+        let area_element = Element::insert_async(area_element, &pool).await?;
+        Element::set_tag_async(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &pool).await?;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        super::soft_delete_async(&area.id.to_string(), &pool).await?;
+        let db_area = Area::select_by_id_async(area.id, &pool).await?;
         assert!(db_area.deleted_at.is_some());
         assert!(db_area.tags.get("areas").is_none());
         Ok(())
     }
 
     #[test]
-    fn get_comments() -> Result<()> {
-        let conn = mock_conn();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        let comment = ElementComment::insert(element.id, "test", &conn)?;
-        let area = Area::insert(Area::mock_tags(), &conn)?;
-        let _area_element = AreaElement::insert(area.id, element.id, &conn)?;
-        assert_eq!(Some(&comment), super::get_comments(&area, &conn)?.first());
+    async fn get_comments() -> Result<()> {
+        let pool = mock_pool().await;
+        let element = Element::insert_async(OverpassElement::mock(1), &pool).await?;
+        let comment = ElementComment::insert_async(element.id, "test", &pool).await?;
+        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let _area_element = AreaElement::insert_async(area.id, element.id, &pool).await?;
+        assert_eq!(
+            Some(&comment),
+            super::get_comments_async(area, &pool).await?.first()
+        );
         Ok(())
     }
 }

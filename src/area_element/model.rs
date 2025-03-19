@@ -1,4 +1,5 @@
 use crate::Result;
+use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 #[cfg(not(test))]
@@ -32,6 +33,13 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at ";
 
 impl AreaElement {
+    pub async fn insert_bulk_async(area_id: i64, element_ids: Vec<i64>, pool: &Pool) -> Result<()> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::insert_bulk(area_id, element_ids, conn))
+            .await?
+    }
+
     pub fn insert_bulk(area_id: i64, element_ids: Vec<i64>, conn: &mut Connection) -> Result<()> {
         let sp = conn.savepoint()?;
         for element in element_ids {
@@ -39,6 +47,13 @@ impl AreaElement {
         }
         sp.commit()?;
         Ok(())
+    }
+
+    pub async fn insert_async(area_id: i64, element_id: i64, pool: &Pool) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::insert(area_id, element_id, conn))
+            .await?
     }
 
     pub fn insert(area_id: i64, element_id: i64, conn: &Connection) -> Result<AreaElement> {
@@ -124,6 +139,13 @@ impl AreaElement {
             .optional()?)
     }
 
+    pub async fn select_by_area_id_async(area_id: i64, pool: &Pool) -> Result<Vec<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_area_id(area_id, conn))
+            .await?
+    }
+
     pub fn select_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
         let query = format!(
             r#"
@@ -166,6 +188,13 @@ impl AreaElement {
             )?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(res)
+    }
+
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_id(id, conn))
+            .await?
     }
 
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<AreaElement>> {
