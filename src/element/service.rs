@@ -343,32 +343,27 @@ fn get_soon_out_of_date_issue(element: &Element) -> Option<Issue> {
 }
 
 pub const TAGS: &'static [&str] = &[
+    "osm:type",
+    "osm:id",
+    "osm:url",
+    "lat",
+    "lon",
     "name",
+    "address",
+    "icon",
     "phone",
     "website",
-    "check_date",
-    "survey:date",
-    "check_date:currency:XBT",
-    "addr:street",
-    "addr:housenumber",
-    "contact:website",
-    "opening_hours",
-    "contact:phone",
-    "contact:email",
-    "contact:twitter",
-    "contact:instagram",
-    "contact:facebook",
-    "contact:line",
-    "btcmap:icon",
-    "btcmap:boost:expires",
-    "btcmap:osm:type",
-    "btcmap:osm:id",
-    "btcmap:osm:url",
-    "btcmap:created_at",
-    "btcmap:updated_at",
-    "btcmap:deleted_at",
-    "btcmap:lat",
-    "btcmap:lon",
+    "twitter",
+    "facebook",
+    "instagramm",
+    "line",
+    "email",
+    "boost:expires",
+    "needs_app",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "verified_at",
 ];
 
 pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Value> {
@@ -376,71 +371,165 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
     let include_tags: Vec<&str> = include_tags
         .to_vec()
         .into_iter()
-        .filter(|it| TAGS.contains(it))
+        .filter(|it| TAGS.contains(it) || it.starts_with("osm:"))
         .collect();
     if let Some(osm_tags) = &element.overpass_data.tags {
         for tag in &include_tags {
-            if tag.starts_with("btcmap:") || tag.starts_with("osm:") {
-                continue;
-            }
-            if osm_tags.contains_key(*tag) {
-                res.insert(tag.to_string(), osm_tags[*tag].clone());
-            }
+            match *tag {
+                "icon" => {
+                    if element.tags.contains_key("icon:android") {
+                        res.insert("icon".into(), element.tags["icon:android"].clone());
+                    }
+                }
+                "boost:expires" => {
+                    if element.tags.contains_key("boost:expires") {
+                        res.insert(
+                            "boost:expires".into(),
+                            element.tags["boost:expires"].clone(),
+                        );
+                    }
+                }
+                "name" => {
+                    if !element.overpass_data.tag("name").is_empty() {
+                        res.insert("name".into(), element.overpass_data.tag("name").into());
+                    }
+                }
+                "needs_app" => {
+                    if !element.overpass_data.tag("payment:lightning:companion_app_url").is_empty() {
+                        res.insert("needs_app".into(), element.overpass_data.tag("payment:lightning:companion_app_url").into());
+                    }
+                }
+                "phone" => {
+                    if !element.overpass_data.tag("phone").is_empty() {
+                        res.insert("phone".into(), element.overpass_data.tag("phone").into());
+                    } else {
+                        if !element.overpass_data.tag("contact:phone").is_empty() {
+                            res.insert("phone".into(), element.overpass_data.tag("contact:phone").into());
+                        }
+                    }
+                }
+                "website" => {
+                    if !element.overpass_data.tag("website").is_empty() {
+                        res.insert("website".into(), element.overpass_data.tag("website").into());
+                    } else {
+                        if !element.overpass_data.tag("contact:website").is_empty() {
+                            res.insert("website".into(), element.overpass_data.tag("contact:website").into());
+                        }
+                    }
+                }
+                "twitter" => {
+                    if !element.overpass_data.tag("contact:twitter").is_empty() {
+                        res.insert("twitter".into(), element.overpass_data.tag("contact:twitter").into());
+                    }
+                }
+                "facebook" => {
+                    if !element.overpass_data.tag("contact:facebook").is_empty() {
+                        res.insert("facebook".into(), element.overpass_data.tag("contact:facebook").into());
+                    }
+                }
+                "instagram" => {
+                    if !element.overpass_data.tag("contact:instagram").is_empty() {
+                        res.insert("instagram".into(), element.overpass_data.tag("contact:instagram").into());
+                    }
+                }
+                "line" => {
+                    if !element.overpass_data.tag("contact:line").is_empty() {
+                        res.insert("line".into(), element.overpass_data.tag("contact:line").into());
+                    }
+                }
+                "email" => {
+                    if !element.overpass_data.tag("email").is_empty() {
+                        res.insert("email".into(), element.overpass_data.tag("email").into());
+                    } else {
+                        if !element.overpass_data.tag("contact:email").is_empty() {
+                            res.insert("email".into(), element.overpass_data.tag("contact:email").into());
+                        }
+                    }
+                }
+                "address" => {
+                    let mut addr = String::new();
+                    let housenumber = element.overpass_data.tag("addr:housenumber");
+                    if !housenumber.is_empty() {
+                        addr.push_str(housenumber);
+                        addr.push_str(" ");
+                    }
+                    let street = element.overpass_data.tag("addr:street");
+                    if !street.is_empty() {
+                        addr.push_str(street);
+                        addr.push_str(" ");
+                    }
+                    let city = element.overpass_data.tag("addr:city");
+                    if !city.is_empty() {
+                        addr.push_str(city);
+                        addr.push_str(" ");
+                    }
+                    let postcode = element.overpass_data.tag("addr:postcode");
+                    if !postcode.is_empty() {
+                        addr.push_str(postcode);
+                        addr.push_str(" ");
+                    }
+                    let addr = addr.trim();
+                    if !addr.is_empty() {
+                        res.insert("address".into(), addr.into());
+                    }
+                }
+                "osm:type" => {
+                    res.insert(
+                        "osm:type".into(),
+                        Value::String(element.overpass_data.r#type.clone()),
+                    );
+                }
+                "osm:id" => {
+                    res.insert(
+                        "osm:id".into(),
+                        Value::Number(element.overpass_data.id.into()),
+                    );
+                }
+                "osm:url" => {
+                    res.insert("osm:url".into(), Value::String(element.osm_url()));
+                }
+                "created_at" => {
+                    res.insert(
+                        "created_at".into(),
+                        Value::String(element.created_at.format(&Rfc3339).unwrap_or_default()),
+                    );
+                }
+                "updated_at" => {
+                    res.insert(
+                        "updated_at".into(),
+                        Value::String(element.updated_at.format(&Rfc3339).unwrap_or_default()),
+                    );
+                }
+                "deleted_at" => match element.deleted_at {
+                    Some(deleted_at) => {
+                        res.insert(
+                            "deleted_at".into(),
+                            Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
+                        );
+                    }
+                    None => {}
+                },
+                "lat" => {
+                    res.insert("lat".into(), json! {element.lat()});
+                }
+                "lon" => {
+                    res.insert("lon".into(), json! {element.lon()});
+                }
+                "verified_at" => {
+                    if let Some(date) = element.overpass_data.verification_date() {
+                        res.insert("verified_at".into(), json! {date.date().to_string()});
+                    }
+                }
+                unrecognized_tag => {
+                    if unrecognized_tag.starts_with("osm:") {
+                        let osm_tag = unrecognized_tag.trim_start_matches("osm:");
+                        if osm_tags.contains_key(osm_tag) {
+                            res.insert(tag.to_string(), osm_tags[osm_tag].clone());
+                        }
+                    }
+                }
+            };
         }
-    }
-    if element.tags.contains_key("icon:android") && include_tags.contains(&"btcmap:icon") {
-        res.insert("btcmap:icon".into(), element.tags["icon:android"].clone());
-    }
-    if element.tags.contains_key("boost:expires") && include_tags.contains(&"btcmap:boost:expires")
-    {
-        res.insert(
-            "btcmap:boost:expires".into(),
-            element.tags["boost:expires"].clone(),
-        );
-    }
-    if include_tags.contains(&"btcmap:osm:type") {
-        res.insert(
-            "btcmap:osm:type".into(),
-            Value::String(element.overpass_data.r#type.clone()),
-        );
-    }
-    if include_tags.contains(&"btcmap:osm:id") {
-        res.insert(
-            "btcmap:osm:id".into(),
-            Value::Number(element.overpass_data.id.into()),
-        );
-    }
-    if include_tags.contains(&"btcmap:osm:url") {
-        res.insert("btcmap:osm:url".into(), Value::String(element.osm_url()));
-    }
-    if include_tags.contains(&"btcmap:created_at") {
-        res.insert(
-            "btcmap:created_at".into(),
-            Value::String(element.created_at.format(&Rfc3339).unwrap_or_default()),
-        );
-    }
-    if include_tags.contains(&"btcmap:updated_at") {
-        res.insert(
-            "btcmap:updated_at".into(),
-            Value::String(element.updated_at.format(&Rfc3339).unwrap_or_default()),
-        );
-    }
-    if include_tags.contains(&"btcmap:deleted_at") {
-        match element.deleted_at {
-            Some(deleted_at) => {
-                res.insert(
-                    "btcmap:deleted_at".into(),
-                    Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
-                );
-            }
-            None => {}
-        }
-    }
-    if include_tags.contains(&"btcmap:lat") {
-        res.insert("btcmap:lat".into(), json! {element.lat()});
-    }
-    if include_tags.contains(&"btcmap:lon") {
-        res.insert("btcmap:lon".into(), json! {element.lon()});
     }
     res
 }

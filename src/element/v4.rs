@@ -10,12 +10,10 @@ use actix_web::HttpRequest;
 use actix_web_lab::extract::Query;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-use tracing::info;
 
 #[derive(Deserialize)]
 pub struct GetListArgs {
@@ -24,7 +22,7 @@ pub struct GetListArgs {
     updated_since: Option<OffsetDateTime>,
     limit: Option<i64>,
     include_deleted: Option<bool>,
-    include_tag: Option<Vec<String>>,
+    f: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -32,21 +30,14 @@ pub struct GetSingleArgs {
     include_tag: Option<Vec<String>>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct GetItem {
-    pub id: i64,
-    pub tags: Map<String, Value>,
-}
-
 #[get("")]
 pub async fn get(
     req: HttpRequest,
     args: Query<GetListArgs>,
     pool: Data<Pool>,
-) -> Result<Json<Vec<GetItem>>, Error> {
-    let include_tags = args.include_tag.clone().unwrap_or(vec![]);
+) -> Result<Json<Vec<Map<String, Value>>>, Error> {
+    let include_tags = args.f.clone().unwrap_or(vec![]);
     let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
-    info!(tags = serde_json::to_string(&include_tags)?);
     let elements = pool
         .get()
         .await?
@@ -63,11 +54,14 @@ pub async fn get(
         .await??;
     req.extensions_mut()
         .insert(RequestExtension::new(elements.len()));
-    let items: Vec<GetItem> = elements
+    let items: Vec<Map<String, Value>> = elements
         .into_iter()
-        .map(|it| GetItem {
-            id: it.id,
-            tags: super::service::generate_tags(&it, &include_tags),
+        .map(|it| {
+            let mut res = Map::new();
+            res.insert("id".into(), it.id.into());
+            let mut tags = super::service::generate_tags(&it, &include_tags);
+            res.append(&mut tags);
+            res
         })
         .collect();
     Ok(Json(items))
@@ -78,7 +72,7 @@ pub async fn get_by_id(
     id: Path<String>,
     args: Query<GetSingleArgs>,
     pool: Data<Pool>,
-) -> Result<Json<GetItem>, Error> {
+) -> Result<Json<Map<String, Value>>, Error> {
     let include_tags = args.include_tag.clone().unwrap_or(vec![]);
     let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
     let id_clone = id.clone();
@@ -87,9 +81,12 @@ pub async fn get_by_id(
         .interact(move |conn| Element::select_by_id_or_osm_id(&id_clone, conn))
         .await??
         .ok_or(Error::not_found())
-        .map(|it| GetItem {
-            id: it.id,
-            tags: super::service::generate_tags(&it, &include_tags),
+        .map(|it| {
+            let mut res = Map::new();
+            res.insert("id".into(), it.id.into());
+            let mut tags = super::service::generate_tags(&it, &include_tags);
+            res.append(&mut tags);
+            res
         })
         .map(|it| Json(it))
 }
@@ -103,6 +100,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use serde_json::{Map, Value};
     use time::macros::datetime;
 
     #[test]
@@ -117,7 +115,7 @@ mod test {
         let req = TestRequest::get()
             .uri("/?updated_since=2020-01-01T00:00:00Z&limit=1")
             .to_request();
-        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<Map<String, Value>> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 0);
         Ok(())
     }
@@ -135,7 +133,7 @@ mod test {
         let req = TestRequest::get()
             .uri("/?updated_since=2020-01-01T00:00:00Z&limit=1")
             .to_request();
-        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<Map<String, Value>> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(1, res.len());
         Ok(())
     }
@@ -155,7 +153,7 @@ mod test {
         let req = TestRequest::get()
             .uri("/?updated_since=2020-01-01T00:00:00Z&limit=2")
             .to_request();
-        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<Map<String, Value>> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(2, res.len());
         Ok(())
     }
@@ -177,7 +175,7 @@ mod test {
         let req = TestRequest::get()
             .uri("/?updated_since=2022-01-10T00:00:00Z&limit=100")
             .to_request();
-        let res: Vec<super::GetItem> = test::call_and_read_body_json(&app, req).await;
+        let res: Vec<Map<String, Value>> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(1, res.len());
         Ok(())
     }
