@@ -343,9 +343,8 @@ fn get_soon_out_of_date_issue(element: &Element) -> Option<Issue> {
 }
 
 pub const TAGS: &'static [&str] = &[
-    "osm:type",
-    "osm:id",
-    "osm:url",
+    "osm_id",
+    "osm_url",
     "lat",
     "lon",
     "name",
@@ -358,8 +357,9 @@ pub const TAGS: &'static [&str] = &[
     "instagramm",
     "line",
     "email",
-    "boost:expires",
-    "needs_app",
+    "opening_hours",
+    "boosted_until",
+    "required_app_url",
     "created_at",
     "updated_at",
     "deleted_at",
@@ -377,26 +377,43 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
         for tag in &include_tags {
             match *tag {
                 "icon" => {
-                    if element.tags.contains_key("icon:android") {
-                        res.insert("icon".into(), element.tags["icon:android"].clone());
+                    match element.tags.get("icon:android") {
+                        Some(icon) => {
+                            if icon.is_string() {
+                                res.insert("icon".into(), icon.clone());
+                            } else {
+                                res.insert("icon".into(), "question_mark".into());
+                            }
+                        }
+                        None => {
+                            res.insert("icon".into(), "question_mark".into());
+                        }
                     }
                 }
-                "boost:expires" => {
+                "boosted_until" => {
                     if element.tags.contains_key("boost:expires") {
                         res.insert(
-                            "boost:expires".into(),
+                            "boosted_until".into(),
                             element.tags["boost:expires"].clone(),
                         );
                     }
                 }
                 "name" => {
-                    if !element.overpass_data.tag("name").is_empty() {
-                        res.insert("name".into(), element.overpass_data.tag("name").into());
+                    let name = element.overpass_data.tag("name");
+                    if name.is_empty() {
+                        res.insert("name".into(), "Unnamed".into());
+                    } else {
+                        res.insert("name".into(), name.into());
                     }
                 }
-                "needs_app" => {
+                "opening_hours" => {
+                    if !element.overpass_data.tag("opening_hours").is_empty() {
+                        res.insert("opening_hours".into(), element.overpass_data.tag("opening_hours").into());
+                    }
+                }
+                "required_app_url" => {
                     if !element.overpass_data.tag("payment:lightning:companion_app_url").is_empty() {
-                        res.insert("needs_app".into(), element.overpass_data.tag("payment:lightning:companion_app_url").into());
+                        res.insert("required_app_url".into(), element.overpass_data.tag("payment:lightning:companion_app_url").into());
                     }
                 }
                 "phone" => {
@@ -473,20 +490,14 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                         res.insert("address".into(), addr.into());
                     }
                 }
-                "osm:type" => {
+                "osm_id" => {
                     res.insert(
-                        "osm:type".into(),
-                        Value::String(element.overpass_data.r#type.clone()),
+                        "osm_id".into(),
+                        element.overpass_data.btcmap_id().into(),
                     );
                 }
-                "osm:id" => {
-                    res.insert(
-                        "osm:id".into(),
-                        Value::Number(element.overpass_data.id.into()),
-                    );
-                }
-                "osm:url" => {
-                    res.insert("osm:url".into(), Value::String(element.osm_url()));
+                "osm_url" => {
+                    res.insert("osm_url".into(), element.osm_url().into());
                 }
                 "created_at" => {
                     res.insert(

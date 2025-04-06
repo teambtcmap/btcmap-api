@@ -47,7 +47,7 @@ pub async fn get(
                     .updated_since
                     .unwrap_or(OffsetDateTime::parse("2020-01-01T00:00:00Z", &Rfc3339).unwrap()),
                 Some(args.limit.unwrap_or(i64::MAX)),
-                args.include_deleted.unwrap_or(true),
+                args.include_deleted.unwrap_or(false),
                 conn,
             )
         })
