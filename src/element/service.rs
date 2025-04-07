@@ -18,6 +18,7 @@ use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
 use tracing::info;
+use url::Url;
 
 pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
     let geometries = area.geo_json_geometries()?;
@@ -412,8 +413,9 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                     }
                 }
                 "required_app_url" => {
-                    if !element.overpass_data.tag("payment:lightning:companion_app_url").is_empty() {
-                        res.insert("required_app_url".into(), element.overpass_data.tag("payment:lightning:companion_app_url").into());
+                    let required_app_url = element.overpass_data.tag("payment:lightning:companion_app_url");
+                    if is_valid_url(required_app_url) {
+                        res.insert("required_app_url".into(), required_app_url.into());
                     }
                 }
                 "phone" => {
@@ -427,31 +429,39 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
                 "website" => {
                     if !element.overpass_data.tag("website").is_empty() {
-                        res.insert("website".into(), element.overpass_data.tag("website").into());
+                        let website = element.overpass_data.tag("website");
+                        if is_valid_url(website) {
+                            res.insert("website".into(), website.into());
+                        }
                     } else {
-                        if !element.overpass_data.tag("contact:website").is_empty() {
-                            res.insert("website".into(), element.overpass_data.tag("contact:website").into());
+                        let website = element.overpass_data.tag("contact:website");
+                        if is_valid_url(website) {
+                            res.insert("website".into(), website.into());
                         }
                     }
                 }
                 "twitter" => {
-                    if !element.overpass_data.tag("contact:twitter").is_empty() {
-                        res.insert("twitter".into(), element.overpass_data.tag("contact:twitter").into());
+                    let twitter = element.overpass_data.tag("contact:twitter");
+                    if is_valid_url(twitter) {
+                        res.insert("twitter".into(), twitter.into());
                     }
                 }
                 "facebook" => {
-                    if !element.overpass_data.tag("contact:facebook").is_empty() {
-                        res.insert("facebook".into(), element.overpass_data.tag("contact:facebook").into());
+                    let facebook = element.overpass_data.tag("contact:facebook");
+                    if is_valid_url(facebook) {
+                        res.insert("facebook".into(), facebook.into());
                     }
                 }
                 "instagram" => {
-                    if !element.overpass_data.tag("contact:instagram").is_empty() {
-                        res.insert("instagram".into(), element.overpass_data.tag("contact:instagram").into());
+                    let instagram = element.overpass_data.tag("contact:instagram");
+                    if is_valid_url(instagram) {
+                        res.insert("instagram".into(), instagram.into());
                     }
                 }
                 "line" => {
-                    if !element.overpass_data.tag("contact:line").is_empty() {
-                        res.insert("line".into(), element.overpass_data.tag("contact:line").into());
+                    let line = element.overpass_data.tag("contact:line");
+                    if is_valid_url(line) {
+                        res.insert("line".into(), line.into());
                     }
                 }
                 "email" => {
@@ -543,4 +553,11 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
         }
     }
     res
+}
+
+fn is_valid_url(url: &str) -> bool {
+    match Url::parse(url) {
+        Ok(url) => url.scheme() == "http" || url.scheme() == "https",
+        Err(_) => false
+    }
 }

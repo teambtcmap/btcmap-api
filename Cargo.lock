@@ -411,6 +411,7 @@ dependencies = [
  "time",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
