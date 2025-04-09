@@ -133,12 +133,12 @@ async fn main() -> Result<()> {
             .service(
                 scope("v4")
                     .service(
-                        scope("elements")
+                        scope("places")
                             .service(element::v4::get)
                             .service(element::v4::get_by_id),
                     )
                     .service(
-                        scope("element-issues")
+                        scope("place-issues")
                             .service(element_issue::v4::get)
                             .service(element_issue::v4::get_by_id),
                     ),
