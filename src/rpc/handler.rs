@@ -41,6 +41,7 @@ pub enum RpcMethod {
     GenerateElementIcons,
     GenerateElementCategories,
     GetElementIssues,
+    GenerateElementCommentCounts,
     // area
     AddArea,
     GetArea,
@@ -272,6 +273,11 @@ pub async fn handle(
         RpcMethod::GetElementIssues => RpcResponse::from(
             req.id.clone(),
             super::get_element_issues::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::GenerateElementCommentCounts => RpcResponse::from(
+            req.id.clone(),
+            super::element::generate_element_comment_counts::run(&admin.unwrap(), &pool, &conf)
+                .await?,
         ),
         // area
         RpcMethod::AddArea => RpcResponse::from(

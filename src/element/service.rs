@@ -377,20 +377,18 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
     if let Some(osm_tags) = &element.overpass_data.tags {
         for tag in &include_tags {
             match *tag {
-                "icon" => {
-                    match element.tags.get("icon:android") {
-                        Some(icon) => {
-                            if icon.is_string() {
-                                res.insert("icon".into(), icon.clone());
-                            } else {
-                                res.insert("icon".into(), "question_mark".into());
-                            }
-                        }
-                        None => {
+                "icon" => match element.tags.get("icon:android") {
+                    Some(icon) => {
+                        if icon.is_string() {
+                            res.insert("icon".into(), icon.clone());
+                        } else {
                             res.insert("icon".into(), "question_mark".into());
                         }
                     }
-                }
+                    None => {
+                        res.insert("icon".into(), "question_mark".into());
+                    }
+                },
                 "boosted_until" => {
                     if element.tags.contains_key("boost:expires") {
                         res.insert(
@@ -409,11 +407,16 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
                 "opening_hours" => {
                     if !element.overpass_data.tag("opening_hours").is_empty() {
-                        res.insert("opening_hours".into(), element.overpass_data.tag("opening_hours").into());
+                        res.insert(
+                            "opening_hours".into(),
+                            element.overpass_data.tag("opening_hours").into(),
+                        );
                     }
                 }
                 "required_app_url" => {
-                    let required_app_url = element.overpass_data.tag("payment:lightning:companion_app_url");
+                    let required_app_url = element
+                        .overpass_data
+                        .tag("payment:lightning:companion_app_url");
                     if is_valid_url(required_app_url) {
                         res.insert("required_app_url".into(), required_app_url.into());
                     }
@@ -423,7 +426,10 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                         res.insert("phone".into(), element.overpass_data.tag("phone").into());
                     } else {
                         if !element.overpass_data.tag("contact:phone").is_empty() {
-                            res.insert("phone".into(), element.overpass_data.tag("contact:phone").into());
+                            res.insert(
+                                "phone".into(),
+                                element.overpass_data.tag("contact:phone").into(),
+                            );
                         }
                     }
                 }
@@ -469,7 +475,10 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                         res.insert("email".into(), element.overpass_data.tag("email").into());
                     } else {
                         if !element.overpass_data.tag("contact:email").is_empty() {
-                            res.insert("email".into(), element.overpass_data.tag("contact:email").into());
+                            res.insert(
+                                "email".into(),
+                                element.overpass_data.tag("contact:email").into(),
+                            );
                         }
                     }
                 }
@@ -501,10 +510,7 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                     }
                 }
                 "osm_id" => {
-                    res.insert(
-                        "osm_id".into(),
-                        element.overpass_data.btcmap_id().into(),
-                    );
+                    res.insert("osm_id".into(), element.overpass_data.btcmap_id().into());
                 }
                 "osm_url" => {
                     res.insert("osm_url".into(), element.osm_url().into());
@@ -558,6 +564,6 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
 fn is_valid_url(url: &str) -> bool {
     match Url::parse(url) {
         Ok(url) => url.scheme() == "http" || url.scheme() == "https",
-        Err(_) => false
+        Err(_) => false,
     }
 }

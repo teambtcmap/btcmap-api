@@ -169,6 +169,16 @@ impl ElementComment {
         Ok(res)
     }
 
+    pub async fn select_by_element_id_async(
+        element_id: i64,
+        pool: &Pool,
+    ) -> Result<Vec<ElementComment>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_element_id(element_id, conn))
+            .await?
+    }
+
     pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementComment>> {
         let query = format!(
             r#"
