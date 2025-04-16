@@ -16,19 +16,12 @@ pub struct Diff {
     pub removed_areas: Vec<i64>,
 }
 
-pub async fn generate_mapping_async(elements: Vec<Element>, pool: &Pool) -> Result<Vec<Diff>> {
-    pool.get()
-        .await?
-        .interact(move |conn| generate_mapping(&elements, conn))
-        .await?
-}
-
-pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Vec<Diff>> {
+pub async fn generate_mapping(elements: &[Element], pool: &Pool) -> Result<Vec<Diff>> {
     let mut diffs = vec![];
-    let areas = Area::select_all(conn)?;
+    let areas = Area::select_all(pool).await?;
     for element in elements {
         let element_areas = element::service::find_areas(element, &areas)?;
-        let old_mappings = AreaElement::select_by_element_id(element.id, conn)?;
+        let old_mappings = AreaElement::select_by_element_id_async(element.id, pool).await?;
         let old_mappings: Vec<AreaElement> = old_mappings
             .into_iter()
             .filter(|it| it.deleted_at.is_none())
@@ -42,33 +35,36 @@ pub fn generate_mapping(elements: &[Element], conn: &Connection) -> Result<Vec<D
         if new_area_ids != old_area_ids {
             for old_area_id in &old_area_ids {
                 if !new_area_ids.contains(old_area_id) {
-                    let area_element = AreaElement::select_by_area_id_and_element_id(
+                    let area_element = AreaElement::select_by_area_id_and_element_id_async(
                         *old_area_id,
                         element.id,
-                        conn,
-                    )?
+                        pool,
+                    )
+                    .await?
                     .unwrap();
-                    AreaElement::set_deleted_at(
+                    AreaElement::set_deleted_at_async(
                         area_element.id,
                         Some(OffsetDateTime::now_utc()),
-                        conn,
-                    )?;
+                        pool,
+                    )
+                    .await?;
                     removed_areas.push(area_element.area_id);
                 }
             }
             for new_area_id in new_area_ids {
                 if !old_area_ids.contains(&new_area_id) {
-                    let area_element = AreaElement::select_by_area_id_and_element_id(
+                    let area_element = AreaElement::select_by_area_id_and_element_id_async(
                         new_area_id,
                         element.id,
-                        conn,
-                    )?;
+                        pool,
+                    )
+                    .await?;
                     match area_element {
                         Some(area_element) => {
-                            AreaElement::set_deleted_at(area_element.id, None, conn)?;
+                            AreaElement::set_deleted_at_async(area_element.id, None, pool).await?;
                         }
                         None => {
-                            AreaElement::insert(new_area_id, element.id, conn)?;
+                            AreaElement::insert_async(new_area_id, element.id, pool).await?;
                         }
                     }
                     added_areas.push(new_area_id);

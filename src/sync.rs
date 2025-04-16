@@ -96,7 +96,7 @@ pub async fn merge_overpass_elements(
     area_mapping_elements.extend(created_elements.clone());
     area_mapping_elements.extend(updated_elements.clone());
     let area_mapping_diff =
-        area_element::service::generate_mapping_async(area_mapping_elements, pool).await?;
+        area_element::service::generate_mapping(&area_mapping_elements, pool).await?;
     let area_mapping_processing_time_s =
         (OffsetDateTime::now_utc() - area_mapping_started_at).as_seconds_f64();
 

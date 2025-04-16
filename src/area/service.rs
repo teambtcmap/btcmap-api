@@ -37,49 +37,35 @@ pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
     Ok(area)
 }
 
-pub async fn patch_tags_async(
-    area_id_or_alias: impl Into<String>,
-    patch_set: Map<String, Value>,
-    pool: &Pool,
-) -> Result<Area> {
-    let area_id_or_alias = area_id_or_alias.into();
-    pool.get()
-        .await?
-        .interact(move |conn| patch_tags(&area_id_or_alias, patch_set, conn))
-        .await?
-}
-
-pub fn patch_tags(
+pub async fn patch_tags(
     area_id_or_alias: &str,
     tags: Map<String, Value>,
-    conn: &Connection,
+    pool: &Pool,
 ) -> Result<Area> {
     if tags.contains_key("url_alias") {
         return Err(Error::InvalidInput("url_alias can't be changed".into()));
     }
-    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
+    let area = Area::select_by_id_or_alias_async(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
         let mut affected_elements: HashSet<Element> = HashSet::new();
-        for area_element in AreaElement::select_by_area_id(area.id, conn)? {
-            let element = Element::select_by_id(area_element.element_id, conn)?.ok_or(format!(
-                "failed to fetch element {}",
-                area_element.element_id,
-            ))?;
+        for area_element in AreaElement::select_by_area_id_async(area.id, pool).await? {
+            let element = Element::select_by_id_async(area_element.element_id, pool).await?;
             affected_elements.insert(element);
         }
-        let area = Area::patch_tags(area.id, tags, conn)?;
-        let elements_in_new_bounds = area_element::service::get_elements_within_geometries(
+        let area = Area::patch_tags_async(area.id, tags, pool).await?;
+        let elements_in_new_bounds = area_element::service::get_elements_within_geometries_async(
             area.geo_json_geometries()?,
-            conn,
-        )?;
+            pool,
+        )
+        .await?;
         for element in elements_in_new_bounds {
             affected_elements.insert(element);
         }
         let affected_elements: Vec<Element> = affected_elements.into_iter().collect();
-        area_element::service::generate_mapping(&affected_elements, conn)?;
+        area_element::service::generate_mapping(&affected_elements, pool).await?;
         Ok(area)
     } else {
-        Area::patch_tags(area.id, tags, conn)
+        Area::patch_tags_async(area.id, tags, pool).await
     }
 }
 
@@ -307,7 +293,7 @@ mod test {
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
         patch_set.insert(new_tag_name.into(), new_tag_value.clone());
-        let area = super::patch_tags_async(&area.id.to_string(), patch_set, &pool).await?;
+        let area = super::patch_tags(&area.id.to_string(), patch_set, &pool).await?;
         let db_area = Area::select_by_id_async(area.id, &pool).await?;
         assert_eq!(area.id, db_area.id);
         assert_eq!(new_tag_value, db_area.tags[new_tag_name]);
@@ -338,7 +324,7 @@ mod test {
             AreaElement::insert_async(area.id, element_in_london.id, &pool).await?;
         tags.insert("geo_json".into(), phuket_geo_json());
         tags.remove("url_alias");
-        let area = super::patch_tags_async(&area.id.to_string(), tags.clone(), &pool).await?;
+        let area = super::patch_tags(&area.id.to_string(), tags.clone(), &pool).await?;
         let db_area = Area::select_by_id_async(area.id, &pool).await?;
         assert_eq!(area.id, db_area.id);
         assert!(
@@ -362,7 +348,7 @@ mod test {
                 .len()
         );
         tags.insert("geo_json".into(), earth_geo_json());
-        let area = super::patch_tags_async(&area.id.to_string(), tags, &pool).await?;
+        let area = super::patch_tags(&area.id.to_string(), tags, &pool).await?;
         assert_eq!(
             2,
             AreaElement::select_by_area_id_async(area.id, &pool)

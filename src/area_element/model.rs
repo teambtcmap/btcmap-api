@@ -118,6 +118,17 @@ impl AreaElement {
         Ok(res)
     }
 
+    pub async fn select_by_area_id_and_element_id_async(
+        area_id: i64,
+        element_id: i64,
+        pool: &Pool,
+    ) -> Result<Option<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_area_id_and_element_id(area_id, element_id, conn))
+            .await?
+    }
+
     pub fn select_by_area_id_and_element_id(
         area_id: i64,
         element_id: i64,
@@ -168,6 +179,13 @@ impl AreaElement {
         Ok(res)
     }
 
+    pub async fn select_by_element_id_async(element_id: i64, pool: &Pool) -> Result<Vec<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_element_id(element_id, conn))
+            .await?
+    }
+
     pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
         let query = format!(
             r#"
@@ -211,11 +229,22 @@ impl AreaElement {
             .optional()?)
     }
 
+    pub async fn set_deleted_at_async(
+        id: i64,
+        deleted_at: Option<OffsetDateTime>,
+        pool: &Pool,
+    ) -> Result<Self> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::set_deleted_at(id, deleted_at, conn))
+            .await?
+    }
+
     pub fn set_deleted_at(
         id: i64,
         deleted_at: Option<OffsetDateTime>,
         conn: &Connection,
-    ) -> Result<AreaElement> {
+    ) -> Result<Self> {
         match deleted_at {
             Some(deleted_at) => {
                 let query = format!(

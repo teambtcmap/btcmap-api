@@ -110,14 +110,14 @@ impl Area {
         Area::select_by_id(conn.last_insert_rowid(), conn)
     }
 
-    pub async fn select_all_async(pool: &Pool) -> Result<Vec<Area>> {
+    pub async fn select_all(pool: &Pool) -> Result<Vec<Area>> {
         pool.get()
             .await?
-            .interact(|conn| Area::select_all(conn))
+            .interact(|conn| Area::_select_all(conn))
             .await?
     }
 
-    pub fn select_all(conn: &Connection) -> Result<Vec<Area>> {
+    fn _select_all(conn: &Connection) -> Result<Vec<Area>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -511,7 +511,7 @@ mod test {
         Area::insert(Area::mock_tags(), &pool).await?;
         Area::insert(Area::mock_tags(), &pool).await?;
         Area::insert(Area::mock_tags(), &pool).await?;
-        assert_eq!(3, Area::select_all_async(&pool).await?.len());
+        assert_eq!(3, Area::select_all(&pool).await?.len());
         Ok(())
     }
 
