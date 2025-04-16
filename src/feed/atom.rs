@@ -170,35 +170,20 @@ pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Resu
     let area = Area::select_by_id_or_alias_async(area.to_string(), &pool).await?;
     let area_id = area.id;
     let area_name = area.name();
-    let comments: Vec<(ElementComment, Element)> = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            crate::area::service::get_comments(&area, conn)
-                .unwrap()
-                .into_iter()
-                .map(|it| {
-                    let cloned_element_id = it.element_id;
-                    (
-                        it,
-                        Element::select_by_id(cloned_element_id, conn)
-                            .unwrap()
-                            .unwrap(),
-                    )
-                })
-                .collect()
-        })
-        .await?;
-    let comments = comments
-        .into_iter()
-        .filter(|it| it.0.deleted_at.is_none())
-        .collect();
+    let comments = crate::area::service::get_comments_async(area, &pool).await?;
+    let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
+    for comment in comments {
+        let element = Element::select_by_id_async(comment.element_id, &pool).await?;
+        if comment.deleted_at.is_none() && element.deleted_at.is_none() {
+            comments_to_elements.push((comment, element));
+        }
+    }
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(comments_to_atom_feed(
             &format!("https://api.btcmap.org/feeds/new-comments?area={}", area_id),
             &format!("BTC Map - New Comments in {}", area_name),
-            comments,
+            comments_to_elements,
         )))
 }
 

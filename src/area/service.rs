@@ -243,7 +243,7 @@ pub async fn get_comments_async(area: Area, pool: &Pool) -> Result<Vec<ElementCo
         .await?
 }
 
-pub fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment>> {
+fn get_comments(area: &Area, conn: &Connection) -> Result<Vec<ElementComment>> {
     let area_elements = AreaElement::select_by_area_id(area.id, conn)?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
