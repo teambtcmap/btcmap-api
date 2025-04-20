@@ -369,6 +369,7 @@ pub const TAGS: &'static [&str] = &[
 
 pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Value> {
     let mut res = Map::new();
+    res.insert("id".into(), element.id.into());
     let include_tags: Vec<&str> = include_tags
         .to_vec()
         .into_iter()

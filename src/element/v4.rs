@@ -56,13 +56,7 @@ pub async fn get(
         .insert(RequestExtension::new(elements.len()));
     let items: Vec<Map<String, Value>> = elements
         .into_iter()
-        .map(|it| {
-            let mut res = Map::new();
-            res.insert("id".into(), it.id.into());
-            let mut tags = super::service::generate_tags(&it, &include_tags);
-            res.append(&mut tags);
-            res
-        })
+        .map(|it| super::service::generate_tags(&it, &include_tags))
         .collect();
     Ok(Json(items))
 }
@@ -81,13 +75,7 @@ pub async fn get_by_id(
         .interact(move |conn| Element::select_by_id_or_osm_id(&id_clone, conn))
         .await??
         .ok_or(Error::not_found())
-        .map(|it| {
-            let mut res = Map::new();
-            res.insert("id".into(), it.id.into());
-            let mut tags = super::service::generate_tags(&it, &include_tags);
-            res.append(&mut tags);
-            res
-        })
+        .map(|it| super::service::generate_tags(&it, &include_tags))
         .map(|it| Json(it))
 }
 

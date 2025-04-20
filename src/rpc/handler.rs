@@ -207,7 +207,7 @@ pub async fn handle(
         // element
         RpcMethod::GetElement => RpcResponse::from(
             req.id.clone(),
-            super::get_element::run(params(req.params)?, &pool).await?,
+            super::element::get_element::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::SetElementTag => RpcResponse::from(
             req.id.clone(),
