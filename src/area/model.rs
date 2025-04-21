@@ -135,21 +135,26 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub async fn select_all_except_deleted_async(pool: &Pool) -> Result<Vec<Self>> {
+    pub async fn select_all_except_deleted(pool: &Pool) -> Result<Vec<Self>> {
         pool.get()
             .await?
-            .interact(|conn| Self::select_all_except_deleted(conn))
+            .interact(|conn| Self::_select_all_except_deleted(conn))
             .await?
     }
 
-    pub fn select_all_except_deleted(conn: &Connection) -> Result<Vec<Area>> {
+    pub fn _select_all_except_deleted(conn: &Connection) -> Result<Vec<Self>> {
         let sql = format!(
             r#"
-                SELECT {MAPPER_PROJECTION}
-                FROM {TABLE_NAME}
-                WHERE {COL_DELETED_AT} IS NULL
-                ORDER BY {COL_UPDATED_AT}, {COL_ID};
-            "#
+                SELECT {projection}
+                FROM {table}
+                WHERE {deleted_at} IS NULL
+                ORDER BY {updated_at}, {id}
+            "#,
+            projection = Columns::projection_full(),
+            table = TABLE_NAME,
+            deleted_at = Columns::DeletedAt.as_str(),
+            updated_at = Columns::UpdatedAt.as_str(),
+            id = Columns::Id.as_str(),
         );
         conn.prepare(&sql)?
             .query_map({}, Columns::mapper_full())?
@@ -562,7 +567,7 @@ mod test {
         ];
         Area::set_deleted_at_async(areas.remove(1).id, Some(OffsetDateTime::now_utc()), &pool)
             .await?;
-        assert_eq!(2, Area::select_all_except_deleted_async(&pool).await?.len());
+        assert_eq!(2, Area::select_all_except_deleted(&pool).await?.len());
         Ok(())
     }
 

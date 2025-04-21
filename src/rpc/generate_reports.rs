@@ -2,7 +2,6 @@ use crate::{
     admin::Admin, area::Area, conf::Conf, discord, element::Element, report::Report, Result,
 };
 use deadpool_sqlite::Pool;
-use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -21,11 +20,7 @@ pub struct Res {
 
 pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let res = pool
-        .get()
-        .await?
-        .interact(|conn| generate_reports(&conn))
-        .await??;
+    let res = generate_reports(&pool).await?;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     if res > 0 {
         discord::post_message(
@@ -45,36 +40,36 @@ pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     })
 }
 
-pub fn generate_reports(conn: &Connection) -> Result<usize> {
+pub async fn generate_reports(pool: &Pool) -> Result<usize> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
-    let today_reports = Report::select_by_date(&today, None, conn)?;
+    let today_reports = Report::select_by_date_async(today, None, pool).await?;
     if !today_reports.is_empty() {
         info!("Found existing reports for today, aborting");
         return Ok(0);
     }
-    let all_areas = Area::select_all_except_deleted(conn)?;
-    let all_elements = Element::select_all_except_deleted(conn)?;
+    let all_areas = Area::select_all_except_deleted(pool).await?;
+    let all_elements = Element::select_all_except_deleted_async(pool).await?;
     let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
     for area in all_areas {
         let area_elements = crate::element::service::filter_by_area(&all_elements, &area)?;
-        if let Some(report) = generate_new_report_if_necessary(&area, area_elements, conn)? {
+        if let Some(report) = generate_new_report_if_necessary(&area, area_elements, pool).await? {
             reports.insert(area.id, report);
         }
     }
     for (area_id, report) in &reports {
-        insert_report(*area_id, report, conn)?;
+        insert_report(*area_id, report, pool).await?;
     }
     Ok(reports.len())
 }
 
-fn generate_new_report_if_necessary(
+async fn generate_new_report_if_necessary(
     area: &Area,
     area_elements: Vec<Element>,
-    conn: &Connection,
+    pool: &Pool,
 ) -> Result<Option<Map<String, Value>>> {
     let new_report_tags = generate_report_tags(&area_elements)?;
-    let prev_report = Report::select_latest_by_area_id(area.id, conn)?;
+    let prev_report = Report::select_latest_by_area_id_async(area.id, pool).await?;
     Ok(match prev_report {
         None => Some(new_report_tags),
         Some(latest_report) => {
@@ -186,10 +181,10 @@ fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
     Ok(tags)
 }
 
-fn insert_report(area_id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<()> {
+async fn insert_report(area_id: i64, tags: &Map<String, Value>, pool: &Pool) -> Result<()> {
     let date = OffsetDateTime::now_utc().date();
     info!(area_id, ?date, ?tags, "Inserting new report");
-    Report::insert(area_id, &date, tags, conn)?;
+    Report::insert_async(area_id, date, tags.clone(), pool).await?;
     info!(area_id, ?date, "Inserted new report");
     Ok(())
 }

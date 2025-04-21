@@ -123,6 +123,17 @@ impl Report {
             .collect::<Result<Vec<Report>, _>>()?)
     }
 
+    pub async fn select_by_date_async(
+        date: Date,
+        limit: Option<i64>,
+        pool: &Pool,
+    ) -> Result<Vec<Self>> {
+        pool.get()
+            .await?
+            .interact(move |conn| Self::select_by_date(&date, limit, conn))
+            .await?
+    }
+
     pub fn select_by_date(
         date: &Date,
         limit: Option<i64>,
