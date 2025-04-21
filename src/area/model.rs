@@ -120,10 +120,14 @@ impl Area {
     fn _select_all(conn: &Connection) -> Result<Vec<Area>> {
         let sql = format!(
             r#"
-                SELECT {MAPPER_PROJECTION}
-                FROM {TABLE_NAME}
-                ORDER BY {COL_UPDATED_AT}, {COL_ID};
-            "#
+                SELECT {projection}
+                FROM {table}
+                ORDER BY {updated_at}, {id}
+            "#,
+            projection = Columns::projection_full(),
+            table = TABLE_NAME,
+            updated_at = Columns::UpdatedAt.as_str(),
+            id = Columns::Id.as_str(),
         );
         conn.prepare(&sql)?
             .query_map({}, Columns::mapper_full())?
@@ -476,6 +480,7 @@ mod test {
     use actix_web::test;
     use serde_json::{json, Map};
     use time::ext::NumericalDuration;
+    use time::Duration;
     use time::{macros::datetime, OffsetDateTime};
 
     #[test]
@@ -512,6 +517,38 @@ mod test {
         Area::insert(Area::mock_tags(), &pool).await?;
         Area::insert(Area::mock_tags(), &pool).await?;
         assert_eq!(3, Area::select_all(&pool).await?.len());
+        Ok(())
+    }
+
+    #[test]
+    async fn select_all_should_sort_by_updated_at_asc() -> Result<()> {
+        let pool = mock_pool().await;
+        let area_1 = Area::insert(Area::mock_tags(), &pool).await?;
+        let area_1 = Area::set_updated_at_async(
+            area_1.id,
+            OffsetDateTime::now_utc() - Duration::hours(3),
+            &pool,
+        )
+        .await?;
+        let area_2 = Area::insert(Area::mock_tags(), &pool).await?;
+        let area_2 = Area::set_updated_at_async(
+            area_2.id,
+            OffsetDateTime::now_utc() - Duration::hours(1),
+            &pool,
+        )
+        .await?;
+        let area_3 = Area::insert(Area::mock_tags(), &pool).await?;
+        assert_eq!(3, Area::select_all(&pool).await?.len());
+        let area_3 = Area::set_updated_at_async(
+            area_3.id,
+            OffsetDateTime::now_utc() - Duration::hours(2),
+            &pool,
+        )
+        .await?;
+        let areas = Area::select_all(&pool).await?;
+        assert_eq!(area_1.id, areas[0].id);
+        assert_eq!(area_3.id, areas[1].id);
+        assert_eq!(area_2.id, areas[2].id);
         Ok(())
     }
 
