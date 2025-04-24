@@ -72,7 +72,7 @@ pub async fn get(
             Redirect::to("https://static.btcmap.org/api/v2/areas.json").permanent(),
         ));
     }
-    let areas = Area::select_updated_since_async(
+    let areas = Area::select_updated_since(
         args.updated_since.unwrap_or(datetime!(2000-01-01 0:00 UTC)),
         args.limit,
         &pool,

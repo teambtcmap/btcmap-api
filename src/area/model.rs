@@ -110,14 +110,14 @@ impl Area {
         Area::select_by_id(conn.last_insert_rowid(), conn)
     }
 
-    pub async fn select_all(pool: &Pool) -> Result<Vec<Area>> {
+    pub async fn select_all(pool: &Pool) -> Result<Vec<Self>> {
         pool.get()
             .await?
             .interact(|conn| Area::_select_all(conn))
             .await?
     }
 
-    fn _select_all(conn: &Connection) -> Result<Vec<Area>> {
+    fn _select_all(conn: &Connection) -> Result<Vec<Self>> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -142,7 +142,7 @@ impl Area {
             .await?
     }
 
-    pub fn _select_all_except_deleted(conn: &Connection) -> Result<Vec<Self>> {
+    fn _select_all_except_deleted(conn: &Connection) -> Result<Vec<Self>> {
         let sql = format!(
             r#"
                 SELECT {projection}
@@ -162,22 +162,22 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub async fn select_updated_since_async(
+    pub async fn select_updated_since(
         updated_since: OffsetDateTime,
         limit: Option<i64>,
         pool: &Pool,
-    ) -> Result<Vec<Area>> {
+    ) -> Result<Vec<Self>> {
         pool.get()
             .await?
-            .interact(move |conn| Area::select_updated_since(updated_since, limit, conn))
+            .interact(move |conn| Self::_select_updated_since(updated_since, limit, conn))
             .await?
     }
 
-    pub fn select_updated_since(
+    fn _select_updated_since(
         updated_since: OffsetDateTime,
         limit: Option<i64>,
         conn: &Connection,
-    ) -> Result<Vec<Area>> {
+    ) -> Result<Vec<Self>> {
         let sql = format!(
             r#"
                 SELECT {MAPPER_PROJECTION}
@@ -585,7 +585,7 @@ mod test {
             Area::set_updated_at_async(area_3.id, datetime!(2020-01-03 00:00 UTC), &pool).await?;
         assert_eq!(
             2,
-            Area::select_updated_since_async(datetime!(2020-01-01 00:00 UTC), None, &pool)
+            Area::select_updated_since(datetime!(2020-01-01 00:00 UTC), None, &pool)
                 .await?
                 .len(),
         );
