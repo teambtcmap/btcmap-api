@@ -170,11 +170,11 @@ pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Resu
     let area = Area::select_by_id_or_alias_async(area.to_string(), &pool).await?;
     let area_id = area.id;
     let area_name = area.name();
-    let comments = crate::area::service::get_comments_async(area, &pool).await?;
+    let comments = crate::area::service::get_comments_async(area, false, &pool).await?;
     let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
     for comment in comments {
         let element = Element::select_by_id_async(comment.element_id, &pool).await?;
-        if comment.deleted_at.is_none() && element.deleted_at.is_none() {
+        if element.deleted_at.is_none() {
             comments_to_elements.push((comment, element));
         }
     }

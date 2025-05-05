@@ -20,13 +20,13 @@ case "$1" in
         ;;
 
     fetch-prod-db)
-        rsync -v btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
+        rsync -v --progress --stats btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
         ;;
 
     deploy)
         cargo test \
             && cargo build --release \
-            && rsync -v target/release/btcmap-api btcmap-api:/usr/local/bin/btcmap-api \
+            && rsync -v --progress --stats target/release/btcmap-api btcmap-api:/usr/local/bin/btcmap-api \
             && ssh btcmap-api 'systemctl restart btcmap-api.service'
         ;;
 esac

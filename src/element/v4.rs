@@ -1,4 +1,5 @@
 use crate::element::Element;
+use crate::element_comment::ElementComment;
 use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
@@ -10,8 +11,10 @@ use actix_web::HttpRequest;
 use actix_web_lab::extract::Query;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use std::i64;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -77,6 +80,43 @@ pub async fn get_by_id(
         .ok_or(Error::not_found())
         .map(|it| super::service::generate_tags(&it, &include_tags))
         .map(|it| Json(it))
+}
+
+#[derive(Serialize)]
+pub struct Comment {
+    pub id: i64,
+    pub text: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+impl From<ElementComment> for Comment {
+    fn from(val: ElementComment) -> Self {
+        Comment {
+            id: val.id,
+            text: val.comment,
+            created_at: val.created_at,
+        }
+    }
+}
+
+impl From<ElementComment> for Json<Comment> {
+    fn from(val: ElementComment) -> Self {
+        Json(val.into())
+    }
+}
+
+#[get("{id}/comments")]
+pub async fn get_by_id_comments(
+    id: Path<String>,
+    pool: Data<Pool>,
+) -> Result<Json<Vec<Comment>>, Error> {
+    let element = Element::select_by_id_or_osm_id_async(id.clone(), &pool)
+        .await?
+        .ok_or(Error::not_found())?;
+    let comments =
+        ElementComment::select_by_element_id_async(element.id, false, i64::MAX, &pool).await?;
+    Ok(Json(comments.into_iter().map(|it| it.into()).collect()))
 }
 
 #[cfg(test)]

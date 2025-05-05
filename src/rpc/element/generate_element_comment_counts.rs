@@ -1,3 +1,5 @@
+use std::i64;
+
 use crate::{
     admin::Admin, conf::Conf, discord, element::Element, element_comment::ElementComment, Result,
 };
@@ -16,11 +18,8 @@ pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let elements = Element::select_all_async(None, pool).await?;
     let mut elements_affected = 0;
     for element in elements {
-        let comments = ElementComment::select_by_element_id_async(element.id, pool).await?;
-        let comments: Vec<_> = comments
-            .iter()
-            .filter(|it| it.deleted_at.is_none())
-            .collect();
+        let comments =
+            ElementComment::select_by_element_id_async(element.id, false, i64::MAX, pool).await?;
         let new_len = comments.len();
         let old_len = element.tag("comments");
         if old_len.is_null() {

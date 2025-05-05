@@ -76,15 +76,21 @@ impl ElementComment {
 
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
+        include_deleted: bool,
         limit: Option<i64>,
         conn: &Connection,
     ) -> Result<Vec<ElementComment>> {
+        let include_deleted_sql = if include_deleted {
+            ""
+        } else {
+            "AND deleted_at IS NULL"
+        };
         let start = Instant::now();
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
-                WHERE {COL_UPDATED_AT} > :updated_since
+                WHERE {COL_UPDATED_AT} > :updated_since {include_deleted_sql}
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
                 LIMIT :limit
             "#
@@ -171,21 +177,36 @@ impl ElementComment {
 
     pub async fn select_by_element_id_async(
         element_id: i64,
+        include_deleted: bool,
+        limit: i64,
         pool: &Pool,
     ) -> Result<Vec<ElementComment>> {
         pool.get()
             .await?
-            .interact(move |conn| Self::select_by_element_id(element_id, conn))
+            .interact(move |conn| {
+                Self::select_by_element_id(element_id, include_deleted, limit, conn)
+            })
             .await?
     }
 
-    pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementComment>> {
+    pub fn select_by_element_id(
+        element_id: i64,
+        include_deleted: bool,
+        limit: i64,
+        conn: &Connection,
+    ) -> Result<Vec<ElementComment>> {
+        let include_deleted_sql = if include_deleted {
+            ""
+        } else {
+            "AND deleted_at IS NULL"
+        };
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
                 FROM {TABLE}
-                WHERE {COL_ELEMENT_ID} = :element_id
+                WHERE {COL_ELEMENT_ID} = :element_id {include_deleted_sql}
                 ORDER BY {COL_UPDATED_AT}, {COL_ID}
+                LIMIT :limit
             "#
         );
         debug!(query);
@@ -194,6 +215,7 @@ impl ElementComment {
             .query_map(
                 named_params! {
                     ":element_id": element_id,
+                    ":limit": limit,
                 },
                 mapper(),
             )?

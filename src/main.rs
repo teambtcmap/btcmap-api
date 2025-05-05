@@ -135,7 +135,8 @@ async fn main() -> Result<()> {
                     .service(
                         scope("places")
                             .service(element::v4::get)
-                            .service(element::v4::get_by_id),
+                            .service(element::v4::get_by_id)
+                            .service(element::v4::get_by_id_comments),
                     )
                     .service(
                         scope("place-issues")

@@ -33,11 +33,7 @@ fn get_most_commented_countries(
     period_end: &OffsetDateTime,
     conn: &Connection,
 ) -> Result<Vec<Res>> {
-    let comments = ElementComment::select_updated_since(period_start, None, conn)?;
-    let comments: Vec<ElementComment> = comments
-        .into_iter()
-        .filter(|it| it.deleted_at.is_none())
-        .collect();
+    let comments = ElementComment::select_updated_since(period_start, false, None, conn)?;
     let comments: Vec<ElementComment> = comments
         .into_iter()
         .filter(|it| it.created_at < *period_end)

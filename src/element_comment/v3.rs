@@ -82,7 +82,7 @@ pub async fn get(
         .get()
         .await?
         .interact(move |conn| {
-            ElementComment::select_updated_since(&args.updated_since, Some(args.limit), conn)
+            ElementComment::select_updated_since(&args.updated_since, true, Some(args.limit), conn)
         })
         .await??;
     req.extensions_mut()
