@@ -99,9 +99,11 @@ impl Area {
             .map_err(|_| Error::invalid_input("invalid geo_json"))?;
         let sql = format!(
             r#"
-                INSERT INTO {TABLE_NAME} ({COL_TAGS}, {COL_ALIAS})
-                VALUES (json(:{COL_TAGS}), :{COL_ALIAS});
-            "#
+                INSERT INTO {TABLE_NAME} ({tags}, {alias})
+                VALUES (json(:{tags}), :{alias});
+            "#,
+            tags = Columns::Tags.as_str(),
+            alias = Columns::Alias.as_str(),
         );
         conn.execute(
             &sql,
@@ -146,12 +148,11 @@ impl Area {
         let sql = format!(
             r#"
                 SELECT {projection}
-                FROM {table}
+                FROM {TABLE_NAME}
                 WHERE {deleted_at} IS NULL
                 ORDER BY {updated_at}, {id}
             "#,
             projection = Columns::projection_full(),
-            table = TABLE_NAME,
             deleted_at = Columns::DeletedAt.as_str(),
             updated_at = Columns::UpdatedAt.as_str(),
             id = Columns::Id.as_str(),
@@ -180,12 +181,15 @@ impl Area {
     ) -> Result<Vec<Self>> {
         let sql = format!(
             r#"
-                SELECT {MAPPER_PROJECTION}
+                SELECT {projection}
                 FROM {TABLE_NAME}
-                WHERE {COL_UPDATED_AT} > :updated_since
-                ORDER BY {COL_UPDATED_AT}, {COL_ID}
+                WHERE {updated_at} > :updated_since
+                ORDER BY {updated_at}, {id}
                 LIMIT :limit;
-            "#
+            "#,
+            projection = Columns::projection_full(),
+            updated_at = Columns::UpdatedAt.as_str(),
+            id = Columns::Id.as_str(),
         );
         conn.prepare(&sql)?
             .query_map(
@@ -199,28 +203,32 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub async fn select_by_search_query_async(
+    pub async fn select_by_search_query(
         search_query: impl Into<String>,
         pool: &Pool,
     ) -> Result<Vec<Self>> {
         let search_query = search_query.into();
         pool.get()
             .await?
-            .interact(move |conn| Self::select_by_search_query(&search_query, conn))
+            .interact(move |conn| Self::_select_by_search_query(&search_query, conn))
             .await?
     }
 
-    pub fn select_by_search_query(
+    fn _select_by_search_query(
         search_query: impl Into<String>,
         conn: &Connection,
     ) -> Result<Vec<Self>> {
         let sql = format!(
             r#"
-                SELECT {MAPPER_PROJECTION}
+                SELECT {projection}
                 FROM {TABLE_NAME}
-                WHERE LOWER(json_extract({COL_TAGS}, '$.name')) LIKE '%' || UPPER(:query) || '%'
-                ORDER BY {COL_UPDATED_AT}, {COL_ID};
-            "#
+                WHERE LOWER(json_extract({tags}, '$.name')) LIKE '%' || UPPER(:query) || '%'
+                ORDER BY {updated_at}, {id};
+            "#,
+            projection = Columns::projection_full(),
+            tags = Columns::Tags.as_str(),
+            updated_at = Columns::UpdatedAt.as_str(),
+            id = Columns::Id.as_str(),
         );
         conn.prepare(&sql)?
             .query_map(
@@ -606,21 +614,11 @@ mod test {
             &pool,
         )
         .await?;
-        assert_eq!(
-            1,
-            Area::select_by_search_query_async("sus", &pool)
-                .await?
-                .len()
-        );
-        assert_eq!(
-            1,
-            Area::select_by_search_query_async("hi", &pool).await?.len()
-        );
+        assert_eq!(1, Area::select_by_search_query("sus", &pool).await?.len());
+        assert_eq!(1, Area::select_by_search_query("hi", &pool).await?.len());
         assert_eq!(
             0,
-            Area::select_by_search_query_async("sashimi", &pool)
-                .await?
-                .len()
+            Area::select_by_search_query("sashimi", &pool).await?.len()
         );
         Ok(())
     }
