@@ -1,4 +1,4 @@
-use crate::{admin::Admin, conf::Conf, discord, Result};
+use crate::{conf::Conf, db::admin::queries::Admin, discord, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -15,14 +15,19 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, source_admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let target_admin = Admin::select_by_name(&params.admin, pool).await?;
+    let target_admin = crate::db::admin::queries_async::select_by_name(&params.admin, pool).await?;
     let allowed_actions: Vec<String> = target_admin
         .allowed_actions
         .into_iter()
         .filter(|it| it != &params.action)
         .collect();
-    let target_admin =
-        Admin::update_allowed_actions(target_admin.id, &allowed_actions, pool).await?;
+    crate::db::admin::queries_async::update_allowed_actions(
+        target_admin.id,
+        &allowed_actions,
+        pool,
+    )
+    .await?;
+    let target_admin = crate::db::admin::queries_async::select_by_id(target_admin.id, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(

@@ -1,5 +1,5 @@
-use crate::admin::Admin;
 use crate::conf::Conf;
+use crate::db::admin::queries::Admin;
 use crate::osm::overpass;
 use crate::sync::MergeResult;
 use crate::{discord, sync, Result};

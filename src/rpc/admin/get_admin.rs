@@ -1,4 +1,4 @@
-use crate::{admin::Admin, Result};
+use crate::{db::admin::queries::Admin, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -31,5 +31,7 @@ impl From<Admin> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    Admin::select_by_id(params.id, pool).await.map(Into::into)
+    crate::db::admin::queries_async::select_by_id(params.id, pool)
+        .await
+        .map(Into::into)
 }

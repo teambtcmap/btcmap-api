@@ -1,6 +1,6 @@
 use crate::{
-    admin::Admin,
     conf::Conf,
+    db::admin::queries::Admin,
     discord,
     element::{self, Element},
     element_issue::model::ElementIssue,

@@ -1,4 +1,4 @@
-use crate::{admin::Admin, conf::Conf, discord, user::User, Result};
+use crate::{conf::Conf, db::admin::queries::Admin, discord, user::User, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

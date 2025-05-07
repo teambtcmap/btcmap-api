@@ -1,6 +1,6 @@
 use crate::{
-    admin::Admin,
     conf::Conf,
+    db::admin::queries::Admin,
     discord,
     invoice::{self, model::Invoice},
     Result,

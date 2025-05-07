@@ -1,5 +1,6 @@
 use crate::{
-    admin::Admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result,
+    conf::Conf, db::admin::queries::Admin, discord, element::Element,
+    osm::overpass::OverpassElement, Result,
 };
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
@@ -92,7 +93,7 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
-    use crate::db;
+    use crate::db_utils;
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::Result;
@@ -102,7 +103,7 @@ mod test {
     #[actix_web::test]
     async fn run() -> Result<()> {
         let mut conn = Connection::open_in_memory()?;
-        db::migrate(&mut conn)?;
+        db_utils::migrate(&mut conn)?;
 
         let mut tags = Map::new();
         tags.insert("amenity".into(), "atm".into());

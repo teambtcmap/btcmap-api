@@ -1,4 +1,6 @@
-use crate::{admin::Admin, boost::Boost, conf::Conf, discord, element::Element, Result};
+use crate::{
+    boost::Boost, conf::Conf, db::admin::queries::Admin, discord, element::Element, Result,
+};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::Deserialize;

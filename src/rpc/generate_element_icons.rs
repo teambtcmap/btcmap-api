@@ -1,5 +1,6 @@
 use crate::{
-    admin::Admin, conf::Conf, discord, element::Element, osm::overpass::OverpassElement, Result,
+    conf::Conf, db::admin::queries::Admin, discord, element::Element,
+    osm::overpass::OverpassElement, Result,
 };
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;

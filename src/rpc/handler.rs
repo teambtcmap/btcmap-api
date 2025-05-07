@@ -1,4 +1,4 @@
-use crate::{admin::Admin, conf::Conf, Result};
+use crate::{conf::Conf, db::admin::queries::Admin, Result};
 use actix_web::{
     dev::ServiceResponse,
     http::{

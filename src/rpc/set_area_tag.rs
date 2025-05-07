@@ -1,8 +1,8 @@
 use super::model::RpcArea;
 use crate::{
-    admin::Admin,
     area::{self},
     conf::Conf,
+    db::admin::queries::Admin,
     discord, Result,
 };
 use deadpool_sqlite::Pool;

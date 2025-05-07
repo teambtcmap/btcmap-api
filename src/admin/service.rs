@@ -1,5 +1,5 @@
-use super::Admin;
-use crate::{conf::Conf, discord, error::Error, Result};
+use crate::db::admin;
+use crate::{conf::Conf, db::admin::queries::Admin, discord, error::Error, Result};
 use deadpool_sqlite::Pool;
 
 pub async fn check_rpc(
@@ -8,7 +8,7 @@ pub async fn check_rpc(
     pool: &Pool,
 ) -> Result<Admin> {
     let action = action.into();
-    let admin = Admin::select_by_password(password, pool).await?;
+    let admin = admin::queries_async::select_by_password(password, pool).await?;
     if is_allowed(&action, &admin.allowed_actions) {
         Ok(admin)
     } else {
@@ -32,17 +32,19 @@ fn is_allowed(action: &str, allowed_actions: &[String]) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::{admin::Admin, test::mock_db, Result};
+    use crate::db::admin;
+    use crate::test::mock_pool;
+    use crate::Result;
 
     #[actix_web::test]
     async fn check_rpc() -> Result<()> {
-        let db = mock_db();
-        assert!(super::check_rpc("pwd", "action", &db.pool).await.is_err());
+        let pool = mock_pool().await;
+        assert!(super::check_rpc("pwd", "action", &pool).await.is_err());
         let password = "pwd";
         let action = "action";
-        Admin::insert("name", password, &db.pool).await?;
-        Admin::update_allowed_actions(1, &["action".into()], &db.pool).await?;
-        assert!(super::check_rpc(password, action, &db.pool).await.is_ok());
+        admin::queries_async::insert("name", password, &pool).await?;
+        admin::queries_async::update_allowed_actions(1, &["action".into()], &pool).await?;
+        assert!(super::check_rpc(password, action, &pool).await.is_ok());
         Ok(())
     }
 

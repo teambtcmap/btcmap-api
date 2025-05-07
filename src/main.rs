@@ -22,7 +22,7 @@ use tracing_subscriber::EnvFilter;
 mod area;
 mod area_element;
 mod boost;
-mod db;
+mod db_utils;
 mod element_comment;
 mod feed;
 mod invoice;
@@ -32,6 +32,7 @@ mod sync;
 use actix_web::web::{scope, Data};
 mod ban;
 use log::Log;
+mod db;
 mod element_issue;
 mod og;
 
@@ -40,8 +41,8 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[actix_web::main]
 async fn main() -> Result<()> {
     init_env();
-    let pool = db::pool()?;
-    db::migrate_async(&pool).await?;
+    let pool = db_utils::pool()?;
+    db_utils::migrate_async(&pool).await?;
     let conf = Conf::select_async(&pool).await?;
     HttpServer::new(move || {
         App::new()

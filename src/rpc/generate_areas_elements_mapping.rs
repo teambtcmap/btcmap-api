@@ -1,7 +1,7 @@
 use crate::{
-    admin::Admin,
     area_element::{self, service::Diff},
     conf::Conf,
+    db::admin::queries::Admin,
     discord,
     element::Element,
     Result,

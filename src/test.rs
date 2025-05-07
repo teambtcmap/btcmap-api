@@ -1,4 +1,4 @@
-use crate::db;
+use crate::db_utils;
 use deadpool_sqlite::{Config, Pool, Runtime};
 use rusqlite::Connection;
 use serde_json::{json, Map, Value};
@@ -13,13 +13,13 @@ pub struct Database {
 
 pub async fn mock_pool() -> Pool {
     let db = _mock_db();
-    db::migrate_async(&db.1).await.unwrap();
+    db_utils::migrate_async(&db.1).await.unwrap();
     db.1
 }
 
 pub fn mock_db() -> Database {
     let mut db = _mock_db();
-    db::migrate(&mut db.0).unwrap();
+    db_utils::migrate(&mut db.0).unwrap();
     Database {
         conn: db.0,
         pool: db.1,
@@ -28,7 +28,7 @@ pub fn mock_db() -> Database {
 
 pub fn mock_conn() -> Connection {
     let mut conn = Connection::open_in_memory().unwrap();
-    db::migrate(&mut conn).unwrap();
+    db_utils::migrate(&mut conn).unwrap();
     conn
 }
 

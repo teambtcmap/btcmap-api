@@ -1,5 +1,5 @@
-use crate::admin::Admin;
 use crate::conf::Conf;
+use crate::db::admin::queries::Admin;
 use crate::discord;
 use crate::element::model::Element;
 use crate::Result;

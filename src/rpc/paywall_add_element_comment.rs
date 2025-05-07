@@ -25,8 +25,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         .await?
         .ok_or("Element not found")?;
     let comment = ElementComment::insert_async(element.id, &params.comment, pool).await?;
-    ElementComment::set_deleted_at_async(comment.id, Some(OffsetDateTime::now_utc()), pool)
-        .await?;
+    ElementComment::set_deleted_at_async(comment.id, Some(OffsetDateTime::now_utc()), pool).await?;
     let invoice = invoice::service::create(
         format!("element_comment:{}:publish", comment.id),
         conf.paywall_add_element_comment_price_sat,

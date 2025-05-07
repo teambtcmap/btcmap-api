@@ -1,5 +1,6 @@
 use crate::{
-    admin::Admin, conf::Conf, discord, element::Element, element_comment::ElementComment, Result,
+    conf::Conf, db::admin::queries::Admin, discord, element::Element,
+    element_comment::ElementComment, Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
