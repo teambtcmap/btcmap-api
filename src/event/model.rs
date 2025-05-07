@@ -188,8 +188,8 @@ impl Event {
         period_end: &OffsetDateTime,
         pool: &Pool,
     ) -> Result<Vec<Event>> {
-        let period_start = period_start.clone();
-        let period_end = period_end.clone();
+        let period_start = *period_start;
+        let period_end = *period_end;
         pool.get()
             .await?
             .interact(move |conn| Event::select_created_between(&period_start, &period_end, conn))

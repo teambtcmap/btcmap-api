@@ -141,7 +141,7 @@ impl User {
             order by edits desc
             limit ?3
         "#;
-        conn.prepare(&sql)?
+        conn.prepare(sql)?
             .query_map(
                 params![
                     period_start.format(&Rfc3339)?,

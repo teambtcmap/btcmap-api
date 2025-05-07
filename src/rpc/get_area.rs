@@ -9,7 +9,7 @@ pub struct Params {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<RpcArea> {
-    Area::select_by_id_or_alias(params.id, &pool)
+    Area::select_by_id_or_alias(params.id, pool)
         .await
         .map(Into::into)
 }

@@ -14,7 +14,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
-use std::i64;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -39,7 +38,7 @@ pub async fn get(
     args: Query<GetListArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<Map<String, Value>>>, Error> {
-    let include_tags = args.f.clone().unwrap_or(vec![]);
+    let include_tags = args.f.clone().unwrap_or_default();
     let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
     let elements = pool
         .get()
@@ -70,7 +69,7 @@ pub async fn get_by_id(
     args: Query<GetSingleArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Map<String, Value>>, Error> {
-    let include_tags = args.include_tag.clone().unwrap_or(vec![]);
+    let include_tags = args.include_tag.clone().unwrap_or_default();
     let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
     let id_clone = id.clone();
     pool.get()
@@ -79,7 +78,7 @@ pub async fn get_by_id(
         .await??
         .ok_or(Error::not_found())
         .map(|it| super::service::generate_tags(&it, &include_tags))
-        .map(|it| Json(it))
+        .map(Json)
 }
 
 #[derive(Serialize)]

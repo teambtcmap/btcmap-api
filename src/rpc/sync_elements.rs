@@ -16,7 +16,7 @@ pub struct Res {
 pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let overpass_res = overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
-    let merge_res = sync::merge_overpass_elements(overpass_res.elements, &pool).await?;
+    let merge_res = sync::merge_overpass_elements(overpass_res.elements, pool).await?;
     if merge_res.elements_created.len()
         + merge_res.elements_updated.len()
         + merge_res.elements_deleted.len()

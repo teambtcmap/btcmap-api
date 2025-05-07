@@ -146,7 +146,7 @@ impl RpcResponse {
     }
 }
 
-const PUBLIC_METHODS: &'static [RpcMethod] = &[
+const PUBLIC_METHODS: &[RpcMethod] = &[
     RpcMethod::GetElement,
     RpcMethod::PaywallGetAddElementCommentQuote,
     RpcMethod::PaywallAddElementComment,

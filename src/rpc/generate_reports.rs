@@ -20,7 +20,7 @@ pub struct Res {
 
 pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let res = generate_reports(&pool).await?;
+    let res = generate_reports(pool).await?;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     if res > 0 {
         discord::post_message(

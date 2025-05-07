@@ -29,7 +29,7 @@ impl Columns {
     }
 
     fn projection_full() -> String {
-        vec![
+        [
             Self::Id,
             Self::Alias,
             Self::Tags,

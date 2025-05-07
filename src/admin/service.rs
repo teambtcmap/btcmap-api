@@ -12,7 +12,7 @@ pub async fn check_rpc(
     if is_allowed(&action, &admin.allowed_actions) {
         Ok(admin)
     } else {
-        let conf = Conf::select_async(&pool).await?;
+        let conf = Conf::select_async(pool).await?;
         discord::post_message(
             conf.discord_webhook_api,
             format!(

@@ -12,7 +12,7 @@ pub struct CreateLNbitsInvoiceResponse {
 }
 
 pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Result<Invoice> {
-    let conf = Conf::select_async(&pool).await?;
+    let conf = Conf::select_async(pool).await?;
     if conf.lnbits_invoice_key.is_empty() {
         Err("lnbits invoice key is not set")?
     }
@@ -54,7 +54,7 @@ pub struct CheckInvoiceResponse {
 }
 
 pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<Vec<Invoice>> {
-    let conf = Conf::select_async(&pool).await?;
+    let conf = Conf::select_async(pool).await?;
     if conf.lnbits_invoice_key.is_empty() {
         Err("lnbits invoice key is not set")?
     }
@@ -90,7 +90,7 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<Vec<Invoice>> {
 }
 
 pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
-    let conf = Conf::select_async(&pool).await?;
+    let conf = Conf::select_async(pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(

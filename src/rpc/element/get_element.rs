@@ -17,6 +17,6 @@ pub struct Res {
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let element = Element::select_by_id_async(params.id, pool).await?;
     Ok(Res {
-        element: crate::element::service::generate_tags(&element, &element::service::TAGS),
+        element: crate::element::service::generate_tags(&element, element::service::TAGS),
     })
 }

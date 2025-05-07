@@ -127,7 +127,7 @@ pub async fn merge_overpass_elements(
 ///
 /// Will return `Err` in many cases!
 pub async fn sync_deleted_elements(
-    fresh_overpass_elements: &Vec<OverpassElement>,
+    fresh_overpass_elements: &[OverpassElement],
     pool: &Pool,
 ) -> Result<Vec<Event>> {
     let fresh_overpass_element_ids: HashSet<String> = fresh_overpass_elements

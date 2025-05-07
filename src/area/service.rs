@@ -10,10 +10,7 @@ use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use std::{
-    collections::{HashMap, HashSet},
-    i64,
-};
+use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
 
 // it can take a long time to find area_elements
@@ -115,8 +112,8 @@ pub async fn get_trending_areas_async(
     pool: &Pool,
 ) -> Result<Vec<TrendingArea>> {
     let r#type = r#type.into();
-    let period_start = period_start.clone();
-    let period_end = period_end.clone();
+    let period_start = *period_start;
+    let period_end = *period_end;
     pool.get()
         .await?
         .interact(move |conn| get_trending_areas(&r#type, &period_start, &period_end, conn))

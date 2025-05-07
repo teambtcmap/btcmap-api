@@ -44,7 +44,7 @@ impl From<Area> for GetItem {
         tags.insert("btcmap:id".into(), val.id.into());
         GetItem {
             id: tags["url_alias"].as_str().unwrap().into(),
-            tags: tags,
+            tags,
             created_at: val.created_at,
             updated_at: val.updated_at,
             deleted_at: val

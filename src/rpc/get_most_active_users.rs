@@ -47,7 +47,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
                 id: it.id,
                 name: it.name,
                 image_url: it.image_url,
-                tip_address: tip_address,
+                tip_address,
                 edits: it.edits,
                 created: it.created,
                 updated: it.updated,

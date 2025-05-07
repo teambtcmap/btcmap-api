@@ -15,7 +15,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let new_admin = Admin::insert(params.new_admin_name, params.new_admin_password, &pool).await?;
+    let new_admin = Admin::insert(params.new_admin_name, params.new_admin_password, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!("Admin {} added new admin {}", admin.name, new_admin.name),

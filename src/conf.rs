@@ -33,7 +33,7 @@ impl Conf {
             "#
         );
         conn.prepare(&sql)?
-            .query_row({}, mapper())
+            .query_row((), mapper())
             .map_err(Into::into)
     }
 

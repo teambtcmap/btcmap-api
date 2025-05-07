@@ -25,7 +25,7 @@ impl From<Invoice> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    Invoice::select_by_id_async(params.id, &pool)
+    Invoice::select_by_id_async(params.id, pool)
         .await
         .map(Into::into)
 }

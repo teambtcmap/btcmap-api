@@ -28,7 +28,7 @@ impl Columns {
     }
 
     fn projection_full() -> String {
-        vec![
+        [
             Self::Id,
             Self::Name,
             Self::Password,

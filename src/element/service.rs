@@ -163,11 +163,8 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
             let old_issue = old_issues.iter().find(|it| it.code == issue.code());
             match old_issue {
                 Some(old_issue) => {
-                    match old_issue.deleted_at {
-                        Some(_) => {
-                            ElementIssue::set_deleted_at(old_issue.id, None, conn)?;
-                        }
-                        None => {}
+                    if old_issue.deleted_at.is_some() {
+                        ElementIssue::set_deleted_at(old_issue.id, None, conn)?;
                     }
                     if old_issue.severity != issue.severity {
                         ElementIssue::set_severity(old_issue.id, issue.severity, conn)?;
@@ -343,7 +340,7 @@ fn get_soon_out_of_date_issue(element: &Element) -> Option<Issue> {
     None
 }
 
-pub const TAGS: &'static [&str] = &[
+pub const TAGS: &[&str] = &[
     "osm_id",
     "osm_url",
     "lat",
@@ -371,8 +368,8 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
     let mut res = Map::new();
     res.insert("id".into(), element.id.into());
     let include_tags: Vec<&str> = include_tags
-        .to_vec()
-        .into_iter()
+        .iter()
+        .copied()
         .filter(|it| TAGS.contains(it) || it.starts_with("osm:"))
         .collect();
     if let Some(osm_tags) = &element.overpass_data.tags {
@@ -425,13 +422,11 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 "phone" => {
                     if !element.overpass_data.tag("phone").is_empty() {
                         res.insert("phone".into(), element.overpass_data.tag("phone").into());
-                    } else {
-                        if !element.overpass_data.tag("contact:phone").is_empty() {
-                            res.insert(
-                                "phone".into(),
-                                element.overpass_data.tag("contact:phone").into(),
-                            );
-                        }
+                    } else if !element.overpass_data.tag("contact:phone").is_empty() {
+                        res.insert(
+                            "phone".into(),
+                            element.overpass_data.tag("contact:phone").into(),
+                        );
                     }
                 }
                 "website" => {
@@ -474,13 +469,11 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 "email" => {
                     if !element.overpass_data.tag("email").is_empty() {
                         res.insert("email".into(), element.overpass_data.tag("email").into());
-                    } else {
-                        if !element.overpass_data.tag("contact:email").is_empty() {
-                            res.insert(
-                                "email".into(),
-                                element.overpass_data.tag("contact:email").into(),
-                            );
-                        }
+                    } else if !element.overpass_data.tag("contact:email").is_empty() {
+                        res.insert(
+                            "email".into(),
+                            element.overpass_data.tag("contact:email").into(),
+                        );
                     }
                 }
                 "address" => {
@@ -488,22 +481,22 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                     let housenumber = element.overpass_data.tag("addr:housenumber");
                     if !housenumber.is_empty() {
                         addr.push_str(housenumber);
-                        addr.push_str(" ");
+                        addr.push(' ');
                     }
                     let street = element.overpass_data.tag("addr:street");
                     if !street.is_empty() {
                         addr.push_str(street);
-                        addr.push_str(" ");
+                        addr.push(' ');
                     }
                     let city = element.overpass_data.tag("addr:city");
                     if !city.is_empty() {
                         addr.push_str(city);
-                        addr.push_str(" ");
+                        addr.push(' ');
                     }
                     let postcode = element.overpass_data.tag("addr:postcode");
                     if !postcode.is_empty() {
                         addr.push_str(postcode);
-                        addr.push_str(" ");
+                        addr.push(' ');
                     }
                     let addr = addr.trim();
                     if !addr.is_empty() {
@@ -528,15 +521,14 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                         Value::String(element.updated_at.format(&Rfc3339).unwrap_or_default()),
                     );
                 }
-                "deleted_at" => match element.deleted_at {
-                    Some(deleted_at) => {
+                "deleted_at" => {
+                    if let Some(deleted_at) = element.deleted_at {
                         res.insert(
                             "deleted_at".into(),
                             Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
                         );
                     }
-                    None => {}
-                },
+                }
                 "lat" => {
                     res.insert("lat".into(), json! {element.lat()});
                 }

@@ -18,7 +18,7 @@ pub struct Params {
 
 pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
     let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())].into_iter());
-    let area = area::service::patch_tags(&params.id, patch_set, &pool).await?;
+    let area = area::service::patch_tags(&params.id, patch_set, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(

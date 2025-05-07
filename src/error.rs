@@ -20,7 +20,7 @@ pub enum Error {
     DeadpoolBuild(deadpool_sqlite::BuildError),
     Parse(time::error::Parse),
     Decode(base64::DecodeError),
-    GeoJson(geojson::Error),
+    GeoJson(Box<geojson::Error>),
     Staticmap(staticmap::Error),
     Blocking(actix_web::error::BlockingError),
 }
@@ -132,7 +132,7 @@ impl From<base64::DecodeError> for Error {
 
 impl From<geojson::Error> for Error {
     fn from(error: geojson::Error) -> Self {
-        Error::GeoJson(error)
+        Error::GeoJson(Box::new(error))
     }
 }
 

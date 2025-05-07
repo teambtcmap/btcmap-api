@@ -14,7 +14,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    Element::select_by_id_or_osm_id_async(&params.element_id, &pool)
+    Element::select_by_id_or_osm_id_async(&params.element_id, pool)
         .await?
         .ok_or("Element not found")?;
     let sats = match params.days {
@@ -26,7 +26,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     let invoice = invoice::service::create(
         format!("element_boost:{}:{}", params.element_id, params.days),
         sats,
-        &pool,
+        pool,
     )
     .await?;
     Ok(Res {

@@ -15,7 +15,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
-    let areas = Area::select_by_search_query(&params.query, &pool).await?;
+    let areas = Area::select_by_search_query(&params.query, pool).await?;
     let mut res_areas: Vec<Res> = areas
         .into_iter()
         .map(|it| Res {
@@ -24,7 +24,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
             id: it.id,
         })
         .collect();
-    let elements = Element::select_by_search_query_async(params.query, &pool).await?;
+    let elements = Element::select_by_search_query_async(params.query, pool).await?;
     let mut res_elements: Vec<Res> = elements
         .into_iter()
         .map(|it| Res {

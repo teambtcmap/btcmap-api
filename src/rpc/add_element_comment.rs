@@ -16,8 +16,8 @@ pub async fn run(
     pool: &Pool,
     conf: &Conf,
 ) -> Result<ElementComment> {
-    let element = Element::select_by_id_async(params.element_id, &pool).await?;
-    let comment = ElementComment::insert_async(element.id, &params.comment, &pool).await?;
+    let element = Element::select_by_id_async(params.element_id, pool).await?;
+    let comment = ElementComment::insert_async(element.id, &params.comment, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
