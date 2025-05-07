@@ -48,7 +48,7 @@ pub async fn patch_tags(
     if tags.contains_key("url_alias") {
         return Err(Error::InvalidInput("url_alias can't be changed".into()));
     }
-    let area = Area::select_by_id_or_alias_async(area_id_or_alias, pool).await?;
+    let area = Area::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
         let mut affected_elements: HashSet<Element> = HashSet::new();
         for area_element in AreaElement::select_by_area_id_async(area.id, pool).await? {
@@ -79,35 +79,21 @@ pub async fn remove_tag_async(
 ) -> Result<Area> {
     let area_id_or_alias = area_id_or_alias.into();
     let tag_name = tag_name.into();
-    pool.get()
-        .await?
-        .interact(move |conn| remove_tag(&area_id_or_alias, &tag_name, conn))
-        .await?
-}
 
-pub fn remove_tag(area_id_or_alias: &str, tag_name: &str, conn: &mut Connection) -> Result<Area> {
     if tag_name == "url_alias" {
         return Err(Error::InvalidInput("url_alias can't be removed".into()));
     }
     if tag_name == "geo_json" {
         return Err(Error::InvalidInput("geo_json can't be removed".into()));
     }
-    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
-    Area::remove_tag(area.id, tag_name, conn)
+    let area = Area::select_by_id_or_alias(area_id_or_alias, pool).await?;
+    Area::remove_tag_async(area.id, tag_name, pool).await
 }
 
 pub async fn soft_delete_async(area_id_or_alias: impl Into<String>, pool: &Pool) -> Result<Area> {
     let area_id_or_alias = area_id_or_alias.into();
-    pool.get()
-        .await?
-        .interact(move |conn| soft_delete(&area_id_or_alias, conn))
-        .await?
-}
-
-pub fn soft_delete(area_id_or_alias: &str, conn: &Connection) -> Result<Area> {
-    let area = Area::select_by_id_or_alias(area_id_or_alias, conn)?;
-    let area = Area::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), conn)?;
-    Ok(area)
+    let area = Area::select_by_id_or_alias(area_id_or_alias, pool).await?;
+    Area::set_deleted_at_async(area.id, Some(OffsetDateTime::now_utc()), pool).await
 }
 
 #[derive(Serialize)]

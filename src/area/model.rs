@@ -239,21 +239,18 @@ impl Area {
             .map_err(Into::into)
     }
 
-    pub async fn select_by_id_or_alias_async(
+    pub async fn select_by_id_or_alias(
         id_or_alias: impl Into<String>,
         pool: &Pool,
     ) -> Result<Area> {
         let id_or_alias = id_or_alias.into();
         pool.get()
             .await?
-            .interact(|conn| Area::select_by_id_or_alias(id_or_alias, conn))
+            .interact(|conn| Area::_select_by_id_or_alias(id_or_alias, conn))
             .await?
     }
 
-    pub fn select_by_id_or_alias(
-        id_or_alias: impl Into<String>,
-        conn: &Connection,
-    ) -> Result<Area> {
+    fn _select_by_id_or_alias(id_or_alias: impl Into<String>, conn: &Connection) -> Result<Area> {
         let id_or_alias = id_or_alias.into();
         match id_or_alias.parse::<i64>() {
             Ok(id) => Area::select_by_id(id, conn),
@@ -331,6 +328,18 @@ impl Area {
             },
         )?;
         Area::select_by_id(area_id, conn)
+    }
+
+    pub async fn remove_tag_async(
+        area_id: i64,
+        tag_name: impl Into<String>,
+        pool: &Pool,
+    ) -> Result<Self> {
+        let tag_name = tag_name.into();
+        pool.get()
+            .await?
+            .interact(move |conn| Self::remove_tag(area_id, &tag_name, conn))
+            .await?
     }
 
     pub fn remove_tag(
@@ -629,15 +638,13 @@ mod test {
         let area = Area::insert(Area::mock_tags(), &pool).await?;
         assert_eq!(
             area.id,
-            Area::select_by_id_or_alias_async(area.id.to_string(), &pool)
+            Area::select_by_id_or_alias(area.id.to_string(), &pool)
                 .await?
                 .id
         );
         assert_eq!(
             area.id,
-            Area::select_by_id_or_alias_async(area.alias(), &pool)
-                .await?
-                .id,
+            Area::select_by_id_or_alias(area.alias(), &pool).await?.id,
         );
         Ok(())
     }
@@ -656,9 +663,7 @@ mod test {
         let area = Area::insert(Area::mock_tags(), &pool).await?;
         assert_eq!(
             area.id,
-            Area::select_by_id_or_alias_async(area.alias(), &pool)
-                .await?
-                .id,
+            Area::select_by_id_or_alias(area.alias(), &pool).await?.id,
         );
         Ok(())
     }

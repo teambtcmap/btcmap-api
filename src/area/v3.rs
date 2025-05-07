@@ -63,8 +63,7 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let areas =
-        Area::select_updated_since(args.updated_since, Some(args.limit), &pool).await?;
+    let areas = Area::select_updated_since(args.updated_since, Some(args.limit), &pool).await?;
     req.extensions_mut()
         .insert(RequestExtension::new(areas.len()));
     Ok(Json(areas.into_iter().map(|it| it.into()).collect()))
@@ -72,7 +71,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    Area::select_by_id_or_alias_async(id.to_string(), &pool)
+    Area::select_by_id_or_alias(id.to_string(), &pool)
         .await
         .map(Into::into)
 }

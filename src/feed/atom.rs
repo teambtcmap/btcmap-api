@@ -45,7 +45,7 @@ pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
 
 #[get("/new-places/{area}")]
 pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
-    let area = Area::select_by_id_or_alias_async(area.to_string(), &pool).await?;
+    let area = Area::select_by_id_or_alias(area.to_string(), &pool).await?;
     let area_elements = pool
         .get()
         .await?
@@ -167,7 +167,7 @@ pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
 
 #[get("/new-comments/{area}")]
 pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
-    let area = Area::select_by_id_or_alias_async(area.to_string(), &pool).await?;
+    let area = Area::select_by_id_or_alias(area.to_string(), &pool).await?;
     let area_id = area.id;
     let area_name = area.name();
     let comments = crate::area::service::get_comments_async(area, false, &pool).await?;

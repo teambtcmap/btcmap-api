@@ -14,7 +14,7 @@ pub struct Params {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<RpcArea> {
-    let area = Area::select_by_id_or_alias_async(&params.id, &pool).await?;
+    let area = Area::select_by_id_or_alias(&params.id, &pool).await?;
     let file_name = format!("{}.{}", area.id, params.icon_ext);
     let bytes = BASE64_STANDARD.decode(params.icon_base64)?;
     let mut file = OpenOptions::new()
