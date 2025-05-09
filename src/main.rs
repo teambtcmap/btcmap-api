@@ -35,6 +35,7 @@ use log::Log;
 mod db;
 mod element_issue;
 mod og;
+mod service;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -43,6 +44,7 @@ async fn main() -> Result<()> {
     init_env();
     let pool = db_utils::pool()?;
     db_utils::migrate_async(&pool).await?;
+    service::admin::upgrade_plaintext_passwords(&pool).await?;
     let conf = Conf::select_async(&pool).await?;
     HttpServer::new(move || {
         App::new()

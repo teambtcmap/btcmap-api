@@ -29,6 +29,6 @@ pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Res
     .await;
     Ok(Res {
         name: new_admin.name,
-        allowed_actions: new_admin.allowed_actions,
+        allowed_actions: new_admin.roles,
     })
 }

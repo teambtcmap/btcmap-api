@@ -9,7 +9,7 @@ pub async fn check_rpc(
 ) -> Result<Admin> {
     let action = action.into();
     let admin = admin::queries_async::select_by_password(password, pool).await?;
-    if is_allowed(&action, &admin.allowed_actions) {
+    if is_allowed(&action, &admin.roles) {
         Ok(admin)
     } else {
         let conf = Conf::select_async(pool).await?;
@@ -43,7 +43,7 @@ mod test {
         let password = "pwd";
         let action = "action";
         admin::queries_async::insert("name", password, &pool).await?;
-        admin::queries_async::update_allowed_actions(1, &["action".into()], &pool).await?;
+        admin::queries_async::set_roles(1, &["action".into()], &pool).await?;
         assert!(super::check_rpc(password, action, &pool).await.is_ok());
         Ok(())
     }

@@ -17,6 +17,21 @@ pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<i64> {
     Ok(conn.last_insert_rowid())
 }
 
+pub fn select_all(conn: &Connection) -> Result<Vec<Admin>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+        "#,
+        projection = Admin::projection(),
+        table = schema::NAME,
+    );
+    conn.prepare(&sql)?
+        .query_map({}, Admin::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<Admin> {
     let sql = format!(
         r#"
@@ -62,25 +77,18 @@ pub fn select_by_password(password: &str, conn: &Connection) -> Result<Admin> {
         .map_err(Into::into)
 }
 
-pub fn update_allowed_actions(
-    id: i64,
-    new_allowed_actions: &[String],
-    conn: &Connection,
-) -> Result<()> {
+pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<()> {
     let sql = format!(
         r#"
             UPDATE {table}
-            SET {allowed_actions} = json(?1)
+            SET {roles} = json(?1)
             WHERE {id} = ?2
         "#,
         table = schema::NAME,
-        allowed_actions = Columns::AllowedActions.as_str(),
+        roles = Columns::Roles.as_str(),
         id = Columns::Id.as_str(),
     );
-    conn.execute(
-        &sql,
-        params![serde_json::to_string(new_allowed_actions)?, id],
-    )?;
+    conn.execute(&sql, params![serde_json::to_string(roles)?, admin_id])?;
     Ok(())
 }
 
@@ -89,7 +97,7 @@ pub struct Admin {
     pub name: String,
     #[allow(dead_code)]
     pub password: String,
-    pub allowed_actions: Vec<String>,
+    pub roles: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -101,7 +109,7 @@ impl Admin {
             Columns::Id,
             Columns::Name,
             Columns::Password,
-            Columns::AllowedActions,
+            Columns::Roles,
             Columns::CreatedAt,
             Columns::UpdatedAt,
             Columns::DeletedAt,
@@ -118,7 +126,7 @@ impl Admin {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 password: row.get(2)?,
-                allowed_actions: serde_json::from_value(row.get(3)?).unwrap_or_default(),
+                roles: serde_json::from_value(row.get(3)?).unwrap_or_default(),
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
                 deleted_at: row.get(6)?,
@@ -141,6 +149,18 @@ mod test {
         assert_eq!(admin_id, res_admin.id);
         assert_eq!(admin_name, res_admin.name);
         assert_eq!(admin_pwd, res_admin.password);
+        Ok(())
+    }
+
+    #[test]
+    fn select_all() -> Result<()> {
+        let conn = mock_conn();
+        let admin_1_id = super::insert("name_1", "pwd_1", &conn)?;
+        let admin_2_id = super::insert("name_2", "pwd_2", &conn)?;
+        let query_res = super::select_all(&conn)?;
+        assert_eq!(2, query_res.len());
+        assert_eq!(admin_1_id, query_res.first().unwrap().id);
+        assert_eq!(admin_2_id, query_res.last().unwrap().id);
         Ok(())
     }
 
@@ -176,15 +196,12 @@ mod test {
     }
 
     #[test]
-    fn update_allowed_actions() -> Result<()> {
+    fn set_roles() -> Result<()> {
         let conn = mock_conn();
         let admin_id = super::insert("name", "pwd", &conn)?;
-        let actions = vec!["action_1".into(), "action_2".into()];
-        super::update_allowed_actions(admin_id, &actions, &conn)?;
-        assert_eq!(
-            actions,
-            super::select_by_id(admin_id, &conn)?.allowed_actions,
-        );
+        let roles = vec!["action_1".into(), "action_2".into()];
+        super::set_roles(admin_id, &roles, &conn)?;
+        assert_eq!(roles, super::select_by_id(admin_id, &conn)?.roles,);
         Ok(())
     }
 }

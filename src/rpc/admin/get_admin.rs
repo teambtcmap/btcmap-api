@@ -22,7 +22,7 @@ impl From<Admin> for Res {
         Self {
             id: val.id,
             name: val.name,
-            allowed_actions: val.allowed_actions,
+            allowed_actions: val.roles,
             created_at: val.created_at,
             updated_at: val.updated_at,
             deleted_at: val.deleted_at,

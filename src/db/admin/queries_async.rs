@@ -15,6 +15,13 @@ pub async fn insert(
         .await?
 }
 
+pub async fn select_all(pool: &Pool) -> Result<Vec<Admin>> {
+    pool.get()
+        .await?
+        .interact(move |conn| super::queries::select_all(conn))
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Admin> {
     pool.get()
         .await?
@@ -38,16 +45,10 @@ pub async fn select_by_password(password: impl Into<String>, pool: &Pool) -> Res
         .await?
 }
 
-pub async fn update_allowed_actions(
-    admin_id: i64,
-    new_allowed_actions: &[String],
-    pool: &Pool,
-) -> Result<()> {
-    let new_allowed_actions = new_allowed_actions.to_vec();
+pub async fn set_roles(admin_id: i64, roles: &[String], pool: &Pool) -> Result<()> {
+    let roles = roles.to_vec();
     pool.get()
         .await?
-        .interact(move |conn| {
-            super::queries::update_allowed_actions(admin_id, &new_allowed_actions, conn)
-        })
+        .interact(move |conn| super::queries::set_roles(admin_id, &roles, conn))
         .await?
 }

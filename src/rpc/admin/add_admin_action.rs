@@ -20,12 +20,11 @@ pub struct Res {
 
 pub async fn run(params: Params, source_admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let target_admin = db::admin::queries_async::select_by_name(&params.admin, pool).await?;
-    let mut allowed_actions = target_admin.allowed_actions;
-    if !allowed_actions.contains(&params.action) {
-        allowed_actions.push(params.action.clone());
+    let mut roles = target_admin.roles;
+    if !roles.contains(&params.action) {
+        roles.push(params.action.clone());
     }
-    db::admin::queries_async::update_allowed_actions(target_admin.id, &allowed_actions, pool)
-        .await?;
+    db::admin::queries_async::set_roles(target_admin.id, &roles, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
@@ -36,6 +35,6 @@ pub async fn run(params: Params, source_admin: &Admin, pool: &Pool, conf: &Conf)
     .await;
     Ok(Res {
         name: target_admin.name,
-        allowed_actions,
+        allowed_actions: roles,
     })
 }
