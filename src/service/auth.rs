@@ -1,13 +1,32 @@
 use crate::db::{access_token, admin};
 use crate::{conf::Conf, db::admin::queries::Admin, discord, error::Error};
 use crate::{db, Result};
+use argon2::password_hash::rand_core::OsRng;
+use argon2::password_hash::SaltString;
+use argon2::PasswordHasher;
+use argon2::{Argon2, PasswordHash};
 use deadpool_sqlite::Pool;
 use tracing::warn;
 
-pub async fn upgrade_plaintext_passwords(pool: &Pool) -> Result<i64> {
+pub async fn upgrade_plaintext_passwords(pool: &Pool) -> Result<()> {
     let admins = db::admin::queries_async::select_all(pool).await?;
     warn!("Loaded {} admin users", admins.len());
-    Ok(0)
+    for admin in &admins {
+        let parsed_hash = PasswordHash::new(&admin.password);
+        if parsed_hash.is_err() {
+            warn!("User {} has plaintext password", admin.name);
+            let argon2 = Argon2::default();
+            let salt = SaltString::generate(&mut OsRng);
+            let password_hash = argon2
+                .hash_password(admin.password.as_bytes(), &salt)
+                .unwrap()
+                .to_string();
+            warn!("Generated password hash {password_hash}");
+            db::admin::queries_async::set_password(admin.id, password_hash, pool).await?;
+            warn!("Saved hash");
+        }
+    }
+    Ok(())
 }
 
 pub async fn check_rpc(

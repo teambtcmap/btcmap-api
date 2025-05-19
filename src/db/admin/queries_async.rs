@@ -45,6 +45,14 @@ pub async fn select_by_password(password: impl Into<String>, pool: &Pool) -> Res
         .await?
 }
 
+pub async fn set_password(id: i64, password: impl Into<String>, pool: &Pool) -> Result<()> {
+    let password = password.into();
+    pool.get()
+        .await?
+        .interact(move |conn| super::queries::set_password(id, password, conn))
+        .await?
+}
+
 pub async fn set_roles(admin_id: i64, roles: &[String], pool: &Pool) -> Result<()> {
     let roles = roles.to_vec();
     pool.get()

@@ -83,3 +83,5 @@ staticmap = { version = "0.4.2", default-features = false }
 regex = { version = "1.11.1", default-features = false }
 
 url = { version = "2.5.4", default-features = false }
+
+argon2 = { version = "0.5.3", default-features = false, features = ["password-hash", "alloc"] }

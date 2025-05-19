@@ -2,6 +2,7 @@ use super::schema;
 use super::schema::Columns;
 use crate::Result;
 use rusqlite::{params, Connection, Row};
+use tracing::warn;
 
 pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<i64> {
     let sql = format!(
@@ -75,6 +76,22 @@ pub fn select_by_password(password: &str, conn: &Connection) -> Result<Admin> {
     );
     conn.query_row(&sql, params![password], Admin::mapper())
         .map_err(Into::into)
+}
+
+pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> Result<()> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {password} = ?1
+            WHERE {id} = ?2
+        "#,
+        table = schema::NAME,
+        password = Columns::Password.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    warn!(sql);
+    conn.execute(&sql, params![password.into(), id])?;
+    Ok(())
 }
 
 pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<()> {
