@@ -2,7 +2,6 @@ use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
 use actix_web::{App, HttpServer};
 use conf::Conf;
 use error::Error;
-mod admin;
 mod conf;
 mod discord;
 mod element;
@@ -44,7 +43,7 @@ async fn main() -> Result<()> {
     init_env();
     let pool = db_utils::pool()?;
     db_utils::migrate_async(&pool).await?;
-    service::admin::upgrade_plaintext_passwords(&pool).await?;
+    service::auth::upgrade_plaintext_passwords(&pool).await?;
     let conf = Conf::select_async(&pool).await?;
     HttpServer::new(move || {
         App::new()

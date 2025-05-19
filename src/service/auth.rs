@@ -1,6 +1,14 @@
-use crate::db::admin;
-use crate::{conf::Conf, db::admin::queries::Admin, discord, error::Error, Result};
+use crate::db::{access_token, admin};
+use crate::{conf::Conf, db::admin::queries::Admin, discord, error::Error};
+use crate::{db, Result};
 use deadpool_sqlite::Pool;
+use tracing::warn;
+
+pub async fn upgrade_plaintext_passwords(pool: &Pool) -> Result<i64> {
+    let admins = db::admin::queries_async::select_all(pool).await?;
+    warn!("Loaded {} admin users", admins.len());
+    Ok(0)
+}
 
 pub async fn check_rpc(
     password: impl Into<String>,
@@ -8,16 +16,17 @@ pub async fn check_rpc(
     pool: &Pool,
 ) -> Result<Admin> {
     let action = action.into();
-    let admin = admin::queries_async::select_by_password(password, pool).await?;
-    if is_allowed(&action, &admin.roles) {
-        Ok(admin)
+    let token = access_token::queries_async::select_by_secret(password, pool).await?;
+    let a = admin::queries_async::select_by_id(token.user_id, pool).await?;
+    if is_allowed(&action, &token.roles) {
+        Ok(a)
     } else {
         let conf = Conf::select_async(pool).await?;
         discord::post_message(
             conf.discord_webhook_api,
             format!(
                 "Admin {} tried to call {action} without proper permissions",
-                admin.name,
+                a.name,
             ),
         )
         .await;
@@ -32,7 +41,7 @@ fn is_allowed(action: &str, allowed_actions: &[String]) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::db::admin;
+    use crate::db::{access_token, admin};
     use crate::test::mock_pool;
     use crate::Result;
 
@@ -44,6 +53,8 @@ mod test {
         let action = "action";
         admin::queries_async::insert("name", password, &pool).await?;
         admin::queries_async::set_roles(1, &["action".into()], &pool).await?;
+        let admin = admin::queries_async::select_by_id(1, &pool).await?;
+        access_token::queries_async::insert(admin.id, "", password, &admin.roles, &pool).await?;
         assert!(super::check_rpc(password, action, &pool).await.is_ok());
         Ok(())
     }

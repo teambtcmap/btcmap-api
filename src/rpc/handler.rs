@@ -193,7 +193,7 @@ pub async fn handle(
     };
     let admin: Option<Admin> = if !PUBLIC_METHODS.contains(&req.method) {
         Some(
-            crate::admin::service::check_rpc(extract_password(headers, &req.params), method, &pool)
+            crate::service::auth::check_rpc(extract_password(headers, &req.params), method, &pool)
                 .await
                 .map_err(|_| "Auth failure")?,
         )
