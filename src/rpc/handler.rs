@@ -61,6 +61,7 @@ pub enum RpcMethod {
     RemoveUserTag,
     GetMostActiveUsers,
     // admin
+    CreateAuthToken,
     AddAdmin,
     GetAdmin,
     SetPassword,
@@ -156,6 +157,7 @@ const PUBLIC_METHODS: &[RpcMethod] = &[
     RpcMethod::GetElementIssues,
     RpcMethod::GetAreaDashboard,
     RpcMethod::GetMostActiveUsers,
+    RpcMethod::CreateAuthToken,
 ];
 
 #[post("")]
@@ -352,6 +354,10 @@ pub async fn handle(
             super::get_most_active_users::run(params(req.params)?, &pool).await?,
         ),
         // admin
+        RpcMethod::CreateAuthToken => RpcResponse::from(
+            req.id.clone(),
+            super::auth::create_auth_token::run(params(req.params)?, &pool, &conf).await?,
+        ),
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),
             super::admin::add_admin::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
