@@ -12,7 +12,11 @@ static API_URL: &str = "https://overpass-api.de/api/interpreter";
 
 static QUERY: &str = r#"
     [out:json][timeout:300];
-    nwr["currency:XBT"=yes];
+    area["name"="United States"]->.boundaryarea;
+    (
+      nwr["currency:XBT"=yes];
+      way["brand:wikidata"="Q7605233"]["disused:amenity"!~"."](area.boundaryarea);
+    );
     out meta geom;
 "#;
 
