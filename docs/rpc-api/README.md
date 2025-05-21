@@ -1,6 +1,8 @@
 # BTCMap RPC API
 
-The RPC API provides a JSON-RPC interface for interacting with BTCMap services.
+The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) interface for interacting with BTCMap services.
+
+**WARNING: This API is a work in progress. If you intend to use it without service interruption, please get in touch with us first. Some features may break, especially for use cases we’re unaware of!**
 
 ## Method Categories
 
