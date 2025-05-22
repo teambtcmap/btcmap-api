@@ -2,12 +2,12 @@
 
 ## Table of Contents
 
-- [set_password](#set_password)
+- [change_password](#change_password)
 - [create_auth_token](#create_auth_token)
 
-## set_password
+## change_password
 
-All users are allowed to change their passwords. Your first password might be assigned to you by someone else during manual account creation. You're advised to change you password as soon as possible in that case. User passwords are encrypted at rest using Argon2 KDF.
+All users can request a password change. If you received your password from us, we advice you to change it and to store the new password safely in your password manager. User passwords are encrypted at rest using Argon2 KDF.
 
 ### Request
 
@@ -16,6 +16,7 @@ All users are allowed to change their passwords. Your first password might be as
   "jsonrpc": "2.0",
   "method": "set_password",
   "params": {
+    "username": "satoshi",
     "old_password": "qwerty",
     "new_password": "foobar"
   },
@@ -33,6 +34,15 @@ All users are allowed to change their passwords. Your first password might be as
   },
   "id": 1
 }
+```
+
+### Example: curl
+
+```bash
+curl --header "Content-Type: application/json" \
+  --request POST \
+  --data '{"jsonrpc":"2.0","method":"change_password","params":{"username":"satoshi","old_password":"qwerty","new_password":"foobar"},"id":1}' \
+  https://api.btcmap.org/rpc
 ```
 
 ## create_auth_token

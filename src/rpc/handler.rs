@@ -61,10 +61,10 @@ pub enum RpcMethod {
     RemoveUserTag,
     GetMostActiveUsers,
     // admin
+    ChangePassword,
     CreateAuthToken,
     AddAdmin,
     GetAdmin,
-    SetPassword,
     AddAdminAction,
     RemoveAdminAction,
     // invoice
@@ -158,6 +158,7 @@ const PUBLIC_METHODS: &[RpcMethod] = &[
     RpcMethod::GetAreaDashboard,
     RpcMethod::GetMostActiveUsers,
     RpcMethod::CreateAuthToken,
+    RpcMethod::ChangePassword,
 ];
 
 #[post("")]
@@ -367,10 +368,9 @@ pub async fn handle(
             req.id.clone(),
             super::admin::get_admin::run(params(req.params)?, &pool).await?,
         ),
-        RpcMethod::SetPassword => RpcResponse::from(
+        RpcMethod::ChangePassword => RpcResponse::from(
             req.id.clone(),
-            super::auth::set_password::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::auth::change_password::run(params(req.params)?, &pool, &conf).await?,
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
