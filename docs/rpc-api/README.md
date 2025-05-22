@@ -6,6 +6,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 
 ## Method Categories
 
+- [Auth](auth.md)
 - [Element Methods](element-methods.md) - Methods for working with map elements
 - [Area Methods](area-methods.md) - Methods for working with geographic areas
 - [User Methods](user-methods.md) - Methods for working with user data

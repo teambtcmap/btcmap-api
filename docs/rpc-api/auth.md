@@ -45,6 +45,12 @@ curl --header "Content-Type: application/json" \
   https://api.btcmap.org/rpc
 ```
 
+### Example: btcmap-cli
+
+```bash
+btcmap-cli change-password satoshi querty foobar
+```
+
 ## create_auth_token
 
 Set a tag for a user.
