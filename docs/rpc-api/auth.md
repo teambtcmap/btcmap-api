@@ -14,7 +14,7 @@ All users can request a password change. If you received your password from us, 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "set_password",
+  "method": "change_password",
   "params": {
     "username": "satoshi",
     "old_password": "qwerty",
@@ -36,7 +36,9 @@ All users can request a password change. If you received your password from us, 
 }
 ```
 
-### Example: curl
+### Examples
+
+#### curl
 
 ```bash
 curl --header "Content-Type: application/json" \
@@ -45,7 +47,7 @@ curl --header "Content-Type: application/json" \
   https://api.btcmap.org/rpc
 ```
 
-### Example: btcmap-cli
+#### btcmap-cli
 
 ```bash
 btcmap-cli change-password satoshi querty foobar
@@ -53,7 +55,7 @@ btcmap-cli change-password satoshi querty foobar
 
 ## create_auth_token
 
-Set a tag for a user.
+Most API requests expect you to provide an auth token.
 
 **Required Admin Action**: `user_admin`
 
