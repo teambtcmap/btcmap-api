@@ -1,11 +1,174 @@
 
 # Public RPC Methods
 
-These RPC methods are publicly accessible and do not require any admin authentication.
+These methods are intended to be used by user-facing apps, such as the Web App, the iOS App and the Android App.
 
-## GetElement
+## Table of Contents
+
+- [AddElementComment](#addelementcomment)
+- [BoostElement](#boostelement)
+- [GetArea](#getarea)
+- [GetAreaDashboard](#getareadashboard)
+- [GetElement](#getelement)
+- [GetElementIssues](#getelementissues)
+- [GetInvoice](#getinvoice)
+- [GetMostActiveUsers](#getmostactiveusers)
+- [PaywallGetAddElementCommentQuote](#paywallgetaddelementcommentquote)
+- [PaywallAddElementComment](#paywalladdelementcomment)
+- [PaywallGetBoostElementQuote](#paywallgetboostelementquote)
+- [PaywallBoostElement](#paywallboostelement)
+- [Search](#search)
+
+## Methods
+
+### AddElementComment
+
+Adds a comment to an element.
+
+Should only really be used by admin apps. User-facing apps should use [PaywallGetAddElementCommentQuote](#paywallgetaddelementcommentquote) and [PaywallBoostElement](#paywallboostelement).
+
+**Authentication**: Requires admin authentication
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "add_element_comment",
+  "params": {
+    "element_id": "element_id",
+    "content": "Comment content",
+    "user_id": "user_id"
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "comment_id": "comment_id"
+  },
+  "id": 1
+}
+```
+
+### BoostElement
+
+Boosts an element.
+
+Should only really be used by admin apps. User-facing apps should use [PaywallGetBoostElementQuote](#paywallgetboostelementquote) and [PaywallAddElementComment](#paywalladdelementcomment).
+
+**Authentication**: Requires admin authentication with 'boost_element' action
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "boost_element",
+  "params": {
+    "element_id": "element_id",
+    "days": 30
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true
+  },
+  "id": 1
+}
+```
+
+### GetArea
+
+Retrieves information about an area.
+
+**Authentication**: No authentication required
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_area",
+  "params": {
+    "id": "area_id"
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "id": "area_id",
+    "name": "Area Name",
+    "description": "Area description",
+    "coordinates": {
+      "lat": 12.345,
+      "lng": 67.890
+    }
+  },
+  "id": 1
+}
+```
+
+### GetAreaDashboard
+
+Gets dashboard information for a specific area.
+
+**Authentication**: No authentication required
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get_area_dashboard",
+  "params": {
+    "area_id": "area_id"
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "area_id": "area_id",
+    "name": "Area Name",
+    "element_count": 123,
+    "recent_elements": [],
+    "top_contributors": [],
+    "recent_activity": []
+  },
+  "id": 1
+}
+```
+
+### GetElement
 
 Retrieves information about a specific element.
+
+**Authentication**: No authentication required
 
 ### Request
 
@@ -42,134 +205,11 @@ Retrieves information about a specific element.
 }
 ```
 
-## PaywallGetAddElementCommentQuote
-
-Gets a quote for adding a comment to an element through the paywall.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_get_add_element_comment_quote",
-  "params": {},
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "quote": {
-      "amount": "amount_in_sats",
-      "expiry": "expiry_time"
-    }
-  },
-  "id": 1
-}
-```
-
-## PaywallAddElementComment
-
-Adds a comment to an element through the paywall.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_add_element_comment",
-  "params": {
-    "element_id": "element_id",
-    "comment": "Comment text",
-    "username": "username",
-    "payment_hash": "lightning_payment_hash"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "comment_id": "comment_id"
-  },
-  "id": 1
-}
-```
-
-## PaywallGetBoostElementQuote
-
-Gets a quote for boosting an element through the paywall.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_get_boost_element_quote",
-  "params": {},
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "quote": {
-      "amount": "amount_in_sats",
-      "expiry": "expiry_time"
-    }
-  },
-  "id": 1
-}
-```
-
-## PaywallBoostElement
-
-Boosts an element through the paywall.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_boost_element",
-  "params": {
-    "element_id": "element_id",
-    "username": "username",
-    "payment_hash": "lightning_payment_hash"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "boost_id": "boost_id"
-  },
-  "id": 1
-}
-```
-
-## GetElementIssues
+### GetElementIssues
 
 Retrieves issues related to a specific element.
+
+**Authentication**: No authentication required
 
 ### Request
 
@@ -206,18 +246,20 @@ Retrieves issues related to a specific element.
 }
 ```
 
-## GetAreaDashboard
+### GetInvoice
 
-Retrieves dashboard information for a specific area.
+Gets information about an invoice by its ID.
+
+**Authentication**: No authentication required
 
 ### Request
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "get_area_dashboard",
+  "method": "get_invoice",
   "params": {
-    "area_id": "area_id"
+    "invoice_id": "inv_12345"
   },
   "id": 1
 }
@@ -229,20 +271,24 @@ Retrieves dashboard information for a specific area.
 {
   "jsonrpc": "2.0",
   "result": {
-    "area_id": "area_id",
-    "name": "Area Name",
-    "element_count": 123,
-    "recent_elements": [],
-    "top_contributors": [],
-    "recent_activity": []
+    "invoice": {
+      "id": "inv_12345",
+      "status": "paid",
+      "amount_btc": 0.001,
+      "amount_usd": 50,
+      "created_at": "2023-06-15T14:30:00Z",
+      "paid_at": "2023-06-15T14:35:00Z"
+    }
   },
   "id": 1
 }
 ```
 
-## GetMostActiveUsers
+### GetMostActiveUsers
 
 Retrieves a list of the most active users.
+
+**Authentication**: No authentication required
 
 ### Request
 
@@ -274,13 +320,136 @@ Retrieves a list of the most active users.
   "id": 1
 }
 ```
-# Public RPC Methods
 
-This page documents all public RPC methods available to external users without admin privileges.
+### PaywallAddElementComment
 
-## Search
+Adds a comment to an element through the paywall system.
+
+**Authentication**: No authentication required
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "paywall_add_element_comment",
+  "params": {
+    "element_id": "123456",
+    "comment": "This is a great place!"
+  },
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "payment_request": "lnbc..."
+  },
+  "id": 1
+}
+```
+
+### PaywallBoostElement
+
+Boosts an element through the paywall system.
+
+**Authentication**: No authentication required
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "paywall_boost_element",
+  "params": {
+    "element_id": "123456",
+    "days": 30
+  },
+  "id": 1
+}
+```
+
+Note: The `days` parameter must be one of: 30, 90, or 365.
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "payment_request": "lnbc..."
+  },
+  "id": 1
+}
+```
+
+### PaywallGetAddElementCommentQuote
+
+Gets a quote for adding a comment to an element.
+
+**Authentication**: No authentication required
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0", 
+  "method": "paywall_get_add_element_comment_quote",
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "quote_sat": 100
+  },
+  "id": 1
+}
+```
+
+### PaywallGetBoostElementQuote
+
+Gets quotes for boosting an element for different durations.
+
+**Authentication**: No authentication required
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "paywall_get_boost_element_quote",
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "quote_30d_sat": 1000,
+    "quote_90d_sat": 2500,
+    "quote_365d_sat": 8000
+  },
+  "id": 1
+}
+```
+
+### Search
 
 Searches for elements, users, and other entities based on search terms.
+
+**Authentication**: No authentication required
 
 ### Request
 
@@ -318,179 +487,6 @@ Searches for elements, users, and other entities based on search terms.
         "score": 0.75
       }
     ]
-  },
-  "id": 1
-}
-```
-
-## GetInvoice
-
-Gets information about an invoice by its ID.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "get_invoice",
-  "params": {
-    "invoice_id": "inv_12345"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "invoice": {
-      "id": "inv_12345",
-      "status": "paid",
-      "amount_btc": 0.001,
-      "amount_usd": 50,
-      "created_at": "2023-06-15T14:30:00Z",
-      "paid_at": "2023-06-15T14:35:00Z"
-    }
-  },
-  "id": 1
-}
-```
-
-## GetMostActiveUsers
-
-Gets a list of the most active users on the platform.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "get_most_active_users",
-  "params": {
-    "limit": 5
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "users": [
-      {
-        "id": "user123",
-        "name": "BitcoinExplorer",
-        "activity_points": 150,
-        "elements_added": 25
-      },
-      {
-        "id": "user456",
-        "name": "SatoshiMapper",
-        "activity_points": 120,
-        "elements_added": 18
-      }
-    ]
-  },
-  "id": 1
-}
-```
-
-## AddElementComment
-
-Adds a comment to an element. Requires authentication.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "add_element_comment",
-  "params": {
-    "element_id": "element_id",
-    "content": "Comment content",
-    "user_id": "user_id"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "comment_id": "comment_id"
-  },
-  "id": 1
-}
-```
-
-## PaywallGetAddElementCommentQuote
-
-Gets a quote for adding a comment to an element.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_get_add_element_comment_quote",
-  "params": {},
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "quote": {
-      "price_btc": 0.0001,
-      "price_usd": 5
-    }
-  },
-  "id": 1
-}
-```
-
-## PaywallAddElementComment
-
-Adds a comment to an element through the paywall system.
-
-### Request
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "paywall_add_element_comment",
-  "params": {
-    "element_id": "element_id",
-    "content": "Comment content",
-    "user_id": "user_id",
-    "payment_hash": "payment_hash"
-  },
-  "id": 1
-}
-```
-
-### Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true,
-    "comment_id": "comment_id"
   },
   "id": 1
 }
