@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-pub struct User {
+pub struct OsmUser {
     pub id: i64,
     pub osm_data: EditingApiUser,
     pub tags: Map<String, Value>,
@@ -27,15 +27,15 @@ pub struct SelectMostActive {
 
 const TABLE_NAME: &str = "user";
 
-impl User {
-    pub async fn insert_async(id: i64, osm_data: EditingApiUser, pool: &Pool) -> Result<User> {
+impl OsmUser {
+    pub async fn insert_async(id: i64, osm_data: EditingApiUser, pool: &Pool) -> Result<Self> {
         pool.get()
             .await?
             .interact(move |conn| Self::insert(id, &osm_data, conn))
             .await?
     }
 
-    pub fn insert(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<User> {
+    pub fn insert(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<Self> {
         let sql = r#"
             INSERT INTO user (
                 rowid,
@@ -52,11 +52,11 @@ impl User {
                 ":osm_data": serde_json::to_string(osm_data)?,
             },
         )?;
-        User::select_by_id(conn.last_insert_rowid(), conn)?
+        Self::select_by_id(conn.last_insert_rowid(), conn)?
             .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
-    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<User>> {
+    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Self>> {
         let sql = r#"
             SELECT
                 id,
@@ -82,7 +82,7 @@ impl User {
         updated_since: &OffsetDateTime,
         limit: Option<i64>,
         conn: &Connection,
-    ) -> Result<Vec<User>> {
+    ) -> Result<Vec<Self>> {
         let sql = r#"
             SELECT
                 rowid,
@@ -116,7 +116,7 @@ impl User {
     ) -> Result<Vec<SelectMostActive>> {
         pool.get()
             .await?
-            .interact(move |conn| User::select_most_active(period_start, period_end, limit, conn))
+            .interact(move |conn| Self::select_most_active(period_start, period_end, limit, conn))
             .await?
     }
 
@@ -154,21 +154,21 @@ impl User {
             .map_err(Into::into)
     }
 
-    pub fn select_by_id_or_name(id_or_name: &str, conn: &Connection) -> Result<Option<User>> {
+    pub fn select_by_id_or_name(id_or_name: &str, conn: &Connection) -> Result<Option<Self>> {
         match id_or_name.parse::<i64>() {
-            Ok(id) => User::select_by_id(id, conn),
-            Err(_) => User::select_by_name(id_or_name, conn),
+            Ok(id) => Self::select_by_id(id, conn),
+            Err(_) => Self::select_by_name(id_or_name, conn),
         }
     }
 
-    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<User>> {
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<Self>> {
         pool.get()
             .await?
-            .interact(move |conn| User::select_by_id(id, conn))
+            .interact(move |conn| Self::select_by_id(id, conn))
             .await?
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<User>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Self>> {
         let sql = r#"
             SELECT
                 rowid,
@@ -185,7 +185,7 @@ impl User {
             .optional()?)
     }
 
-    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<User>> {
+    pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<Self>> {
         let sql = format!(
             r#"
                 SELECT                 
@@ -205,24 +205,24 @@ impl User {
         Ok(res)
     }
 
-    pub async fn set_tag_async(id: i64, name: String, value: Value, pool: &Pool) -> Result<User> {
+    pub async fn set_tag_async(id: i64, name: String, value: Value, pool: &Pool) -> Result<Self> {
         pool.get()
             .await?
             .interact(move |conn| Self::set_tag(id, &name, &value, conn))
             .await?
     }
 
-    pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<User> {
+    pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Self> {
         let mut patch_set = HashMap::new();
         patch_set.insert(name.into(), value.clone());
-        User::patch_tags(id, &patch_set, conn)
+        Self::patch_tags(id, &patch_set, conn)
     }
 
     pub fn patch_tags(
         id: i64,
         tags: &HashMap<String, Value>,
         conn: &Connection,
-    ) -> crate::Result<User> {
+    ) -> crate::Result<Self> {
         let sql = format!(
             r#"
                 UPDATE {TABLE_NAME}
@@ -234,10 +234,10 @@ impl User {
             &sql,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        User::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Self::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 
-    pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<User>> {
+    pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<Self>> {
         let sql = format!(
             r#"
                 UPDATE {TABLE_NAME}
@@ -252,7 +252,7 @@ impl User {
                 ":name": format!("$.{name}"),
             },
         )?;
-        let res = User::select_by_id(id, conn)?;
+        let res = Self::select_by_id(id, conn)?;
         Ok(res)
     }
 
@@ -284,7 +284,7 @@ impl User {
         id: i64,
         updated_at: &OffsetDateTime,
         conn: &Connection,
-    ) -> Result<User> {
+    ) -> Result<Self> {
         let sql = r#"
                 UPDATE user
                 SET updated_at = :updated_at
@@ -298,16 +298,16 @@ impl User {
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        User::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Self::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
     }
 }
 
-const fn mapper() -> fn(&Row) -> rusqlite::Result<User> {
-    |row: &Row| -> rusqlite::Result<User> {
+const fn mapper() -> fn(&Row) -> rusqlite::Result<OsmUser> {
+    |row: &Row| -> rusqlite::Result<OsmUser> {
         let osm_data: String = row.get(1)?;
         let tags: String = row.get(2)?;
 
-        Ok(User {
+        Ok(OsmUser {
             id: row.get(0)?,
             osm_data: serde_json::from_str(&osm_data).unwrap(),
             tags: serde_json::from_str(&tags).unwrap(),
@@ -335,15 +335,15 @@ const fn mapper_select_ordered_by_severity() -> fn(&Row) -> rusqlite::Result<Sel
 
 #[cfg(test)]
 mod test {
-    use crate::{osm::api::EditingApiUser, test::mock_conn, user::User, Result};
+    use crate::{osm::api::EditingApiUser, test::mock_conn, user::OsmUser, Result};
     use std::collections::HashMap;
     use time::macros::datetime;
 
     #[test]
     fn insert() -> Result<()> {
         let conn = mock_conn();
-        User::insert(1, &EditingApiUser::mock(), &conn)?;
-        let users = User::select_all(None, &conn)?;
+        OsmUser::insert(1, &EditingApiUser::mock(), &conn)?;
+        let users = OsmUser::select_all(None, &conn)?;
         assert_eq!(1, users.len());
         Ok(())
     }
@@ -351,10 +351,10 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = mock_conn();
-        User::insert(1, &EditingApiUser::mock(), &conn)?;
-        User::insert(2, &EditingApiUser::mock(), &conn)?;
-        User::insert(3, &EditingApiUser::mock(), &conn)?;
-        let reports = User::select_all(None, &conn)?;
+        OsmUser::insert(1, &EditingApiUser::mock(), &conn)?;
+        OsmUser::insert(2, &EditingApiUser::mock(), &conn)?;
+        OsmUser::insert(3, &EditingApiUser::mock(), &conn)?;
+        let reports = OsmUser::select_all(None, &conn)?;
         assert_eq!(3, reports.len());
         Ok(())
     }
@@ -376,7 +376,7 @@ mod test {
         )?;
         assert_eq!(
             2,
-            User::select_updated_since(&datetime!(2020-01-01 00:00:00 UTC), None, &conn)?.len()
+            OsmUser::select_updated_since(&datetime!(2020-01-01 00:00:00 UTC), None, &conn)?.len()
         );
         Ok(())
     }
@@ -384,8 +384,8 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
-        User::insert(1, &EditingApiUser::mock(), &conn)?;
-        assert!(User::select_by_id(1, &conn)?.is_some());
+        OsmUser::insert(1, &EditingApiUser::mock(), &conn)?;
+        assert!(OsmUser::select_by_id(1, &conn)?.is_some());
         Ok(())
     }
 
@@ -398,15 +398,15 @@ mod test {
         let tag_2_value = "test";
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
-        User::insert(1, &EditingApiUser::mock(), &conn)?;
-        let user = User::select_by_id(1, &conn)?.unwrap();
+        OsmUser::insert(1, &EditingApiUser::mock(), &conn)?;
+        let user = OsmUser::select_by_id(1, &conn)?.unwrap();
         assert!(user.tags.is_empty());
-        User::patch_tags(1, &tags, &conn)?;
-        let user = User::select_by_id(1, &conn)?.unwrap();
+        OsmUser::patch_tags(1, &tags, &conn)?;
+        let user = OsmUser::select_by_id(1, &conn)?.unwrap();
         assert_eq!(1, user.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
-        User::patch_tags(1, &tags, &conn)?;
-        let user = User::select_by_id(1, &conn)?.unwrap();
+        OsmUser::patch_tags(1, &tags, &conn)?;
+        let user = OsmUser::select_by_id(1, &conn)?.unwrap();
         assert_eq!(2, user.tags.len());
         Ok(())
     }
@@ -418,13 +418,13 @@ mod test {
             id: 1,
             ..EditingApiUser::mock()
         };
-        User::insert(user.id, &user, &conn)?;
+        OsmUser::insert(user.id, &user, &conn)?;
         let user = EditingApiUser {
             id: 2,
             ..EditingApiUser::mock()
         };
-        User::set_osm_data(1, &user, &conn)?;
-        let user = User::select_by_id(1, &conn)?.unwrap();
+        OsmUser::set_osm_data(1, &user, &conn)?;
+        let user = OsmUser::select_by_id(1, &conn)?.unwrap();
         assert_eq!(2, user.osm_data.id);
         Ok(())
     }

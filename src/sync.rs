@@ -305,7 +305,7 @@ mod test {
         element::Element,
         osm::{api::EditingApiUser, overpass::OverpassElement},
         test::mock_db,
-        user::{self, User},
+        user::{self, OsmUser},
         Result,
     };
     use actix_web::test;
@@ -348,7 +348,7 @@ mod test {
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
         let db = mock_db();
-        let user = User::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        let user = OsmUser::insert(1, &EditingApiUser::mock(), &db.conn)?;
         assert!(user::service::insert_user_if_not_exists(user.id, &db.pool)
             .await
             .is_ok());
@@ -365,7 +365,7 @@ mod test {
                 .await
                 .is_ok()
         );
-        assert!(User::select_by_id(btc_map_user_id, &db.conn)?.is_some());
+        assert!(OsmUser::select_by_id(btc_map_user_id, &db.conn)?.is_some());
         Ok(())
     }
 }

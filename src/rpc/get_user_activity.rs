@@ -1,4 +1,4 @@
-use crate::{element::Element, event::Event, user::User, Result};
+use crate::{element::Element, event::Event, user::OsmUser, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -23,7 +23,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let user = pool
         .get()
         .await?
-        .interact(move |conn| User::select_by_id_or_name(&cloned_args_id, conn))
+        .interact(move |conn| OsmUser::select_by_id_or_name(&cloned_args_id, conn))
         .await??
         .ok_or(format!("There is no user with id or name = {}", params.id))?;
     let events = pool

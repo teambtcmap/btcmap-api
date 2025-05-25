@@ -1,6 +1,6 @@
 use crate::log::RequestExtension;
 use crate::osm::api::EditingApiUser;
-use crate::user::User;
+use crate::user::OsmUser;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -39,8 +39,8 @@ pub struct GetItem {
     pub deleted_at: String,
 }
 
-impl From<User> for GetItem {
-    fn from(val: User) -> Self {
+impl From<OsmUser> for GetItem {
+    fn from(val: OsmUser) -> Self {
         GetItem {
             id: val.id,
             osm_json: val.osm_data,
@@ -55,8 +55,8 @@ impl From<User> for GetItem {
     }
 }
 
-impl From<User> for Json<GetItem> {
-    fn from(val: User) -> Self {
+impl From<OsmUser> for Json<GetItem> {
+    fn from(val: OsmUser) -> Self {
         Json(val.into())
     }
 }
@@ -76,8 +76,8 @@ pub async fn get(
         .get()
         .await?
         .interact(move |conn| match &args.updated_since {
-            Some(updated_since) => User::select_updated_since(updated_since, args.limit, conn),
-            None => User::select_all(args.limit, conn),
+            Some(updated_since) => OsmUser::select_updated_since(updated_since, args.limit, conn),
+            None => OsmUser::select_all(args.limit, conn),
         })
         .await??;
     let users_len = users.len();
@@ -92,7 +92,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
     let id = id.into_inner();
     pool.get()
         .await?
-        .interact(move |conn| User::select_by_id(id, conn))
+        .interact(move |conn| OsmUser::select_by_id(id, conn))
         .await??
         .map(|it| it.into())
         .ok_or(Error::not_found())
@@ -103,7 +103,7 @@ mod test {
     use crate::osm::api::EditingApiUser;
     use crate::test::mock_db;
     use crate::user::v2::GetItem;
-    use crate::user::User;
+    use crate::user::OsmUser;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -128,7 +128,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let db = mock_db();
-        User::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        OsmUser::insert(1, &EditingApiUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -172,7 +172,7 @@ mod test {
     async fn get_by_id() -> Result<()> {
         let db = mock_db();
         let user_id = 1;
-        User::insert(user_id, &EditingApiUser::mock(), &db.conn)?;
+        OsmUser::insert(user_id, &EditingApiUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))

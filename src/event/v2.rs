@@ -116,7 +116,7 @@ mod test {
     use crate::osm::api::EditingApiUser;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_db;
-    use crate::user::User;
+    use crate::user::OsmUser;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -142,7 +142,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let db = mock_db();
-        let user = User::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        let user = OsmUser::insert(1, &EditingApiUser::mock(), &db.conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         Event::insert(user.id, element.id, "", &db.conn)?;
         let app = test::init_service(
@@ -160,7 +160,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db();
-        User::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        OsmUser::insert(1, &EditingApiUser::mock(), &db.conn)?;
         Element::insert(&OverpassElement::mock(1), &db.conn)?;
         Event::insert(1, 1, "", &db.conn)?;
         Event::insert(1, 1, "", &db.conn)?;
@@ -180,7 +180,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db();
-        User::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        OsmUser::insert(1, &EditingApiUser::mock(), &db.conn)?;
         Element::insert(&OverpassElement::mock(1), &db.conn)?;
         let event_1 = Event::insert(1, 1, "", &db.conn)?;
         Event::set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC), &db.conn)?;
@@ -204,7 +204,7 @@ mod test {
     async fn get_by_id() -> Result<()> {
         let db = mock_db();
         let event_id = 1;
-        let user = User::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        let user = OsmUser::insert(1, &EditingApiUser::mock(), &db.conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
         Event::insert(user.id, element.id, "", &db.conn)?;
         let app = test::init_service(

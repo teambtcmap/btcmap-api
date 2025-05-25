@@ -3,7 +3,7 @@ use crate::discord;
 use crate::event::Event;
 use crate::osm;
 use crate::user;
-use crate::user::User;
+use crate::user::OsmUser;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
@@ -16,7 +16,7 @@ use tracing::warn;
 
 pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
     user::service::insert_user_if_not_exists(event.user_id, pool).await?;
-    let user = User::select_by_id_async(event.user_id, pool)
+    let user = OsmUser::select_by_id_async(event.user_id, pool)
         .await?
         .unwrap();
 
@@ -68,19 +68,20 @@ pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
                         new_osm_data = serde_json::to_string(&new_osm_data)?,
                         "User data changed",
                     );
-                    User::set_osm_data_async(user.id, new_osm_data, pool).await?;
+                    OsmUser::set_osm_data_async(user.id, new_osm_data, pool).await?;
                 } else {
                     info!("User data didn't change")
                 }
 
                 let now = OffsetDateTime::now_utc();
                 let now: String = now.format(&Rfc3339)?;
-                User::set_tag_async(user.id, "osm:sync:date".into(), Value::String(now), pool)
+                OsmUser::set_tag_async(user.id, "osm:sync:date".into(), Value::String(now), pool)
                     .await?;
             }
             None => {
                 warn!(user.osm_data.id, "User no longer exists on OSM");
-                User::set_tag_async(user.id, "osm:missing".into(), Value::Bool(true), pool).await?;
+                OsmUser::set_tag_async(user.id, "osm:missing".into(), Value::Bool(true), pool)
+                    .await?;
             }
         },
         Err(e) => error!("Failed to fetch user {} {}", user.osm_data.id, e),
