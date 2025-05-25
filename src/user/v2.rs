@@ -1,5 +1,5 @@
 use crate::log::RequestExtension;
-use crate::osm::api::OsmUser;
+use crate::osm::api::EditingApiUser;
 use crate::user::User;
 use crate::Error;
 use actix_web::get;
@@ -30,7 +30,7 @@ pub struct GetArgs {
 #[derive(Serialize, Deserialize)]
 pub struct GetItem {
     pub id: i64,
-    pub osm_json: OsmUser,
+    pub osm_json: EditingApiUser,
     pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -100,7 +100,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
-    use crate::osm::api::OsmUser;
+    use crate::osm::api::EditingApiUser;
     use crate::test::mock_db;
     use crate::user::v2::GetItem;
     use crate::user::User;
@@ -128,7 +128,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let db = mock_db();
-        User::insert(1, &OsmUser::mock(), &db.conn)?;
+        User::insert(1, &EditingApiUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -147,11 +147,11 @@ mod test {
         db.pool.get().await?.interact(|conn| {
             conn.execute(
                 "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
-                [serde_json::to_string(&OsmUser::mock()).unwrap()],
+                [serde_json::to_string(&EditingApiUser::mock()).unwrap()],
             ).unwrap();
             conn.execute(
                 "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2022-02-05T00:00:00Z')",
-                [serde_json::to_string(&OsmUser::mock()).unwrap()],
+                [serde_json::to_string(&EditingApiUser::mock()).unwrap()],
             ).unwrap();
         }).await?;
         let app = test::init_service(
@@ -172,7 +172,7 @@ mod test {
     async fn get_by_id() -> Result<()> {
         let db = mock_db();
         let user_id = 1;
-        User::insert(user_id, &OsmUser::mock(), &db.conn)?;
+        User::insert(user_id, &EditingApiUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))

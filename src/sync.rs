@@ -303,7 +303,7 @@ mod test {
     use crate::{
         conf::Conf,
         element::Element,
-        osm::{api::OsmUser, overpass::OverpassElement},
+        osm::{api::EditingApiUser, overpass::OverpassElement},
         test::mock_db,
         user::{self, User},
         Result,
@@ -348,7 +348,7 @@ mod test {
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
         let db = mock_db();
-        let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &db.conn)?;
         assert!(user::service::insert_user_if_not_exists(user.id, &db.pool)
             .await
             .is_ok());

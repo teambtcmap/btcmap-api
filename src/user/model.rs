@@ -1,4 +1,4 @@
-use crate::{osm::api::OsmUser, Error, Result};
+use crate::{osm::api::EditingApiUser, Error, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::{named_params, params, Connection, OptionalExtension, Row};
 use serde_json::{Map, Value};
@@ -7,7 +7,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub struct User {
     pub id: i64,
-    pub osm_data: OsmUser,
+    pub osm_data: EditingApiUser,
     pub tags: Map<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
@@ -28,14 +28,14 @@ pub struct SelectMostActive {
 const TABLE_NAME: &str = "user";
 
 impl User {
-    pub async fn insert_async(id: i64, osm_data: OsmUser, pool: &Pool) -> Result<User> {
+    pub async fn insert_async(id: i64, osm_data: EditingApiUser, pool: &Pool) -> Result<User> {
         pool.get()
             .await?
             .interact(move |conn| Self::insert(id, &osm_data, conn))
             .await?
     }
 
-    pub fn insert(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<User> {
+    pub fn insert(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<User> {
         let sql = r#"
             INSERT INTO user (
                 rowid,
@@ -256,14 +256,14 @@ impl User {
         Ok(res)
     }
 
-    pub async fn set_osm_data_async(id: i64, osm_data: OsmUser, pool: &Pool) -> Result<()> {
+    pub async fn set_osm_data_async(id: i64, osm_data: EditingApiUser, pool: &Pool) -> Result<()> {
         pool.get()
             .await?
             .interact(move |conn| Self::set_osm_data(id, &osm_data, conn))
             .await?
     }
 
-    pub fn set_osm_data(id: i64, osm_data: &OsmUser, conn: &Connection) -> Result<()> {
+    pub fn set_osm_data(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<()> {
         let sql = r#"
             UPDATE user
             SET osm_data = json(:osm_data)
@@ -335,14 +335,14 @@ const fn mapper_select_ordered_by_severity() -> fn(&Row) -> rusqlite::Result<Sel
 
 #[cfg(test)]
 mod test {
-    use crate::{osm::api::OsmUser, test::mock_conn, user::User, Result};
+    use crate::{osm::api::EditingApiUser, test::mock_conn, user::User, Result};
     use std::collections::HashMap;
     use time::macros::datetime;
 
     #[test]
     fn insert() -> Result<()> {
         let conn = mock_conn();
-        User::insert(1, &OsmUser::mock(), &conn)?;
+        User::insert(1, &EditingApiUser::mock(), &conn)?;
         let users = User::select_all(None, &conn)?;
         assert_eq!(1, users.len());
         Ok(())
@@ -351,9 +351,9 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = mock_conn();
-        User::insert(1, &OsmUser::mock(), &conn)?;
-        User::insert(2, &OsmUser::mock(), &conn)?;
-        User::insert(3, &OsmUser::mock(), &conn)?;
+        User::insert(1, &EditingApiUser::mock(), &conn)?;
+        User::insert(2, &EditingApiUser::mock(), &conn)?;
+        User::insert(3, &EditingApiUser::mock(), &conn)?;
         let reports = User::select_all(None, &conn)?;
         assert_eq!(3, reports.len());
         Ok(())
@@ -364,15 +364,15 @@ mod test {
         let conn = mock_conn();
         conn.execute(
             "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2020-01-01T00:00:00Z')",
-            [serde_json::to_string(&OsmUser::mock())?],
+            [serde_json::to_string(&EditingApiUser::mock())?],
         )?;
         conn.execute(
             "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2020-01-02T00:00:00Z')",
-            [serde_json::to_string(&OsmUser::mock())?],
+            [serde_json::to_string(&EditingApiUser::mock())?],
         )?;
         conn.execute(
             "INSERT INTO user (rowid, osm_data, updated_at) VALUES (3, json(?), '2020-01-03T00:00:00Z')",
-            [serde_json::to_string(&OsmUser::mock())?],
+            [serde_json::to_string(&EditingApiUser::mock())?],
         )?;
         assert_eq!(
             2,
@@ -384,7 +384,7 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
-        User::insert(1, &OsmUser::mock(), &conn)?;
+        User::insert(1, &EditingApiUser::mock(), &conn)?;
         assert!(User::select_by_id(1, &conn)?.is_some());
         Ok(())
     }
@@ -398,7 +398,7 @@ mod test {
         let tag_2_value = "test";
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
-        User::insert(1, &OsmUser::mock(), &conn)?;
+        User::insert(1, &EditingApiUser::mock(), &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();
         assert!(user.tags.is_empty());
         User::patch_tags(1, &tags, &conn)?;
@@ -414,14 +414,14 @@ mod test {
     #[test]
     fn set_osm_data() -> Result<()> {
         let conn = mock_conn();
-        let user = OsmUser {
+        let user = EditingApiUser {
             id: 1,
-            ..OsmUser::mock()
+            ..EditingApiUser::mock()
         };
         User::insert(user.id, &user, &conn)?;
-        let user = OsmUser {
+        let user = EditingApiUser {
             id: 2,
-            ..OsmUser::mock()
+            ..EditingApiUser::mock()
         };
         User::set_osm_data(1, &user, &conn)?;
         let user = User::select_by_id(1, &conn)?.unwrap();

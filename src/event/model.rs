@@ -371,7 +371,7 @@ mod test {
     use super::Event;
     use crate::{
         element::Element,
-        osm::{api::OsmUser, overpass::OverpassElement},
+        osm::{api::EditingApiUser, overpass::OverpassElement},
         test::mock_conn,
         user::User,
         Result,
@@ -383,7 +383,7 @@ mod test {
     #[test]
     fn insert() -> Result<()> {
         let conn = mock_conn();
-        let user = User::insert(1, &OsmUser::mock(), &conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let event = Event::insert(user.id, element.id, "create", &conn)?;
         assert_eq!(event, Event::select_by_id(event.id, &conn)?.unwrap());
@@ -393,7 +393,7 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = mock_conn();
-        let user = User::insert(1, &OsmUser::mock(), &conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(
             vec![
@@ -409,7 +409,7 @@ mod test {
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
-        let user = User::insert(1, &OsmUser::mock(), &conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let event_1 = Event::insert(user.id, element.id, "", &conn)?;
         let _event_1 = Event::set_updated_at(event_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
@@ -427,7 +427,7 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
-        let user = User::insert(1, &OsmUser::mock(), &conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let event = Event::insert(user.id, element.id, "", &conn)?;
         assert_eq!(event, Event::select_by_id(1, &conn)?.unwrap());
@@ -442,7 +442,7 @@ mod test {
         let tag_1_value_2 = json!("tag_1_value_2");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
-        let user = User::insert(1, &OsmUser::mock(), &conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let event = Event::insert(user.id, element.id, "", &conn)?;
         let mut tags = HashMap::new();
@@ -464,7 +464,7 @@ mod test {
     fn set_updated_at() -> Result<()> {
         let conn = mock_conn();
         let updated_at = OffsetDateTime::now_utc();
-        let user = User::insert(1, &OsmUser::mock(), &conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = Element::insert(&OverpassElement::mock(1), &conn)?;
         let event = Event::insert(user.id, element.id, "", &conn)?;
         let event = Event::set_updated_at(event.id, &updated_at, &conn)?;

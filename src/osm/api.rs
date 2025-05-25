@@ -60,12 +60,12 @@ async fn _get_element(res: Response) -> Result<Option<OsmElement>> {
 }
 
 #[derive(Deserialize)]
-struct OsmUserResponse {
-    user: OsmUser,
+struct EditingApiUserResponse {
+    user: EditingApiUser,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-pub struct OsmUser {
+pub struct EditingApiUser {
     pub id: i64,
     pub display_name: String,
     #[serde(with = "time::serde::rfc3339")]
@@ -110,10 +110,10 @@ pub struct BlocksReceived {
     active: i32,
 }
 
-impl OsmUser {
+impl EditingApiUser {
     #[cfg(test)]
-    pub fn mock() -> OsmUser {
-        OsmUser {
+    pub fn mock() -> EditingApiUser {
+        EditingApiUser {
             id: 1,
             display_name: "".into(),
             account_created: OffsetDateTime::now_utc(),
@@ -133,7 +133,7 @@ impl OsmUser {
     }
 }
 
-pub async fn get_user(id: i64) -> Result<Option<OsmUser>> {
+pub async fn get_user(id: i64) -> Result<Option<EditingApiUser>> {
     let url = format!("https://api.openstreetmap.org/api/0.6/user/{id}.json");
     info!(url, "Querying OSM");
     let res = reqwest::get(&url).await?;
@@ -141,9 +141,9 @@ pub async fn get_user(id: i64) -> Result<Option<OsmUser>> {
     _get_user(res).await
 }
 
-async fn _get_user(res: Response) -> Result<Option<OsmUser>> {
+async fn _get_user(res: Response) -> Result<Option<EditingApiUser>> {
     if res.status().is_success() {
-        let res: OsmUserResponse = res.json().await?;
+        let res: EditingApiUserResponse = res.json().await?;
         Ok(Some(res.user))
     } else {
         match res.status() {

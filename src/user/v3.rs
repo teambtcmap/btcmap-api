@@ -1,5 +1,5 @@
 use crate::log::RequestExtension;
-use crate::osm::api::OsmUser;
+use crate::osm::api::EditingApiUser;
 use crate::user::User;
 use crate::Error;
 use actix_web::get;
@@ -27,7 +27,7 @@ pub struct GetArgs {
 pub struct GetItem {
     pub id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub osm_data: Option<OsmUser>,
+    pub osm_data: Option<EditingApiUser>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Map<String, Value>>,
     #[serde(with = "time::serde::rfc3339")]
@@ -97,7 +97,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
-    use crate::osm::api::OsmUser;
+    use crate::osm::api::EditingApiUser;
     use crate::test::mock_db;
     use crate::user::User;
     use crate::Result;
@@ -157,7 +157,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let db = mock_db();
-        let user = User::insert(1, &OsmUser::mock(), &db.conn)?;
+        let user = User::insert(1, &EditingApiUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -175,9 +175,9 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db();
-        let user_1 = User::insert(1, &OsmUser::mock(), &db.conn)?;
-        let user_2 = User::insert(2, &OsmUser::mock(), &db.conn)?;
-        let _user_3 = User::insert(3, &OsmUser::mock(), &db.conn)?;
+        let user_1 = User::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        let user_2 = User::insert(2, &EditingApiUser::mock(), &db.conn)?;
+        let _user_3 = User::insert(3, &EditingApiUser::mock(), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -195,9 +195,9 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db();
-        let user_1 = User::insert(1, &OsmUser::mock(), &db.conn)?;
+        let user_1 = User::insert(1, &EditingApiUser::mock(), &db.conn)?;
         User::_set_updated_at(user_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
-        let user_2 = User::insert(2, &OsmUser::mock(), &db.conn)?;
+        let user_2 = User::insert(2, &EditingApiUser::mock(), &db.conn)?;
         let user_2 = User::_set_updated_at(user_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?;
         let app = test::init_service(
             App::new()
