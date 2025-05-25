@@ -25,6 +25,13 @@ pub struct RpcRequest {
 #[derive(Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
+    // auth
+    AddAdmin,
+    GetAdmin,
+    ChangePassword,
+    CreateApiKey,
+    AddAdminAction,
+    RemoveAdminAction,
     // element
     GetElement,
     SetElementTag,
@@ -60,13 +67,6 @@ pub enum RpcMethod {
     SetUserTag,
     RemoveUserTag,
     GetMostActiveUsers,
-    // admin
-    ChangePassword,
-    CreateAuthToken,
-    AddAdmin,
-    GetAdmin,
-    AddAdminAction,
-    RemoveAdminAction,
     // invoice
     GetInvoice,
     GenerateInvoice,
@@ -149,6 +149,10 @@ impl RpcResponse {
 }
 
 const PUBLIC_METHODS: &[RpcMethod] = &[
+    // auth
+    RpcMethod::ChangePassword,
+    RpcMethod::CreateApiKey,
+    // unsorted
     RpcMethod::GetElement,
     RpcMethod::PaywallGetAddElementCommentQuote,
     RpcMethod::PaywallAddElementComment,
@@ -157,8 +161,6 @@ const PUBLIC_METHODS: &[RpcMethod] = &[
     RpcMethod::GetElementIssues,
     RpcMethod::GetAreaDashboard,
     RpcMethod::GetMostActiveUsers,
-    RpcMethod::CreateAuthToken,
-    RpcMethod::ChangePassword,
 ];
 
 #[post("")]
@@ -354,10 +356,10 @@ pub async fn handle(
             req.id.clone(),
             super::get_most_active_users::run(params(req.params)?, &pool).await?,
         ),
-        // admin
-        RpcMethod::CreateAuthToken => RpcResponse::from(
+        // auth
+        RpcMethod::CreateApiKey => RpcResponse::from(
             req.id.clone(),
-            super::auth::create_auth_token::run(params(req.params)?, &pool, &conf).await?,
+            super::auth::create_api_key::run(params(req.params)?, &pool, &conf).await?,
         ),
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),

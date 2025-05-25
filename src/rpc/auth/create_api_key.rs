@@ -11,7 +11,7 @@ use uuid::Uuid;
 pub struct Params {
     pub username: String,
     pub password: String,
-    pub token_label: String,
+    pub label: String,
 }
 
 #[derive(Serialize)]
@@ -28,18 +28,12 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         .verify_password(params.password.as_bytes(), &password_hash)
         .unwrap();
     let token = Uuid::new_v4().to_string();
-    db::access_token::queries_async::insert(
-        admin.id,
-        &params.token_label,
-        &token,
-        &admin.roles,
-        &pool,
-    )
-    .await?;
+    db::access_token::queries_async::insert(admin.id, &params.label, &token, &admin.roles, &pool)
+        .await?;
     let time_passed_ms = (OffsetDateTime::now_utc() - start_time).whole_milliseconds();
     let discord_message = format!(
-        "Admin {} created a new auth token labled {}. It took {time_passed_ms} ms to process this call",
-        admin.name, params.token_label,
+        "User {} created a new API token labled {} ({time_passed_ms} ms)",
+        admin.name, params.label,
     );
     discord::post_message(&conf.discord_webhook_api, discord_message).await;
     Ok(Res {
