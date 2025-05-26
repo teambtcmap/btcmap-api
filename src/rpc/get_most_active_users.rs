@@ -1,4 +1,4 @@
-use crate::{user::OsmUser, Result};
+use crate::{db, Result};
 use deadpool_sqlite::Pool;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -32,8 +32,13 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let period_start =
         OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_start), &Rfc3339)?;
     let period_end = OffsetDateTime::parse(&format!("{}T00:00:00Z", params.period_end), &Rfc3339)?;
-    let res =
-        OsmUser::select_most_active_async(period_start, period_end, params.limit, pool).await?;
+    let res = db::osm_user::queries_async::select_most_active(
+        period_start,
+        period_end,
+        params.limit,
+        pool,
+    )
+    .await?;
     let res: Vec<ResUser> = res
         .into_iter()
         .map(|it| {

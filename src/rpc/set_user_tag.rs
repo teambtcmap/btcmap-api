@@ -1,4 +1,8 @@
-use crate::{conf::Conf, db::admin::queries::Admin, discord, user::OsmUser, Result};
+use crate::{
+    conf::Conf,
+    db::{self, admin::queries::Admin},
+    discord, Result,
+};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -23,14 +27,19 @@ pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Res
     let user = pool
         .get()
         .await?
-        .interact(move |conn| OsmUser::select_by_name(&cloned_args_user_name, conn))
+        .interact(move |conn| db::osm_user::queries::select_by_name(&cloned_args_user_name, conn))
         .await??
         .ok_or(format!("There is no user with name = {}", params.user_name))?;
     let user = pool
         .get()
         .await?
         .interact(move |conn| {
-            OsmUser::set_tag(user.id, &cloned_args_tag_name, &cloned_args_tag_value, conn)
+            db::osm_user::queries::set_tag(
+                user.id,
+                &cloned_args_tag_name,
+                &cloned_args_tag_value,
+                conn,
+            )
         })
         .await??;
     let discord_message = format!(

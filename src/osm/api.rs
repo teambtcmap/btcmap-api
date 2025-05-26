@@ -101,13 +101,13 @@ pub struct Traces {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Blocks {
-    received: BlocksReceived,
+    pub received: BlocksReceived,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct BlocksReceived {
-    count: i32,
-    active: i32,
+    pub count: i32,
+    pub active: i32,
 }
 
 impl EditingApiUser {

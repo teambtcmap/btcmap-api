@@ -302,10 +302,11 @@ pub async fn sync_new_elements(
 mod test {
     use crate::{
         conf::Conf,
+        db,
         element::Element,
         osm::{api::EditingApiUser, overpass::OverpassElement},
         test::mock_db,
-        user::{self, OsmUser},
+        user::{self},
         Result,
     };
     use actix_web::test;
@@ -348,7 +349,7 @@ mod test {
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
         let db = mock_db();
-        let user = OsmUser::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
         assert!(user::service::insert_user_if_not_exists(user.id, &db.pool)
             .await
             .is_ok());
@@ -365,7 +366,7 @@ mod test {
                 .await
                 .is_ok()
         );
-        assert!(OsmUser::select_by_id(btc_map_user_id, &db.conn)?.is_some());
+        assert!(db::osm_user::queries::select_by_id(btc_map_user_id, &db.conn)?.is_some());
         Ok(())
     }
 }
