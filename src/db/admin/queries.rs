@@ -63,21 +63,6 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<Admin> {
         .map_err(Into::into)
 }
 
-pub fn select_by_password(password: &str, conn: &Connection) -> Result<Admin> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM {table}
-            WHERE {password} = ?1
-        "#,
-        projection = Admin::projection(),
-        table = schema::NAME,
-        password = Columns::Password.as_str(),
-    );
-    conn.query_row(&sql, params![password], Admin::mapper())
-        .map_err(Into::into)
-}
-
 pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> Result<()> {
     let sql = format!(
         r#"
@@ -198,17 +183,6 @@ mod test {
         let res_admin = super::select_by_name(admin_name, &conn)?;
         assert_eq!(admin_id, res_admin.id);
         assert_eq!(admin_name, res_admin.name);
-        Ok(())
-    }
-
-    #[test]
-    fn select_by_password() -> Result<()> {
-        let conn = mock_conn();
-        let password = "pwd";
-        let admin_id = super::insert("", password, &conn)?;
-        let query_res = super::select_by_password(password, &conn)?;
-        assert_eq!(admin_id, query_res.id);
-        assert_eq!(password, query_res.password);
         Ok(())
     }
 

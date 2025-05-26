@@ -18,32 +18,10 @@ pub async fn insert(
         .await?
 }
 
-pub async fn select_all(pool: &Pool) -> Result<Vec<AccessToken>> {
-    pool.get()
-        .await?
-        .interact(move |conn| super::queries::select_all(conn))
-        .await?
-}
-
-pub async fn select_by_id(id: i64, pool: &Pool) -> Result<AccessToken> {
-    pool.get()
-        .await?
-        .interact(move |conn| super::queries::select_by_id(id, conn))
-        .await?
-}
-
 pub async fn select_by_secret(secret: impl Into<String>, pool: &Pool) -> Result<AccessToken> {
     let secret = secret.into();
     pool.get()
         .await?
         .interact(move |conn| super::queries::select_by_secret(&secret, conn))
-        .await?
-}
-
-pub async fn set_roles(token_id: i64, roles: &[String], pool: &Pool) -> Result<()> {
-    let roles = roles.to_vec();
-    pool.get()
-        .await?
-        .interact(move |conn| super::queries::set_roles(token_id, &roles, conn))
         .await?
 }

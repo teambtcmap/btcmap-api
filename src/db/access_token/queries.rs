@@ -28,6 +28,7 @@ pub fn insert(
     Ok(conn.last_insert_rowid())
 }
 
+#[cfg(test)]
 pub fn select_all(conn: &Connection) -> Result<Vec<AccessToken>> {
     let sql = format!(
         r#"
@@ -43,6 +44,7 @@ pub fn select_all(conn: &Connection) -> Result<Vec<AccessToken>> {
         .map_err(Into::into)
 }
 
+#[cfg(test)]
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<AccessToken> {
     let sql = format!(
         r#"
@@ -73,6 +75,7 @@ pub fn select_by_secret(secret: &str, conn: &Connection) -> Result<AccessToken> 
         .map_err(Into::into)
 }
 
+#[cfg(test)]
 pub fn set_roles(token_id: i64, roles: &[String], conn: &Connection) -> Result<()> {
     let sql = format!(
         r#"
@@ -88,6 +91,7 @@ pub fn set_roles(token_id: i64, roles: &[String], conn: &Connection) -> Result<(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub struct AccessToken {
     pub id: i64,
     pub user_id: i64,

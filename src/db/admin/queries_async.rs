@@ -37,14 +37,6 @@ pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<Admi
         .await?
 }
 
-pub async fn select_by_password(password: impl Into<String>, pool: &Pool) -> Result<Admin> {
-    let password = password.into();
-    pool.get()
-        .await?
-        .interact(move |conn| super::queries::select_by_password(&password, conn))
-        .await?
-}
-
 pub async fn set_password(id: i64, password: impl Into<String>, pool: &Pool) -> Result<()> {
     let password = password.into();
     pool.get()
