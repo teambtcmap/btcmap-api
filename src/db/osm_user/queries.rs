@@ -328,18 +328,12 @@ mod test {
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
-        conn.execute(
-            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2020-01-01T00:00:00Z')",
-            [serde_json::to_string(&EditingApiUser::mock())?],
-        )?;
-        conn.execute(
-            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2020-01-02T00:00:00Z')",
-            [serde_json::to_string(&EditingApiUser::mock())?],
-        )?;
-        conn.execute(
-            "INSERT INTO user (rowid, osm_data, updated_at) VALUES (3, json(?), '2020-01-03T00:00:00Z')",
-            [serde_json::to_string(&EditingApiUser::mock())?],
-        )?;
+        let _u1 = super::insert(1, &EditingApiUser::mock(), &conn)?;
+        let _u1 = super::set_updated_at(_u1.id, &datetime!(2020-01-01 00:00:00 UTC), &conn)?;
+        let _u2 = super::insert(2, &EditingApiUser::mock(), &conn)?;
+        let _u2 = super::set_updated_at(_u2.id, &datetime!(2020-01-02 00:00:00 UTC), &conn)?;
+        let _u3 = super::insert(3, &EditingApiUser::mock(), &conn)?;
+        let _u3 = super::set_updated_at(_u3.id, &datetime!(2020-01-03 00:00:00 UTC), &conn)?;
         assert_eq!(
             2,
             super::select_updated_since(&datetime!(2020-01-01 00:00:00 UTC), None, &conn)?.len()

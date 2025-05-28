@@ -1,4 +1,4 @@
-pub const NAME: &str = "user";
+pub const NAME: &str = "osm_user";
 
 pub enum Columns {
     Id,

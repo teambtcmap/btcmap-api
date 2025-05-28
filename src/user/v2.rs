@@ -111,6 +111,7 @@ mod test {
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use serde_json::Value;
+    use time::macros::datetime;
 
     #[test]
     async fn get_empty_table() -> Result<()> {
@@ -146,16 +147,26 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db();
-        db.pool.get().await?.interact(|conn| {
-            conn.execute(
-                "INSERT INTO user (rowid, osm_data, updated_at) VALUES (1, json(?), '2022-01-05T00:00:00Z')",
-                [serde_json::to_string(&EditingApiUser::mock()).unwrap()],
-            ).unwrap();
-            conn.execute(
-                "INSERT INTO user (rowid, osm_data, updated_at) VALUES (2, json(?), '2022-02-05T00:00:00Z')",
-                [serde_json::to_string(&EditingApiUser::mock()).unwrap()],
-            ).unwrap();
-        }).await?;
+        db.pool
+            .get()
+            .await?
+            .interact(|conn| {
+                let _u1 = db::osm_user::queries::insert(1, &EditingApiUser::mock(), conn).unwrap();
+                db::osm_user::queries::set_updated_at(
+                    _u1.id,
+                    &datetime!(2022-01-05 00:00:00 UTC),
+                    conn,
+                )
+                .unwrap();
+                let _u2 = db::osm_user::queries::insert(2, &EditingApiUser::mock(), conn).unwrap();
+                db::osm_user::queries::set_updated_at(
+                    _u2.id,
+                    &datetime!(2022-02-05 00:00:00 UTC),
+                    conn,
+                )
+                .unwrap();
+            })
+            .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
