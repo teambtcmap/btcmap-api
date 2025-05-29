@@ -1,4 +1,5 @@
-use crate::area::Area;
+use crate::db;
+use crate::db::area::schema::Area;
 use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
@@ -16,7 +17,6 @@ use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 use time::format_description::well_known::Rfc3339;
-use time::macros::datetime;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -72,12 +72,8 @@ pub async fn get(
             Redirect::to("https://static.btcmap.org/api/v2/areas.json").permanent(),
         ));
     }
-    let areas = Area::select_updated_since(
-        args.updated_since.unwrap_or(datetime!(2000-01-01 0:00 UTC)),
-        args.limit,
-        &pool,
-    )
-    .await?;
+    let areas =
+        db::area::queries_async::select(args.updated_since, true, args.limit, &pool).await?;
     let areas_len = areas.len();
     let res = Either::Left(Json(areas.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
@@ -90,7 +86,7 @@ pub async fn get_by_url_alias(
     url_alias: Path<String>,
     pool: Data<Pool>,
 ) -> Result<Json<GetItem>, Error> {
-    Area::select_by_alias_async(url_alias.to_string(), &pool)
+    db::area::queries_async::select_by_alias(url_alias.to_string(), &pool)
         .await
         .map(Into::into)
 }
@@ -122,7 +118,7 @@ mod tests {
     #[test]
     async fn get_one_row() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -138,9 +134,9 @@ mod tests {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
-        Area::insert(Area::mock_tags(), &pool).await?;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -161,7 +157,7 @@ mod tests {
         let mut tags = Area::mock_tags();
         let area_url_alias = "test";
         tags.insert("url_alias".into(), area_url_alias.into());
-        Area::insert(tags, &pool).await?;
+        db::area::queries_async::insert(tags, &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))

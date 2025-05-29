@@ -63,8 +63,8 @@ impl OverpassElement {
 
         let mut category = "other";
 
-        if amenity == "atm"
-            || amenity == "bureau_de_change" // practical assumption of exchange offices are regarded as much useful as atms 
+        if amenity == "atm" || amenity == "bureau_de_change"
+        // practical assumption of exchange offices are regarded as much useful as atms
         {
             category = "atm";
         }

@@ -1,5 +1,5 @@
 use super::model::RpcArea;
-use crate::{area::Area, Result};
+use crate::{db, Result};
 use base64::prelude::*;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
@@ -14,7 +14,7 @@ pub struct Params {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<RpcArea> {
-    let area = Area::select_by_id_or_alias(&params.id, pool).await?;
+    let area = db::area::queries_async::select_by_id_or_alias(&params.id, pool).await?;
     let file_name = format!("{}.{}", area.id, params.icon_ext);
     let bytes = BASE64_STANDARD.decode(params.icon_base64)?;
     let mut file = OpenOptions::new()
@@ -28,6 +28,6 @@ pub async fn run(params: Params, pool: &Pool) -> Result<RpcArea> {
     file.flush()?;
     let url = format!("https://static.btcmap.org/images/areas/{file_name}");
     let patch_set = Map::from_iter([("icon:square".into(), url.into())].into_iter());
-    let area = Area::patch_tags_async(area.id, patch_set, pool).await?;
+    let area = db::area::queries_async::patch_tags(area.id, patch_set, pool).await?;
     Ok(area.into())
 }

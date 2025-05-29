@@ -404,8 +404,10 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
 
 #[cfg(test)]
 mod test {
+    use crate::db;
+    use crate::db::area::schema::Area;
     use crate::test::mock_pool;
-    use crate::{area::Area, report::Report, Result};
+    use crate::{report::Report, Result};
     use actix_web::test;
     use serde_json::Map;
     use serde_json::Value;
@@ -416,7 +418,7 @@ mod test {
     #[actix_web::test]
     async fn insert_async() -> Result<()> {
         let pool = mock_pool().await;
-        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let date = date!(2023 - 01 - 01);
         let mut tags = Map::new();
         tags.insert("key".to_string(), Value::String("value".to_string()));
@@ -430,7 +432,7 @@ mod test {
     #[test]
     async fn insert() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         let reports =
             Report::select_updated_since_async(datetime!(2000-01-01 00:00 UTC), None, &pool)
@@ -442,7 +444,7 @@ mod test {
     #[test]
     async fn select_updated_since() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let report_1 =
             Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         Report::set_updated_at(report_1.id, datetime!(2020-01-01 00:00:00 UTC), &pool).await?;
@@ -464,7 +466,7 @@ mod test {
     #[test]
     async fn select_by_id() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         assert!(Report::select_by_id_async(1, &pool).await?.is_some());
         Ok(())
@@ -473,7 +475,7 @@ mod test {
     #[test]
     async fn select_latest_by_area_id() -> Result<()> {
         let pool = mock_pool().await;
-        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         Report::insert_async(
             area.id,
             OffsetDateTime::now_utc().date().previous_day().unwrap(),
@@ -496,7 +498,7 @@ mod test {
     #[test]
     async fn merge_tags() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
@@ -519,7 +521,7 @@ mod test {
     #[test]
     async fn set_deleted_at() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let report =
             Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         let new_deleted_at = OffsetDateTime::now_utc().add(Duration::days(1));

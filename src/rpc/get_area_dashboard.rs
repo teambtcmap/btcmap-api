@@ -1,4 +1,4 @@
-use crate::{area::Area, report::Report, Result};
+use crate::{db, report::Report, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +23,7 @@ pub struct ChartEntry {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let area = Area::select_by_id_async(params.area_id, pool).await?;
+    let area = db::area::queries_async::select_by_id(params.area_id, pool).await?;
     let mut reports = Report::select_by_area_id_async(area.id, None, pool).await?;
     reports.sort_by(|a, b| b.date.cmp(&a.date));
     let reports: Vec<Report> = reports.into_iter().take(365).collect();

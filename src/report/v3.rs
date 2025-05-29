@@ -104,10 +104,10 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
-    use crate::area::Area;
+    use crate::db::area::schema::Area;
     use crate::report::Report;
     use crate::test::{mock_db, mock_pool};
-    use crate::Result;
+    use crate::{db, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -166,7 +166,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let pool = mock_pool().await;
-        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let report =
             Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
                 .await?;
@@ -187,7 +187,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = mock_pool().await;
-        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let report_1 =
             Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
                 .await?;
@@ -214,7 +214,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = mock_pool().await;
-        let area = Area::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let report_1 =
             Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
                 .await?;

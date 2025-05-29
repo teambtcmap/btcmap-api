@@ -116,11 +116,11 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
-    use crate::area::Area;
+    use crate::db::area::schema::Area;
     use crate::report::v2::GetItem;
     use crate::report::Report;
     use crate::test::{mock_db, mock_pool};
-    use crate::Result;
+    use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
@@ -146,7 +146,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -163,7 +163,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         Report::insert_async(1, date!(2023 - 05 - 06), Map::new(), &pool).await?;
         Report::insert_async(1, date!(2023 - 05 - 07), Map::new(), &pool).await?;
         Report::insert_async(1, date!(2023 - 05 - 08), Map::new(), &pool).await?;
@@ -182,7 +182,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = mock_pool().await;
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let report_1 =
             Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         Report::set_updated_at(report_1.id, datetime!(2022-01-05 00:00:00 UTC), &pool).await?;

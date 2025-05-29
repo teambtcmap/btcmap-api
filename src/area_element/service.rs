@@ -1,6 +1,6 @@
 use super::model::AreaElement;
-use crate::{area::Area, element::Element};
-use crate::{element, Result};
+use crate::element::Element;
+use crate::{db, element, Result};
 use deadpool_sqlite::Pool;
 use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
@@ -18,7 +18,7 @@ pub struct Diff {
 
 pub async fn generate_mapping(elements: &[Element], pool: &Pool) -> Result<Vec<Diff>> {
     let mut diffs = vec![];
-    let areas = Area::select_all(pool).await?;
+    let areas = db::area::queries_async::select(None, true, None, pool).await?;
     for element in elements {
         let element_areas = element::service::find_areas(element, &areas)?;
         let old_mappings = AreaElement::select_by_element_id_async(element.id, pool).await?;

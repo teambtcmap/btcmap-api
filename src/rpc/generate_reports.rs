@@ -1,5 +1,9 @@
 use crate::{
-    area::Area, conf::Conf, db::admin::queries::Admin, discord, element::Element, report::Report,
+    conf::Conf,
+    db::{self, admin::queries::Admin, area::schema::Area},
+    discord,
+    element::Element,
+    report::Report,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -49,7 +53,7 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
         info!("Found existing reports for today, aborting");
         return Ok(0);
     }
-    let all_areas = Area::select_all_except_deleted(pool).await?;
+    let all_areas = db::area::queries_async::select(None, false, None, pool).await?;
     let all_elements = Element::select_all_except_deleted_async(pool).await?;
     let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
     for area in all_areas {
@@ -203,7 +207,7 @@ mod test {
         let pool = mock_pool().await;
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
-        Area::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         for _ in 1..100 {
             Report::insert_async(1, date!(2023 - 11 - 12), Map::new(), &pool).await?;
         }

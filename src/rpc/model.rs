@@ -1,4 +1,4 @@
-use crate::area::Area;
+use crate::db::area::schema::Area;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use time::OffsetDateTime;

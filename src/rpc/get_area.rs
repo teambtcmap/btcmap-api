@@ -1,5 +1,5 @@
 use super::model::RpcArea;
-use crate::{area::Area, Result};
+use crate::{db, Result};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 
@@ -9,7 +9,7 @@ pub struct Params {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<RpcArea> {
-    Area::select_by_id_or_alias(params.id, pool)
+    db::area::queries_async::select_by_id_or_alias(params.id, pool)
         .await
         .map(Into::into)
 }
