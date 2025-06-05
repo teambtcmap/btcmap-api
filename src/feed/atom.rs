@@ -1,4 +1,3 @@
-use crate::area_element::model::AreaElement;
 use crate::element_comment::ElementComment;
 use crate::{db, Result};
 use crate::{element::Element, event::Event};
@@ -48,7 +47,7 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
     let area_elements = pool
         .get()
         .await?
-        .interact(move |conn| AreaElement::select_by_area_id(area.id, conn))
+        .interact(move |conn| db::area_element::queries::select_by_area_id(area.id, conn))
         .await??;
     let area_element_ids: HashSet<i64> =
         area_elements.into_iter().map(|it| it.element_id).collect();

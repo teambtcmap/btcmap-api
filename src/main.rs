@@ -44,6 +44,7 @@ async fn main() -> Result<()> {
     let pool = db_utils::pool()?;
     db_utils::migrate_async(&pool).await?;
     service::auth::upgrade_plaintext_passwords(&pool).await?;
+    //area_element::service::remove_duplicates(&pool).await?;
     let conf = Conf::select_async(&pool).await?;
     HttpServer::new(move || {
         App::new()

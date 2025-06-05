@@ -1,5 +1,8 @@
-use super::model::AreaElement;
-use crate::{log::RequestExtension, Error, Result};
+use crate::{
+    db::{self, area_element::schema::AreaElement},
+    log::RequestExtension,
+    Result,
+};
 use actix_web::{
     get,
     web::{Data, Json, Path, Query},
@@ -63,13 +66,12 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>> {
-    let area_elements = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            AreaElement::select_updated_since(&args.updated_since, Some(args.limit), conn)
-        })
-        .await??;
+    let area_elements = db::area_element::queries_async::select_updated_since(
+        args.updated_since,
+        Some(args.limit),
+        &pool,
+    )
+    .await?;
     req.extensions_mut()
         .insert(RequestExtension::new(area_elements.len()));
     Ok(Json(
@@ -79,10 +81,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>> {
-    pool.get()
-        .await?
-        .interact(move |conn| AreaElement::select_by_id(*id, conn))
-        .await??
-        .ok_or(Error::not_found())
+    db::area_element::queries_async::select_by_id(*id, &pool)
+        .await
         .map(|it| it.into())
 }

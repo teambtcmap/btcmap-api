@@ -1,4 +1,5 @@
-use super::model::AreaElement;
+use crate::db::area::schema::Area;
+use crate::db::area_element::schema::AreaElement;
 use crate::element::Element;
 use crate::{db, element, Result};
 use deadpool_sqlite::Pool;
@@ -6,7 +7,9 @@ use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
 use rusqlite::Connection;
 use serde::Serialize;
+use time::macros::datetime;
 use time::OffsetDateTime;
+use tracing::warn;
 
 #[derive(Serialize)]
 pub struct Diff {
@@ -18,67 +21,93 @@ pub struct Diff {
 
 pub async fn generate_mapping(elements: &[Element], pool: &Pool) -> Result<Vec<Diff>> {
     let mut diffs = vec![];
-    let areas = db::area::queries_async::select(None, true, None, pool).await?;
+    let all_areas = db::area::queries_async::select(None, true, None, pool).await?;
     for element in elements {
-        let element_areas = element::service::find_areas(element, &areas)?;
-        let old_mappings = AreaElement::select_by_element_id_async(element.id, pool).await?;
-        let old_mappings: Vec<AreaElement> = old_mappings
-            .into_iter()
-            .filter(|it| it.deleted_at.is_none())
-            .collect();
-        let mut old_area_ids: Vec<i64> = old_mappings.into_iter().map(|it| it.area_id).collect();
-        let mut new_area_ids: Vec<i64> = element_areas.into_iter().map(|it| it.id).collect();
-        old_area_ids.sort();
-        new_area_ids.sort();
-        let mut added_areas: Vec<i64> = vec![];
-        let mut removed_areas: Vec<i64> = vec![];
-        if new_area_ids != old_area_ids {
-            for old_area_id in &old_area_ids {
-                if !new_area_ids.contains(old_area_id) {
-                    let area_element = AreaElement::select_by_area_id_and_element_id_async(
-                        *old_area_id,
-                        element.id,
-                        pool,
-                    )
-                    .await?
-                    .unwrap();
-                    AreaElement::set_deleted_at_async(
-                        area_element.id,
-                        Some(OffsetDateTime::now_utc()),
-                        pool,
-                    )
-                    .await?;
-                    removed_areas.push(area_element.area_id);
-                }
-            }
-            for new_area_id in new_area_ids {
-                if !old_area_ids.contains(&new_area_id) {
-                    let area_element = AreaElement::select_by_area_id_and_element_id_async(
-                        new_area_id,
-                        element.id,
-                        pool,
-                    )
-                    .await?;
-                    match area_element {
-                        Some(area_element) => {
-                            AreaElement::set_deleted_at_async(area_element.id, None, pool).await?;
-                        }
-                        None => {
-                            AreaElement::insert_async(new_area_id, element.id, pool).await?;
-                        }
-                    }
-                    added_areas.push(new_area_id);
-                }
-            }
-            diffs.push(Diff {
-                element_id: element.id,
-                element_osm_url: element.osm_url(),
-                added_areas,
-                removed_areas,
-            });
+        if let Some(diff) = generate_element_areas_mapping(element, &all_areas, pool).await? {
+            diffs.push(diff);
         }
     }
     Ok(diffs)
+}
+
+pub async fn generate_element_areas_mapping(
+    element: &Element,
+    areas: &Vec<Area>,
+    pool: &Pool,
+) -> Result<Option<Diff>> {
+    let mut added_areas: Vec<i64> = vec![];
+    let mut removed_areas: Vec<i64> = vec![];
+    let old_mappings =
+        db::area_element::queries_async::select_by_element_id(element.id, pool).await?;
+    let new_mappings = element::service::find_areas(&element, &areas)?;
+    // mark no longer active mappings as deleted
+    for old_mapping in &old_mappings {
+        if old_mapping.deleted_at.is_none() {
+            let still_valid = new_mappings
+                .iter()
+                .find(|area| area.id == old_mapping.area_id)
+                .is_some();
+            if !still_valid {
+                db::area_element::queries_async::set_deleted_at(
+                    old_mapping.id,
+                    Some(OffsetDateTime::now_utc()),
+                    pool,
+                )
+                .await?;
+                removed_areas.push(old_mapping.area_id);
+            }
+        }
+    }
+    // refresh data to include the changes made above
+    let old_mappings =
+        db::area_element::queries_async::select_by_element_id(element.id, pool).await?;
+    for area in new_mappings {
+        let old_mapping = old_mappings
+            .iter()
+            .find(|old_mapping| old_mapping.area_id == area.id);
+        match old_mapping {
+            Some(old_mapping) => {
+                if old_mapping.deleted_at.is_some() {
+                    db::area_element::queries_async::set_deleted_at(old_mapping.id, None, pool)
+                        .await?;
+                }
+            }
+            None => {
+                db::area_element::queries_async::insert(area.id, element.id, pool).await?;
+            }
+        }
+        added_areas.push(area.id);
+    }
+    let res = if !added_areas.is_empty() || !removed_areas.is_empty() {
+        Some(Diff {
+            element_id: element.id,
+            element_osm_url: element.osm_url(),
+            added_areas,
+            removed_areas,
+        })
+    } else {
+        None
+    };
+    Ok(res)
+}
+
+pub async fn remove_duplicates(pool: &Pool) -> Result<()> {
+    let all_rows = db::area_element::queries_async::select_updated_since(
+        datetime!(2000-01-01 00:00:00 UTC),
+        None,
+        pool,
+    )
+    .await?;
+    for row in &all_rows {
+        let duplicates: Vec<&AreaElement> = all_rows
+            .iter()
+            .filter(|it| it.area_id == row.area_id && it.element_id == row.element_id)
+            .collect();
+        if duplicates.len() > 1 {
+            warn!("Found {} duplicates", duplicates.len(),);
+        }
+    }
+    Ok(())
 }
 
 pub async fn get_elements_within_geometries_async(

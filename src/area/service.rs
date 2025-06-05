@@ -1,5 +1,5 @@
 use crate::{
-    area_element::{self, model::AreaElement},
+    area_element::{self},
     db::{self, area::schema::Area},
     element::Element,
     element_comment::ElementComment,
@@ -28,12 +28,9 @@ pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
         pool,
     )
     .await?;
-    AreaElement::insert_bulk_async(
-        area.id,
-        area_elements.into_iter().map(|it| it.id).collect(),
-        pool,
-    )
-    .await?;
+    for element in area_elements {
+        db::area_element::queries_async::insert(area.id, element.id, pool).await?;
+    }
     Ok(area)
 }
 
@@ -48,7 +45,9 @@ pub async fn patch_tags(
     let area = db::area::queries_async::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
         let mut affected_elements: HashSet<Element> = HashSet::new();
-        for area_element in AreaElement::select_by_area_id_async(area.id, pool).await? {
+        for area_element in
+            db::area_element::queries_async::select_by_area_id(area.id, pool).await?
+        {
             let element = Element::select_by_id_async(area_element.element_id, pool).await?;
             affected_elements.insert(element);
         }
@@ -130,10 +129,11 @@ pub fn get_trending_areas(
     let mut areas_to_events: HashMap<i64, Vec<&Event>> = HashMap::new();
     for event in &events {
         let element = Element::select_by_id(event.element_id, conn)?.unwrap();
-        let element_area_ids: Vec<i64> = AreaElement::select_by_element_id(element.id, conn)?
-            .into_iter()
-            .map(|it| it.area_id)
-            .collect();
+        let element_area_ids: Vec<i64> =
+            db::area_element::queries::select_by_element_id(element.id, conn)?
+                .into_iter()
+                .map(|it| it.area_id)
+                .collect();
         for element_area_id in element_area_ids {
             areas_to_events.entry(element_area_id).or_default();
             let area_events = areas_to_events.get_mut(&element_area_id).unwrap();
@@ -148,10 +148,11 @@ pub fn get_trending_areas(
     let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
     for comment in &comments {
         let element = Element::select_by_id(comment.element_id, conn)?.unwrap();
-        let element_area_ids: Vec<i64> = AreaElement::select_by_element_id(element.id, conn)?
-            .into_iter()
-            .map(|it| it.area_id)
-            .collect();
+        let element_area_ids: Vec<i64> =
+            db::area_element::queries::select_by_element_id(element.id, conn)?
+                .into_iter()
+                .map(|it| it.area_id)
+                .collect();
         for element_area_id in element_area_ids {
             areas_to_comments.entry(element_area_id).or_default();
             let area_comments = areas_to_comments.get_mut(&element_area_id).unwrap();
@@ -224,7 +225,7 @@ fn get_comments(
     include_deleted: bool,
     conn: &Connection,
 ) -> Result<Vec<ElementComment>> {
-    let area_elements = AreaElement::select_by_area_id(area.id, conn)?;
+    let area_elements = db::area_element::queries::select_by_area_id(area.id, conn)?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
         for comment in ElementComment::select_by_element_id(
@@ -241,7 +242,6 @@ fn get_comments(
 
 #[cfg(test)]
 mod test {
-    use crate::area_element::model::AreaElement;
     use crate::db::area::schema::Area;
     use crate::element::Element;
     use crate::element_comment::ElementComment;
@@ -282,7 +282,9 @@ mod test {
         super::insert(tags, &pool).await?;
         assert_eq!(
             1,
-            AreaElement::select_by_area_id_async(1, &pool).await?.len()
+            db::area_element::queries_async::select_by_area_id(1, &pool)
+                .await?
+                .len()
         );
         Ok(())
     }
@@ -321,31 +323,29 @@ mod test {
         tags.insert("geo_json".into(), earth_geo_json());
         let area = db::area::queries_async::insert(tags.clone(), &pool).await?;
         let area_element_phuket =
-            AreaElement::insert_async(area.id, element_in_phuket.id, &pool).await?;
+            db::area_element::queries_async::insert(area.id, element_in_phuket.id, &pool).await?;
         let area_element_london =
-            AreaElement::insert_async(area.id, element_in_london.id, &pool).await?;
+            db::area_element::queries_async::insert(area.id, element_in_london.id, &pool).await?;
         tags.insert("geo_json".into(), phuket_geo_json());
         tags.remove("url_alias");
         let area = super::patch_tags(&area.id.to_string(), tags.clone(), &pool).await?;
         let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
         assert_eq!(area.id, db_area.id);
         assert!(
-            AreaElement::select_by_id_async(area_element_phuket.id, &pool)
+            db::area_element::queries_async::select_by_id(area_element_phuket.id, &pool)
                 .await?
-                .ok_or("failed to insert area element")?
                 .deleted_at
                 .is_none()
         );
         assert!(
-            AreaElement::select_by_id_async(area_element_london.id, &pool)
+            db::area_element::queries_async::select_by_id(area_element_london.id, &pool)
                 .await?
-                .ok_or("failed to insert area element")?
                 .deleted_at
                 .is_some()
         );
         assert_eq!(
             2,
-            AreaElement::select_by_area_id_async(area.id, &pool)
+            db::area_element::queries_async::select_by_area_id(area.id, &pool)
                 .await?
                 .len()
         );
@@ -353,21 +353,19 @@ mod test {
         let area = super::patch_tags(&area.id.to_string(), tags, &pool).await?;
         assert_eq!(
             2,
-            AreaElement::select_by_area_id_async(area.id, &pool)
+            db::area_element::queries_async::select_by_area_id(area.id, &pool)
                 .await?
                 .len()
         );
         assert!(
-            AreaElement::select_by_id_async(area_element_phuket.id, &pool)
+            db::area_element::queries_async::select_by_id(area_element_phuket.id, &pool)
                 .await?
-                .ok_or("failed to insert area element")?
                 .deleted_at
                 .is_none()
         );
         assert!(
-            AreaElement::select_by_id_async(area_element_london.id, &pool)
+            db::area_element::queries_async::select_by_id(area_element_london.id, &pool)
                 .await?
-                .ok_or("failed to insert area element")?
                 .deleted_at
                 .is_none()
         );
@@ -408,7 +406,8 @@ mod test {
         let element = Element::insert_async(OverpassElement::mock(1), &pool).await?;
         let comment = ElementComment::insert_async(element.id, "test", &pool).await?;
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
-        let _area_element = AreaElement::insert_async(area.id, element.id, &pool).await?;
+        let _area_element =
+            db::area_element::queries_async::insert(area.id, element.id, &pool).await?;
         assert_eq!(
             Some(&comment),
             super::get_comments_async(area, false, &pool).await?.first()
