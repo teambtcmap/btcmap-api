@@ -15,13 +15,6 @@ pub async fn insert(
         .await?
 }
 
-pub async fn select_all(pool: &Pool) -> Result<Vec<Admin>> {
-    pool.get()
-        .await?
-        .interact(move |conn| super::queries::select_all(conn))
-        .await?
-}
-
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Admin> {
     pool.get()
         .await?

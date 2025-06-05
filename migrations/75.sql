@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX area_element_area_id_element_id ON area_element(area_id, element_id);

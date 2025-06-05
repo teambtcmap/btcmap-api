@@ -18,6 +18,7 @@ pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<i64> {
     Ok(conn.last_insert_rowid())
 }
 
+#[cfg(test)]
 pub fn select_all(conn: &Connection) -> Result<Vec<Admin>> {
     let sql = format!(
         r#"

@@ -1,5 +1,4 @@
 use crate::db::area::schema::Area;
-use crate::db::area_element::schema::AreaElement;
 use crate::element::Element;
 use crate::{db, element, Result};
 use deadpool_sqlite::Pool;
@@ -7,9 +6,7 @@ use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
 use rusqlite::Connection;
 use serde::Serialize;
-use time::macros::datetime;
 use time::OffsetDateTime;
-use tracing::warn;
 
 #[derive(Serialize)]
 pub struct Diff {
@@ -89,25 +86,6 @@ pub async fn generate_element_areas_mapping(
         None
     };
     Ok(res)
-}
-
-pub async fn remove_duplicates(pool: &Pool) -> Result<()> {
-    let all_rows = db::area_element::queries_async::select_updated_since(
-        datetime!(2000-01-01 00:00:00 UTC),
-        None,
-        pool,
-    )
-    .await?;
-    for row in &all_rows {
-        let duplicates: Vec<&AreaElement> = all_rows
-            .iter()
-            .filter(|it| it.area_id == row.area_id && it.element_id == row.element_id)
-            .collect();
-        if duplicates.len() > 1 {
-            warn!("Found {} duplicates", duplicates.len(),);
-        }
-    }
-    Ok(())
 }
 
 pub async fn get_elements_within_geometries_async(
