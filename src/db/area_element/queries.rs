@@ -284,11 +284,11 @@ mod tests {
         // Insert test data for multiple areas
         let _item1 = super::insert(1, 1, &conn)?; // area 1
         let _item1 = super::set_updated_at(_item1.id, &(now - Duration::days(2)), &conn)?;
-        let _item2 = super::insert(2, 1, &conn)?; // area 2
+        let _item2 = super::insert(2, 2, &conn)?; // area 2
         let _item2 = super::set_updated_at(_item2.id, &(now - Duration::days(1)), &conn)?;
-        let _item3 = super::insert(1, 1, &conn)?; // area 1
+        let _item3 = super::insert(1, 3, &conn)?; // area 1
         let _item3 = super::set_updated_at(_item3.id, &(now - Duration::hours(1)), &conn)?;
-        let _item4 = super::insert(2, 1, &conn)?; // area 2
+        let _item4 = super::insert(2, 4, &conn)?; // area 2
         let _item4 = super::set_updated_at(_item4.id, &now, &conn)?;
 
         // Test for area_id = 1
@@ -353,11 +353,11 @@ mod tests {
         // Insert test data for multiple elements
         let _item1 = super::insert(1, 1, &conn)?; // element 1
         let _item1 = super::set_updated_at(_item1.id, &(now - Duration::days(2)), &conn)?;
-        let _item2 = super::insert(1, 2, &conn)?; // element 2
+        let _item2 = super::insert(2, 2, &conn)?; // element 2
         let _item2 = super::set_updated_at(_item2.id, &(now - Duration::days(1)), &conn)?;
-        let _item3 = super::insert(1, 1, &conn)?; // element 1
+        let _item3 = super::insert(3, 1, &conn)?; // element 1
         let _item3 = super::set_updated_at(_item3.id, &(now - Duration::hours(1)), &conn)?;
-        let _item4 = super::insert(1, 2, &conn)?; // element 2
+        let _item4 = super::insert(4, 2, &conn)?; // element 2
         let _item4 = super::set_updated_at(_item4.id, &now, &conn)?;
 
         // Test for element_id = 1
@@ -389,9 +389,9 @@ mod tests {
         // Insert records with same element_id and same updated_at but different ids
         super::insert(1, 1, &conn)?;
         super::set_updated_at(1, &now, &conn)?;
-        super::insert(1, 1, &conn)?;
+        super::insert(2, 1, &conn)?;
         super::set_updated_at(1, &now, &conn)?;
-        super::insert(1, 1, &conn)?;
+        super::insert(3, 1, &conn)?;
         super::set_updated_at(1, &now, &conn)?;
 
         let results = super::select_by_element_id(1, &conn)?;
