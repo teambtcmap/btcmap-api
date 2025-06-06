@@ -101,16 +101,15 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
     pool.get()
         .await?
         .interact(move |conn| Element::select_by_osm_type_and_id(&r#type, id, conn))
-        .await??
-        .map(|it| it.into())
-        .ok_or(Error::not_found())
+        .await?
+        .map(Into::into)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::test::mock_db;
-    use crate::Result;
+    use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
     use actix_web::{test, App};
@@ -134,7 +133,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let db = mock_db();
-        let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -151,9 +150,9 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let db = mock_db();
-        Element::insert(&OverpassElement::mock(1), &db.conn)?;
-        Element::insert(&OverpassElement::mock(2), &db.conn)?;
-        Element::insert(&OverpassElement::mock(3), &db.conn)?;
+        db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
+        db::element::queries::insert(&OverpassElement::mock(2), &db.conn)?;
+        db::element::queries::insert(&OverpassElement::mock(3), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -169,9 +168,9 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let db = mock_db();
-        let element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let element_1 = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
         Element::_set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
-        let element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;
+        let element_2 = db::element::queries::insert(&OverpassElement::mock(2), &db.conn)?;
         Element::_set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?;
         let app = test::init_service(
             App::new()
@@ -190,7 +189,7 @@ mod test {
     #[test]
     async fn get_by_id() -> Result<()> {
         let db = mock_db();
-        let element = Element::insert(&OverpassElement::mock(1), &db.conn)?;
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))

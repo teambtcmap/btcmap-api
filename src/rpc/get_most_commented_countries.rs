@@ -1,6 +1,5 @@
 use crate::{
     db::{self, area::schema::Area},
-    element::Element,
     element_comment::ElementComment,
     Result,
 };
@@ -45,10 +44,7 @@ fn get_most_commented_countries(
         .collect();
     let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
     for comment in &comments {
-        let element = Element::select_by_id(comment.element_id, conn)?.ok_or(format!(
-            "There is no element with id = {}",
-            comment.element_id
-        ))?;
+        let element = db::element::queries::select_by_id(comment.element_id, conn)?;
         if element.tags.contains_key("areas") {
             let areas = element.tag("areas").as_array().ok_or("Not an array")?;
             for area in areas {

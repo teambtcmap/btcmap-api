@@ -1,8 +1,8 @@
 use crate::conf::Conf;
 use crate::db::admin::queries::Admin;
-use crate::discord;
 use crate::element::model::Element;
 use crate::Result;
+use crate::{db, discord};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde_json::Value;
@@ -15,7 +15,7 @@ pub struct Params {
 }
 
 pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Element> {
-    let element = Element::select_by_id_async(params.element_id, pool).await?;
+    let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
     let element =
         Element::set_tag_async(element.id, &params.tag_name, &params.tag_value, pool).await?;
     discord::post_message(

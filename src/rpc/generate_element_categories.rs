@@ -1,6 +1,10 @@
 use crate::{
-    conf::Conf, db::admin::queries::Admin, discord, element::Element,
-    osm::overpass::OverpassElement, Result,
+    conf::Conf,
+    db::{self, admin::queries::Admin},
+    discord,
+    element::Element,
+    osm::overpass::OverpassElement,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
@@ -43,7 +47,7 @@ fn generate_element_categories(
 ) -> Result<Res> {
     let mut changes = 0;
     for element_id in from_element_id..=to_element_id {
-        let Some(element) = Element::select_by_id(element_id, conn)? else {
+        let Ok(element) = db::element::queries::select_by_id(element_id, conn) else {
             continue;
         };
         let old_category = element.tag("category").as_str().unwrap_or_default();
@@ -95,10 +99,10 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
-    use crate::db_utils;
     use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::Result;
+    use crate::{db, db_utils};
     use rusqlite::Connection;
     use serde_json::Map;
 
@@ -109,7 +113,7 @@ mod test {
 
         let mut tags = Map::new();
         tags.insert("amenity".into(), "atm".into());
-        Element::insert(
+        db::element::queries::insert(
             &OverpassElement {
                 tags: Some(tags),
                 ..OverpassElement::mock(1)
@@ -119,7 +123,7 @@ mod test {
 
         let mut tags = Map::new();
         tags.insert("amenity".into(), "cafe".into());
-        Element::insert(
+        db::element::queries::insert(
             &OverpassElement {
                 tags: Some(tags),
                 ..OverpassElement::mock(2)

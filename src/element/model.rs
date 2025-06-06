@@ -1,7 +1,7 @@
-use crate::Result;
-use crate::{osm::overpass::OverpassElement, Error};
+use crate::osm::overpass::OverpassElement;
+use crate::{db, Result};
 use deadpool_sqlite::Pool;
-use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use rusqlite::{named_params, Connection, Row};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::hash::Hash;
@@ -45,28 +45,6 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
-    pub async fn insert_async(overpass_data: OverpassElement, pool: &Pool) -> Result<Self> {
-        pool.get()
-            .await?
-            .interact(move |conn| Self::insert(&overpass_data, conn))
-            .await?
-    }
-
-    pub fn insert(overpass_data: &OverpassElement, conn: &Connection) -> Result<Element> {
-        let sql = format!(
-            r#"
-                INSERT INTO {TABLE} ({COL_OVERPASS_DATA}) 
-                VALUES (json(:overpass_data))
-            "#
-        );
-        conn.execute(
-            &sql,
-            named_params! { ":overpass_data": serde_json::to_string(overpass_data)?},
-        )?;
-        Element::select_by_id(conn.last_insert_rowid(), conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
-    }
-
     pub async fn select_all_async(limit: Option<i64>, pool: &Pool) -> Result<Vec<Element>> {
         pool.get()
             .await?
@@ -187,7 +165,7 @@ impl Element {
     pub async fn select_by_id_or_osm_id_async(
         id: impl Into<String>,
         pool: &Pool,
-    ) -> Result<Option<Element>> {
+    ) -> Result<Element> {
         let id = id.into();
         pool.get()
             .await?
@@ -195,14 +173,11 @@ impl Element {
             .await?
     }
 
-    pub fn select_by_id_or_osm_id(
-        id: impl Into<String>,
-        conn: &Connection,
-    ) -> Result<Option<Element>> {
+    pub fn select_by_id_or_osm_id(id: impl Into<String>, conn: &Connection) -> Result<Element> {
         let id: String = id.into();
         let id = id.as_str();
         match id.parse::<i64>() {
-            Ok(id) => Element::select_by_id(id, conn),
+            Ok(id) => db::element::queries::select_by_id(id, conn),
             Err(_) => {
                 let parts: Vec<_> = id.split(':').collect();
                 let osm_type = parts[0];
@@ -212,32 +187,7 @@ impl Element {
         }
     }
 
-    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Element> {
-        pool.get()
-            .await?
-            .interact(move |conn| Element::select_by_id(id, conn))
-            .await??
-            .ok_or(Error::not_found())
-    }
-
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Element>> {
-        let sql = format!(
-            r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
-                WHERE {COL_ROWID} = :id
-            "#
-        );
-        Ok(conn
-            .query_row(&sql, named_params! { ":id": id }, mapper())
-            .optional()?)
-    }
-
-    pub fn select_by_osm_type_and_id(
-        r#type: &str,
-        id: i64,
-        conn: &Connection,
-    ) -> Result<Option<Element>> {
+    pub fn select_by_osm_type_and_id(r#type: &str, id: i64, conn: &Connection) -> Result<Element> {
         let sql = format!(
             r#"
                 SELECT {ALL_COLUMNS}
@@ -246,23 +196,17 @@ impl Element {
                 AND json_extract({COL_OVERPASS_DATA}, '$.id') = :id
             "#
         );
-        Ok(conn
-            .query_row(
-                &sql,
-                named_params! {
-                    ":type": r#type,
-                    ":id": id,
-                },
-                mapper(),
-            )
-            .optional()?)
+        Ok(conn.query_row(
+            &sql,
+            named_params! {
+                ":type": r#type,
+                ":id": id,
+            },
+            mapper(),
+        )?)
     }
 
-    pub fn patch_tags(
-        id: i64,
-        tags: &Map<String, Value>,
-        conn: &Connection,
-    ) -> crate::Result<Element> {
+    pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Element> {
         let sql = format!(
             r#"
                 UPDATE {TABLE} SET {COL_TAGS} = json_patch({COL_TAGS}, :tags) WHERE {COL_ROWID} = :id
@@ -275,8 +219,7 @@ impl Element {
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Element::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        db::element::queries::select_by_id(id, conn)
     }
 
     pub async fn set_overpass_data_async(
@@ -309,8 +252,7 @@ impl Element {
                 ":overpass_data": serde_json::to_string(overpass_data)?,
             },
         )?;
-        Element::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        db::element::queries::select_by_id(id, conn)
     }
 
     pub async fn set_tag_async(
@@ -360,8 +302,7 @@ impl Element {
                 ":name": format!("$.{name}"),
             },
         )?;
-        Element::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        db::element::queries::select_by_id(id, conn)
     }
 
     #[cfg(test)]
@@ -393,8 +334,7 @@ impl Element {
                 ":updated_at": updated_at.format(&Rfc3339).unwrap(),
             },
         )?;
-        Element::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        db::element::queries::select_by_id(id, conn)
     }
 
     pub async fn set_deleted_at_async(
@@ -441,8 +381,7 @@ impl Element {
                 conn.execute(&sql, named_params! { ":id": id })?;
             }
         };
-        Element::select_by_id(id, conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        db::element::queries::select_by_id(id, conn)
     }
 
     pub fn tag(&self, name: &str) -> &Value {
@@ -488,30 +427,18 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
 #[cfg(test)]
 mod test {
     use super::Element;
-    use crate::{osm::overpass::OverpassElement, test::mock_conn, Result};
+    use crate::{db, osm::overpass::OverpassElement, test::mock_conn, Result};
     use serde_json::{json, Map};
     use time::{macros::datetime, OffsetDateTime};
-
-    #[test]
-    fn insert() -> Result<()> {
-        let conn = mock_conn();
-        let overpass_data = OverpassElement::mock(1);
-        let element = Element::insert(&overpass_data, &conn)?;
-        assert_eq!(overpass_data, element.overpass_data);
-        let element = Element::select_by_id(1, &conn)?;
-        assert!(element.is_some());
-        assert_eq!(overpass_data, element.unwrap().overpass_data);
-        Ok(())
-    }
 
     #[test]
     fn select_all() -> Result<()> {
         let conn = mock_conn();
         assert_eq!(
             vec![
-                Element::insert(&OverpassElement::mock(1), &conn)?,
-                Element::insert(&OverpassElement::mock(2), &conn)?,
-                Element::insert(&OverpassElement::mock(3), &conn)?
+                db::element::queries::insert(&OverpassElement::mock(1), &conn)?,
+                db::element::queries::insert(&OverpassElement::mock(2), &conn)?,
+                db::element::queries::insert(&OverpassElement::mock(3), &conn)?
             ],
             Element::select_all(None, &conn)?
         );
@@ -521,9 +448,9 @@ mod test {
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
-        Element::insert(&OverpassElement::mock(1), &conn)?
+        db::element::queries::insert(&OverpassElement::mock(1), &conn)?
             .set_updated_at(&datetime!(2023-10-01 00:00 UTC), &conn)?;
-        let expected_element = Element::insert(&OverpassElement::mock(2), &conn)?
+        let expected_element = db::element::queries::insert(&OverpassElement::mock(2), &conn)?
             .set_updated_at(&datetime!(2023-10-02 00:00 UTC), &conn)?;
         assert_eq!(
             vec![expected_element],
@@ -533,17 +460,9 @@ mod test {
     }
 
     #[test]
-    fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
-        assert_eq!(element, Element::select_by_id(element.id, &conn)?.unwrap());
-        Ok(())
-    }
-
-    #[test]
     fn select_by_osm_type_and_id() -> Result<()> {
         let conn = mock_conn();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(
             element,
             Element::select_by_osm_type_and_id(
@@ -551,7 +470,6 @@ mod test {
                 element.overpass_data.id,
                 &conn,
             )?
-            .unwrap()
         );
         Ok(())
     }
@@ -564,7 +482,7 @@ mod test {
         let tag_1_value_2 = json!("tag_1_value_2");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value_1.clone());
         let element = Element::patch_tags(element.id, &tags, &conn)?;
@@ -585,7 +503,7 @@ mod test {
         let conn = mock_conn();
         let orig_data = OverpassElement::mock(1);
         let override_data = OverpassElement::mock(2);
-        let element = Element::insert(&orig_data, &conn)?;
+        let element = db::element::queries::insert(&orig_data, &conn)?;
         let element = Element::set_overpass_data(element.id, &override_data, &conn)?;
         assert_eq!(override_data, element.overpass_data);
         Ok(())
@@ -596,7 +514,7 @@ mod test {
         let conn = mock_conn();
         let tag_name = "foo";
         let tag_value = json!("bar");
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let element = Element::set_tag(element.id, tag_name, &tag_value, &conn)?;
         assert_eq!(tag_value, element.tags[tag_name]);
         Ok(())
@@ -606,7 +524,7 @@ mod test {
     fn remove_tag() -> Result<()> {
         let conn = mock_conn();
         let tag_name = "foo";
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let element = Element::set_tag(element.id, tag_name, &"bar".into(), &conn)?;
         let element = Element::remove_tag(element.id, tag_name, &conn)?;
         assert!(!element.tags.contains_key(tag_name));
@@ -617,13 +535,11 @@ mod test {
     fn set_updated_at() -> Result<()> {
         let conn = mock_conn();
         let updated_at = OffsetDateTime::now_utc();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?
             .set_updated_at(&updated_at, &conn)?;
         assert_eq!(
             updated_at,
-            Element::select_by_id(element.id, &conn)?
-                .unwrap()
-                .updated_at
+            db::element::queries::select_by_id(element.id, &conn)?.updated_at
         );
         Ok(())
     }
@@ -632,12 +548,11 @@ mod test {
     fn set_deleted_at() -> Result<()> {
         let conn = mock_conn();
         let deleted_at = OffsetDateTime::now_utc();
-        let element = Element::insert(&OverpassElement::mock(1), &conn)?;
+        let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let element = Element::set_deleted_at(element.id, Some(deleted_at), &conn)?;
         assert_eq!(
             deleted_at,
-            Element::select_by_id(element.id, &conn)?
-                .unwrap()
+            db::element::queries::select_by_id(element.id, &conn)?
                 .deleted_at
                 .unwrap()
         );

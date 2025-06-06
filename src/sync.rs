@@ -5,7 +5,7 @@ use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
-use crate::{area_element, discord, user, Error, Result};
+use crate::{area_element, db, discord, user, Error, Result};
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use serde_json::Value;
@@ -53,7 +53,7 @@ pub async fn merge_overpass_elements(
     let deleted_element_events = sync_deleted_elements(&fresh_overpass_elements, pool).await?;
     let mut deleted_elements: Vec<MergeResultElement> = vec![];
     for event in &deleted_element_events {
-        let element = Element::select_by_id_async(event.element_id, pool).await?;
+        let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
         deleted_elements.push(element.into());
     }
     let deleted_sync_time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
@@ -63,7 +63,7 @@ pub async fn merge_overpass_elements(
     let updated_element_events = sync_updated_elements(&fresh_overpass_elements, pool).await?;
     let mut updated_elements: Vec<Element> = vec![];
     for event in &updated_element_events {
-        let element = Element::select_by_id_async(event.element_id, pool).await?;
+        let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
         updated_elements.push(element);
     }
     let updated_sync_time_s =
@@ -74,7 +74,7 @@ pub async fn merge_overpass_elements(
     let created_element_events = sync_new_elements(&fresh_overpass_elements, pool).await?;
     let mut created_elements: Vec<Element> = vec![];
     for event in &created_element_events {
-        let element = Element::select_by_id_async(event.element_id, pool).await?;
+        let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
         created_elements.push(element);
     }
     let created_sync_time_s =
@@ -274,7 +274,8 @@ pub async fn sync_new_elements(
             Some(_) => {}
             None => {
                 user::service::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
-                let element = Element::insert_async(fresh_element.clone(), pool).await?;
+                let element =
+                    db::element::queries_async::insert(fresh_element.clone(), pool).await?;
                 let event =
                     Event::insert_async(user_id.unwrap(), element.id, "create", pool).await?;
                 res.push(event);
@@ -303,7 +304,6 @@ mod test {
     use crate::{
         conf::Conf,
         db,
-        element::Element,
         osm::{api::EditingApiUser, overpass::OverpassElement},
         test::mock_db,
         user::{self},
@@ -315,9 +315,9 @@ mod test {
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
         let db = mock_db();
-        let element_1 = Element::insert(&OverpassElement::mock(1), &db.conn)?;
-        let element_2 = Element::insert(&OverpassElement::mock(2), &db.conn)?;
-        let element_3 = Element::insert(&OverpassElement::mock(2702291726), &db.conn)?;
+        let element_1 = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
+        let element_2 = db::element::queries::insert(&OverpassElement::mock(2), &db.conn)?;
+        let element_3 = db::element::queries::insert(&OverpassElement::mock(2702291726), &db.conn)?;
         let res = super::sync_deleted_elements(
             &vec![element_1.overpass_data, element_2.overpass_data],
             &db.pool,

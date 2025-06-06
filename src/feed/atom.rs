@@ -24,9 +24,7 @@ pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
                     let cloned_element_id = it.element_id;
                     (
                         it,
-                        Element::select_by_id(cloned_element_id, conn)
-                            .unwrap()
-                            .unwrap(),
+                        db::element::queries::select_by_id(cloned_element_id, conn).unwrap(),
                     )
                 })
                 .collect()
@@ -69,9 +67,7 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
                 let cloned_element_id = it.element_id;
                 (
                     it,
-                    Element::select_by_id(cloned_element_id, conn)
-                        .unwrap()
-                        .unwrap(),
+                    db::element::queries::select_by_id(cloned_element_id, conn).unwrap(),
                 )
             })
             .collect()
@@ -142,9 +138,7 @@ pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
                     let cloned_element_id = it.element_id;
                     (
                         it,
-                        Element::select_by_id(cloned_element_id, conn)
-                            .unwrap()
-                            .unwrap(),
+                        db::element::queries::select_by_id(cloned_element_id, conn).unwrap(),
                     )
                 })
                 .collect()
@@ -171,7 +165,7 @@ pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Resu
     let comments = crate::area::service::get_comments_async(area, false, &pool).await?;
     let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
     for comment in comments {
-        let element = Element::select_by_id_async(comment.element_id, &pool).await?;
+        let element = db::element::queries_async::select_by_id(comment.element_id, &pool).await?;
         if element.deleted_at.is_none() {
             comments_to_elements.push((comment, element));
         }

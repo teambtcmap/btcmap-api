@@ -1,6 +1,9 @@
 use crate::{
-    conf::Conf, db::admin::queries::Admin, discord, element::Element,
-    element_comment::ElementComment, Result,
+    conf::Conf,
+    db::{self, admin::queries::Admin},
+    discord,
+    element_comment::ElementComment,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
@@ -17,7 +20,7 @@ pub async fn run(
     pool: &Pool,
     conf: &Conf,
 ) -> Result<ElementComment> {
-    let element = Element::select_by_id_async(params.element_id, pool).await?;
+    let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
     let comment = ElementComment::insert_async(element.id, &params.comment, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,

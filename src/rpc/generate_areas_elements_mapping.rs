@@ -1,7 +1,7 @@
 use crate::{
     area_element::{self, service::Diff},
     conf::Conf,
-    db::admin::queries::Admin,
+    db::{self, admin::queries::Admin},
     discord,
     element::Element,
     Result,
@@ -43,7 +43,7 @@ async fn generate_areas_elements_mapping(
 ) -> Result<Res> {
     let mut elements: Vec<Element> = vec![];
     for element_id in from_element_id..=to_element_id {
-        let Ok(element) = Element::select_by_id_async(element_id, pool).await else {
+        let Ok(element) = db::element::queries_async::select_by_id(element_id, pool).await else {
             continue;
         };
         elements.push(element);

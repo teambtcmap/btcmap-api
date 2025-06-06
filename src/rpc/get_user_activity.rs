@@ -39,7 +39,10 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
                 .into_iter()
                 .map(|it| {
                     let cloned_id = it.element_id;
-                    (it, Element::select_by_id(cloned_id, conn).unwrap().unwrap())
+                    (
+                        it,
+                        db::element::queries::select_by_id(cloned_id, conn).unwrap(),
+                    )
                     // TODO remove unwraps
                 })
                 .collect()

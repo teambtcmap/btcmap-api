@@ -1,6 +1,10 @@
 use crate::{
-    conf::Conf, db::admin::queries::Admin, discord, element::Element,
-    osm::overpass::OverpassElement, Result,
+    conf::Conf,
+    db::{self, admin::queries::Admin},
+    discord,
+    element::Element,
+    osm::overpass::OverpassElement,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
@@ -61,7 +65,7 @@ fn generate_element_icons(
 ) -> Result<Vec<UpdatedElement>> {
     let mut updated_elements = vec![];
     for element_id in from_element_id..=to_element_id {
-        let Some(element) = Element::select_by_id(element_id, conn)? else {
+        let Ok(element) = db::element::queries::select_by_id(element_id, conn) else {
             continue;
         };
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
@@ -1659,6 +1663,7 @@ impl OverpassElement {
 #[cfg(test)]
 mod test {
     use crate::{
+        db,
         element::Element,
         osm::overpass::OverpassElement,
         test::{mock_conn, mock_osm_tags},
@@ -1668,14 +1673,14 @@ mod test {
     #[actix_web::test]
     async fn run() -> Result<()> {
         let conn = mock_conn();
-        Element::insert(
+        db::element::queries::insert(
             &OverpassElement {
                 tags: Some(mock_osm_tags(&["golf", "clubhouse"])),
                 ..OverpassElement::mock(1)
             },
             &conn,
         )?;
-        Element::insert(
+        db::element::queries::insert(
             &OverpassElement {
                 tags: Some(mock_osm_tags(&["building", "industrial"])),
                 ..OverpassElement::mock(2)
