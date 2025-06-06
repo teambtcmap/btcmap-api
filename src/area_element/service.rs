@@ -67,13 +67,14 @@ pub async fn generate_element_areas_mapping(
                 if old_mapping.deleted_at.is_some() {
                     db::area_element::queries_async::set_deleted_at(old_mapping.id, None, pool)
                         .await?;
+                    added_areas.push(area.id);
                 }
             }
             None => {
                 db::area_element::queries_async::insert(area.id, element.id, pool).await?;
+                added_areas.push(area.id);
             }
         }
-        added_areas.push(area.id);
     }
     let res = if !added_areas.is_empty() || !removed_areas.is_empty() {
         Some(Diff {
