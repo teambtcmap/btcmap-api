@@ -16,10 +16,6 @@ edition = "2021"
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
 actix-web = { version = "4.9.0", default-features = false, features = ["macros", "compress-brotli"] }
 
-# Experimental extractors
-# https://github.com/robjtede/actix-web-lab/releases
-actix-web-lab = { version = "0.23.0" }
-
 # Actix middleware needs that
 # https://github.com/rust-lang/futures-rs/releases
 futures-util = { version = "0.3.31", default-features = false }

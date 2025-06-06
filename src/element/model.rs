@@ -94,6 +94,20 @@ impl Element {
         Ok(res)
     }
 
+    pub async fn select_updated_since_async(
+        updated_since: OffsetDateTime,
+        limit: Option<i64>,
+        include_deleted: bool,
+        pool: &Pool,
+    ) -> Result<Vec<Element>> {
+        pool.get()
+            .await?
+            .interact(move |conn| {
+                Element::select_updated_since(&updated_since, limit, include_deleted, conn)
+            })
+            .await?
+    }
+
     pub fn select_updated_since(
         updated_since: &OffsetDateTime,
         limit: Option<i64>,

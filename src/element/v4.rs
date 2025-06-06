@@ -6,30 +6,29 @@ use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
+use actix_web::web::Query;
 use actix_web::HttpMessage;
 use actix_web::HttpRequest;
-use actix_web_lab::extract::Query;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct GetListArgs {
+    fields: Option<String>,
     #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     updated_since: Option<OffsetDateTime>,
     limit: Option<i64>,
     include_deleted: Option<bool>,
-    f: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
 pub struct GetSingleArgs {
-    include_tag: Option<Vec<String>>,
+    fields: Option<String>,
 }
 
 #[get("")]
@@ -38,27 +37,20 @@ pub async fn get(
     args: Query<GetListArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<Map<String, Value>>>, Error> {
-    let include_tags = args.f.clone().unwrap_or_default();
-    let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
-    let elements = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            Element::select_updated_since(
-                &args
-                    .updated_since
-                    .unwrap_or(OffsetDateTime::parse("2020-01-01T00:00:00Z", &Rfc3339).unwrap()),
-                Some(args.limit.unwrap_or(i64::MAX)),
-                args.include_deleted.unwrap_or(false),
-                conn,
-            )
-        })
-        .await??;
+    let fields = args.fields.clone().unwrap_or_default();
+    let fields: Vec<&str> = fields.split(',').collect();
+    let items = Element::select_updated_since_async(
+        args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH),
+        args.limit,
+        args.include_deleted.unwrap_or(false),
+        &pool,
+    )
+    .await?;
     req.extensions_mut()
-        .insert(RequestExtension::new(elements.len()));
-    let items: Vec<Map<String, Value>> = elements
+        .insert(RequestExtension::new(items.len()));
+    let items: Vec<Map<String, Value>> = items
         .into_iter()
-        .map(|it| super::service::generate_tags(&it, &include_tags))
+        .map(|it| super::service::generate_tags(&it, &fields))
         .collect();
     Ok(Json(items))
 }
@@ -69,14 +61,11 @@ pub async fn get_by_id(
     args: Query<GetSingleArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Map<String, Value>>, Error> {
-    let include_tags = args.include_tag.clone().unwrap_or_default();
-    let include_tags: Vec<_> = include_tags.iter().map(String::as_str).collect();
-    let id_clone = id.clone();
-    pool.get()
-        .await?
-        .interact(move |conn| Element::select_by_id_or_osm_id(&id_clone, conn))
-        .await?
-        .map(|it| super::service::generate_tags(&it, &include_tags))
+    let fields = args.fields.clone().unwrap_or_default();
+    let fields: Vec<&str> = fields.split(',').collect();
+    Element::select_by_id_or_osm_id_async(id.into_inner(), &pool)
+        .await
+        .map(|it| super::service::generate_tags(&it, &fields))
         .map(Json)
 }
 
