@@ -1,37 +1,39 @@
-# Elements API (v4)
+# Places API (v4)
 
-This document describes the endpoints for interacting with elements in API v4.
+This document describes the endpoints for interacting with places in API v4.
 
 ## Available Endpoints
 
-- [Get Elements List](#get-elements-list)
-- [Get Element by ID](#get-element-by-id)
+- [Get List](#get-list)
+- [Get Single by ID](#get-by-id)
+- [Get Comments](#get-comments)
 
-### Get Elements List
+### Get List
 
 ```
-GET /v4/elements
+GET /v4/places
 ```
 
-Retrieves a list of elements that have been updated since a specific time.
+Retrieves a list of places. You can limit the output and apply a few useful filters.
 
 #### Query Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `updated_since` | ISO 8601 datetime | **Required**. Filter elements updated since this time (RFC3339 format). |
-| `limit` | Integer | **Required**. Limit the number of elements returned. |
-| `include_deleted` | Boolean | Optional. Whether to include deleted elements. Default is `true`. |
-| `include_tag` | String | Optional. Can be specified multiple times to include specific tags in the response. |
+| `fields` | String | Optional. A comma-separated list of requested fields. |
+| `updated_since` | ISO 8601 datetime | Optional. Filter places updated since this time. |
+| `include_deleted` | Boolean | Optional. Whether to include deleted elements. Default is `false`. |
+| `limit` | Integer | Optional. Limit the number of places returned. |
 
-### Incremental Sync Approach
+### Incremental Sync Approach (Recommended for Native Apps)
 
-The `/v4/elements` endpoint is designed for efficient incremental synchronization. Clients should:
+The `/v4/places` endpoint is designed for efficient incremental synchronization. Clients should:
 
 1. Store the timestamp of their last sync locally
 2. Request elements that have been updated since that timestamp using the `updated_since` parameter
-3. Process only the changes since the last sync
-4. Update their local timestamp for the next sync
+3. Deleted places can be excluded during the first sync but you need to include deleted places for follow-up sync in order to invalidate previously cached but now deleted entries
+4. Process only the changes since the last sync
+5. Use `max(updated_at)` as a starting point for the follow-up sync jobs
 
 This approach minimizes data transfer and processing requirements, making it ideal for mobile applications and other bandwidth-constrained environments.
 
@@ -39,117 +41,45 @@ This approach minimizes data transfer and processing requirements, making it ide
 
 ```
 // Initial sync - store returned timestamp
-GET /v4/elements?updated_since=2020-01-01T00:00:00Z&limit=1000
+GET /v4/places?updated_since=2020-01-01T00:00:00Z&limit=1000
 
 // Subsequent sync - use timestamp from previous response
-GET /v4/elements?updated_since=2023-09-15T14:30:45Z&limit=1000
+GET /v4/places?updated_since=2023-09-15T14:30:45Z&limit=1000
 ```
 
-### Limits
+#### Field Selection
 
-The following limits apply to the `/v4/elements` endpoint:
+The `fields` parameter allows you to request specific fields to be included in the response, which can improve performance for large requests.
 
-- **Rate Limit**: 60 requests per minute per IP address
-- **Maximum Limit Parameter**: 1000 elements per request
-- **Default Limit**: 100 elements if not specified
-- **Maximum Response Size**: 10MB
-
-Exceeding these limits will result in a `429 Too Many Requests` or `413 Payload Too Large` error response.
-
-#### Tag Selection
-
-The `include_tag` parameter allows you to request specific tags to be included in the response, which can improve performance for large requests. You can specify the parameter multiple times to include multiple tags.
-
-Available tags include:
+Available fields include:
 
 ```
-name                    // Element name
-phone                   // Contact phone number
-website                 // Website URL
-check_date              // Date the element was last checked
-survey:date             // Date the element was surveyed
-check_date:currency:XBT // Bitcoin acceptance check date
-addr:street             // Street address
-addr:housenumber        // Street address house number
-contact:website         // Contact website
-opening_hours           // Business hours
-contact:phone           // Contact phone
-contact:email           // Contact email
-contact:twitter         // Twitter handle
-contact:instagram       // Instagram handle
-contact:facebook        // Facebook page
-contact:line            // Line contact
-btcmap:icon             // Icon identifier
-btcmap:boost:expires    // Boost expiration date
-btcmap:osm:type         // OpenStreetMap element type
-btcmap:osm:id           // OpenStreetMap ID
-btcmap:osm:url          // OpenStreetMap URL
-btcmap:created_at       // Creation timestamp
-btcmap:updated_at       // Update timestamp
-btcmap:deleted_at       // Deletion timestamp
-btcmap:lat              // Latitude
-btcmap:lon              // Longitude
+lat // Place latitude
+lon // Place longitude
+icon // Place icon
+name // Place name
 ```
 
 ##### Examples:
 
-Basic request for active merchants with location and name:
+Basic request for active places with location and name:
 ```
-GET /v4/elements?include_deleted=false&include_tag=btcmap:lat&include_tag=btcmap:lon&include_tag=name
-```
-
-Request with additional contact information:
-```
-GET /v4/elements?include_deleted=false&include_tag=btcmap:lat&include_tag=btcmap:lon&include_tag=name&include_tag=contact:website&include_tag=contact:phone
-```
-
-Request with detailed address information:
-```
-GET /v4/elements?include_deleted=false&include_tag=name&include_tag=addr:street&include_tag=addr:housenumber
+GET /v4/elements?fields=lat,lon,name&limit=5
 ```
 
 #### Response
 
 ```json
-[
-  {
-    "id": 123456,
-    "osm_type": "node",
-    "osm_id": 123456,
-    "geolocation": {
-      "latitude": 40.7128,
-      "longitude": -74.0060
-    },
-    "tags": {
-      "name": "Bitcoin Coffee",
-      "amenity": "cafe",
-      "currency:XBT": "yes"
-    },
-    "issues": [
-      {
-        "id": 1,
-        "type": "closed",
-        "created_at": "2023-02-10T12:00:00Z"
-      }
-    ],
-    "updated_at": "2023-01-15T00:00:00Z"
-  }
-]
+TODO
 ```
 
-#### Example Request
+### Get Single by ID
 
 ```
-GET /v4/elements?updated_since=2023-01-01T00:00:00Z&limit=10
+GET /v4/places/{id}
 ```
 
-### Get Element by ID
-
-```
-GET /v4/elements/{id}
-```
-
-Retrieves a specific element by its ID.
+Retrieves a specific place by its ID.
 
 #### Path Parameters
 
@@ -160,28 +90,7 @@ Retrieves a specific element by its ID.
 #### Response
 
 ```json
-{
-  "id": 123456,
-  "osm_type": "node",
-  "osm_id": 123456,
-  "geolocation": {
-    "latitude": 40.7128,
-    "longitude": -74.0060
-  },
-  "tags": {
-    "name": "Bitcoin Coffee",
-    "amenity": "cafe",
-    "currency:XBT": "yes"
-  },
-  "issues": [
-    {
-      "id": 1,
-      "type": "closed",
-      "created_at": "2023-02-10T12:00:00Z"
-    }
-  ],
-  "updated_at": "2023-01-15T00:00:00Z"
-}
+TODO
 ```
 
 #### Example Request
