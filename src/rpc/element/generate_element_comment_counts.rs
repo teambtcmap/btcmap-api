@@ -14,7 +14,8 @@ pub struct Res {
 
 pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let elements = Element::select_all_async(None, pool).await?;
+    let elements =
+        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
     let mut elements_affected = 0;
     for element in elements {
         let comments =

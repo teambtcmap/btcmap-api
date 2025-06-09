@@ -45,32 +45,6 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
-    pub async fn select_all_async(limit: Option<i64>, pool: &Pool) -> Result<Vec<Element>> {
-        pool.get()
-            .await?
-            .interact(move |conn| Element::select_all(limit, conn))
-            .await?
-    }
-
-    pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<Element>> {
-        let sql = format!(
-            r#"
-                SELECT {ALL_COLUMNS} 
-                FROM {TABLE} 
-                ORDER BY {COL_UPDATED_AT}, {COL_ROWID} 
-                LIMIT :limit
-            "#
-        );
-        let res = conn
-            .prepare(&sql)?
-            .query_map(
-                named_params! { ":limit": limit.unwrap_or(i64::MAX) },
-                mapper(),
-            )?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(res)
-    }
-
     pub async fn select_all_except_deleted_async(pool: &Pool) -> Result<Vec<Element>> {
         pool.get()
             .await?
@@ -444,20 +418,6 @@ mod test {
     use crate::{db, osm::overpass::OverpassElement, test::mock_conn, Result};
     use serde_json::{json, Map};
     use time::{macros::datetime, OffsetDateTime};
-
-    #[test]
-    fn select_all() -> Result<()> {
-        let conn = mock_conn();
-        assert_eq!(
-            vec![
-                db::element::queries::insert(&OverpassElement::mock(1), &conn)?,
-                db::element::queries::insert(&OverpassElement::mock(2), &conn)?,
-                db::element::queries::insert(&OverpassElement::mock(3), &conn)?
-            ],
-            Element::select_all(None, &conn)?
-        );
-        Ok(())
-    }
 
     #[test]
     fn select_updated_since() -> Result<()> {

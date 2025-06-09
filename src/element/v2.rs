@@ -79,7 +79,9 @@ pub async fn get(
             Some(updated_since) => {
                 Element::select_updated_since(updated_since, args.limit, true, conn)
             }
-            None => Element::select_all(args.limit, conn),
+            None => {
+                Element::select_updated_since(&OffsetDateTime::UNIX_EPOCH, args.limit, true, conn)
+            }
         })
         .await??;
     let elements_len = elements.len();

@@ -105,6 +105,7 @@ mod test {
     use crate::{db, db_utils};
     use rusqlite::Connection;
     use serde_json::Map;
+    use time::OffsetDateTime;
 
     #[actix_web::test]
     async fn run() -> Result<()> {
@@ -133,7 +134,8 @@ mod test {
 
         super::generate_element_categories(1, 100, &conn)?;
 
-        let elements = Element::select_all(None, &conn)?;
+        let elements =
+            Element::select_updated_since(&OffsetDateTime::UNIX_EPOCH, None, true, &conn)?;
 
         assert_eq!("atm", elements[0].tag("category").as_str().unwrap());
         assert_eq!("cafe", elements[1].tag("category").as_str().unwrap());

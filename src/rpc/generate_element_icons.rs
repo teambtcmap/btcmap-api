@@ -1662,6 +1662,8 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
+    use time::OffsetDateTime;
+
     use crate::{
         db,
         element::Element,
@@ -1688,7 +1690,8 @@ mod test {
             &conn,
         )?;
         super::generate_element_icons(1, 100, &conn)?;
-        let elements = Element::select_all(None, &conn)?;
+        let elements =
+            Element::select_updated_since(&OffsetDateTime::UNIX_EPOCH, None, true, &conn)?;
         assert_eq!(
             "golf_course",
             elements[0].tag("icon:android").as_str().unwrap()

@@ -21,7 +21,8 @@ pub struct Res {
 }
 
 pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let elements = Element::select_all_async(None, pool).await?;
+    let elements =
+        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
     for element in elements {
         if element.deleted_at.is_some() {
             let issues = ElementIssue::select_by_element_id_async(element.id, pool).await?;

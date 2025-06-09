@@ -204,7 +204,8 @@ pub async fn sync_updated_elements(
     pool: &Pool,
 ) -> Result<Vec<Event>> {
     let mut res = vec![];
-    let cached_elements = Element::select_all_async(None, pool).await?;
+    let cached_elements =
+        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
     for fresh_overpass_element in fresh_overpass_elements {
         let cached_element = cached_elements.iter().find(|cached_element| {
             cached_element.overpass_data.r#type == fresh_overpass_element.r#type
@@ -262,7 +263,8 @@ pub async fn sync_new_elements(
     pool: &Pool,
 ) -> Result<Vec<Event>> {
     let mut res = vec![];
-    let cached_elements = Element::select_all_async(None, pool).await?;
+    let cached_elements =
+        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
     for fresh_element in fresh_overpass_elements {
         let btcmap_id = fresh_element.btcmap_id();
         let user_id = fresh_element.uid;
