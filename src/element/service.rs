@@ -362,6 +362,7 @@ pub const TAGS: &[&str] = &[
     "updated_at",
     "deleted_at",
     "verified_at",
+    "comments",
 ];
 
 pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Value> {
@@ -417,6 +418,11 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                         .tag("payment:lightning:companion_app_url");
                     if is_valid_url(required_app_url) {
                         res.insert("required_app_url".into(), required_app_url.into());
+                    }
+                }
+                "comments" => {
+                    if element.tags.contains_key("comments") {
+                        res.insert("comments".into(), element.tags["comments"].clone());
                     }
                 }
                 "phone" => {
