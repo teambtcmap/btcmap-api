@@ -36,6 +36,7 @@ lat // Place latitude
 lon // Place longitude
 icon // Place icon
 name // Place name
+comments // Number of comments
 ```
 
 #### Examples:
