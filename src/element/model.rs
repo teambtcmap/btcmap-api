@@ -45,29 +45,6 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
-    pub async fn select_all_except_deleted_async(pool: &Pool) -> Result<Vec<Element>> {
-        pool.get()
-            .await?
-            .interact(move |conn| Element::select_all_except_deleted(conn))
-            .await?
-    }
-
-    pub fn select_all_except_deleted(conn: &Connection) -> Result<Vec<Element>> {
-        let sql = format!(
-            r#"
-                SELECT {ALL_COLUMNS} 
-                FROM {TABLE}
-                WHERE {COL_DELETED_AT} IS NULL
-                ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
-            "#
-        );
-        let res = conn
-            .prepare(&sql)?
-            .query_map({}, mapper())?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(res)
-    }
-
     pub async fn select_updated_since_async(
         updated_since: OffsetDateTime,
         limit: Option<i64>,

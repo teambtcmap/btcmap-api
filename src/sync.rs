@@ -134,11 +134,12 @@ pub async fn sync_deleted_elements(
         .iter()
         .map(|it| it.btcmap_id())
         .collect();
-    let absent_elements: Vec<Element> = Element::select_all_except_deleted_async(pool)
-        .await?
-        .into_iter()
-        .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
-        .collect();
+    let absent_elements: Vec<Element> =
+        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, false, pool)
+            .await?
+            .into_iter()
+            .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
+            .collect();
     let mut res = vec![];
     let conf = Conf::select_async(pool).await?;
     for absent_element in absent_elements {

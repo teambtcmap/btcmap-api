@@ -32,7 +32,8 @@ pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
             }
         }
     }
-    let elements = Element::select_all_except_deleted_async(pool).await?;
+    let elements =
+        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, false, pool).await?;
     let res = element::service::generate_issues_async(elements, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
