@@ -35,7 +35,7 @@ Available fields include:
 | Name | Type | Example | Description |
 |------|------|---------|-------------|
 | lat | Number | 53.2689435 | Place latitude. |
-| lat | Number | 9.8538715 | Place longitude. |
+| lon | Number | 9.8538715 | Place longitude. |
 | icon | String | cafe | [Material Icons](https://fonts.google.com/icons) identifier. |
 | name | String | Der Schafstall | Place Name. Defaults to English, if available. |
 | address | String | 5, Nowhere St. | Place address, if known. |
