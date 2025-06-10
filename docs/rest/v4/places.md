@@ -31,13 +31,19 @@ The `fields` parameter allows you to request specific fields to be included in t
 
 Available fields include:
 
-```
-lat // Place latitude
-lon // Place longitude
-icon // Place icon
-name // Place name
-comments // Number of comments
-```
+
+| Name | Type | Example | Description |
+|------|------|---------|-------------|
+| lat | Number | 53.2689435 | Place latitude. |
+| lat | Number | 9.8538715 | Place longitude. |
+| icon | String | cafe | [Material Icons](https://fonts.google.com/icons) identifier. |
+| name | String | Der Schafstall | Place Name. Defaults to English, if available. |
+| address | String | 5, Nowhere St. | Place address, if known. |
+| opening_hours | String | Mo-Fr 08:00-12:00 | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:opening_hours) for detailed format spec. |
+| comments | Number | 2 | Number of comments. The comments themselves can be fetched via [Get Comments by Place ID](#get-comments) |
+| updated_at | ISO 8601 datetime | 2025-01-01T00:00:00Z | Last change timestamp. Can be used for incremental sync. |
+| verified_at | ISO 8601 date | 2025-02-03 | Last verification date. Recently verified places are more reliable so you might express it somehow in your app. You can also filter out places which haven't been verified for quite some time. |
+
 
 #### Examples:
 
