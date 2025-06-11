@@ -8,7 +8,7 @@ use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 #[derive(Deserialize)]
 pub struct CreateLNbitsInvoiceResponse {
     pub payment_hash: String,
-    pub payment_request: String,
+    pub bolt11: String,
 }
 
 pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Result<Invoice> {
@@ -32,7 +32,7 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
         description,
         amount_sats,
         lnbits_response.payment_hash,
-        lnbits_response.payment_request,
+        lnbits_response.bolt11,
         "unpaid",
         pool,
     )
