@@ -1,25 +1,26 @@
-use crate::db::{access_token, admin};
+use crate::db::user::schema::User;
+use crate::db::{access_token, user};
 use crate::Result;
-use crate::{conf::Conf, db::admin::queries::Admin, discord, error::Error};
+use crate::{conf::Conf, discord, error::Error};
 use deadpool_sqlite::Pool;
 
 pub async fn check_rpc(
     password: impl Into<String>,
     action: impl Into<String>,
     pool: &Pool,
-) -> Result<Admin> {
+) -> Result<User> {
     let action = action.into();
     let token = access_token::queries_async::select_by_secret(password, pool).await?;
-    let a = admin::queries_async::select_by_id(token.user_id, pool).await?;
+    let user = user::queries_async::select_by_id(token.user_id, pool).await?;
     if is_allowed(&action, &token.roles) {
-        Ok(a)
+        Ok(user)
     } else {
         let conf = Conf::select_async(pool).await?;
         discord::post_message(
             conf.discord_webhook_api,
             format!(
-                "Admin {} tried to call {action} without proper permissions",
-                a.name,
+                "{} tried to call {action} without proper permissions",
+                user.name,
             ),
         )
         .await;
@@ -34,7 +35,7 @@ fn is_allowed(action: &str, allowed_actions: &[String]) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::db::{access_token, admin};
+    use crate::db::{access_token, user};
     use crate::test::mock_pool;
     use crate::Result;
 
@@ -44,9 +45,9 @@ mod test {
         assert!(super::check_rpc("pwd", "action", &pool).await.is_err());
         let password = "pwd";
         let action = "action";
-        admin::queries_async::insert("name", password, &pool).await?;
-        admin::queries_async::set_roles(1, &["action".into()], &pool).await?;
-        let admin = admin::queries_async::select_by_id(1, &pool).await?;
+        user::queries_async::insert("name", password, &pool).await?;
+        user::queries_async::set_roles(1, &["action".into()], &pool).await?;
+        let admin = user::queries_async::select_by_id(1, &pool).await?;
         access_token::queries_async::insert(admin.id, "", password, &admin.roles, &pool).await?;
         assert!(super::check_rpc(password, action, &pool).await.is_ok());
         Ok(())

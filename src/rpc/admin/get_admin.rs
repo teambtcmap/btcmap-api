@@ -1,4 +1,4 @@
-use crate::{db::admin::queries::Admin, Result};
+use crate::{db::user::schema::User, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -17,8 +17,8 @@ pub struct Res {
     pub deleted_at: Option<String>,
 }
 
-impl From<Admin> for Res {
-    fn from(val: Admin) -> Self {
+impl From<User> for Res {
+    fn from(val: User) -> Self {
         Self {
             id: val.id,
             name: val.name,
@@ -31,7 +31,7 @@ impl From<Admin> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    crate::db::admin::queries_async::select_by_id(params.id, pool)
+    crate::db::user::queries_async::select_by_id(params.id, pool)
         .await
         .map(Into::into)
 }

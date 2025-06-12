@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::{self, admin::queries::Admin},
+    db::{self, user::schema::User},
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -18,23 +18,23 @@ pub struct Res {
     pub allowed_actions: Vec<String>,
 }
 
-pub async fn run(params: Params, source_admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let target_admin = db::admin::queries_async::select_by_name(&params.admin, pool).await?;
-    let mut roles = target_admin.roles;
+pub async fn run(params: Params, source_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let target_user = db::user::queries_async::select_by_name(&params.admin, pool).await?;
+    let mut roles = target_user.roles;
     if !roles.contains(&params.action) {
         roles.push(params.action.clone());
     }
-    db::admin::queries_async::set_roles(target_admin.id, &roles, pool).await?;
+    db::user::queries_async::set_roles(target_user.id, &roles, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} allowed action {} for admin {}",
-            source_admin.name, params.action, target_admin.name
+            "{} added role {} for user {}",
+            source_user.name, params.action, target_user.name
         ),
     )
     .await;
     Ok(Res {
-        name: target_admin.name,
+        name: target_user.name,
         allowed_actions: roles,
     })
 }

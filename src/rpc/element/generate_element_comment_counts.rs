@@ -1,6 +1,6 @@
 use crate::{
-    conf::Conf, db::admin::queries::Admin, discord, element::Element,
-    element_comment::ElementComment, Result,
+    conf::Conf, db::user::schema::User, discord, element::Element, element_comment::ElementComment,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
@@ -12,7 +12,7 @@ pub struct Res {
     pub time_sec: f64,
 }
 
-pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let elements =
         Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
@@ -40,8 +40,8 @@ pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} generated comment counts for all elements",
-            admin.name,
+            "{} generated comment counts for all elements",
+            requesting_user.name,
         ),
     )
     .await;

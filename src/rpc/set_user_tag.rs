@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::{self, admin::queries::Admin},
+    db::{self, user::schema::User},
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -20,7 +20,7 @@ pub struct Res {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let cloned_args_user_name = params.user_name.clone();
     let cloned_args_tag_name = params.tag_name.clone();
     let cloned_args_tag_value = params.tag_value.clone();
@@ -43,8 +43,8 @@ pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Res
         })
         .await??;
     let discord_message = format!(
-        "Admin {} set tag {} = {} for user {} https://api.btcmap.org/v3/users/{}",
-        admin.name,
+        "{} set tag {} = {} for user {} https://api.btcmap.org/v3/users/{}",
+        caller.name,
         params.tag_name,
         serde_json::to_string(&params.tag_value)?,
         params.user_name,

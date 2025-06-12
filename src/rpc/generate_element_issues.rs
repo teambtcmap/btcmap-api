@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::admin::queries::Admin,
+    db::user::schema::User,
     discord,
     element::{self, Element},
     element_issue::model::ElementIssue,
@@ -20,7 +20,7 @@ pub struct Res {
     pub affected_elements: i64,
 }
 
-pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let elements =
         Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
     for element in elements {
@@ -38,8 +38,8 @@ pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} generated element issues. Affected elements: {}",
-            admin.name, res.affected_elements
+            "{} generated element issues. Affected elements: {}",
+            requesting_user.name, res.affected_elements
         ),
     )
     .await;

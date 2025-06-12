@@ -1,7 +1,7 @@
-use super::schema;
 use super::schema::Columns;
+use super::schema::{self, User};
 use crate::Result;
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection};
 use tracing::warn;
 
 pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<i64> {
@@ -10,7 +10,7 @@ pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<i64> {
             INSERT INTO {table} ({name}, {password})
             VALUES (?1, ?2)
         "#,
-        table = schema::NAME,
+        table = schema::TABLE_NAME,
         name = Columns::Name.as_str(),
         password = Columns::Password.as_str(),
     );
@@ -19,48 +19,48 @@ pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<i64> {
 }
 
 #[cfg(test)]
-pub fn select_all(conn: &Connection) -> Result<Vec<Admin>> {
+pub fn select_all(conn: &Connection) -> Result<Vec<User>> {
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
         "#,
-        projection = Admin::projection(),
-        table = schema::NAME,
+        projection = User::projection(),
+        table = schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
-        .query_map({}, Admin::mapper())?
+        .query_map({}, User::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
 
-pub fn select_by_id(id: i64, conn: &Connection) -> Result<Admin> {
+pub fn select_by_id(id: i64, conn: &Connection) -> Result<User> {
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
             WHERE {id} = ?1
         "#,
-        projection = Admin::projection(),
-        table = schema::NAME,
+        projection = User::projection(),
+        table = schema::TABLE_NAME,
         id = Columns::Id.as_str(),
     );
-    conn.query_row(&sql, params![id], Admin::mapper())
+    conn.query_row(&sql, params![id], User::mapper())
         .map_err(Into::into)
 }
 
-pub fn select_by_name(name: &str, conn: &Connection) -> Result<Admin> {
+pub fn select_by_name(name: &str, conn: &Connection) -> Result<User> {
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
             WHERE {name} = ?1
         "#,
-        projection = Admin::projection(),
-        table = schema::NAME,
+        projection = User::projection(),
+        table = schema::TABLE_NAME,
         name = Columns::Name.as_str(),
     );
-    conn.query_row(&sql, params![name], Admin::mapper())
+    conn.query_row(&sql, params![name], User::mapper())
         .map_err(Into::into)
 }
 
@@ -71,7 +71,7 @@ pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> 
             SET {password} = ?1
             WHERE {id} = ?2
         "#,
-        table = schema::NAME,
+        table = schema::TABLE_NAME,
         password = Columns::Password.as_str(),
         id = Columns::Id.as_str(),
     );
@@ -87,55 +87,12 @@ pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<(
             SET {roles} = json(?1)
             WHERE {id} = ?2
         "#,
-        table = schema::NAME,
+        table = schema::TABLE_NAME,
         roles = Columns::Roles.as_str(),
         id = Columns::Id.as_str(),
     );
     conn.execute(&sql, params![serde_json::to_string(roles)?, admin_id])?;
     Ok(())
-}
-
-pub struct Admin {
-    pub id: i64,
-    pub name: String,
-    #[allow(dead_code)]
-    pub password: String,
-    pub roles: Vec<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
-}
-
-impl Admin {
-    fn projection() -> String {
-        [
-            Columns::Id,
-            Columns::Name,
-            Columns::Password,
-            Columns::Roles,
-            Columns::CreatedAt,
-            Columns::UpdatedAt,
-            Columns::DeletedAt,
-        ]
-        .iter()
-        .map(Columns::as_str)
-        .collect::<Vec<_>>()
-        .join(", ")
-    }
-
-    fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
-        |row: &Row| -> rusqlite::Result<Self> {
-            Ok(Admin {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                password: row.get(2)?,
-                roles: serde_json::from_value(row.get(3)?).unwrap_or_default(),
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-                deleted_at: row.get(6)?,
-            })
-        }
-    }
 }
 
 #[cfg(test)]

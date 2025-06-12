@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::{self, admin::queries::Admin, area::schema::Area},
+    db::{self, area::schema::Area, user::schema::User},
     discord,
     element::Element,
     report::Report,
@@ -23,7 +23,7 @@ pub struct Res {
     pub new_reports: i64,
 }
 
-pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let res = generate_reports(pool).await?;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
@@ -31,8 +31,8 @@ pub async fn run(admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
         discord::post_message(
             &conf.discord_webhook_api,
             format!(
-                "Admin {} generated {} reports in {} seconds",
-                admin.name, res, time_s
+                "{} generated {} reports in {} seconds",
+                caller.name, res, time_s
             ),
         )
         .await;

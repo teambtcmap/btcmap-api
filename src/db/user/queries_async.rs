@@ -1,4 +1,4 @@
-use super::queries::Admin;
+use super::schema::User;
 use crate::Result;
 use deadpool_sqlite::Pool;
 
@@ -15,14 +15,14 @@ pub async fn insert(
         .await?
 }
 
-pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Admin> {
+pub async fn select_by_id(id: i64, pool: &Pool) -> Result<User> {
     pool.get()
         .await?
         .interact(move |conn| super::queries::select_by_id(id, conn))
         .await?
 }
 
-pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<Admin> {
+pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<User> {
     let name = name.into();
     pool.get()
         .await?

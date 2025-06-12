@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::{self, admin::queries::Admin},
+    db::{self, user::schema::User},
     discord,
     element::Element,
     osm::overpass::OverpassElement,
@@ -21,7 +21,7 @@ pub struct Res {
     pub changes: i64,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res = pool
         .get()
         .await?
@@ -32,8 +32,8 @@ pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Res
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} generated element categories (id range {}..{})",
-            admin.name, params.from_element_id, params.to_element_id,
+            "{} generated element categories (id range {}..{})",
+            requesting_user.name, params.from_element_id, params.to_element_id,
         ),
     )
     .await;

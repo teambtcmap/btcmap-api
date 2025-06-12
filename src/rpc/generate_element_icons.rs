@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::{self, admin::queries::Admin},
+    db::{self, user::schema::User},
     discord,
     element::Element,
     osm::overpass::OverpassElement,
@@ -31,7 +31,7 @@ pub struct UpdatedElement {
     pub new_icon: String,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let updated_elements = pool
         .get()
@@ -44,8 +44,8 @@ pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Res
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} generated element icons (id range {}..{}, elements affected: {})",
-            admin.name,
+            "{} generated element icons (id range {}..{}, elements affected: {})",
+            requesting_user.name,
             params.from_element_id,
             params.to_element_id,
             updated_elements.len(),

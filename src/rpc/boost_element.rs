@@ -1,6 +1,4 @@
-use crate::{
-    boost::Boost, conf::Conf, db::admin::queries::Admin, discord, element::Element, Result,
-};
+use crate::{boost::Boost, conf::Conf, db::user::schema::User, discord, element::Element, Result};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::Deserialize;
@@ -13,18 +11,23 @@ pub struct Params {
     pub days: i64,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Element> {
-    let admin_id = admin.id;
+pub async fn run(
+    params: Params,
+    requesting_user: &User,
+    pool: &Pool,
+    conf: &Conf,
+) -> Result<Element> {
+    let requesting_user_id = requesting_user.id;
     let element = pool
         .get()
         .await?
-        .interact(move |conn| _boost(admin_id, &params.id, params.days, conn))
+        .interact(move |conn| _boost(requesting_user_id, &params.id, params.days, conn))
         .await??;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} boosted element {} ({}) for {} days",
-            admin.name,
+            "{} boosted element {} ({}) for {} days",
+            requesting_user.name,
             element.name(),
             element.id,
             params.days

@@ -1,4 +1,4 @@
-use crate::{conf::Conf, db::admin::queries::Admin, Result};
+use crate::{conf::Conf, db::user::schema::User, Result};
 use actix_web::{
     dev::ServiceResponse,
     http::{
@@ -197,7 +197,7 @@ pub async fn handle(
             return Ok(Json(RpcResponse::error(e)));
         }
     };
-    let admin: Option<Admin> = if !PUBLIC_METHODS.contains(&req.method) {
+    let admin: Option<User> = if !PUBLIC_METHODS.contains(&req.method) {
         Some(
             crate::service::auth::check_rpc(extract_password(headers, &req.params), method, &pool)
                 .await

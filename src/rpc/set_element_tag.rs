@@ -1,5 +1,5 @@
 use crate::conf::Conf;
-use crate::db::admin::queries::Admin;
+use crate::db::user::schema::User;
 use crate::element::model::Element;
 use crate::Result;
 use crate::{db, discord};
@@ -14,15 +14,15 @@ pub struct Params {
     pub tag_value: Value,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Element> {
+pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<Element> {
     let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
     let element =
         Element::set_tag_async(element.id, &params.tag_name, &params.tag_value, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} set tag {} = {} for element {} ({})",
-            admin.name,
+            "{} set tag {} = {} for element {} ({})",
+            user.name,
             params.tag_name,
             serde_json::to_string(&params.tag_value)?,
             element.name(),

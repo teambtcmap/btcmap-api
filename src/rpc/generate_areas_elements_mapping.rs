@@ -1,7 +1,7 @@
 use crate::{
     area_element::{self, service::Diff},
     conf::Conf,
-    db::{self, admin::queries::Admin},
+    db::{self, user::schema::User},
     discord,
     element::Element,
     Result,
@@ -20,19 +20,20 @@ pub struct Res {
     pub affected_elements: Vec<Diff>,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res =
         generate_areas_elements_mapping(params.from_element_id, params.to_element_id, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} generated areas to elements mappings (id range {}..{}, elements affected: {})",
-            admin.name,
+            "{} generated areas to elements mappings (id range {}..{}, elements affected: {})",
+            requesting_user.name,
             params.from_element_id,
             params.to_element_id,
             res.affected_elements.len()
-        )
-    ).await;
+        ),
+    )
+    .await;
     Ok(res)
 }
 

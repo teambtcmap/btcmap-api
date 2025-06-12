@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::{self, admin::queries::Admin},
+    db::{self, user::schema::User},
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -19,7 +19,7 @@ pub struct Res {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let cloned_args_user_name = params.user_name.clone();
     let cloned_args_tag_name = params.tag_name.clone();
     let user = pool
@@ -39,8 +39,8 @@ pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Res
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} removed tag {} for user {} ({})",
-            admin.name, params.tag_name, params.user_name, user.id,
+            "{} removed tag {} for user {} ({})",
+            caller.name, params.tag_name, params.user_name, user.id,
         ),
     )
     .await;

@@ -2,7 +2,7 @@ use super::model::RpcArea;
 use crate::{
     area::{self},
     conf::Conf,
-    db::admin::queries::Admin,
+    db::user::schema::User,
     discord, Result,
 };
 use deadpool_sqlite::Pool;
@@ -16,14 +16,14 @@ pub struct Params {
     pub value: Value,
 }
 
-pub async fn run(params: Params, admin: &Admin, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
+pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
     let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())].into_iter());
     let area = area::service::patch_tags(&params.id, patch_set, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} set tag {} = {} for area {} ({})",
-            admin.name,
+            "{} set tag {} = {} for area {} ({})",
+            user.name,
             params.name,
             serde_json::to_string(&params.value)?,
             area.name(),

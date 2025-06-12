@@ -1,0 +1,1 @@
+ALTER TABLE admin RENAME TO user;

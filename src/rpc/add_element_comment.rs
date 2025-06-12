@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    db::{self, admin::queries::Admin},
+    db::{self, user::schema::User},
     discord,
     element_comment::ElementComment,
     Result,
@@ -16,7 +16,7 @@ pub struct Params {
 
 pub async fn run(
     params: Params,
-    admin: &Admin,
+    requesting_user: &User,
     pool: &Pool,
     conf: &Conf,
 ) -> Result<ElementComment> {
@@ -25,8 +25,8 @@ pub async fn run(
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
-            "Admin {} added a comment to element {} ({}): {}",
-            admin.name,
+            "{} added a comment to element {} ({}): {}",
+            requesting_user.name,
             element.name(),
             element.id,
             params.comment,
