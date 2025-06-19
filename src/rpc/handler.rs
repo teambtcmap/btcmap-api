@@ -1,4 +1,12 @@
-use crate::{conf::Conf, db::user::schema::User, Result};
+use crate::{
+    conf::Conf,
+    db::{
+        self,
+        access_token::queries::{AccessToken, Role},
+        user::schema::User,
+    },
+    Result,
+};
 use actix_web::{
     dev::ServiceResponse,
     http::{
@@ -13,6 +21,8 @@ use actix_web::{
 use deadpool_sqlite::Pool;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
+use strum::VariantArray;
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -22,7 +32,7 @@ pub struct RpcRequest {
     pub id: Value,
 }
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, PartialEq, Eq, VariantArray, Hash, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
     // auth
@@ -75,7 +85,59 @@ pub enum RpcMethod {
     Search,
 }
 
-#[derive(Serialize)]
+impl Role {
+    const ANON_METHODS: &[RpcMethod] = &[
+        RpcMethod::ChangePassword,
+        RpcMethod::CreateApiKey,
+        RpcMethod::GetElement,
+        RpcMethod::PaywallGetAddElementCommentQuote,
+        RpcMethod::PaywallAddElementComment,
+        RpcMethod::PaywallGetBoostElementQuote,
+        RpcMethod::PaywallBoostElement,
+        RpcMethod::GetElementIssues,
+        RpcMethod::GetAreaDashboard,
+        RpcMethod::GetMostActiveUsers,
+    ];
+
+    const USER_METHODS: &[RpcMethod] = &[];
+
+    const ADMIN_METHODS: &[RpcMethod] = &[
+        // Admins can set and override custom place tags
+        RpcMethod::SetElementTag,
+        // Admins can remove custom place tags
+        RpcMethod::RemoveElementTag,
+        // Admins can create new areas
+        RpcMethod::AddArea,
+        // Admins can look up any area
+        RpcMethod::GetArea,
+        // Admins can set and override custom place tags
+        RpcMethod::SetAreaTag,
+        // Admins can remove custom area tags
+        RpcMethod::RemoveAreaTag,
+        // Admins can set and override area icons
+        RpcMethod::SetAreaIcon,
+        // Admins can remove any area
+        RpcMethod::RemoveArea,
+        // Admins can set and override custom user tags
+        RpcMethod::SetUserTag,
+        // Admins can remove custom user tags
+        RpcMethod::RemoveUserTag,
+        // Admins can request universal search
+        RpcMethod::Search,
+        // Admins can query user activity (TODO ask Rockedf if he still needs it)
+        RpcMethod::GetUserActivity,
+    ];
+
+    const fn allowed_methods(&self) -> &[RpcMethod] {
+        match self {
+            Role::User => Self::USER_METHODS,
+            Role::Admin => Self::ADMIN_METHODS,
+            Role::Root => RpcMethod::VARIANTS,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct RpcResponse {
     pub jsonrpc: String,
     pub result: Option<Value>,
@@ -84,7 +146,7 @@ pub struct RpcResponse {
     pub id: Value,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct RpcError {
     pub code: i64,
     pub message: String,
@@ -148,20 +210,21 @@ impl RpcResponse {
     }
 }
 
-const PUBLIC_METHODS: &[RpcMethod] = &[
-    // auth
-    RpcMethod::ChangePassword,
-    RpcMethod::CreateApiKey,
-    // unsorted
-    RpcMethod::GetElement,
-    RpcMethod::PaywallGetAddElementCommentQuote,
-    RpcMethod::PaywallAddElementComment,
-    RpcMethod::PaywallGetBoostElementQuote,
-    RpcMethod::PaywallBoostElement,
-    RpcMethod::GetElementIssues,
-    RpcMethod::GetAreaDashboard,
-    RpcMethod::GetMostActiveUsers,
-];
+impl AccessToken {
+    fn allowed_methods(&self) -> HashSet<RpcMethod> {
+        let mut res = HashSet::new();
+        // All anonymous methods are also acessible to authorized users
+        for method in Role::ANON_METHODS {
+            res.insert(method.clone());
+        }
+        for role in &self.roles {
+            for method in role.allowed_methods() {
+                res.insert(method.clone());
+            }
+        }
+        res
+    }
+}
 
 #[post("")]
 pub async fn handle(
@@ -183,7 +246,7 @@ pub async fn handle(
             error_data,
         )))));
     };
-    let Some(method) = method.as_str() else {
+    let Some(_) = method.as_str() else {
         let error_data = json!("Field method is not a string");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
             error_data,
@@ -197,18 +260,37 @@ pub async fn handle(
             return Ok(Json(RpcResponse::error(e)));
         }
     };
-    let admin: Option<User> = if !PUBLIC_METHODS.contains(&req.method) {
-        Some(
-            crate::service::auth::check_rpc(extract_password(headers, &req.params), method, &pool)
-                .await
-                .map_err(|_| "Auth failure")?,
-        )
-    } else {
+
+    let access_token = extract_access_token(headers, &req.params);
+
+    if access_token.is_empty() && !Role::ANON_METHODS.contains(&req.method) {
+        return Ok(Json(RpcResponse::error(RpcError {
+            code: 1,
+            message: "Auth header is missing".into(),
+            data: None,
+        })));
+    }
+
+    let user: Option<User> = if access_token.is_empty() {
         None
+    } else {
+        let access_token =
+            db::access_token::queries_async::select_by_secret(access_token, &pool).await?;
+        let user = db::user::queries_async::select_by_id(access_token.user_id, &pool).await?;
+        if !access_token.allowed_methods().contains(&req.method) {
+            return Ok(Json(RpcResponse::error(RpcError {
+                code: 1,
+                message: "You don't have permissions to call this method".into(),
+                data: None,
+            })));
+        }
+        Some(user)
     };
+
     if req.jsonrpc != "2.0" {
         return Ok(Json(RpcResponse::invalid_request(Value::Null)));
     }
+
     let res: RpcResponse = match req.method {
         // element
         RpcMethod::GetElement => RpcResponse::from(
@@ -217,11 +299,11 @@ pub async fn handle(
         ),
         RpcMethod::SetElementTag => RpcResponse::from(
             req.id.clone(),
-            super::set_element_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::set_element_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::RemoveElementTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_element_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+            super::remove_element_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf)
                 .await?,
         ),
         RpcMethod::GetBoostedElements => RpcResponse::from(
@@ -230,7 +312,7 @@ pub async fn handle(
         ),
         RpcMethod::BoostElement => RpcResponse::from(
             req.id.clone(),
-            super::boost_element::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::boost_element::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::PaywallGetBoostElementQuote => RpcResponse::from(
             req.id.clone(),
@@ -242,7 +324,7 @@ pub async fn handle(
         ),
         RpcMethod::AddElementComment => RpcResponse::from(
             req.id.clone(),
-            super::add_element_comment::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+            super::add_element_comment::run(params(req.params)?, &user.unwrap(), &pool, &conf)
                 .await?,
         ),
         RpcMethod::PaywallGetAddElementCommentQuote => RpcResponse::from(
@@ -255,22 +337,22 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_issues::run(&admin.unwrap(), &pool, &conf).await?,
+            super::generate_element_issues::run(&user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
-            super::sync_elements::run(&admin.unwrap(), &pool, &conf).await?,
+            super::sync_elements::run(&user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_icons::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+            super::generate_element_icons::run(params(req.params)?, &user.unwrap(), &pool, &conf)
                 .await?,
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
             super::generate_element_categories::run(
                 params(req.params)?,
-                &admin.unwrap(),
+                &user.unwrap(),
                 &pool,
                 &conf,
             )
@@ -282,13 +364,13 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementCommentCounts => RpcResponse::from(
             req.id.clone(),
-            super::element::generate_element_comment_counts::run(&admin.unwrap(), &pool, &conf)
+            super::element::generate_element_comment_counts::run(&user.unwrap(), &pool, &conf)
                 .await?,
         ),
         // area
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
-            super::add_area::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::add_area::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetArea => RpcResponse::from(
             req.id.clone(),
@@ -296,11 +378,11 @@ pub async fn handle(
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::set_area_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::set_area_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_area_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::remove_area_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::SetAreaIcon => RpcResponse::from(
             req.id.clone(),
@@ -308,7 +390,7 @@ pub async fn handle(
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
-            super::remove_area::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::remove_area::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
@@ -326,7 +408,7 @@ pub async fn handle(
             req.id.clone(),
             super::generate_areas_elements_mapping::run(
                 params(req.params)?,
-                &admin.unwrap(),
+                &user.unwrap(),
                 &pool,
                 &conf,
             )
@@ -334,7 +416,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),
-            super::generate_reports::run(&admin.unwrap(), &pool, &conf).await?,
+            super::generate_reports::run(&user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetAreaDashboard => RpcResponse::from(
             req.id.clone(),
@@ -346,11 +428,11 @@ pub async fn handle(
         ),
         RpcMethod::SetUserTag => RpcResponse::from(
             req.id.clone(),
-            super::set_user_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::set_user_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_user_tag::run(params(req.params)?, &admin.unwrap(), &pool, &conf).await?,
+            super::remove_user_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetMostActiveUsers => RpcResponse::from(
             req.id.clone(),
@@ -363,8 +445,7 @@ pub async fn handle(
         ),
         RpcMethod::AddAdmin => RpcResponse::from(
             req.id.clone(),
-            super::admin::add_admin::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::admin::add_admin::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::GetAdmin => RpcResponse::from(
             req.id.clone(),
@@ -376,14 +457,14 @@ pub async fn handle(
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::admin::add_admin_action::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
+            super::admin::add_admin_action::run(params(req.params)?, &user.unwrap(), &pool, &conf)
                 .await?,
         ),
         RpcMethod::RemoveAdminAction => RpcResponse::from(
             req.id.clone(),
             super::admin::remove_admin_action::run(
                 params(req.params)?,
-                &admin.unwrap(),
+                &user.unwrap(),
                 &pool,
                 &conf,
             )
@@ -395,8 +476,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateInvoice => RpcResponse::from(
             req.id.clone(),
-            super::generate_invoice::run(params(req.params)?, &admin.unwrap(), &pool, &conf)
-                .await?,
+            super::generate_invoice::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),
@@ -429,7 +509,7 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
     Ok(ErrorHandlerResponse::Response(res))
 }
 
-fn extract_password(headers: &HeaderMap, params: &Option<Value>) -> String {
+fn extract_access_token(headers: &HeaderMap, params: &Option<Value>) -> String {
     if headers.contains_key(header::AUTHORIZATION) {
         let header = headers
             .get(header::AUTHORIZATION)
@@ -448,4 +528,287 @@ fn extract_password(headers: &HeaderMap, params: &Option<Value>) -> String {
         return "".into();
     };
     password.into()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{osm::overpass::OverpassElement, test::mock_pool};
+    use actix_web::{
+        http::{header, StatusCode},
+        test,
+        web::scope,
+        App,
+    };
+    use serde_json::json;
+
+    #[test]
+    async fn invalid_json() {
+        let pool = mock_pool().await;
+        let conf = Conf {
+            paywall_add_element_comment_price_sat: 1,
+            paywall_boost_element_30d_price_sat: 2,
+            paywall_boost_element_90d_price_sat: 3,
+            paywall_boost_element_365d_price_sat: 4,
+            lnbits_invoice_key: "".into(),
+            discord_webhook_osm_changes: "".into(),
+            discord_webhook_api: "".into(),
+        };
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .set_payload("not json")
+            .to_request();
+
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body: RpcResponse = test::read_body_json(res).await;
+        assert_eq!(body.error.unwrap().code, -32700); // Parse error
+    }
+
+    #[test]
+    async fn missing_method() {
+        let pool = mock_pool().await;
+        let conf = Conf {
+            paywall_add_element_comment_price_sat: 1,
+            paywall_boost_element_30d_price_sat: 2,
+            paywall_boost_element_90d_price_sat: 3,
+            paywall_boost_element_365d_price_sat: 4,
+            lnbits_invoice_key: "".into(),
+            discord_webhook_osm_changes: "".into(),
+            discord_webhook_api: "".into(),
+        };
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.error.unwrap().code, -32700); // Parse error
+    }
+
+    #[test]
+    async fn anonymous_method_allowed() -> Result<()> {
+        let pool = mock_pool().await;
+        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let conf = Conf {
+            paywall_add_element_comment_price_sat: 1,
+            paywall_boost_element_30d_price_sat: 2,
+            paywall_boost_element_90d_price_sat: 3,
+            paywall_boost_element_365d_price_sat: 4,
+            lnbits_invoice_key: "".into(),
+            discord_webhook_osm_changes: "".into(),
+            discord_webhook_api: "".into(),
+        };
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "get_element",
+                "params": {"id": 1},
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.error, None);
+        Ok(())
+    }
+
+    #[test]
+    async fn protected_method_without_auth() -> Result<()> {
+        let pool = mock_pool().await;
+        let conf = Conf {
+            paywall_add_element_comment_price_sat: 1,
+            paywall_boost_element_30d_price_sat: 2,
+            paywall_boost_element_90d_price_sat: 3,
+            paywall_boost_element_365d_price_sat: 4,
+            lnbits_invoice_key: "".into(),
+            discord_webhook_osm_changes: "".into(),
+            discord_webhook_api: "".into(),
+        };
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "add_area",
+                "params": {"name": "test"},
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert!(res.error.is_some());
+        Ok(())
+    }
+
+    #[test]
+    async fn invalid_jsonrpc_version() {
+        let pool = mock_pool().await;
+        let conf = Conf {
+            paywall_add_element_comment_price_sat: 1,
+            paywall_boost_element_30d_price_sat: 2,
+            paywall_boost_element_90d_price_sat: 3,
+            paywall_boost_element_365d_price_sat: 4,
+            lnbits_invoice_key: "".into(),
+            discord_webhook_osm_changes: "".into(),
+            discord_webhook_api: "".into(),
+        };
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .set_json(&json!({
+                "jsonrpc": "1.0",
+                "method": "get_element",
+                "params": {"element_id": 1},
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.error.unwrap().code, -32600); // Invalid Request
+    }
+
+    #[test]
+    async fn valid_request_with_auth() -> Result<()> {
+        let pool = mock_pool().await;
+        let user = db::user::queries_async::insert("root", "", &pool).await?;
+        let _token = db::access_token::queries_async::insert(
+            user,
+            "",
+            "secret",
+            &vec!["root".into()],
+            &pool,
+        )
+        .await?;
+        let conf = Conf {
+            paywall_add_element_comment_price_sat: 1,
+            paywall_boost_element_30d_price_sat: 2,
+            paywall_boost_element_90d_price_sat: 3,
+            paywall_boost_element_365d_price_sat: 4,
+            lnbits_invoice_key: "".into(),
+            discord_webhook_osm_changes: "".into(),
+            discord_webhook_api: "".into(),
+        };
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "secret"))
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "get_boosted_elements",
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.error, None);
+        Ok(())
+    }
+
+    #[test]
+    async fn unauthorized_method() {
+        let pool = mock_pool().await;
+        let conf = Conf {
+            paywall_add_element_comment_price_sat: 1,
+            paywall_boost_element_30d_price_sat: 2,
+            paywall_boost_element_90d_price_sat: 3,
+            paywall_boost_element_365d_price_sat: 4,
+            lnbits_invoice_key: "".into(),
+            discord_webhook_osm_changes: "".into(),
+            discord_webhook_api: "".into(),
+        };
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "add_area",  // Requires admin role
+                "params": {"name": "test"},
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert!(res.error.is_some());
+    }
+
+    #[test]
+    async fn test_extract_access_token_from_header() {
+        let headers = header::HeaderMap::new();
+        let mut headers_with_auth = header::HeaderMap::new();
+        headers_with_auth.insert(
+            header::AUTHORIZATION,
+            header::HeaderValue::from_static("Bearer test_token"),
+        );
+
+        // Test with no headers
+        assert_eq!(extract_access_token(&headers, &None), "");
+
+        // Test with auth header
+        assert_eq!(
+            extract_access_token(&headers_with_auth, &None),
+            "test_token"
+        );
+
+        // Test with params fallback
+        let params = Some(json!({"password": "param_token"}));
+        assert_eq!(extract_access_token(&headers, &params), "param_token");
+    }
 }

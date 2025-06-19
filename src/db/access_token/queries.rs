@@ -2,6 +2,7 @@ use super::schema;
 use super::schema::Columns;
 use crate::Result;
 use rusqlite::{params, Connection, Row};
+use std::{fmt, str::FromStr};
 
 pub fn insert(
     user_id: i64,
@@ -76,7 +77,7 @@ pub fn select_by_secret(secret: &str, conn: &Connection) -> Result<AccessToken> 
 }
 
 #[cfg(test)]
-pub fn set_roles(token_id: i64, roles: &[String], conn: &Connection) -> Result<()> {
+pub fn set_roles(token_id: i64, roles: &[Role], conn: &Connection) -> Result<()> {
     let sql = format!(
         r#"
             UPDATE {table}
@@ -87,7 +88,8 @@ pub fn set_roles(token_id: i64, roles: &[String], conn: &Connection) -> Result<(
         roles = Columns::Roles.as_str(),
         id = Columns::Id.as_str(),
     );
-    conn.execute(&sql, params![serde_json::to_string(roles)?, token_id])?;
+    let roles: Vec<String> = roles.iter().map(|role| role.to_string()).collect();
+    conn.execute(&sql, params![serde_json::to_string(&roles)?, token_id])?;
     Ok(())
 }
 
@@ -97,10 +99,40 @@ pub struct AccessToken {
     pub user_id: i64,
     pub name: Option<String>,
     pub secret: String,
-    pub roles: Vec<String>,
+    pub roles: Vec<Role>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug)]
+pub enum Role {
+    User,
+    Admin,
+    Root,
+}
+
+impl FromStr for Role {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "user" => Ok(Role::User),
+            "admin" => Ok(Role::Admin),
+            "root" => Ok(Role::Root),
+            _ => Err(format!("'{}' is not a valid Role", s)),
+        }
+    }
+}
+
+impl fmt::Display for Role {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Role::User => write!(f, "user"),
+            Role::Admin => write!(f, "admin"),
+            Role::Root => write!(f, "root"),
+        }
+    }
 }
 
 impl AccessToken {
@@ -123,12 +155,18 @@ impl AccessToken {
 
     fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row: &Row| -> rusqlite::Result<Self> {
+            let roles: Vec<String> = serde_json::from_value(row.get(4)?).unwrap_or_default();
+            let roles: Vec<Role> = roles
+                .into_iter()
+                .filter_map(|s| Role::from_str(&s).ok())
+                .collect();
+
             Ok(AccessToken {
                 id: row.get(0)?,
                 user_id: row.get(1)?,
                 name: row.get(2)?,
                 secret: row.get(3)?,
-                roles: serde_json::from_value(row.get(4)?).unwrap_or_default(),
+                roles,
                 created_at: row.get(5)?,
                 updated_at: row.get(6)?,
                 deleted_at: row.get(7)?,
@@ -196,9 +234,12 @@ mod test {
         let conn = mock_conn();
         let user_id = db::user::queries::insert("", "", &conn)?;
         let token_id = super::insert(user_id, "name", "pwd", &[], &conn)?;
-        let roles = vec!["action_1".into(), "action_2".into()];
+        let roles = vec![super::Role::User, super::Role::Admin];
         super::set_roles(token_id, &roles, &conn)?;
-        assert_eq!(roles, super::select_by_id(token_id, &conn)?.roles,);
+        assert_eq!(roles, super::select_by_id(token_id, &conn)?.roles);
         Ok(())
     }
+
+    #[test]
+    fn typed_roles() {}
 }

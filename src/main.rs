@@ -34,7 +34,6 @@ use log::Log;
 mod db;
 mod element_issue;
 mod og;
-mod service;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
