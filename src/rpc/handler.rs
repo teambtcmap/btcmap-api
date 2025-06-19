@@ -42,6 +42,7 @@ pub enum RpcMethod {
     CreateApiKey,
     AddAdminAction,
     RemoveAdminAction,
+    Whoami,
     // element
     GetElement,
     SetElementTag,
@@ -292,6 +293,10 @@ pub async fn handle(
     }
 
     let res: RpcResponse = match req.method {
+        RpcMethod::Whoami => RpcResponse::from(
+            req.id.clone(),
+            super::auth::whoami::run(&user.unwrap()).await?,
+        ),
         // element
         RpcMethod::GetElement => RpcResponse::from(
             req.id.clone(),
