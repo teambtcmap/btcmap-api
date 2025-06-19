@@ -3,27 +3,27 @@ use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, Row};
 use serde::Serialize;
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
 pub struct Invoice {
     pub id: i64,
+    pub uuid: String,
     pub description: String,
     pub amount_sats: i64,
     pub payment_hash: String,
     pub payment_request: String,
     pub status: String,
-    #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
     pub deleted_at: Option<OffsetDateTime>,
 }
 
 const TABLE: &str = "invoice";
 const ALL_COLUMNS: &str =
-    "id, description, amount_sats, payment_hash, payment_request, status, created_at, updated_at, deleted_at";
+    "id, uuid, description, amount_sats, payment_hash, payment_request, status, created_at, updated_at, deleted_at";
 const COL_ID: &str = "id";
+const COL_UUID: &str = "uuid";
 const COL_DESCRIPTION: &str = "description";
 const COL_AMOUNT_SATS: &str = "amount_sats";
 const COL_PAYMENT_HASH: &str = "payment_hash";
@@ -72,12 +72,14 @@ impl Invoice {
         let sql = format!(
             r#"
                 INSERT INTO {TABLE} (
+                    {COL_UUID},
                     {COL_DESCRIPTION},
                     {COL_AMOUNT_SATS},
                     {COL_PAYMENT_HASH},
                     {COL_PAYMENT_REQUEST},
                     {COL_STATUS}
                 ) VALUES (
+                    :uuid,
                     :description,
                     :amount_sats,
                     :payment_hash,
@@ -89,6 +91,7 @@ impl Invoice {
         conn.execute(
             &sql,
             named_params! {
+                ":uuid": Uuid::new_v4().to_string(),
                 ":amount_sats": amount_sats,
                 ":description": description.into(),
                 ":payment_hash": payment_hash.into(),
@@ -189,14 +192,15 @@ const fn mapper() -> fn(&Row) -> rusqlite::Result<Invoice> {
     |row: &Row| -> rusqlite::Result<Invoice> {
         Ok(Invoice {
             id: row.get(0)?,
-            description: row.get(1)?,
-            amount_sats: row.get(2)?,
-            payment_hash: row.get(3)?,
-            payment_request: row.get(4)?,
-            status: row.get(5)?,
-            created_at: row.get(6)?,
-            updated_at: row.get(7)?,
-            deleted_at: row.get(8)?,
+            uuid: row.get(1)?,
+            description: row.get(2)?,
+            amount_sats: row.get(3)?,
+            payment_hash: row.get(4)?,
+            payment_request: row.get(5)?,
+            status: row.get(6)?,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            deleted_at: row.get(9)?,
         })
     }
 }

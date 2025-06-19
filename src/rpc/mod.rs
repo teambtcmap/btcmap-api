@@ -8,7 +8,7 @@ pub mod generate_areas_elements_mapping;
 pub mod generate_element_categories;
 pub mod generate_element_icons;
 pub mod generate_element_issues;
-pub mod generate_invoice;
+pub mod invoice;
 pub mod generate_reports;
 pub mod get_area;
 pub mod get_area_dashboard;

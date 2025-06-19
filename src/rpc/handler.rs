@@ -79,8 +79,8 @@ pub enum RpcMethod {
     RemoveUserTag,
     GetMostActiveUsers,
     // invoice
+    CreateInvoice,
     GetInvoice,
-    GenerateInvoice,
     SyncUnpaidInvoices,
     // search
     Search,
@@ -90,11 +90,15 @@ impl Role {
     const ANON_METHODS: &[RpcMethod] = &[
         RpcMethod::ChangePassword,
         RpcMethod::CreateApiKey,
+        // TODO consider making private
         RpcMethod::GetElement,
+        // Android uses that anonymously, we should keep it public
         RpcMethod::PaywallGetAddElementCommentQuote,
         RpcMethod::PaywallAddElementComment,
+        // Android uses that anonymously, we should keep it public
         RpcMethod::PaywallGetBoostElementQuote,
         RpcMethod::PaywallBoostElement,
+        // Used by our website, we need to create website user or stop using those methods
         RpcMethod::GetElementIssues,
         RpcMethod::GetAreaDashboard,
         RpcMethod::GetMostActiveUsers,
@@ -479,9 +483,10 @@ pub async fn handle(
             req.id.clone(),
             super::get_invoice::run(params(req.params)?, &pool).await?,
         ),
-        RpcMethod::GenerateInvoice => RpcResponse::from(
+        RpcMethod::CreateInvoice => RpcResponse::from(
             req.id.clone(),
-            super::generate_invoice::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
+            super::invoice::create_invoice::run(params(req.params)?, &user.unwrap(), &pool, &conf)
+                .await?,
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),
