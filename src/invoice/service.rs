@@ -1,5 +1,14 @@
-use super::model::Invoice;
-use crate::{conf::Conf, discord, element::Element, element_comment::ElementComment, Result};
+use crate::{
+    conf::Conf,
+    db::{
+        self,
+        invoice::schema::{Invoice, InvoiceStatus},
+    },
+    discord,
+    element::Element,
+    element_comment::ElementComment,
+    Result,
+};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -28,12 +37,12 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
         return Err("Failed to generate LNBITS invoice".into());
     }
     let lnbits_response: CreateLNbitsInvoiceResponse = lnbits_response.json().await?;
-    let invoice = Invoice::insert_async(
+    let invoice = db::invoice::queries_async::insert(
         description,
         amount_sats,
         lnbits_response.payment_hash,
         lnbits_response.bolt11,
-        "unpaid",
+        InvoiceStatus::Unpaid,
         pool,
     )
     .await?;
@@ -53,16 +62,18 @@ pub struct CheckInvoiceResponse {
     pub paid: bool,
 }
 
-pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<Vec<Invoice>> {
+pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<i64> {
     let conf = Conf::select_async(pool).await?;
     if conf.lnbits_invoice_key.is_empty() {
         Err("lnbits invoice key is not set")?
     }
-    let unpaid_invoices = Invoice::select_by_status_async("unpaid", pool).await?;
+    let unpaid_invoices =
+        db::invoice::queries_async::select_by_status(InvoiceStatus::Unpaid, pool).await?;
     let now = OffsetDateTime::now_utc();
+    let hour_ago = now.saturating_sub(Duration::hours(1)).format(&Rfc3339)?;
     let unpaid_invoices: Vec<Invoice> = unpaid_invoices
         .into_iter()
-        .filter(|it| it.created_at > now.saturating_sub(Duration::hours(1)))
+        .filter(|it| it.created_at > hour_ago)
         .collect();
     let mut affected_invoices = vec![];
     let client = reqwest::Client::new();
@@ -81,17 +92,17 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<Vec<Invoice>> {
         }
         let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
         if lnbits_response.paid {
-            Invoice::set_status_async(invoice.id, "paid", pool).await?;
+            db::invoice::queries_async::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
             on_invoice_paid(&invoice, pool).await?;
             affected_invoices.push(invoice);
         }
     }
-    Ok(affected_invoices)
+    Ok(affected_invoices.len() as i64)
 }
 
 // Returns true if invoice was unpaid and became paid
 pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool> {
-    if invoice.status != "unpaid" {
+    if invoice.status != InvoiceStatus::Unpaid {
         return Ok(false);
     }
     let conf = Conf::select_async(pool).await?;
@@ -110,7 +121,7 @@ pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool>
     }
     let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
     if lnbits_response.paid {
-        Invoice::set_status_async(invoice.id, "paid", pool).await?;
+        db::invoice::queries_async::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
         on_invoice_paid(&invoice, pool).await?;
         return Ok(true);
     } else {
@@ -199,10 +210,7 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        db, element::Element, invoice::model::Invoice, osm::overpass::OverpassElement,
-        test::mock_db, Result,
-    };
+    use crate::{db, element::Element, osm::overpass::OverpassElement, test::mock_db, Result};
     use actix_web::test;
     use serde_json::Value;
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
@@ -211,7 +219,14 @@ mod test {
     async fn on_invoice_paid_on_unboosted_element() -> Result<()> {
         let db = mock_db();
         db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        let invoice = Invoice::insert("element_boost:1:10", 0, "", "", "", &db.conn)?;
+        let invoice = db::invoice::queries::insert(
+            "element_boost:1:10",
+            0,
+            "",
+            "",
+            db::invoice::schema::InvoiceStatus::Unpaid,
+            &db.conn,
+        )?;
         super::on_invoice_paid(&invoice, &db.pool).await?;
         let element = db::element::queries::select_by_id(1, &db.conn)?;
         assert!(element.tags.contains_key("boost:expires"));
@@ -233,7 +248,14 @@ mod test {
             &Value::String(old_boost_expires),
             &db.conn,
         )?;
-        let invoice = Invoice::insert("element_boost:1:10", 0, "", "", "", &db.conn)?;
+        let invoice = db::invoice::queries::insert(
+            "element_boost:1:10",
+            0,
+            "",
+            "",
+            db::invoice::schema::InvoiceStatus::Unpaid,
+            &db.conn,
+        )?;
         super::on_invoice_paid(&invoice, &db.pool).await?;
         let element = db::element::queries::select_by_id(1, &db.conn)?;
         assert!(element.tags.contains_key("boost:expires"));

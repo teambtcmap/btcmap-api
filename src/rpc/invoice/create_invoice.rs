@@ -1,8 +1,8 @@
 use crate::{
     conf::Conf,
-    db::user::schema::User,
+    db::{invoice::schema::Invoice, user::schema::User},
     discord,
-    invoice::{self, model::Invoice},
+    invoice::{self},
     Result,
 };
 use deadpool_sqlite::Pool;

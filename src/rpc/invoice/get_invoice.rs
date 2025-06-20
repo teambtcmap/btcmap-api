@@ -1,4 +1,10 @@
-use crate::{invoice::model::Invoice, Result};
+use crate::{
+    db::{
+        self,
+        invoice::schema::{Invoice, InvoiceStatus},
+    },
+    Result,
+};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -17,17 +23,17 @@ impl From<Invoice> for Res {
     fn from(val: Invoice) -> Self {
         Res {
             uuid: val.uuid,
-            status: val.status,
+            status: val.status.into(),
         }
     }
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let mut invoice = Invoice::select_by_uuid_async(params.uuid.clone(), pool).await?;
-    if invoice.status == "unpaid"
+    let mut invoice = db::invoice::queries_async::select_by_uuid(params.uuid.clone(), pool).await?;
+    if invoice.status == InvoiceStatus::Unpaid
         && crate::invoice::service::sync_unpaid_invoice(&invoice, &pool).await?
     {
-        invoice = Invoice::select_by_uuid_async(params.uuid, pool).await?;
+        invoice = db::invoice::queries_async::select_by_uuid(params.uuid, pool).await?;
     }
     Ok(invoice.into())
 }

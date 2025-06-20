@@ -2,5 +2,6 @@ pub mod access_token;
 pub mod area;
 pub mod area_element;
 pub mod element;
+pub mod invoice;
 pub mod osm_user;
 pub mod user;
