@@ -18,6 +18,7 @@ pub struct Params {
 #[derive(Serialize)]
 pub struct Res {
     pub payment_request: String,
+    pub invoice_uuid: String,
 }
 
 pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
@@ -32,5 +33,6 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     .await?;
     Ok(Res {
         payment_request: invoice.payment_request,
+        invoice_uuid: invoice.uuid,
     })
 }

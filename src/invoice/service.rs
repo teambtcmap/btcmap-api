@@ -89,6 +89,35 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<Vec<Invoice>> {
     Ok(affected_invoices)
 }
 
+// Returns true if invoice was unpaid and became paid
+pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool> {
+    if invoice.status != "unpaid" {
+        return Ok(false);
+    }
+    let conf = Conf::select_async(pool).await?;
+    let client = reqwest::Client::new();
+    let url = format!(
+        "https://core.btcmap.org/api/v1/payments/{}",
+        invoice.payment_hash,
+    );
+    let lnbits_response = client
+        .get(url)
+        .header("X-Api-Key", &conf.lnbits_invoice_key)
+        .send()
+        .await?;
+    if !lnbits_response.status().is_success() {
+        return Err("Failed to check LNBITS invoice".into());
+    }
+    let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
+    if lnbits_response.paid {
+        Invoice::set_status_async(invoice.id, "paid", pool).await?;
+        on_invoice_paid(&invoice, pool).await?;
+        return Ok(true);
+    } else {
+        Ok(false)
+    }
+}
+
 pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
     let conf = Conf::select_async(pool).await?;
     discord::post_message(

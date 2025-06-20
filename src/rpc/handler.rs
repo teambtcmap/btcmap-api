@@ -90,6 +90,8 @@ impl Role {
     const ANON_METHODS: &[RpcMethod] = &[
         RpcMethod::ChangePassword,
         RpcMethod::CreateApiKey,
+        // Anons can use some paid features so they need to be able to check their invoice status
+        RpcMethod::GetInvoice,
         // TODO consider making private
         RpcMethod::GetElement,
         // Android uses that anonymously, we should keep it public
@@ -481,7 +483,7 @@ pub async fn handle(
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
-            super::get_invoice::run(params(req.params)?, &pool).await?,
+            super::invoice::get_invoice::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::CreateInvoice => RpcResponse::from(
             req.id.clone(),

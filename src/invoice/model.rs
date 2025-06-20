@@ -134,13 +134,6 @@ impl Invoice {
         Ok(res)
     }
 
-    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Invoice> {
-        pool.get()
-            .await?
-            .interact(move |conn| Invoice::select_by_id(id, conn))
-            .await?
-    }
-
     pub fn select_by_id(id: i64, conn: &Connection) -> Result<Invoice> {
         let sql = format!(
             r#"
@@ -150,6 +143,25 @@ impl Invoice {
             "#
         );
         conn.query_row(&sql, named_params! { ":id": id }, mapper())
+            .map_err(Into::into)
+    }
+
+    pub async fn select_by_uuid_async(uuid: String, pool: &Pool) -> Result<Invoice> {
+        pool.get()
+            .await?
+            .interact(move |conn| Invoice::select_by_uuid(uuid, conn))
+            .await?
+    }
+
+    pub fn select_by_uuid(uuid: String, conn: &Connection) -> Result<Invoice> {
+        let sql = format!(
+            r#"
+                SELECT {ALL_COLUMNS}
+                FROM {TABLE}
+                WHERE {COL_UUID} = :uuid
+            "#
+        );
+        conn.query_row(&sql, named_params! { ":uuid": uuid }, mapper())
             .map_err(Into::into)
     }
 

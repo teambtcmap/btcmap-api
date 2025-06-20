@@ -4,28 +4,30 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct Params {
-    pub id: i64,
+    pub uuid: String,
 }
 
 #[derive(Serialize)]
 pub struct Res {
-    id: i64,
-    description: String,
+    uuid: String,
     status: String,
 }
 
 impl From<Invoice> for Res {
     fn from(val: Invoice) -> Self {
         Res {
-            id: val.id,
-            description: val.description,
+            uuid: val.uuid,
             status: val.status,
         }
     }
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    Invoice::select_by_id_async(params.id, pool)
-        .await
-        .map(Into::into)
+    let mut invoice = Invoice::select_by_uuid_async(params.uuid.clone(), pool).await?;
+    if invoice.status == "unpaid"
+        && crate::invoice::service::sync_unpaid_invoice(&invoice, &pool).await?
+    {
+        invoice = Invoice::select_by_uuid_async(params.uuid, pool).await?;
+    }
+    Ok(invoice.into())
 }
