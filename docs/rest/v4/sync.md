@@ -1,21 +1,52 @@
-# Incremental Sync Approach (Recommended for Native Apps)
+# Incremental Sync (Recommended for Native Apps)
 
-The `/v4/places` endpoint is designed for efficient incremental synchronization. Clients should:
+For performance-critical apps, use BTC Map's incremental sync API with native map widgets. Avoid slower web views. 
 
-1. Store the timestamp of their last sync locally
-2. Request elements that have been updated since that timestamp using the `updated_since` parameter
-3. Deleted places can be excluded during the first sync but you need to include deleted places for follow-up sync in order to invalidate previously cached but now deleted entries
-4. Process only the changes since the last sync
-5. Use `max(updated_at)` as a starting point for the follow-up sync jobs
+## Reduce Latency  
 
-This approach minimizes data transfer and processing requirements, making it ideal for mobile applications and other bandwidth-constrained environments.
+The primary API server (`api.btcmap.org`) is hosted in London. To minimize latency:  
+- Use the **CDN-backed static snapshot** (below) for initial data.  
+- Fetch incremental updates from the API only after. 
 
-## Example Incremental Sync Flow
+## CDN-Powered Static Snapshots  
 
+Merchant data changes slowly (~few %/month). Fetch the latest snapshot from:
+
+https://cdn.static.btcmap.org/api/v4/places.json
+
+This file is usually already cached by a few CDN nodes close to your physical location, so it should allow you to fetch all BTC Map merchants in well under a second, in most cases.
+
+**Included Fields:**
+- `id` – Use to look up more fields on demand
+- `lat`, `lon` – Location data  
+- `icon`, `comments` – UI metadata 
+
+Which should be enough to display all the pins on your map, with proper icons and comment count badges.
+
+## Incremental Updates 
+
+1. Note the `last-modified` header (e.g., `2025-06-11T00:00:00Z`).  
+2. Fetch changes since that timestamp:
+
+```bash
+curl `https://api.btcmap.org/v4/places?fields=id,lat,lon,icon,comments,deleted_at
+  &updated_since=2025-06-11T00:00:00Z
+  &include_deleted=true`
 ```
-// Initial sync - store returned timestamp
-GET /v4/places?updated_since=2020-01-01T00:00:00Z&limit=1000
 
-// Subsequent sync - use timestamp from previous response
-GET /v4/places?updated_since=2023-09-15T14:30:45Z&limit=1000
+Key Parameters:
+
+- `updated_since`: Sync anchor timestamp.
+- `include_deleted`: Required to evict stale records.
+
+## Example Sync Flow
+
+```bash
+// 1. Initial CDN Snapshot
+curl `https://cdn.static.btcmap.org/api/v4/places.json`
+
+// 2. First Incremental Update
+curl `https://api.btcmap.org/v4/places?fields=id,lat,lon,icon,comments,deleted_at
+  &updated_since=2025-06-11T00:00:00Z
+  &include_deleted=true`
 ```
