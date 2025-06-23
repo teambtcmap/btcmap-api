@@ -1,19 +1,26 @@
-# BTCMap REST API v4
+# BTC Map REST API v4
 
-The v4 REST API is the latest version of our REST API with the most advanced features.
+The latest and recommended version of the BTCMap API, offering improved performance and features. 
 
-## Currently Implemented Endpoints
+## Endpoints  
 
-- [Places](places.md) - Fetch places, individually or in batches.
+### Implemented  
+- **[Places](places.md)** – Fetch places (single or batch).  
+### Planned  
+- **[Areas](areas.md)** *(Coming soon)* 
+### Proposed
+- Need something extra? Let us know!
 
-## Planned Endpoints
+## Incremental Sync  
+For performance-sensitive apps with persistent caching:  
+- [Sync Guide](sync.md) – Maintain a local data snapshot for instant (offline) retrieval. 
 
-- [Areas](areas.md)
+## Error Handling  
+**Current (Temporary):**  
+- All errors return HTTP `500` with a plain-text message.  
+- Treat any `500` response as an API error; the body may be displayed directly.  
 
-## Error Handling
+**Planned Improvement:**  
+- Adopt [RFC 9457](https://datatracker.ietf.org/doc/html/rfc9457) (Problem Details for HTTP APIs) for structured errors.  
+- Proper status codes (e.g., `400` for client errors, `404` for not found).  
 
-TODO
-
-## Incremental Sync
-
-If you care about app performance and if your platform is capable of maintaining a persistent cache, [here](sync.md) is a walktrough on how you can maintain a local snapshot of BTC Map data for instant retreival, even in offline mode.
