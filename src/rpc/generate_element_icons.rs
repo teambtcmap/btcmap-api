@@ -1666,7 +1666,6 @@ mod test {
 
     use crate::{
         db,
-        element::Element,
         osm::overpass::OverpassElement,
         test::{mock_conn, mock_osm_tags},
         Result,
@@ -1690,8 +1689,12 @@ mod test {
             &conn,
         )?;
         super::generate_element_icons(1, 100, &conn)?;
-        let elements =
-            Element::select_updated_since(&OffsetDateTime::UNIX_EPOCH, None, true, &conn)?;
+        let elements = db::element::queries::select_updated_since(
+            OffsetDateTime::UNIX_EPOCH,
+            None,
+            true,
+            &conn,
+        )?;
         assert_eq!(
             "golf_course",
             elements[0].tag("icon:android").as_str().unwrap()

@@ -1,3 +1,4 @@
+use crate::db;
 use crate::element::Element;
 use crate::log::RequestExtension;
 use crate::osm::overpass::OverpassElement;
@@ -77,11 +78,14 @@ pub async fn get(
         .await?
         .interact(move |conn| match &args.updated_since {
             Some(updated_since) => {
-                Element::select_updated_since(updated_since, args.limit, true, conn)
+                db::element::queries::select_updated_since(*updated_since, args.limit, true, conn)
             }
-            None => {
-                Element::select_updated_since(&OffsetDateTime::UNIX_EPOCH, args.limit, true, conn)
-            }
+            None => db::element::queries::select_updated_since(
+                OffsetDateTime::UNIX_EPOCH,
+                args.limit,
+                true,
+                conn,
+            ),
         })
         .await??;
     let elements_len = elements.len();

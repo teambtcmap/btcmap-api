@@ -1,5 +1,9 @@
 use crate::{
-    conf::Conf, db::user::schema::User, discord, element::Element, element_comment::ElementComment,
+    conf::Conf,
+    db::{self, user::schema::User},
+    discord,
+    element::Element,
+    element_comment::ElementComment,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -14,8 +18,13 @@ pub struct Res {
 
 pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let elements =
-        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
+    let elements = db::element::queries_async::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     let mut elements_affected = 0;
     for element in elements {
         let comments =

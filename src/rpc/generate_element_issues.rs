@@ -1,8 +1,8 @@
 use crate::{
     conf::Conf,
-    db::user::schema::User,
+    db::{self, user::schema::User},
     discord,
-    element::{self, Element},
+    element::{self},
     element_issue::model::ElementIssue,
     Result,
 };
@@ -21,8 +21,13 @@ pub struct Res {
 }
 
 pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let elements =
-        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
+    let elements = db::element::queries_async::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     for element in elements {
         if element.deleted_at.is_some() {
             let issues = ElementIssue::select_by_element_id_async(element.id, pool).await?;
@@ -32,8 +37,13 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
             }
         }
     }
-    let elements =
-        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, false, pool).await?;
+    let elements = db::element::queries_async::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        false,
+        pool,
+    )
+    .await?;
     let res = element::service::generate_issues_async(elements, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,

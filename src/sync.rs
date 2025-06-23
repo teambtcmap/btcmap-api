@@ -134,12 +134,16 @@ pub async fn sync_deleted_elements(
         .iter()
         .map(|it| it.btcmap_id())
         .collect();
-    let absent_elements: Vec<Element> =
-        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, false, pool)
-            .await?
-            .into_iter()
-            .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
-            .collect();
+    let absent_elements: Vec<Element> = db::element::queries_async::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        false,
+        pool,
+    )
+    .await?
+    .into_iter()
+    .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
+    .collect();
     let mut res = vec![];
     let conf = Conf::select_async(pool).await?;
     for absent_element in absent_elements {
@@ -205,8 +209,13 @@ pub async fn sync_updated_elements(
     pool: &Pool,
 ) -> Result<Vec<Event>> {
     let mut res = vec![];
-    let cached_elements =
-        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
+    let cached_elements = db::element::queries_async::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     for fresh_overpass_element in fresh_overpass_elements {
         let cached_element = cached_elements.iter().find(|cached_element| {
             cached_element.overpass_data.r#type == fresh_overpass_element.r#type
@@ -264,8 +273,13 @@ pub async fn sync_new_elements(
     pool: &Pool,
 ) -> Result<Vec<Event>> {
     let mut res = vec![];
-    let cached_elements =
-        Element::select_updated_since_async(OffsetDateTime::UNIX_EPOCH, None, true, pool).await?;
+    let cached_elements = db::element::queries_async::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     for fresh_element in fresh_overpass_elements {
         let btcmap_id = fresh_element.btcmap_id();
         let user_id = fresh_element.uid;

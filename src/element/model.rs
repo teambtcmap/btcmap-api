@@ -45,59 +45,6 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
-    pub async fn select_updated_since_async(
-        updated_since: OffsetDateTime,
-        limit: Option<i64>,
-        include_deleted: bool,
-        pool: &Pool,
-    ) -> Result<Vec<Element>> {
-        pool.get()
-            .await?
-            .interact(move |conn| {
-                Element::select_updated_since(&updated_since, limit, include_deleted, conn)
-            })
-            .await?
-    }
-
-    pub fn select_updated_since(
-        updated_since: &OffsetDateTime,
-        limit: Option<i64>,
-        include_deleted: bool,
-        conn: &Connection,
-    ) -> Result<Vec<Element>> {
-        let sql = if include_deleted {
-            format!(
-                r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
-                WHERE {COL_UPDATED_AT} > :updated_since
-                ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
-                LIMIT :limit
-            "#
-            )
-        } else {
-            format!(
-                r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
-                WHERE deleted_at IS NULL AND {COL_UPDATED_AT} > :updated_since
-                ORDER BY {COL_UPDATED_AT}, {COL_ROWID}
-                LIMIT :limit
-            "#
-            )
-        };
-        Ok(conn
-            .prepare(&sql)?
-            .query_map(
-                named_params! {
-                    ":updated_since": updated_since.format(&Rfc3339)?,
-                    ":limit": limit.unwrap_or(i64::MAX)
-                },
-                mapper(),
-            )?
-            .collect::<Result<Vec<_>, _>>()?)
-    }
-
     pub async fn select_by_search_query_async(
         search_query: impl Into<String>,
         pool: &Pool,
@@ -394,21 +341,7 @@ mod test {
     use super::Element;
     use crate::{db, osm::overpass::OverpassElement, test::mock_conn, Result};
     use serde_json::{json, Map};
-    use time::{macros::datetime, OffsetDateTime};
-
-    #[test]
-    fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
-        db::element::queries::insert(&OverpassElement::mock(1), &conn)?
-            .set_updated_at(&datetime!(2023-10-01 00:00 UTC), &conn)?;
-        let expected_element = db::element::queries::insert(&OverpassElement::mock(2), &conn)?
-            .set_updated_at(&datetime!(2023-10-02 00:00 UTC), &conn)?;
-        assert_eq!(
-            vec![expected_element],
-            Element::select_updated_since(&datetime!(2023-10-01 00:00 UTC), None, true, &conn)?
-        );
-        Ok(())
-    }
+    use time::OffsetDateTime;
 
     #[test]
     fn select_by_osm_type_and_id() -> Result<()> {

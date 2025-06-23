@@ -104,7 +104,9 @@ pub fn get_elements_within_geometries(
     conn: &Connection,
 ) -> Result<Vec<Element>> {
     let mut area_elements: Vec<Element> = vec![];
-    for element in Element::select_updated_since(&OffsetDateTime::UNIX_EPOCH, None, true, conn)? {
+    for element in
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, conn)?
+    {
         for geometry in &geometries {
             match &geometry.value {
                 geojson::Value::MultiPolygon(_) => {

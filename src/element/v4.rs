@@ -1,3 +1,4 @@
+use crate::db;
 use crate::element::Element;
 use crate::element_comment::ElementComment;
 use crate::log::RequestExtension;
@@ -39,7 +40,7 @@ pub async fn get(
 ) -> Result<Json<Vec<Map<String, Value>>>, Error> {
     let fields = args.fields.clone().unwrap_or_default();
     let fields: Vec<&str> = fields.split(',').collect();
-    let items = Element::select_updated_since_async(
+    let items = db::element::queries_async::select_updated_since(
         args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH),
         args.limit,
         args.include_deleted.unwrap_or(false),

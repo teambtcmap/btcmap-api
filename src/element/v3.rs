@@ -1,3 +1,4 @@
+use crate::db;
 use crate::element::Element;
 use crate::log::RequestExtension;
 use crate::osm::overpass::OverpassElement;
@@ -76,7 +77,12 @@ pub async fn get(
         .get()
         .await?
         .interact(move |conn| {
-            Element::select_updated_since(&args.updated_since, Some(args.limit), true, conn)
+            db::element::queries::select_updated_since(
+                args.updated_since,
+                Some(args.limit),
+                true,
+                conn,
+            )
         })
         .await??;
     req.extensions_mut()

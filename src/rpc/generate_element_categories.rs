@@ -99,7 +99,6 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
-    use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::Result;
     use crate::{db, db_utils};
@@ -134,8 +133,12 @@ mod test {
 
         super::generate_element_categories(1, 100, &conn)?;
 
-        let elements =
-            Element::select_updated_since(&OffsetDateTime::UNIX_EPOCH, None, true, &conn)?;
+        let elements = db::element::queries::select_updated_since(
+            OffsetDateTime::UNIX_EPOCH,
+            None,
+            true,
+            &conn,
+        )?;
 
         assert_eq!("atm", elements[0].tag("category").as_str().unwrap());
         assert_eq!("cafe", elements[1].tag("category").as_str().unwrap());
