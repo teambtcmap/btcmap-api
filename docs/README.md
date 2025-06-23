@@ -1,8 +1,12 @@
 # BTC Map API Documentation  
 
-This documentation provides details about the BTC Map API.  
+This documentation describes the BTC Map API, including available interfaces and usage guidelines.  
 
-## API Types  
+## Available Interfaces  
 
-- [REST](rest/README.md) - An HTTP-based API used by all BTC Map client apps. Supports syncing points, areas of interest, and supplementary entities. It supports incremental sync, caching is recommended where applicable.  
-- [RPC](rpc/README.md) - A JSON-RPC interface focused on admin tasks. It's a work in progress, and we don't advise using it unless you're working in close coordination with our core team. 
+- **[REST](rest/README.md)** – An HTTP-based API used by all BTC Map client apps.
+  - Provides places, areas, and supplementary entities.  
+  - Supports incremental sync (caching recommended where applicable).  
+
+- **[RPC](rpc/README.md)** – A JSON-RPC interface for admin tasks.  
+  - **Note:** Work in progress; use only in coordination with the core team.  
