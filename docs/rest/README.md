@@ -1,19 +1,22 @@
+# BTC Map REST API  
 
-# BTC Map REST API
+The BTC Map REST API provides HTTP-based access to BTC Map data.  
 
-The BTC Map REST API provides HTTP-based access to BTC Map data.
+## Base URL  
 
-## Base URL
+All endpoints are relative to: 
 
-All REST API endpoints are relative to the base URL: `https://api.btcmap.org/`
+https://api.btcmap.org/
 
 ## API Versioning
 
-The API is versioned with the paths `/v2/`, `/v3/`, and `/v4/`. You are always advised to use the latest available version since the old versions will be phased out eventually.
+The API uses versioned paths (`/v2/`, `/v3/`, `/v4/`).
 
-## Available API Versions
+**Always prefer the latest version**, as older versions will be deprecated.
 
-- [v4](v4/README.md) - use that, unless you have a very good reason to use an older API.
-- [v3](v3/README.md) - used by Android app currently.
-- [v2](v2/README.md) - used by Web and iOS apps so we keep it alive for now.
+## Available API Versions List
+
+- **[v4](v4/README.md)** – **Recommended** unless legacy compatibility is needed.  
+- **[v3](v3/README.md)** – Currently used by the Android app.  
+- **[v2](v2/README.md)** – Maintained for Web/iOS apps (legacy).
 
