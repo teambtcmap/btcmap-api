@@ -1,10 +1,7 @@
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Error {
-    OsmApi(String),
-    OverpassApi(String),
     Other(String),
     IO(std::io::Error),
     Rusqlite(rusqlite::Error),
@@ -22,6 +19,28 @@ pub enum Error {
     Blocking(actix_web::error::BlockingError),
 }
 
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Other(_) => None,
+            Error::IO(err) => Some(err),
+            Error::Rusqlite(err) => Some(err),
+            Error::Reqwest(err) => Some(err),
+            Error::SerdeJson(err) => Some(err),
+            Error::TimeFormat(err) => Some(err),
+            Error::DeadpoolPool(err) => Some(err),
+            Error::DeadpoolInteract(err) => Some(err),
+            Error::DeadpoolConfig(err) => Some(err),
+            Error::DeadpoolBuild(err) => Some(err),
+            Error::Parse(err) => Some(err),
+            Error::Decode(err) => Some(err),
+            Error::GeoJson(err) => Some(err),
+            Error::Staticmap(err) => Some(err),
+            Error::Blocking(err) => Some(err),
+        }
+    }
+}
+
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -34,8 +53,6 @@ impl Display for Error {
             Error::Reqwest(err) => err.fmt(f),
             Error::SerdeJson(err) => err.fmt(f),
             Error::TimeFormat(err) => err.fmt(f),
-            Error::OsmApi(err) => err.fmt(f),
-            Error::OverpassApi(err) => err.fmt(f),
             Error::DeadpoolPool(err) => err.fmt(f),
             Error::DeadpoolInteract(err) => err.fmt(f),
             Error::DeadpoolConfig(err) => err.fmt(f),
@@ -139,16 +156,5 @@ impl From<staticmap::Error> for Error {
 impl From<actix_web::error::BlockingError> for Error {
     fn from(error: actix_web::error::BlockingError) -> Self {
         Error::Blocking(error)
-    }
-}
-
-// Used by REST API
-impl ResponseError for Error {
-    fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).body(self.to_string())
-    }
-
-    fn status_code(&self) -> StatusCode {
-        StatusCode::INTERNAL_SERVER_ERROR
     }
 }

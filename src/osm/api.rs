@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::Result;
 use reqwest::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -51,10 +51,7 @@ async fn _get_element(res: Response) -> Result<Option<OsmElement>> {
     } else {
         match res.status() {
             StatusCode::NOT_FOUND => Ok(None),
-            _ => Err(Error::OsmApi(format!(
-                "Unexpected response status: {}",
-                res.status()
-            )))?,
+            _ => Err(format!("Unexpected response status: {}", res.status()))?,
         }
     }
 }
@@ -149,10 +146,7 @@ async fn _get_user(res: Response) -> Result<Option<EditingApiUser>> {
         match res.status() {
             StatusCode::NOT_FOUND => Ok(None),
             StatusCode::GONE => Ok(None),
-            _ => Err(Error::OsmApi(format!(
-                "Unexpected response status: {}",
-                res.status()
-            )))?,
+            _ => Err(format!("Unexpected response status: {}", res.status()))?,
         }
     }
 }

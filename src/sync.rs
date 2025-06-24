@@ -5,7 +5,7 @@ use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
-use crate::{area_element, db, discord, user, Error, Result};
+use crate::{area_element, db, discord, user, Result};
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use serde_json::Value;
@@ -187,10 +187,10 @@ async fn mark_element_as_deleted(
 async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<OsmElement> {
     let osm_element = match osm::api::get_element(osm_type, osm_id).await? {
         Some(v) => v,
-        None => Err(Error::OsmApi(format!(
+        None => Err(format!(
             "Failed to fetch element {}:{} from OSM",
             osm_type, osm_id,
-        )))?,
+        ))?,
     };
     if osm_element.visible.unwrap_or(true) && osm_element.tag("currency:XBT", "no") == "yes" {
         let message = format!(
@@ -199,7 +199,7 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<Osm
         );
         error!(message);
         discord::post_message(&conf.discord_webhook_osm_changes, &message).await;
-        Err(Error::OverpassApi(message))?
+        Err(message)?
     }
     Ok(osm_element)
 }

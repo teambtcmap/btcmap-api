@@ -1,4 +1,4 @@
-use crate::{db, osm, Error, Result};
+use crate::{db, osm, Result};
 use deadpool_sqlite::Pool;
 use tracing::info;
 
@@ -12,9 +12,7 @@ pub async fn insert_user_if_not_exists(user_id: i64, pool: &Pool) -> Result<()> 
     }
     match osm::api::get_user(user_id).await? {
         Some(user) => db::osm_user::queries_async::insert(user_id, user, pool).await?,
-        None => Err(Error::OsmApi(format!(
-            "User with id = {user_id} doesn't exist on OSM"
-        )))?,
+        None => Err(format!("User with id = {user_id} doesn't exist on OSM"))?,
     };
     Ok(())
 }

@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::Result;
 use geo::{coord, Coord};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -188,14 +188,14 @@ pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
     info!(http_status_code = ?response.status(), "Got OSM API response");
     let response = response.json::<Response>().await?;
     if response.elements.is_empty() {
-        Err(Error::OverpassApi(format!(
+        Err(format!(
             "Got suspicious response: {}",
             serde_json::to_string_pretty(&response)?
-        )))?
+        ))?
     }
     info!(elements = response.elements.len(), "Fetched elements");
     if response.elements.len() < 5000 {
-        Err(Error::OverpassApi("Data set is most likely invalid".into()))?
+        Err("Data set is most likely invalid")?
     }
     Ok(QueryBitcoinMerchantsRes {
         elements: response.elements,
