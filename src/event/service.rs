@@ -16,9 +16,7 @@ use tracing::warn;
 
 pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
     user::service::insert_user_if_not_exists(event.user_id, pool).await?;
-    let user = db::osm_user::queries_async::select_by_id(event.user_id, pool)
-        .await?
-        .unwrap();
+    let user = db::osm_user::queries_async::select_by_id(event.user_id, pool).await?;
 
     let message = match event.r#type.as_str() {
         "create" => format!(

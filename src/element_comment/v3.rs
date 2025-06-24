@@ -97,7 +97,6 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
     pool.get()
         .await?
         .interact(move |conn| ElementComment::select_by_id(*id, conn))
-        .await??
-        .ok_or(Error::not_found())
+        .await?
         .map(|it| it.into())
 }

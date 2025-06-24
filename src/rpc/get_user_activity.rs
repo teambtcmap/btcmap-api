@@ -24,8 +24,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
         .get()
         .await?
         .interact(move |conn| db::osm_user::queries::select_by_id_or_name(&cloned_args_id, conn))
-        .await??
-        .ok_or(format!("There is no user with id or name = {}", params.id))?;
+        .await??;
     let events = pool
         .get()
         .await?

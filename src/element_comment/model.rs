@@ -1,6 +1,6 @@
 use crate::Result;
 use deadpool_sqlite::Pool;
-use rusqlite::{named_params, Connection, OptionalExtension, Row};
+use rusqlite::{named_params, Connection, Row};
 use serde::Serialize;
 #[cfg(not(test))]
 use std::thread::sleep;
@@ -71,7 +71,10 @@ impl ElementComment {
                 ":comment": comment.into(),
             },
         )?;
-        Ok(ElementComment::select_by_id(conn.last_insert_rowid(), conn)?.unwrap())
+        Ok(ElementComment::select_by_id(
+            conn.last_insert_rowid(),
+            conn,
+        )?)
     }
 
     pub fn select_updated_since(
@@ -223,14 +226,14 @@ impl ElementComment {
         Ok(res)
     }
 
-    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<ElementComment>> {
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<ElementComment> {
         pool.get()
             .await?
             .interact(move |conn| ElementComment::select_by_id(id, conn))
             .await?
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<ElementComment>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementComment> {
         let query = format!(
             r#"
                 SELECT {ALL_COLUMNS}
@@ -239,16 +242,14 @@ impl ElementComment {
             "#
         );
         debug!(query);
-        Ok(conn
-            .query_row(&query, named_params! { ":id": id }, mapper())
-            .optional()?)
+        Ok(conn.query_row(&query, named_params! { ":id": id }, mapper())?)
     }
 
     pub async fn set_deleted_at_async(
         id: i64,
         deleted_at: Option<OffsetDateTime>,
         pool: &Pool,
-    ) -> Result<Option<ElementComment>> {
+    ) -> Result<ElementComment> {
         pool.get()
             .await?
             .interact(move |conn| ElementComment::set_deleted_at(id, deleted_at, conn))
@@ -259,7 +260,7 @@ impl ElementComment {
         id: i64,
         deleted_at: Option<OffsetDateTime>,
         conn: &Connection,
-    ) -> Result<Option<ElementComment>> {
+    ) -> Result<ElementComment> {
         match deleted_at {
             Some(deleted_at) => {
                 let sql = format!(

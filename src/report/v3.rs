@@ -97,9 +97,8 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
     pool.get()
         .await?
         .interact(move |conn| Report::select_by_id(id, conn))
-        .await??
+        .await?
         .map(|it| it.into())
-        .ok_or(Error::not_found())
 }
 
 #[cfg(test)]

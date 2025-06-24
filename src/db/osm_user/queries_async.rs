@@ -32,7 +32,7 @@ pub async fn select_most_active(
         .await?
 }
 
-pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Option<OsmUser>> {
+pub async fn select_by_id(id: i64, pool: &Pool) -> Result<OsmUser> {
     pool.get()
         .await?
         .interact(move |conn| super::queries::select_by_id(id, conn))

@@ -3,7 +3,6 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Error {
-    NotFound(String),
     Unauthorized(String),
     InvalidInput(String),
     OsmApi(String),
@@ -28,7 +27,6 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::NotFound(err) => write!(f, "{}", err),
             Error::InvalidInput(err) => write!(f, "{}", err),
             Error::Unauthorized(err) => write!(f, "{}", err),
             Error::Other(err) => write!(f, "{}", err),
@@ -159,10 +157,6 @@ impl ResponseError for Error {
 }
 
 impl Error {
-    pub fn not_found() -> Self {
-        Error::NotFound("Requested entity not found".into())
-    }
-
     pub fn unauthorized(action: impl Into<String>) -> Error {
         Error::Unauthorized(format!(
             "you are not allowed to perform action {}",

@@ -1,9 +1,7 @@
-use crate::Error;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use rusqlite::named_params;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
 use rusqlite::Row;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -72,8 +70,7 @@ impl Event {
                 ":type": r#type,
             },
         )?;
-        Event::select_by_id(conn.last_insert_rowid(), conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Event::select_by_id(conn.last_insert_rowid(), conn)
     }
 
     pub fn select_all(
@@ -261,7 +258,7 @@ impl Event {
         Ok(res)
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Event>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Event> {
         let sql = format!(
             r#"
                 SELECT
@@ -280,9 +277,8 @@ impl Event {
                 WHERE ev.{COL_ROWID} = :id
             "#
         );
-        Ok(conn
-            .query_row(&sql, named_params! { ":id": id }, mapper())
-            .optional()?)
+        conn.query_row(&sql, named_params! { ":id": id }, mapper())
+            .map_err(Into::into)
     }
 
     pub async fn patch_tags_async(
@@ -315,7 +311,7 @@ impl Event {
                 ":tags": &serde_json::to_string(tags)?,
             },
         )?;
-        Event::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Event::select_by_id(id, conn)
     }
 
     #[cfg(test)]
@@ -338,7 +334,7 @@ impl Event {
                 ":updated_at": updated_at.format(&Rfc3339)?,
             },
         )?;
-        Event::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Event::select_by_id(id, conn)
     }
 
     #[cfg(test)]
@@ -385,7 +381,7 @@ mod test {
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = Event::insert(user.id, element.id, "create", &conn)?;
-        assert_eq!(event, Event::select_by_id(event.id, &conn)?.unwrap());
+        assert_eq!(event, Event::select_by_id(event.id, &conn)?);
         Ok(())
     }
 
@@ -429,7 +425,7 @@ mod test {
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = Event::insert(user.id, element.id, "", &conn)?;
-        assert_eq!(event, Event::select_by_id(1, &conn)?.unwrap());
+        assert_eq!(event, Event::select_by_id(1, &conn)?);
         Ok(())
     }
 
@@ -467,10 +463,7 @@ mod test {
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = Event::insert(user.id, element.id, "", &conn)?;
         let event = Event::set_updated_at(event.id, &updated_at, &conn)?;
-        assert_eq!(
-            updated_at,
-            Event::select_by_id(event.id, &conn)?.unwrap().updated_at,
-        );
+        assert_eq!(updated_at, Event::select_by_id(event.id, &conn)?.updated_at);
         Ok(())
     }
 }

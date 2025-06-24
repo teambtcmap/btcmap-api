@@ -383,7 +383,7 @@ mod test {
                 .await
                 .is_ok()
         );
-        assert!(db::osm_user::queries::select_by_id(btc_map_user_id, &db.conn)?.is_some());
+        assert!(db::osm_user::queries::select_by_id(btc_map_user_id, &db.conn).is_ok());
         Ok(())
     }
 }

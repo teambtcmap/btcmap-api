@@ -28,8 +28,7 @@ pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Res
         .get()
         .await?
         .interact(move |conn| db::osm_user::queries::select_by_name(&cloned_args_user_name, conn))
-        .await??
-        .ok_or(format!("There is no user with name = {}", params.user_name))?;
+        .await??;
     let user = pool
         .get()
         .await?

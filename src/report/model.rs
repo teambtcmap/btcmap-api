@@ -1,4 +1,3 @@
-use crate::Error;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use rusqlite::named_params;
@@ -73,8 +72,7 @@ impl Report {
                 ":tags" : serde_json::to_string(&tags)?,
             },
         )?;
-        Report::select_by_id(conn.last_insert_rowid(), conn)?
-            .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Report::select_by_id(conn.last_insert_rowid(), conn)
     }
 
     pub async fn select_updated_since_async(
@@ -212,14 +210,14 @@ impl Report {
             .collect::<Result<Vec<Report>, _>>()?)
     }
 
-    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Option<Self>> {
+    pub async fn select_by_id_async(id: i64, pool: &Pool) -> Result<Self> {
         pool.get()
             .await?
             .interact(move |conn| Self::select_by_id(id, conn))
             .await?
     }
 
-    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<Report>> {
+    pub fn select_by_id(id: i64, conn: &Connection) -> Result<Report> {
         let sql = r#"
             SELECT
                 r.rowid,
@@ -234,9 +232,8 @@ impl Report {
             LEFT JOIN area a ON a.rowid = r.area_id
             WHERE r.rowid = :id
         "#;
-        Ok(conn
-            .query_row(sql, named_params! { ":id": id }, mapper())
-            .optional()?)
+        conn.query_row(sql, named_params! { ":id": id }, mapper())
+            .map_err(Into::into)
     }
 
     pub async fn select_latest_by_area_id_async(area_id: i64, pool: &Pool) -> Result<Option<Self>> {
@@ -287,7 +284,7 @@ impl Report {
             sql,
             named_params! { ":id": id, ":tags": &serde_json::to_string(tags)? },
         )?;
-        Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Report::select_by_id(id, conn)
     }
 
     #[cfg(test)]
@@ -317,7 +314,7 @@ impl Report {
                 ":updated_at": updated_at.format(&time::format_description::well_known::Rfc3339)?,
             },
         )?;
-        Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Report::select_by_id(id, conn)
     }
 
     #[cfg(test)]
@@ -351,7 +348,7 @@ impl Report {
                 ":deleted_at": deleted_at.format(&time::format_description::well_known::Rfc3339)?,
             },
         )?;
-        Report::select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+        Report::select_by_id(id, conn)
     }
 
     pub fn total_elements(&self) -> i64 {
@@ -468,7 +465,7 @@ mod test {
         let pool = mock_pool().await;
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
-        assert!(Report::select_by_id_async(1, &pool).await?.is_some());
+        assert!(Report::select_by_id_async(1, &pool).await.is_ok());
         Ok(())
     }
 
@@ -506,14 +503,14 @@ mod test {
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
         Report::insert_async(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
-        let report = Report::select_by_id_async(1, &pool).await?.unwrap();
+        let report = Report::select_by_id_async(1, &pool).await?;
         assert!(report.tags.is_empty());
         Report::patch_tags(1, tags.clone(), &pool).await?;
-        let report = Report::select_by_id_async(1, &pool).await?.unwrap();
+        let report = Report::select_by_id_async(1, &pool).await?;
         assert_eq!(1, report.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
         Report::patch_tags(1, tags, &pool).await?;
-        let report = Report::select_by_id_async(1, &pool).await?.unwrap();
+        let report = Report::select_by_id_async(1, &pool).await?;
         assert_eq!(2, report.tags.len());
         Ok(())
     }
@@ -530,7 +527,6 @@ mod test {
             new_deleted_at,
             Report::select_by_id_async(report.id, &pool)
                 .await?
-                .unwrap()
                 .deleted_at
                 .unwrap(),
         );

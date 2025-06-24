@@ -1,7 +1,7 @@
 use super::schema;
 use super::schema::Columns;
-use crate::{error::Error, osm::api::EditingApiUser, Result};
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use crate::{osm::api::EditingApiUser, Result};
+use rusqlite::{params, Connection, Row};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -64,8 +64,7 @@ pub fn insert(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<O
         table = schema::NAME
     );
     conn.execute(&sql, params![id, serde_json::to_string(osm_data)?])?;
-    select_by_id(conn.last_insert_rowid(), conn)?
-        .ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+    select_by_id(conn.last_insert_rowid(), conn)
 }
 
 pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<OsmUser>> {
@@ -181,14 +180,14 @@ pub fn select_most_active(
         .map_err(Into::into)
 }
 
-pub fn select_by_id_or_name(id_or_name: &str, conn: &Connection) -> Result<Option<OsmUser>> {
+pub fn select_by_id_or_name(id_or_name: &str, conn: &Connection) -> Result<OsmUser> {
     match id_or_name.parse::<i64>() {
         Ok(id) => select_by_id(id, conn),
         Err(_) => select_by_name(id_or_name, conn),
     }
 }
 
-pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<OsmUser>> {
+pub fn select_by_id(id: i64, conn: &Connection) -> Result<OsmUser> {
     let sql = format!(
         r#"
             SELECT {projection}
@@ -199,12 +198,11 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<OsmUser>> {
         table = schema::NAME,
         id = Columns::Id.as_str(),
     );
-    Ok(conn
-        .query_row(&sql, params![id], OsmUser::mapper())
-        .optional()?)
+    conn.query_row(&sql, params![id], OsmUser::mapper())
+        .map_err(Into::into)
 }
 
-pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<OsmUser>> {
+pub fn select_by_name(name: &str, conn: &Connection) -> Result<OsmUser> {
     let sql = format!(
         r#"
                 SELECT {projection}
@@ -215,10 +213,8 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<OsmUser>> 
         table = schema::NAME,
         osm_data = Columns::OsmData.as_str(),
     );
-    let res = conn
-        .query_row(&sql, params![name], OsmUser::mapper())
-        .optional()?;
-    Ok(res)
+    conn.query_row(&sql, params![name], OsmUser::mapper())
+        .map_err(Into::into)
 }
 
 pub fn set_osm_data(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<()> {
@@ -254,10 +250,10 @@ pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> 
         id = Columns::Id.as_str(),
     );
     conn.execute(&sql, params![&serde_json::to_string(tags)?, id])?;
-    select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+    select_by_id(id, conn)
 }
 
-pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<OsmUser>> {
+pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<OsmUser> {
     let sql = format!(
         r#"
                 UPDATE {table}
@@ -269,8 +265,7 @@ pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<Option<OsmUs
         id = Columns::Id.as_str(),
     );
     conn.execute(&sql, params![format!("$.{name}"), id,])?;
-    let res = select_by_id(id, conn)?;
-    Ok(res)
+    select_by_id(id, conn)
 }
 
 #[cfg(test)]
@@ -286,7 +281,7 @@ pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -
         id = Columns::Id.as_str(),
     );
     conn.execute(&sql, params![updated_at.format(&Rfc3339)?, id,])?;
-    select_by_id(id, conn)?.ok_or(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows))
+    select_by_id(id, conn)
 }
 
 #[cfg(test)]
@@ -372,11 +367,10 @@ mod test {
     fn select_by_id_or_name() -> Result<()> {
         let conn = mock_conn();
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
-        assert_eq!(user.id, super::select_by_id(1, &conn)?.unwrap().id);
+        assert_eq!(user.id, super::select_by_id(1, &conn)?.id);
         assert_eq!(
             user.osm_data.display_name,
             super::select_by_name(&user.osm_data.display_name, &conn)?
-                .unwrap()
                 .osm_data
                 .display_name
         );
@@ -387,7 +381,7 @@ mod test {
     fn select_by_id() -> Result<()> {
         let conn = mock_conn();
         super::insert(1, &EditingApiUser::mock(), &conn)?;
-        assert!(super::select_by_id(1, &conn)?.is_some());
+        assert!(super::select_by_id(1, &conn).is_ok());
         Ok(())
     }
 
@@ -415,10 +409,7 @@ mod test {
         let _user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         assert_eq!(
             name,
-            super::select_by_name(name, &conn)?
-                .unwrap()
-                .osm_data
-                .display_name
+            super::select_by_name(name, &conn)?.osm_data.display_name
         );
         Ok(())
     }
@@ -436,7 +427,7 @@ mod test {
             ..EditingApiUser::mock()
         };
         super::set_osm_data(1, &user, &conn)?;
-        let user = super::select_by_id(1, &conn)?.unwrap();
+        let user = super::select_by_id(1, &conn)?;
         assert_eq!(2, user.osm_data.id);
         Ok(())
     }
@@ -462,14 +453,14 @@ mod test {
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value.into());
         super::insert(1, &EditingApiUser::mock(), &conn)?;
-        let user = super::select_by_id(1, &conn)?.unwrap();
+        let user = super::select_by_id(1, &conn)?;
         assert!(user.tags.is_empty());
         super::patch_tags(1, &tags, &conn)?;
-        let user = super::select_by_id(1, &conn)?.unwrap();
+        let user = super::select_by_id(1, &conn)?;
         assert_eq!(1, user.tags.len());
         tags.insert(tag_2_name.into(), tag_2_value.into());
         super::patch_tags(1, &tags, &conn)?;
-        let user = super::select_by_id(1, &conn)?.unwrap();
+        let user = super::select_by_id(1, &conn)?;
         assert_eq!(2, user.tags.len());
         Ok(())
     }
@@ -482,7 +473,7 @@ mod test {
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         let user = super::set_tag(user.id, tag_name, &tag_value, &conn)?;
         assert_eq!(tag_value, user.tags[tag_name]);
-        let user = super::remove_tag(user.id, tag_name, &conn)?.unwrap();
+        let user = super::remove_tag(user.id, tag_name, &conn)?;
         assert!(user.tags.get(tag_name).is_none());
         Ok(())
     }

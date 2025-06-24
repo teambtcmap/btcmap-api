@@ -148,8 +148,8 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
         }
         let id = id.parse::<i64>().unwrap_or(0);
         if *action == "publish" {
-            let comment = ElementComment::select_by_id_async(id, pool).await?;
-            if comment.is_some() {
+            let comment = ElementComment::select_by_id_async(id, pool).await;
+            if comment.is_ok() {
                 ElementComment::set_deleted_at_async(id, None, pool).await?;
                 discord::post_message(
                     &conf.discord_webhook_api,
