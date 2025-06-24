@@ -3,7 +3,6 @@ use std::i64;
 use super::schema;
 use super::schema::Area;
 use super::schema::Columns;
-use crate::Error;
 use crate::Result;
 use geojson::GeoJson;
 use rusqlite::params;
@@ -16,17 +15,13 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
     let alias = tags
         .get("url_alias")
         .cloned()
-        .ok_or(Error::invalid_input("url_alias is missing"))?;
-    let alias = alias
-        .as_str()
-        .ok_or(Error::invalid_input("url_alias is not a string"))?;
-    let _ = tags
-        .get("geo_json")
-        .ok_or(Error::invalid_input("geo_json is missing"))?;
+        .ok_or("url_alias is missing")?;
+    let alias = alias.as_str().ok_or("url_alias is not a string")?;
+    let _ = tags.get("geo_json").ok_or("geo_json is missing")?;
     let geo_json = tags["geo_json"].clone();
     serde_json::to_string(&geo_json)?
         .parse::<GeoJson>()
-        .map_err(|_| Error::invalid_input("invalid geo_json"))?;
+        .map_err(|_| "invalid geo_json")?;
     let sql = format!(
         r#"
                 INSERT INTO {table} ({alias}, {tags})

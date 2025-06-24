@@ -4,7 +4,7 @@ use crate::{
     element::Element,
     element_comment::ElementComment,
     event::Event,
-    Error, Result,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
@@ -40,7 +40,7 @@ pub async fn patch_tags(
     pool: &Pool,
 ) -> Result<Area> {
     if tags.contains_key("url_alias") {
-        return Err(Error::InvalidInput("url_alias can't be changed".into()));
+        return Err("url_alias can't be changed".into());
     }
     let area = db::area::queries_async::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
@@ -78,10 +78,10 @@ pub async fn remove_tag_async(
     let tag_name = tag_name.into();
 
     if tag_name == "url_alias" {
-        return Err(Error::InvalidInput("url_alias can't be removed".into()));
+        return Err("url_alias can't be removed".into());
     }
     if tag_name == "geo_json" {
-        return Err(Error::InvalidInput("geo_json can't be removed".into()));
+        return Err("geo_json can't be removed".into());
     }
     let area = db::area::queries_async::select_by_id_or_alias(area_id_or_alias, pool).await?;
     db::area::queries_async::remove_tag(area.id, tag_name, pool).await

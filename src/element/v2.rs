@@ -100,9 +100,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
     let id = id.into_inner();
     let id_parts: Vec<String> = id.split(":").map(|it| it.into()).collect();
     let r#type = id_parts[0].clone();
-    let id = id_parts[1]
-        .parse::<i64>()
-        .map_err(|_| Error::InvalidInput("Invalid ID".into()))?;
+    let id = id_parts[1].parse::<i64>().map_err(|_| "Invalid ID")?;
 
     pool.get()
         .await?

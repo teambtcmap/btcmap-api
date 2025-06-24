@@ -3,8 +3,6 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Error {
-    Unauthorized(String),
-    InvalidInput(String),
     OsmApi(String),
     OverpassApi(String),
     Other(String),
@@ -27,8 +25,6 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::InvalidInput(err) => write!(f, "{}", err),
-            Error::Unauthorized(err) => write!(f, "{}", err),
             Error::Other(err) => write!(f, "{}", err),
             Error::Parse(err) => write!(f, "{}", err),
             Error::Decode(err) => write!(f, "{}", err),
@@ -146,6 +142,7 @@ impl From<actix_web::error::BlockingError> for Error {
     }
 }
 
+// Used by REST API
 impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(self.status_code()).body(self.to_string())
@@ -153,18 +150,5 @@ impl ResponseError for Error {
 
     fn status_code(&self) -> StatusCode {
         StatusCode::INTERNAL_SERVER_ERROR
-    }
-}
-
-impl Error {
-    pub fn unauthorized(action: impl Into<String>) -> Error {
-        Error::Unauthorized(format!(
-            "you are not allowed to perform action {}",
-            action.into(),
-        ))
-    }
-
-    pub fn invalid_input(msg: &str) -> Error {
-        Error::InvalidInput(msg.into())
     }
 }
