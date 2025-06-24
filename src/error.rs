@@ -154,12 +154,7 @@ impl ResponseError for Error {
     }
 
     fn status_code(&self) -> StatusCode {
-        match self {
-            Error::InvalidInput(_) => StatusCode::BAD_REQUEST,
-            Error::Unauthorized(_) => StatusCode::UNAUTHORIZED,
-            Error::NotFound(_) => StatusCode::NOT_FOUND,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        }
+        StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 

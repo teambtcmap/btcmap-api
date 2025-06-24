@@ -352,7 +352,7 @@ pub const TAGS: &[&str] = &[
     "website",
     "twitter",
     "facebook",
-    "instagramm",
+    "instagram",
     "line",
     "email",
     "opening_hours",
