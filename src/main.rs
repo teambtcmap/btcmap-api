@@ -1,7 +1,9 @@
+use actix_web::error::InternalError;
 use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
-use actix_web::{App, HttpServer};
+use actix_web::{web, App, HttpServer, ResponseError};
 use conf::Conf;
 use error::Error;
+use rest::error::{RestApiError, RestApiErrorCode};
 mod conf;
 mod discord;
 mod element;
@@ -133,6 +135,19 @@ async fn main() -> Result<()> {
             )
             .service(
                 scope("v4")
+                    .configure(|cfg| {
+                        cfg.app_data(web::QueryConfig::default().error_handler(|err, _req| {
+                            InternalError::from_response(
+                                err,
+                                RestApiError::new(
+                                    RestApiErrorCode::InvalidInput,
+                                    "Invalid query parameters",
+                                )
+                                .error_response(),
+                            )
+                            .into()
+                        }));
+                    })
                     .service(
                         scope("places")
                             .service(element::v4::get)

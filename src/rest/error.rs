@@ -1,5 +1,7 @@
 use crate::Error;
-use actix_web::{http::StatusCode, web::Json, HttpResponse, ResponseError};
+use actix_web::{
+    error::QueryPayloadError, http::StatusCode, web::Json, HttpResponse, ResponseError,
+};
 use serde_json::json;
 use std::fmt;
 
@@ -36,6 +38,7 @@ impl RestApiError {
 
 #[derive(Debug)]
 pub enum RestApiErrorCode {
+    InvalidInput,
     NotFound,
     Database,
 }
@@ -49,6 +52,7 @@ impl fmt::Display for RestApiError {
 impl std::fmt::Display for RestApiErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            RestApiErrorCode::InvalidInput => write!(f, "invalid_input"),
             RestApiErrorCode::NotFound => write!(f, "not_found"),
             RestApiErrorCode::Database => write!(f, "database"),
         }
@@ -58,6 +62,7 @@ impl std::fmt::Display for RestApiErrorCode {
 impl RestApiErrorCode {
     fn status_code(&self) -> StatusCode {
         match self {
+            Self::InvalidInput => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -77,6 +82,21 @@ impl ResponseError for RestApiError {
 
     fn status_code(&self) -> StatusCode {
         self.code.status_code()
+    }
+}
+
+impl From<QueryPayloadError> for RestApiError {
+    fn from(err: QueryPayloadError) -> Self {
+        match err {
+            QueryPayloadError::Deserialize(e) => RestApiError {
+                code: RestApiErrorCode::InvalidInput,
+                message: format!("Invalid query parameters: {}", e),
+            },
+            _ => RestApiError {
+                code: RestApiErrorCode::InvalidInput,
+                message: "Invalid query parameters".to_string(),
+            },
+        }
     }
 }
 
