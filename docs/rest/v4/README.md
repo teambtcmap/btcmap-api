@@ -15,12 +15,26 @@ The latest and recommended version of the BTCMap API, offering improved performa
 For performance-sensitive apps with persistent caching:  
 - [Sync Guide](sync.md) – Maintain a local data snapshot for instant (offline) retrieval. 
 
-## Error Handling  
-**Current (Temporary):**  
-- All errors return HTTP `500` with a plain-text message.  
-- Treat any `500` response as an API error; the body may be displayed directly.  
+## Error Response Format
 
-**Planned Improvement:**  
-- Adopt [RFC 9457](https://datatracker.ietf.org/doc/html/rfc9457) (Problem Details for HTTP APIs) for structured errors.  
-- Proper status codes (e.g., `400` for client errors, `404` for not found).  
+All API errors return:
+1. Standard HTTP status codes
+2. Consistent JSON error bodies
+
+### HTTP Status Codes
+
+| Code | Description |
+|------|-------------|
+| 400  | Bad Request - Invalid parameters |
+| 404  | Not Found - Resource doesn't exist |
+| 500  | Server Error - Unexpected failure in database or elsewhere |
+
+### Error Response Body
+
+```jsonc
+{
+  "code": "string",    // Machine-readable error identifier
+  "message": "string"  // Human-readable explanation
+}
+```
 
