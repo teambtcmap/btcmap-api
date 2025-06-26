@@ -37,6 +37,14 @@ pub async fn select_by_search_query(
         .await?
 }
 
+pub async fn select_by_id_or_osm_id(id: impl Into<String>, pool: &Pool) -> Result<Element> {
+    let id = id.into();
+    pool.get()
+        .await?
+        .interact(|conn| queries::select_by_id_or_osm_id(id, conn))
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Element> {
     pool.get()
         .await?

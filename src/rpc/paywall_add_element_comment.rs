@@ -1,6 +1,6 @@
 use crate::{
     conf::Conf,
-    element::Element,
+    db,
     element_comment::ElementComment,
     invoice::{self},
     Result,
@@ -22,7 +22,8 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let element = Element::select_by_id_or_osm_id_async(params.element_id, pool).await?;
+    let element =
+        db::element::queries_async::select_by_id_or_osm_id(params.element_id, pool).await?;
     let comment = ElementComment::insert_async(element.id, &params.comment, pool).await?;
     ElementComment::set_deleted_at_async(comment.id, Some(OffsetDateTime::now_utc()), pool).await?;
     let invoice = invoice::service::create(

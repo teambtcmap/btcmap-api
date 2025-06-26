@@ -1,4 +1,4 @@
-use crate::{element::Element, Result};
+use crate::{db, Result};
 use actix_web::{
     get,
     web::{Data, Path},
@@ -19,7 +19,7 @@ pub async fn get_element(id: Path<String>, pool: Data<Pool>) -> Result<impl Resp
 }
 
 async fn element_og(id: &str, pool: &Pool) -> Result<Vec<u8>> {
-    let Ok(element) = Element::select_by_id_or_osm_id_async(id, pool).await else {
+    let Ok(element) = db::element::queries_async::select_by_id_or_osm_id(id, pool).await else {
         return Err("Element not found".into());
     };
     let res = actix_web::web::block(move || {

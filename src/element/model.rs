@@ -46,31 +46,6 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
-    pub async fn select_by_id_or_osm_id_async(
-        id: impl Into<String>,
-        pool: &Pool,
-    ) -> Result<Element> {
-        let id = id.into();
-        pool.get()
-            .await?
-            .interact(|conn| Element::select_by_id_or_osm_id(id, conn))
-            .await?
-    }
-
-    pub fn select_by_id_or_osm_id(id: impl Into<String>, conn: &Connection) -> Result<Element> {
-        let id: String = id.into();
-        let id = id.as_str();
-        match id.parse::<i64>() {
-            Ok(id) => db::element::queries::select_by_id(id, conn),
-            Err(_) => {
-                let parts: Vec<_> = id.split(':').collect();
-                let osm_type = parts[0];
-                let osm_id = parts[1].parse::<i64>().unwrap();
-                db::element::queries::select_by_osm_type_and_id(osm_type, osm_id, conn)
-            }
-        }
-    }
-
     pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Element> {
         let sql = format!(
             r#"

@@ -1,5 +1,4 @@
 use crate::db;
-use crate::element::Element;
 use crate::element_comment::ElementComment;
 use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
@@ -70,7 +69,7 @@ pub async fn get_by_id(
     pool: Data<Pool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
-    Element::select_by_id_or_osm_id_async(id.into_inner(), &pool)
+    db::element::queries_async::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
         .map(|it| Json(super::service::generate_tags(&it, &fields)))
         .map_err(|e| match e {
@@ -99,7 +98,7 @@ impl From<ElementComment> for Comment {
 
 #[get("{id}/comments")]
 pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<Comment>> {
-    let element = Element::select_by_id_or_osm_id_async(id.as_str(), &pool)
+    let element = db::element::queries_async::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),

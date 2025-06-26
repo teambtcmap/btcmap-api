@@ -1,4 +1,11 @@
-use crate::{boost::Boost, conf::Conf, db::user::schema::User, discord, element::Element, Result};
+use crate::{
+    boost::Boost,
+    conf::Conf,
+    db::{self, user::schema::User},
+    discord,
+    element::Element,
+    Result,
+};
 use deadpool_sqlite::Pool;
 use rusqlite::Connection;
 use serde::Deserialize;
@@ -38,7 +45,7 @@ pub async fn run(
 }
 
 fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {
-    let element = Element::select_by_id_or_osm_id(id_or_osm_id, conn)?;
+    let element = db::element::queries::select_by_id_or_osm_id(id_or_osm_id, conn)?;
     let boost_expires = element.tag("boost:expires");
     let boost_expires = match boost_expires {
         Value::String(v) => {

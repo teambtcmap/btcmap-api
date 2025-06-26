@@ -172,7 +172,8 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
         if element_id == 0 || days == 0 {
             return Ok(());
         }
-        let Ok(element) = Element::select_by_id_or_osm_id_async(element_id.to_string(), pool).await
+        let Ok(element) =
+            db::element::queries_async::select_by_id_or_osm_id(element_id.to_string(), pool).await
         else {
             return Ok(());
         };

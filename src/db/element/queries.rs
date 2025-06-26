@@ -87,6 +87,20 @@ pub fn select_by_search_query(
         .map_err(Into::into)
 }
 
+pub fn select_by_id_or_osm_id(id: impl Into<String>, conn: &Connection) -> Result<Element> {
+    let id: String = id.into();
+    let id = id.as_str();
+    match id.parse::<i64>() {
+        Ok(id) => select_by_id(id, conn),
+        Err(_) => {
+            let parts: Vec<_> = id.split(':').collect();
+            let osm_type = parts[0];
+            let osm_id = parts[1].parse::<i64>().unwrap();
+            select_by_osm_type_and_id(osm_type, osm_id, conn)
+        }
+    }
+}
+
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<Element> {
     let sql = format!(
         r#"

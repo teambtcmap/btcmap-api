@@ -92,11 +92,8 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id_clone = id.clone();
-    pool.get()
-        .await?
-        .interact(move |conn| Element::select_by_id_or_osm_id(&id_clone, conn))
-        .await?
+    db::element::queries_async::select_by_id_or_osm_id(id.as_str(), &pool)
+        .await
         .map(Into::into)
 }
 

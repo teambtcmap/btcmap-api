@@ -1,4 +1,4 @@
-use crate::{conf::Conf, element::Element, invoice, Result};
+use crate::{conf::Conf, db, invoice, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +15,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    Element::select_by_id_or_osm_id_async(&params.element_id, pool).await?;
+    db::element::queries_async::select_by_id_or_osm_id(&params.element_id, pool).await?;
     let sats = match params.days {
         30 => conf.paywall_boost_element_30d_price_sat,
         90 => conf.paywall_boost_element_90d_price_sat,
