@@ -26,6 +26,17 @@ pub async fn select_updated_since(
         .await?
 }
 
+pub async fn select_by_search_query(
+    search_query: impl Into<String>,
+    pool: &Pool,
+) -> Result<Vec<Element>> {
+    let search_query = search_query.into();
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_by_search_query(search_query, conn))
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Element> {
     pool.get()
         .await?

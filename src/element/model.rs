@@ -41,39 +41,11 @@ const COL_ROWID: &str = "rowid";
 const COL_OVERPASS_DATA: &str = "overpass_data";
 const COL_TAGS: &str = "tags";
 const _COL_CREATED_AT: &str = "created_at";
+#[cfg(test)]
 const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
-    pub async fn select_by_search_query_async(
-        search_query: impl Into<String>,
-        pool: &Pool,
-    ) -> Result<Vec<Self>> {
-        let search_query = search_query.into();
-        pool.get()
-            .await?
-            .interact(move |conn| Self::select_by_search_query(&search_query, conn))
-            .await?
-    }
-
-    pub fn select_by_search_query(
-        search_query: impl Into<String>,
-        conn: &Connection,
-    ) -> Result<Vec<Self>> {
-        let sql = format!(
-            r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
-                WHERE LOWER(json_extract({COL_OVERPASS_DATA}, '$.tags.name')) LIKE '%' || UPPER(:query) || '%'
-                ORDER BY {COL_UPDATED_AT}, {COL_ROWID};
-            "#
-        );
-        conn.prepare(&sql)?
-            .query_map(named_params! { ":query": search_query.into() }, mapper())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
-    }
-
     pub async fn select_by_id_or_osm_id_async(
         id: impl Into<String>,
         pool: &Pool,

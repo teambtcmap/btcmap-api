@@ -64,6 +64,29 @@ pub fn select_updated_since(
         .collect::<Result<Vec<_>, _>>()?)
 }
 
+pub fn select_by_search_query(
+    search_query: impl Into<String>,
+    conn: &Connection,
+) -> Result<Vec<Element>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE LOWER(json_extract({overpass_data}, '$.tags.name')) LIKE '%' || UPPER(?1) || '%'
+            ORDER BY {updated_at}, {id}
+        "#,
+        projection = Element::projection(),
+        table = schema::TABLE_NAME,
+        overpass_data = Columns::OverpassData.as_str(),
+        updated_at = Columns::UpdatedAt.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![search_query.into()], Element::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<Element> {
     let sql = format!(
         r#"
@@ -114,6 +137,83 @@ mod test {
             0,
             super::select_updated_since(datetime!(2023-10-01 00:00 UTC), None, false, &conn)?.len()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_search_query() -> Result<()> {
+        let conn = mock_conn();
+
+        // Insert test data with different name patterns
+        let element1 = super::insert(
+            &OverpassElement::mock_with_tag(1, "name", "Coffee Shop Downtown"),
+            &conn,
+        )?;
+        let element2 = super::insert(
+            &OverpassElement::mock_with_tag(2, "name", "Central Park"),
+            &conn,
+        )?;
+        let element3 = super::insert(
+            &OverpassElement::mock_with_tag(3, "name", "Downtown Mall"),
+            &conn,
+        )?;
+        // Element without a name tag
+        let _element4 = super::insert(&OverpassElement::mock(4), &conn)?;
+
+        // Test case-insensitive matching
+        assert_eq!(
+            vec![element1.clone(), element3.clone()],
+            super::select_by_search_query("downtown", &conn)?
+        );
+
+        // Test partial matching
+        assert_eq!(
+            vec![element2.clone()],
+            super::select_by_search_query("park", &conn)?
+        );
+
+        // Test no matches
+        assert_eq!(
+            0,
+            super::select_by_search_query("nonexistent", &conn)?.len()
+        );
+
+        // Test empty query (should match all named elements)
+        let results = super::select_by_search_query("", &conn)?;
+        assert_eq!(3, results.len());
+        assert!(results.contains(&element1));
+        assert!(results.contains(&element2));
+        assert!(results.contains(&element3));
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_search_query_special_chars() -> Result<()> {
+        let conn = mock_conn();
+
+        let element = super::insert(
+            &OverpassElement::mock_with_tag(1, "name", "Café 'Le Paris'"),
+            &conn,
+        )?;
+
+        // Test with special characters
+        assert_eq!(
+            vec![element.clone()],
+            super::select_by_search_query("café", &conn)?
+        );
+
+        assert_eq!(
+            vec![element.clone()],
+            super::select_by_search_query("paris", &conn)?
+        );
+
+        // Test with single quote
+        assert_eq!(
+            vec![element],
+            super::select_by_search_query("le paris", &conn)?
+        );
+
         Ok(())
     }
 

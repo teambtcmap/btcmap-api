@@ -1,4 +1,4 @@
-use crate::{db, element::Element, Result};
+use crate::{db, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +24,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
             id: it.id,
         })
         .collect();
-    let elements = Element::select_by_search_query_async(params.query, pool).await?;
+    let elements = db::element::queries_async::select_by_search_query(params.query, pool).await?;
     let mut res_elements: Vec<Res> = elements
         .into_iter()
         .map(|it| Res {

@@ -169,6 +169,28 @@ impl OverpassElement {
             members: None,
         }
     }
+
+    #[cfg(test)]
+    pub fn mock_with_tag(id: i64, tag_name: &str, tag_value: &str) -> OverpassElement {
+        let mut tags = Map::new();
+        tags.insert(tag_name.into(), tag_value.into());
+        OverpassElement {
+            r#type: "node".into(),
+            id,
+            lat: Some(0.0),
+            lon: Some(0.0),
+            timestamp: Some("".into()),
+            version: Some(1),
+            changeset: Some(1),
+            user: Some("".into()),
+            uid: Some(1),
+            tags: Some(tags),
+            bounds: None,
+            nodes: None,
+            geometry: None,
+            members: None,
+        }
+    }
 }
 
 #[derive(Serialize)]
