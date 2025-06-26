@@ -1,6 +1,7 @@
 use super::schema::{self, Columns};
 use crate::{element::Element, osm::overpass::OverpassElement, Result};
 use rusqlite::{named_params, params, Connection};
+use serde_json::{Map, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub fn insert(overpass_data: &OverpassElement, conn: &Connection) -> Result<Element> {
@@ -133,6 +134,44 @@ pub fn select_by_osm_type_and_id(
         overpass_data = Columns::OverpassData.as_str(),
     );
     Ok(conn.query_row(&sql, params![osm_type, osm_id], Element::mapper())?)
+}
+
+pub fn set_overpass_data(
+    id: i64,
+    overpass_data: &OverpassElement,
+    conn: &Connection,
+) -> Result<Element> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {overpass_data} = json(?2)
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        overpass_data = Columns::OverpassData.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.execute(&sql, params![id, serde_json::to_string(overpass_data)?,])?;
+    select_by_id(id, conn)
+}
+
+pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Element> {
+    let sql = format!(
+        r#"
+            UPDATE {table} SET {tags} = json_patch({tags}, ?2) WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        tags = Columns::Tags.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.execute(&sql, params![id, &serde_json::to_string(tags)?,])?;
+    select_by_id(id, conn)
+}
+
+pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
+    let mut patch_set = Map::new();
+    patch_set.insert(name.into(), value.clone());
+    patch_tags(id, &patch_set, conn)
 }
 
 #[cfg(test)]
@@ -294,6 +333,17 @@ mod test {
                 &conn,
             )?
         );
+        Ok(())
+    }
+
+    #[test]
+    fn set_overpass_data() -> Result<()> {
+        let conn = mock_conn();
+        let orig_data = OverpassElement::mock(1);
+        let override_data = OverpassElement::mock(2);
+        let element = super::insert(&orig_data, &conn)?;
+        let element = super::set_overpass_data(element.id, &override_data, &conn)?;
+        assert_eq!(override_data, element.overpass_data);
         Ok(())
     }
 }

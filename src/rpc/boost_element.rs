@@ -59,7 +59,7 @@ fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Re
         boost_expires
     };
     let boost_expires = boost_expires.checked_add(Duration::days(days)).unwrap();
-    let element = Element::set_tag(
+    let element = db::element::queries::set_tag(
         element.id,
         "boost:expires",
         &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),

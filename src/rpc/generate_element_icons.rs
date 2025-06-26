@@ -2,7 +2,6 @@ use crate::{
     conf::Conf,
     db::{self, user::schema::User},
     discord,
-    element::Element,
     osm::overpass::OverpassElement,
     Result,
 };
@@ -71,7 +70,12 @@ fn generate_element_icons(
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {
-            Element::set_tag(element.id, "icon:android", &new_icon.clone().into(), conn)?;
+            db::element::queries::set_tag(
+                element.id,
+                "icon:android",
+                &new_icon.clone().into(),
+                conn,
+            )?;
             updated_elements.push(UpdatedElement {
                 id: element_id,
                 osm_url: element.osm_url(),

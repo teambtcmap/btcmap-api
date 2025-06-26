@@ -2,7 +2,6 @@ use crate::{
     conf::Conf,
     db::{self, user::schema::User},
     discord,
-    element::Element,
     osm::overpass::OverpassElement,
     Result,
 };
@@ -53,7 +52,12 @@ fn generate_element_categories(
         let old_category = element.tag("category").as_str().unwrap_or_default();
         let new_category = element.overpass_data.generate_category();
         if old_category != new_category {
-            Element::set_tag(element.id, "category", &new_category.clone().into(), conn)?;
+            db::element::queries::set_tag(
+                element.id,
+                "category",
+                &new_category.clone().into(),
+                conn,
+            )?;
             changes += 1;
         }
     }

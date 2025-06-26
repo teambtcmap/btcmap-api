@@ -38,7 +38,7 @@ impl Hash for Element {
 const TABLE: &str = "element";
 const _ALL_COLUMNS: &str = "rowid, overpass_data, tags, created_at, updated_at, deleted_at";
 const COL_ROWID: &str = "rowid";
-const COL_OVERPASS_DATA: &str = "overpass_data";
+const _COL_OVERPASS_DATA: &str = "overpass_data";
 const COL_TAGS: &str = "tags";
 const _COL_CREATED_AT: &str = "created_at";
 #[cfg(test)]
@@ -46,55 +46,6 @@ const COL_UPDATED_AT: &str = "updated_at";
 const COL_DELETED_AT: &str = "deleted_at";
 
 impl Element {
-    pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Element> {
-        let sql = format!(
-            r#"
-                UPDATE {TABLE} SET {COL_TAGS} = json_patch({COL_TAGS}, :tags) WHERE {COL_ROWID} = :id
-            "#
-        );
-        conn.execute(
-            &sql,
-            named_params! {
-                ":id": id,
-                ":tags": &serde_json::to_string(tags)?,
-            },
-        )?;
-        db::element::queries::select_by_id(id, conn)
-    }
-
-    pub async fn set_overpass_data_async(
-        id: i64,
-        overpass_data: OverpassElement,
-        pool: &Pool,
-    ) -> Result<Self> {
-        pool.get()
-            .await?
-            .interact(move |conn| Self::set_overpass_data(id, &overpass_data, conn))
-            .await?
-    }
-
-    pub fn set_overpass_data(
-        id: i64,
-        overpass_data: &OverpassElement,
-        conn: &Connection,
-    ) -> Result<Element> {
-        let sql = format!(
-            r#"
-                UPDATE {TABLE}
-                SET {COL_OVERPASS_DATA} = json(:overpass_data)
-                WHERE {COL_ROWID} = :id
-            "#
-        );
-        conn.execute(
-            &sql,
-            named_params! {
-                ":id": id,
-                ":overpass_data": serde_json::to_string(overpass_data)?,
-            },
-        )?;
-        db::element::queries::select_by_id(id, conn)
-    }
-
     pub async fn set_tag_async(
         id: i64,
         name: impl Into<String>,
@@ -105,14 +56,8 @@ impl Element {
         let value = value.clone();
         pool.get()
             .await?
-            .interact(move |conn| Element::set_tag(id, &name, &value, conn))
+            .interact(move |conn| db::element::queries::set_tag(id, &name, &value, conn))
             .await?
-    }
-
-    pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<Element> {
-        let mut patch_set = Map::new();
-        patch_set.insert(name.into(), value.clone());
-        Element::patch_tags(id, &patch_set, conn)
     }
 
     pub async fn remove_tag_async(
@@ -266,27 +211,16 @@ mod test {
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let mut tags = Map::new();
         tags.insert(tag_1_name.into(), tag_1_value_1.clone());
-        let element = Element::patch_tags(element.id, &tags, &conn)?;
+        let element = db::element::queries::patch_tags(element.id, &tags, &conn)?;
         assert_eq!(&tag_1_value_1, element.tag(tag_1_name));
         tags.insert(tag_1_name.into(), tag_1_value_2.clone());
-        let element = Element::patch_tags(element.id, &tags, &conn)?;
+        let element = db::element::queries::patch_tags(element.id, &tags, &conn)?;
         assert_eq!(&tag_1_value_2, element.tag(tag_1_name));
         tags.clear();
         tags.insert(tag_2_name.into(), tag_2_value.clone());
-        let element = Element::patch_tags(element.id, &tags, &conn)?;
+        let element = db::element::queries::patch_tags(element.id, &tags, &conn)?;
         assert!(element.tags.contains_key(tag_1_name));
         assert_eq!(&tag_2_value, element.tag(tag_2_name));
-        Ok(())
-    }
-
-    #[test]
-    fn set_overpass_data() -> Result<()> {
-        let conn = mock_conn();
-        let orig_data = OverpassElement::mock(1);
-        let override_data = OverpassElement::mock(2);
-        let element = db::element::queries::insert(&orig_data, &conn)?;
-        let element = Element::set_overpass_data(element.id, &override_data, &conn)?;
-        assert_eq!(override_data, element.overpass_data);
         Ok(())
     }
 
@@ -296,7 +230,7 @@ mod test {
         let tag_name = "foo";
         let tag_value = json!("bar");
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
-        let element = Element::set_tag(element.id, tag_name, &tag_value, &conn)?;
+        let element = db::element::queries::set_tag(element.id, tag_name, &tag_value, &conn)?;
         assert_eq!(tag_value, element.tags[tag_name]);
         Ok(())
     }
@@ -306,7 +240,7 @@ mod test {
         let conn = mock_conn();
         let tag_name = "foo";
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
-        let element = Element::set_tag(element.id, tag_name, &"bar".into(), &conn)?;
+        let element = db::element::queries::set_tag(element.id, tag_name, &"bar".into(), &conn)?;
         let element = Element::remove_tag(element.id, tag_name, &conn)?;
         assert!(!element.tags.contains_key(tag_name));
         Ok(())

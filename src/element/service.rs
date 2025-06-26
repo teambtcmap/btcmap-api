@@ -1,4 +1,5 @@
 use super::Element;
+use crate::db;
 use crate::db::area::schema::Area;
 use crate::element_issue::model::ElementIssue;
 use crate::Result;
@@ -188,7 +189,7 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
         let issues = serde_json::to_value(&issues)?;
         // We should avoid toucing the elements if the issues didn't change
         if element.tag("issues") != &issues {
-            Element::set_tag(element.id, "issues", &issues, conn)?;
+            db::element::queries::set_tag(element.id, "issues", &issues, conn)?;
             affected_elements += 1;
         }
     }

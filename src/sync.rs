@@ -242,7 +242,7 @@ pub async fn sync_updated_elements(
             .await?;
             res.push(event);
         }
-        let mut updated_element = Element::set_overpass_data_async(
+        let mut updated_element = db::element::queries_async::set_overpass_data(
             cached_element.id,
             fresh_overpass_element.clone(),
             pool,

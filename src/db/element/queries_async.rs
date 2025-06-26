@@ -51,3 +51,14 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Element> {
         .interact(move |conn| queries::select_by_id(id, conn))
         .await?
 }
+
+pub async fn set_overpass_data(
+    id: i64,
+    overpass_data: OverpassElement,
+    pool: &Pool,
+) -> Result<Element> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::set_overpass_data(id, &overpass_data, conn))
+        .await?
+}
