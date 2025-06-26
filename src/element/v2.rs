@@ -104,7 +104,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
 
     pool.get()
         .await?
-        .interact(move |conn| Element::select_by_osm_type_and_id(&r#type, id, conn))
+        .interact(move |conn| db::element::queries::select_by_osm_type_and_id(&r#type, id, conn))
         .await?
         .map(Into::into)
 }

@@ -1,7 +1,7 @@
 use crate::osm::overpass::OverpassElement;
 use crate::{db, Result};
 use deadpool_sqlite::Pool;
-use rusqlite::{named_params, Connection, Row};
+use rusqlite::{named_params, Connection};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::hash::Hash;
@@ -36,7 +36,7 @@ impl Hash for Element {
 }
 
 const TABLE: &str = "element";
-const ALL_COLUMNS: &str = "rowid, overpass_data, tags, created_at, updated_at, deleted_at";
+const _ALL_COLUMNS: &str = "rowid, overpass_data, tags, created_at, updated_at, deleted_at";
 const COL_ROWID: &str = "rowid";
 const COL_OVERPASS_DATA: &str = "overpass_data";
 const COL_TAGS: &str = "tags";
@@ -66,28 +66,9 @@ impl Element {
                 let parts: Vec<_> = id.split(':').collect();
                 let osm_type = parts[0];
                 let osm_id = parts[1].parse::<i64>().unwrap();
-                Element::select_by_osm_type_and_id(osm_type, osm_id, conn)
+                db::element::queries::select_by_osm_type_and_id(osm_type, osm_id, conn)
             }
         }
-    }
-
-    pub fn select_by_osm_type_and_id(r#type: &str, id: i64, conn: &Connection) -> Result<Element> {
-        let sql = format!(
-            r#"
-                SELECT {ALL_COLUMNS}
-                FROM {TABLE}
-                WHERE json_extract({COL_OVERPASS_DATA}, '$.type') = :type
-                AND json_extract({COL_OVERPASS_DATA}, '$.id') = :id
-            "#
-        );
-        Ok(conn.query_row(
-            &sql,
-            named_params! {
-                ":type": r#type,
-                ":id": id,
-            },
-            mapper(),
-        )?)
     }
 
     pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Result<Element> {
@@ -292,43 +273,12 @@ impl Element {
     }
 }
 
-const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
-    |row: &Row| -> rusqlite::Result<Element> {
-        let overpass_data: String = row.get(1)?;
-        let overpass_data: OverpassElement = serde_json::from_str(&overpass_data).unwrap();
-        let tags: String = row.get(2)?;
-        Ok(Element {
-            id: row.get(0)?,
-            overpass_data,
-            tags: serde_json::from_str(&tags).unwrap(),
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
-            deleted_at: row.get(5)?,
-        })
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::Element;
     use crate::{db, osm::overpass::OverpassElement, test::mock_conn, Result};
     use serde_json::{json, Map};
     use time::OffsetDateTime;
-
-    #[test]
-    fn select_by_osm_type_and_id() -> Result<()> {
-        let conn = mock_conn();
-        let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
-        assert_eq!(
-            element,
-            Element::select_by_osm_type_and_id(
-                &element.overpass_data.r#type,
-                element.overpass_data.id,
-                &conn,
-            )?
-        );
-        Ok(())
-    }
 
     #[test]
     fn patch_tags() -> Result<()> {

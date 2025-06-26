@@ -102,6 +102,25 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Element> {
         .map_err(Into::into)
 }
 
+pub fn select_by_osm_type_and_id(
+    osm_type: &str,
+    osm_id: i64,
+    conn: &Connection,
+) -> Result<Element> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE json_extract({overpass_data}, '$.type') = ?1
+            AND json_extract({overpass_data}, '$.id') = ?2
+        "#,
+        projection = Element::projection(),
+        table = schema::TABLE_NAME,
+        overpass_data = Columns::OverpassData.as_str(),
+    );
+    Ok(conn.query_row(&sql, params![osm_type, osm_id], Element::mapper())?)
+}
+
 #[cfg(test)]
 mod test {
     use crate::element::Element;
@@ -247,5 +266,20 @@ mod test {
             super::select_by_id(1, &mock_conn()),
             Err(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)),
         ));
+    }
+
+    #[test]
+    fn select_by_osm_type_and_id() -> Result<()> {
+        let conn = mock_conn();
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        assert_eq!(
+            element,
+            super::select_by_osm_type_and_id(
+                &element.overpass_data.r#type,
+                element.overpass_data.id,
+                &conn,
+            )?
+        );
+        Ok(())
     }
 }
