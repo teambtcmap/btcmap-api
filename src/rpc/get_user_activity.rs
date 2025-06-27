@@ -1,4 +1,8 @@
-use crate::{db, element::Element, event::Event, Result};
+use crate::{
+    db::{self, element::schema::Element},
+    event::Event,
+    Result,
+};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;

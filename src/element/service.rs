@@ -1,6 +1,6 @@
-use super::Element;
 use crate::db;
 use crate::db::area::schema::Area;
+use crate::db::element::schema::Element;
 use crate::element_issue::model::ElementIssue;
 use crate::Result;
 use deadpool_sqlite::Pool;

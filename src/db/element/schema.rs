@@ -1,6 +1,8 @@
-use crate::element::Element;
+use crate::osm::overpass::OverpassElement;
 use rusqlite::Row;
+use serde_json::{Map, Value};
 use std::sync::OnceLock;
+use time::OffsetDateTime;
 
 pub const TABLE_NAME: &str = "element";
 
@@ -26,14 +28,15 @@ impl Columns {
     }
 }
 
-// pub struct Element {
-//     pub id: i64,
-//     pub overpass_data: OverpassElement,
-//     pub tags: Map<String, Value>,
-//     pub created_at: OffsetDateTime,
-//     pub updated_at: OffsetDateTime,
-//     pub deleted_at: Option<OffsetDateTime>,
-// }
+#[derive(Clone, Debug, PartialEq)]
+pub struct Element {
+    pub id: i64,
+    pub overpass_data: OverpassElement,
+    pub tags: Map<String, Value>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+    pub deleted_at: Option<OffsetDateTime>,
+}
 
 impl Element {
     pub fn projection() -> &'static str {
@@ -83,5 +86,28 @@ impl Element {
                 deleted_at: row.get(5)?,
             })
         }
+    }
+
+    pub fn tag(&self, name: &str) -> &Value {
+        self.tags.get(name).unwrap_or(&Value::Null)
+    }
+
+    pub fn name(&self) -> String {
+        self.overpass_data.tag("name").into()
+    }
+
+    pub fn osm_url(&self) -> String {
+        format!(
+            "https://www.openstreetmap.org/{}/{}",
+            self.overpass_data.r#type, self.overpass_data.id,
+        )
+    }
+
+    pub fn lat(&self) -> f64 {
+        self.overpass_data.coord().y
+    }
+
+    pub fn lon(&self) -> f64 {
+        self.overpass_data.coord().x
     }
 }

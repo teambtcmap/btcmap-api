@@ -1,7 +1,6 @@
 use crate::{
     area_element::{self},
-    db::{self, area::schema::Area},
-    element::Element,
+    db::{self, area::schema::Area, element::schema::Element},
     element_comment::ElementComment,
     event::Event,
     Result,

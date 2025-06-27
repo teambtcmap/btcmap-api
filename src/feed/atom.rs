@@ -1,6 +1,7 @@
+use crate::db::element::schema::Element;
 use crate::element_comment::ElementComment;
+use crate::event::Event;
 use crate::{db, Result};
-use crate::{element::Element, event::Event};
 use actix_web::{
     get,
     web::{Data, Path},

@@ -1,5 +1,5 @@
 use super::queries;
-use crate::element::Element;
+use super::schema::Element;
 use crate::osm::overpass::OverpassElement;
 use crate::Result;
 use deadpool_sqlite::Pool;

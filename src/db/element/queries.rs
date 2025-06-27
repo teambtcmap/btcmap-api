@@ -1,5 +1,5 @@
-use super::schema::{self, Columns};
-use crate::{element::Element, osm::overpass::OverpassElement, Result};
+use super::schema::{self, Columns, Element};
+use crate::{osm::overpass::OverpassElement, Result};
 use rusqlite::{named_params, params, Connection};
 use serde_json::{Map, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};

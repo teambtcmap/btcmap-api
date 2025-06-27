@@ -1,5 +1,5 @@
 use crate::db::area::schema::Area;
-use crate::element::Element;
+use crate::db::element::schema::Element;
 use crate::{db, element, Result};
 use deadpool_sqlite::Pool;
 use geo::{Contains, LineString, MultiPolygon, Polygon};

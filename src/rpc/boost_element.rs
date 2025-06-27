@@ -1,10 +1,8 @@
 use crate::{
     boost::Boost,
     conf::Conf,
-    db::{self, user::schema::User},
-    discord,
-    element::Element,
-    Result,
+    db::{self, element::schema::Element, user::schema::User},
+    discord, Result,
 };
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;

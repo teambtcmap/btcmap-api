@@ -1,5 +1,5 @@
 use crate::db;
-use crate::element::Element;
+use crate::db::element::schema::Element;
 use crate::log::RequestExtension;
 use crate::osm::overpass::OverpassElement;
 use crate::Error;

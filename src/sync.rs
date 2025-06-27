@@ -1,6 +1,7 @@
 use crate::area_element::service::Diff;
 use crate::conf::Conf;
-use crate::element::{self, Element};
+use crate::db::element::schema::Element;
+use crate::element::{self};
 use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
