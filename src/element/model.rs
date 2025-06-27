@@ -2,7 +2,7 @@ use crate::osm::overpass::OverpassElement;
 use serde_json::{Map, Value};
 use time::OffsetDateTime;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Element {
     pub id: i64,
     pub overpass_data: OverpassElement,
@@ -11,14 +11,6 @@ pub struct Element {
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
 }
-
-impl PartialEq for Element {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for Element {}
 
 impl Element {
     pub fn tag(&self, name: &str) -> &Value {

@@ -33,7 +33,7 @@ struct Osm3s {
     timestamp_osm_base: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OverpassElement {
     pub r#type: String,
     pub id: i64,
@@ -56,14 +56,6 @@ pub struct OverpassElement {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub members: Option<Value>, // for relations only
 }
-
-impl PartialEq for OverpassElement {
-    fn eq(&self, other: &Self) -> bool {
-        self.r#type == other.r#type && self.id == other.id && self.version == other.version
-    }
-}
-
-impl Eq for OverpassElement {}
 
 impl Hash for OverpassElement {
     fn hash<H: Hasher>(&self, state: &mut H) {
