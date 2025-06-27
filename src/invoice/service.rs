@@ -5,7 +5,6 @@ use crate::{
         invoice::schema::{Invoice, InvoiceStatus},
     },
     discord,
-    element::Element,
     element_comment::ElementComment,
     Result,
 };
@@ -187,7 +186,7 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
         } else {
             OffsetDateTime::now_utc().saturating_add(Duration::days(days))
         };
-        Element::set_tag_async(
+        db::element::queries_async::set_tag(
             element_id,
             "boost:expires",
             &Value::String(boost_expires.format(&Rfc3339)?),

@@ -174,11 +174,78 @@ pub fn set_tag(id: i64, name: &str, value: &Value, conn: &Connection) -> Result<
     patch_tags(id, &patch_set, conn)
 }
 
+pub fn remove_tag(element_id: i64, tag_name: &str, conn: &Connection) -> Result<Element> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {tags} = json_remove({tags}, ?2)
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        tags = Columns::Tags.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.execute(&sql, params![element_id, format!("$.{tag_name}"),])?;
+    select_by_id(element_id, conn)
+}
+
+#[cfg(test)]
+pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Element> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {updated_at} = ?2
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        updated_at = Columns::UpdatedAt.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.execute(&sql, params![id, updated_at.format(&Rfc3339).unwrap()])?;
+    select_by_id(id, conn)
+}
+
+pub fn set_deleted_at(
+    id: i64,
+    deleted_at: Option<OffsetDateTime>,
+    conn: &Connection,
+) -> Result<Element> {
+    match deleted_at {
+        Some(deleted_at) => {
+            let sql = format!(
+                r#"
+                    UPDATE {table}
+                    SET {deleted_at} = ?2
+                    WHERE {id} = ?1
+                "#,
+                table = schema::TABLE_NAME,
+                deleted_at = Columns::DeletedAt.as_str(),
+                id = Columns::Id.as_str(),
+            );
+            conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?,])?;
+        }
+        None => {
+            let sql = format!(
+                r#"
+                    UPDATE {table}
+                    SET {deleted_at} = NULL
+                    WHERE {id} = ?1
+                "#,
+                table = schema::TABLE_NAME,
+                deleted_at = Columns::DeletedAt.as_str(),
+                id = Columns::Id.as_str(),
+            );
+            conn.execute(&sql, params![id])?;
+        }
+    };
+    select_by_id(id, conn)
+}
+
 #[cfg(test)]
 mod test {
-    use crate::element::Element;
     use crate::Error;
     use crate::{osm::overpass::OverpassElement, test::mock_conn, Result};
+    use serde_json::{json, Map};
     use time::macros::datetime;
     use time::OffsetDateTime;
 
@@ -196,15 +263,17 @@ mod test {
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
-        let _element_1 = super::insert(&OverpassElement::mock(1), &conn)?
-            .set_updated_at(&datetime!(2023-10-01 00:00 UTC), &conn)?;
-        let element_2 = super::insert(&OverpassElement::mock(2), &conn)?
-            .set_updated_at(&datetime!(2023-10-02 00:00 UTC), &conn)?;
+        let element_1 = super::insert(&OverpassElement::mock(1), &conn)?;
+        let _element_1 =
+            super::set_updated_at(element_1.id, &datetime!(2023-10-01 00:00 UTC), &conn)?;
+        let element_2 = super::insert(&OverpassElement::mock(2), &conn)?;
+        let element_2 =
+            super::set_updated_at(element_2.id, &datetime!(2023-10-02 00:00 UTC), &conn)?;
         assert_eq!(
             vec![element_2.clone()],
             super::select_updated_since(datetime!(2023-10-01 00:00 UTC), None, false, &conn)?
         );
-        Element::set_deleted_at(element_2.id, Some(OffsetDateTime::now_utc()), &conn)?;
+        super::set_deleted_at(element_2.id, Some(OffsetDateTime::now_utc()), &conn)?;
         assert_eq!(
             0,
             super::select_updated_since(datetime!(2023-10-01 00:00 UTC), None, false, &conn)?.len()
@@ -344,6 +413,78 @@ mod test {
         let element = super::insert(&orig_data, &conn)?;
         let element = super::set_overpass_data(element.id, &override_data, &conn)?;
         assert_eq!(override_data, element.overpass_data);
+        Ok(())
+    }
+
+    #[test]
+    fn patch_tags() -> Result<()> {
+        let conn = mock_conn();
+        let tag_1_name = "tag_1_name";
+        let tag_1_value_1 = json!("tag_1_value_1");
+        let tag_1_value_2 = json!("tag_1_value_2");
+        let tag_2_name = "tag_2_name";
+        let tag_2_value = json!("tag_2_value");
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        let mut tags = Map::new();
+        tags.insert(tag_1_name.into(), tag_1_value_1.clone());
+        let element = super::patch_tags(element.id, &tags, &conn)?;
+        assert_eq!(&tag_1_value_1, element.tag(tag_1_name));
+        tags.insert(tag_1_name.into(), tag_1_value_2.clone());
+        let element = super::patch_tags(element.id, &tags, &conn)?;
+        assert_eq!(&tag_1_value_2, element.tag(tag_1_name));
+        tags.clear();
+        tags.insert(tag_2_name.into(), tag_2_value.clone());
+        let element = super::patch_tags(element.id, &tags, &conn)?;
+        assert!(element.tags.contains_key(tag_1_name));
+        assert_eq!(&tag_2_value, element.tag(tag_2_name));
+        Ok(())
+    }
+
+    #[test]
+    fn set_tag() -> Result<()> {
+        let conn = mock_conn();
+        let tag_name = "foo";
+        let tag_value = json!("bar");
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        let element = super::set_tag(element.id, tag_name, &tag_value, &conn)?;
+        assert_eq!(tag_value, element.tags[tag_name]);
+        Ok(())
+    }
+
+    #[test]
+    fn remove_tag() -> Result<()> {
+        let conn = mock_conn();
+        let tag_name = "foo";
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        let element = super::set_tag(element.id, tag_name, &"bar".into(), &conn)?;
+        let element = super::remove_tag(element.id, tag_name, &conn)?;
+        assert!(!element.tags.contains_key(tag_name));
+        Ok(())
+    }
+
+    #[test]
+    fn set_updated_at() -> Result<()> {
+        let conn = mock_conn();
+        let updated_at = OffsetDateTime::now_utc();
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        let element = super::set_updated_at(element.id, &updated_at, &conn)?;
+        assert_eq!(
+            updated_at,
+            super::select_by_id(element.id, &conn)?.updated_at
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_deleted_at() -> Result<()> {
+        let conn = mock_conn();
+        let deleted_at = OffsetDateTime::now_utc();
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        let element = super::set_deleted_at(element.id, Some(deleted_at), &conn)?;
+        assert_eq!(
+            deleted_at,
+            super::select_by_id(element.id, &conn)?.deleted_at.unwrap()
+        );
         Ok(())
     }
 }

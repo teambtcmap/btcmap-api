@@ -1,5 +1,3 @@
-use std::i64;
-
 use super::schema;
 use super::schema::Area;
 use super::schema::Columns;
@@ -8,6 +6,7 @@ use geojson::GeoJson;
 use rusqlite::params;
 use rusqlite::Connection;
 use serde_json::{Map, Value};
+use std::i64;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -41,12 +40,6 @@ pub fn select(
     limit: Option<i64>,
     conn: &Connection,
 ) -> Result<Vec<Area>> {
-    println!(
-        "Updated since: {}",
-        updated_since
-            .map(|it| it.format(&Rfc3339).unwrap())
-            .unwrap_or("".into())
-    );
     let updated_since_sql = match updated_since {
         Some(updated_since) => format!(
             "AND {updated_at} > '{updated_since}'",

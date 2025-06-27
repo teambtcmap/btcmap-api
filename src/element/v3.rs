@@ -99,7 +99,6 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
 
 #[cfg(test)]
 mod test {
-    use crate::element::Element;
     use crate::osm::overpass::OverpassElement;
     use crate::test::mock_db;
     use crate::{db, Result};
@@ -198,10 +197,17 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let db = mock_db();
         let element_1 = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        Element::_set_updated_at(element_1.id, &datetime!(2022-01-05 00:00 UTC), &db.conn)?;
+        db::element::queries::set_updated_at(
+            element_1.id,
+            &datetime!(2022-01-05 00:00 UTC),
+            &db.conn,
+        )?;
         let element_2 = db::element::queries::insert(&OverpassElement::mock(2), &db.conn)?;
-        let element_2 =
-            Element::_set_updated_at(element_2.id, &datetime!(2022-02-05 00:00 UTC), &db.conn)?;
+        let element_2 = db::element::queries::set_updated_at(
+            element_2.id,
+            &datetime!(2022-02-05 00:00 UTC),
+            &db.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))

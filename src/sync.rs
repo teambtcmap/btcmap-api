@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Serialize)]
 pub struct MergeResult {
@@ -130,6 +130,10 @@ pub async fn sync_deleted_elements(
     fresh_overpass_elements: &[OverpassElement],
     pool: &Pool,
 ) -> Result<Vec<Event>> {
+    info!(
+        fresh_overpass_elements = fresh_overpass_elements.len(),
+        "Syncing deleted elements"
+    );
     let fresh_overpass_element_ids: HashSet<String> = fresh_overpass_elements
         .iter()
         .map(|it| it.btcmap_id())
@@ -174,7 +178,8 @@ async fn mark_element_as_deleted(
     if element.tags.contains_key("areas") {
         event_tags.insert("areas".into(), element.tags["areas"].clone());
     }
-    Element::set_deleted_at_async(element.id, Some(OffsetDateTime::now_utc()), pool).await?;
+    db::element::queries_async::set_deleted_at(element.id, Some(OffsetDateTime::now_utc()), pool)
+        .await?;
     let element_issues = ElementIssue::select_by_element_id_async(element.id, pool).await?;
     for issue in element_issues {
         ElementIssue::set_deleted_at_async(issue.id, Some(OffsetDateTime::now_utc()), pool).await?;
@@ -226,7 +231,8 @@ pub async fn sync_updated_elements(
         }
         let mut cached_element = cached_element.unwrap().clone();
         if cached_element.deleted_at.is_some() {
-            cached_element = Element::set_deleted_at_async(cached_element.id, None, pool).await?;
+            cached_element =
+                db::element::queries_async::set_deleted_at(cached_element.id, None, pool).await?;
         }
         if *fresh_overpass_element == cached_element.overpass_data {
             continue;
@@ -254,7 +260,7 @@ pub async fn sync_updated_elements(
             .as_str()
             .unwrap_or_default();
         if new_android_icon != old_android_icon {
-            updated_element = Element::set_tag_async(
+            updated_element = db::element::queries_async::set_tag(
                 updated_element.id,
                 "icon:android",
                 &new_android_icon.clone().into(),
@@ -298,10 +304,14 @@ pub async fn sync_new_elements(
                 res.push(event);
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
-                let element =
-                    Element::set_tag_async(element.id, "category", &category.clone().into(), pool)
-                        .await?;
-                let element = Element::set_tag_async(
+                let element = db::element::queries_async::set_tag(
+                    element.id,
+                    "category",
+                    &category.clone().into(),
+                    pool,
+                )
+                .await?;
+                let element = db::element::queries_async::set_tag(
                     element.id,
                     "icon:android",
                     &android_icon.clone().into(),

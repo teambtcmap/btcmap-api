@@ -17,7 +17,8 @@ pub struct Params {
 pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<Element> {
     let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
     let element =
-        Element::set_tag_async(element.id, &params.tag_name, &params.tag_value, pool).await?;
+        db::element::queries_async::set_tag(element.id, &params.tag_name, &params.tag_value, pool)
+            .await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(

@@ -2,7 +2,6 @@ use crate::{
     conf::Conf,
     db::{self, user::schema::User},
     discord,
-    element::Element,
     element_comment::ElementComment,
     Result,
 };
@@ -35,13 +34,15 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
             if new_len == 0 {
                 // do nothing
             } else {
-                Element::set_tag_async(element.id, "comments", &new_len.into(), pool).await?;
+                db::element::queries_async::set_tag(element.id, "comments", &new_len.into(), pool)
+                    .await?;
                 elements_affected += 1;
             }
         } else {
             let old_len = old_len.as_i64().unwrap_or(0) as usize;
             if new_len != old_len {
-                Element::set_tag_async(element.id, "comments", &new_len.into(), pool).await?;
+                db::element::queries_async::set_tag(element.id, "comments", &new_len.into(), pool)
+                    .await?;
                 elements_affected += 1;
             }
         }

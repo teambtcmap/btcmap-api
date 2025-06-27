@@ -182,7 +182,7 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
         }
         // No current issues found but an element has some old issues which need to be deleted
         if issues.is_empty() && element.tags.contains_key("issues") {
-            Element::remove_tag(element.id, "issues", conn)?;
+            db::element::queries::remove_tag(element.id, "issues", conn)?;
             affected_elements += 1;
             continue;
         }

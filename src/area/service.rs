@@ -244,7 +244,6 @@ fn get_comments(
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::element::Element;
     use crate::element_comment::ElementComment;
     use crate::osm::overpass::OverpassElement;
     use crate::test::{earth_geo_json, mock_pool, phuket_geo_json};
@@ -392,7 +391,13 @@ mod test {
             ..OverpassElement::mock(1)
         };
         let area_element = db::element::queries_async::insert(area_element, &pool).await?;
-        Element::set_tag_async(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &pool).await?;
+        db::element::queries_async::set_tag(
+            area_element.id,
+            "areas",
+            &json!("[{id:1},{id:2}]"),
+            &pool,
+        )
+        .await?;
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         super::soft_delete_async(&area.id.to_string(), &pool).await?;
         let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
