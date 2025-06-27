@@ -7,8 +7,9 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
+use geojson::JsonObject;
 use rusqlite::Connection;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
 
@@ -18,12 +19,13 @@ pub struct Params {
     pub days: i64,
 }
 
-pub async fn run(
-    params: Params,
-    requesting_user: &User,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<Element> {
+#[derive(Serialize)]
+pub struct Res {
+    id: i64,
+    tags: JsonObject,
+}
+
+pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let requesting_user_id = requesting_user.id;
     let element = pool
         .get()
@@ -41,7 +43,10 @@ pub async fn run(
         ),
     )
     .await;
-    Ok(element)
+    Ok(Res {
+        id: element.id,
+        tags: element.tags,
+    })
 }
 
 fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {

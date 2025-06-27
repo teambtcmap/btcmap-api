@@ -1,20 +1,16 @@
 use crate::osm::overpass::OverpassElement;
-use serde::Serialize;
 use serde_json::{Map, Value};
 use std::hash::Hash;
 use std::hash::Hasher;
 use time::OffsetDateTime;
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Element {
     pub id: i64,
     pub overpass_data: OverpassElement,
     pub tags: Map<String, Value>,
-    #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
     pub deleted_at: Option<OffsetDateTime>,
 }
 
