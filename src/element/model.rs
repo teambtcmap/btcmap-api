@@ -1,7 +1,5 @@
 use crate::osm::overpass::OverpassElement;
 use serde_json::{Map, Value};
-use std::hash::Hash;
-use std::hash::Hasher;
 use time::OffsetDateTime;
 
 #[derive(Clone, Debug)]
@@ -21,12 +19,6 @@ impl PartialEq for Element {
 }
 
 impl Eq for Element {}
-
-impl Hash for Element {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
 
 impl Element {
     pub fn tag(&self, name: &str) -> &Value {

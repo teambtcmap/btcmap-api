@@ -44,13 +44,13 @@ pub async fn patch_tags(
     }
     let area = db::area::queries_async::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
-        let mut affected_elements: HashSet<Element> = HashSet::new();
+        let mut affected_element_ids: HashSet<i64> = HashSet::new();
         for area_element in
             db::area_element::queries_async::select_by_area_id(area.id, pool).await?
         {
             let element =
                 db::element::queries_async::select_by_id(area_element.element_id, pool).await?;
-            affected_elements.insert(element);
+            affected_element_ids.insert(element.id);
         }
         let area = db::area::queries_async::patch_tags(area.id, tags, pool).await?;
         let elements_in_new_bounds = area_element::service::get_elements_within_geometries_async(
@@ -59,9 +59,12 @@ pub async fn patch_tags(
         )
         .await?;
         for element in elements_in_new_bounds {
-            affected_elements.insert(element);
+            affected_element_ids.insert(element.id);
         }
-        let affected_elements: Vec<Element> = affected_elements.into_iter().collect();
+        let mut affected_elements: Vec<Element> = vec![];
+        for id in affected_element_ids {
+            affected_elements.push(db::element::queries_async::select_by_id(id, &pool).await?);
+        }
         area_element::service::generate_mapping(&affected_elements, pool).await?;
         Ok(area)
     } else {
