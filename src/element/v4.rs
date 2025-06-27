@@ -1,5 +1,5 @@
 use crate::db;
-use crate::element_comment::ElementComment;
+use crate::db::element_comment::schema::ElementComment;
 use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
@@ -104,7 +104,7 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<C
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
         })?;
-    ElementComment::select_by_element_id_async(element.id, false, i64::MAX, &pool)
+    db::element_comment::queries_async::select_by_element_id(element.id, false, i64::MAX, &pool)
         .await
         .map(|it| Json(it.into_iter().map(Comment::from).collect()))
         .map_err(|_| RestApiError::database())

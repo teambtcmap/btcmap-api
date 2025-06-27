@@ -1,4 +1,5 @@
-use super::ElementComment;
+use crate::db;
+use crate::db::element_comment::schema::ElementComment;
 use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
@@ -82,7 +83,12 @@ pub async fn get(
         .get()
         .await?
         .interact(move |conn| {
-            ElementComment::select_updated_since(&args.updated_since, true, Some(args.limit), conn)
+            db::element_comment::queries::select_updated_since(
+                &args.updated_since,
+                true,
+                Some(args.limit),
+                conn,
+            )
         })
         .await??;
     req.extensions_mut()
@@ -96,7 +102,7 @@ pub async fn get(
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
     pool.get()
         .await?
-        .interact(move |conn| ElementComment::select_by_id(*id, conn))
+        .interact(move |conn| db::element_comment::queries::select_by_id(*id, conn))
         .await?
         .map(|it| it.into())
 }

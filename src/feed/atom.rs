@@ -1,5 +1,5 @@
 use crate::db::element::schema::Element;
-use crate::element_comment::ElementComment;
+use crate::db::element_comment::schema::ElementComment;
 use crate::event::Event;
 use crate::{db, Result};
 use actix_web::{
@@ -132,7 +132,7 @@ pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
         .get()
         .await?
         .interact(move |conn| {
-            ElementComment::select_latest(100, conn)
+            db::element_comment::queries::select_latest(100, conn)
                 .unwrap()
                 .into_iter()
                 .map(|it| {

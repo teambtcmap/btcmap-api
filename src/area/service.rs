@@ -1,7 +1,8 @@
 use crate::{
     area_element::{self},
-    db::{self, area::schema::Area, element::schema::Element},
-    element_comment::ElementComment,
+    db::{
+        self, area::schema::Area, element::schema::Element, element_comment::schema::ElementComment,
+    },
     event::Event,
     Result,
 };
@@ -143,7 +144,8 @@ pub fn get_trending_areas(
             area_events.push(event);
         }
     }
-    let comments = ElementComment::select_created_between(period_start, period_end, conn)?;
+    let comments =
+        db::element_comment::queries::select_created_between(period_start, period_end, conn)?;
     let comments: Vec<ElementComment> = comments
         .into_iter()
         .filter(|it| it.deleted_at.is_none())
@@ -231,7 +233,7 @@ fn get_comments(
     let area_elements = db::area_element::queries::select_by_area_id(area.id, conn)?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
-        for comment in ElementComment::select_by_element_id(
+        for comment in db::element_comment::queries::select_by_element_id(
             area_element.element_id,
             include_deleted,
             i64::MAX,
@@ -246,7 +248,6 @@ fn get_comments(
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::element_comment::ElementComment;
     use crate::osm::overpass::OverpassElement;
     use crate::test::{earth_geo_json, mock_pool, phuket_geo_json};
     use crate::{db, Result};
@@ -412,7 +413,7 @@ mod test {
     async fn get_comments() -> Result<()> {
         let pool = mock_pool().await;
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
-        let comment = ElementComment::insert_async(element.id, "test", &pool).await?;
+        let comment = db::element_comment::queries_async::insert(element.id, "test", &pool).await?;
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let _area_element =
             db::area_element::queries_async::insert(area.id, element.id, &pool).await?;

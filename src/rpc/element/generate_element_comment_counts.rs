@@ -1,9 +1,7 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord,
-    element_comment::ElementComment,
-    Result,
+    discord, Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
@@ -26,8 +24,13 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
     .await?;
     let mut elements_affected = 0;
     for element in elements {
-        let comments =
-            ElementComment::select_by_element_id_async(element.id, false, i64::MAX, pool).await?;
+        let comments = db::element_comment::queries_async::select_by_element_id(
+            element.id,
+            false,
+            i64::MAX,
+            pool,
+        )
+        .await?;
         let new_len = comments.len();
         let old_len = element.tag("comments");
         if old_len.is_null() {

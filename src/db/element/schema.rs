@@ -59,7 +59,7 @@ impl Element {
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
         |row| {
-            let overpass_data: String = row.get(1)?;
+            let overpass_data: String = row.get(Columns::OverpassData.as_str())?;
             let overpass_data = serde_json::from_str(&overpass_data).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     1,
@@ -68,7 +68,7 @@ impl Element {
                 )
             })?;
 
-            let tags: String = row.get(2)?;
+            let tags: String = row.get(Columns::Tags.as_str())?;
             let tags = serde_json::from_str(&tags).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     2,
@@ -78,12 +78,12 @@ impl Element {
             })?;
 
             Ok(Element {
-                id: row.get(0)?,
+                id: row.get(Columns::Id.as_str())?,
                 overpass_data,
                 tags,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
+                created_at: row.get(Columns::CreatedAt.as_str())?,
+                updated_at: row.get(Columns::UpdatedAt.as_str())?,
+                deleted_at: row.get(Columns::DeletedAt.as_str())?,
             })
         }
     }

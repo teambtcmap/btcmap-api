@@ -4,9 +4,7 @@ use crate::{
         self,
         invoice::schema::{Invoice, InvoiceStatus},
     },
-    discord,
-    element_comment::ElementComment,
-    Result,
+    discord, Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
@@ -147,9 +145,9 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
         }
         let id = id.parse::<i64>().unwrap_or(0);
         if *action == "publish" {
-            let comment = ElementComment::select_by_id_async(id, pool).await;
+            let comment = db::element_comment::queries_async::select_by_id(id, pool).await;
             if comment.is_ok() {
-                ElementComment::set_deleted_at_async(id, None, pool).await?;
+                db::element_comment::queries_async::set_deleted_at(id, None, pool).await?;
                 discord::post_message(
                     &conf.discord_webhook_api,
                     format!(

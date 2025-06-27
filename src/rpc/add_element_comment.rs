@@ -1,12 +1,10 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord,
-    element_comment::ElementComment,
-    Result,
+    discord, Result,
 };
 use deadpool_sqlite::Pool;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -14,14 +12,15 @@ pub struct Params {
     pub comment: String,
 }
 
-pub async fn run(
-    params: Params,
-    requesting_user: &User,
-    pool: &Pool,
-    conf: &Conf,
-) -> Result<ElementComment> {
+#[derive(Serialize)]
+pub struct Res {
+    pub id: i64,
+}
+
+pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
-    let comment = ElementComment::insert_async(element.id, &params.comment, pool).await?;
+    let comment =
+        db::element_comment::queries_async::insert(element.id, &params.comment, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
@@ -33,5 +32,5 @@ pub async fn run(
         ),
     )
     .await;
-    Ok(comment)
+    Ok(Res { id: comment.id })
 }
