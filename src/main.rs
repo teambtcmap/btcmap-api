@@ -19,7 +19,6 @@ use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-mod area;
 mod area_element;
 mod boost;
 mod db_utils;
@@ -86,8 +85,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("areas")
-                            .service(area::v2::get)
-                            .service(area::v2::get_by_url_alias),
+                            .service(rest::v2::areas::get)
+                            .service(rest::v2::areas::get_by_url_alias),
                     )
                     .service(
                         scope("reports")
@@ -114,8 +113,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("areas")
-                            .service(area::v3::get)
-                            .service(area::v3::get_by_id),
+                            .service(rest::v3::areas::get)
+                            .service(rest::v3::areas::get_by_id),
                     )
                     .service(
                         scope("reports")
