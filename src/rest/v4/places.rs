@@ -16,6 +16,8 @@ use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
+use std::i64;
+use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -57,6 +59,51 @@ pub async fn get(
 
     let items = items
         .into_iter()
+        .map(|it| service::element::generate_tags(&it, &fields))
+        .collect();
+
+    Ok(Json(items))
+}
+
+#[derive(Deserialize)]
+pub struct GetBoostedArgs {
+    fields: Option<String>,
+}
+
+#[get("/boosted")]
+pub async fn get_boosted(
+    req: HttpRequest,
+    args: Query<GetBoostedArgs>,
+    pool: Data<Pool>,
+) -> Res<Vec<JsonObject>> {
+    let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
+    let updated_since = OffsetDateTime::UNIX_EPOCH;
+    let include_deleted = false;
+
+    let items = db::element::queries_async::select_updated_since(
+        updated_since,
+        None,
+        include_deleted,
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
+
+    req.extensions_mut()
+        .insert(RequestExtension::new(items.len()));
+
+    let items = items
+        .into_iter()
+        .filter(|it| match it.tags.get("boost:expires") {
+            Some(boost_expires) => match boost_expires.as_str() {
+                Some(boost_expires) => match OffsetDateTime::parse(boost_expires, &Rfc3339) {
+                    Ok(boost_expires) => boost_expires > OffsetDateTime::now_utc(),
+                    Err(_) => false,
+                },
+                None => false,
+            },
+            None => false,
+        })
         .map(|it| service::element::generate_tags(&it, &fields))
         .collect();
 
