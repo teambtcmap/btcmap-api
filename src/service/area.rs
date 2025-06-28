@@ -1,5 +1,5 @@
+use crate::service;
 use crate::{
-    area_element::{self},
     db::{
         self, area::schema::Area, element::schema::Element, element_comment::schema::ElementComment,
     },
@@ -23,7 +23,7 @@ use time::OffsetDateTime;
 // but wat if an element was moved? It could change its area set... TODO
 pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
     let area = db::area::queries_async::insert(tags, pool).await?;
-    let area_elements = area_element::service::get_elements_within_geometries_async(
+    let area_elements = service::area_element::get_elements_within_geometries_async(
         area.geo_json_geometries()?,
         pool,
     )
@@ -53,7 +53,7 @@ pub async fn patch_tags(
             affected_element_ids.insert(element.id);
         }
         let area = db::area::queries_async::patch_tags(area.id, tags, pool).await?;
-        let elements_in_new_bounds = area_element::service::get_elements_within_geometries_async(
+        let elements_in_new_bounds = service::area_element::get_elements_within_geometries_async(
             area.geo_json_geometries()?,
             pool,
         )
@@ -65,7 +65,7 @@ pub async fn patch_tags(
         for id in affected_element_ids {
             affected_elements.push(db::element::queries_async::select_by_id(id, &pool).await?);
         }
-        area_element::service::generate_mapping(&affected_elements, pool).await?;
+        service::area_element::generate_mapping(&affected_elements, pool).await?;
         Ok(area)
     } else {
         db::area::queries_async::patch_tags(area.id, tags, pool).await

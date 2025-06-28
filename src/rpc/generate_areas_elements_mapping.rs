@@ -1,8 +1,9 @@
 use crate::{
-    area_element::{self, service::Diff},
     conf::Conf,
     db::{self, element::schema::Element, user::schema::User},
-    discord, Result,
+    discord,
+    service::{self, area_element::Diff},
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,6 @@ async fn generate_areas_elements_mapping(
         };
         elements.push(element);
     }
-    let affected_elements = area_element::service::generate_mapping(&elements, pool).await?;
+    let affected_elements = service::area_element::generate_mapping(&elements, pool).await?;
     Ok(Res { affected_elements })
 }

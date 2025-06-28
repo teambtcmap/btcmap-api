@@ -1,11 +1,12 @@
-use crate::area_element::service::Diff;
 use crate::conf::Conf;
 use crate::db::element::schema::Element;
 use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
-use crate::{area_element, db, discord, service, user, Result};
+use crate::service;
+use crate::service::area_element::Diff;
+use crate::{db, discord, user, Result};
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use serde_json::Value;
@@ -96,7 +97,7 @@ pub async fn merge_overpass_elements(
     area_mapping_elements.extend(created_elements.clone());
     area_mapping_elements.extend(updated_elements.clone());
     let area_mapping_diff =
-        area_element::service::generate_mapping(&area_mapping_elements, pool).await?;
+        service::area_element::generate_mapping(&area_mapping_elements, pool).await?;
     let area_mapping_processing_time_s =
         (OffsetDateTime::now_utc() - area_mapping_started_at).as_seconds_f64();
 
