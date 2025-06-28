@@ -1,12 +1,11 @@
 use crate::area_element::service::Diff;
 use crate::conf::Conf;
 use crate::db::element::schema::Element;
-use crate::element::{self};
 use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
-use crate::{area_element, db, discord, user, Result};
+use crate::{area_element, db, discord, service, user, Result};
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use serde_json::Value;
@@ -269,7 +268,7 @@ pub async fn sync_updated_elements(
             )
             .await?;
         }
-        element::service::generate_issues_async(vec![updated_element], pool).await?;
+        service::element::generate_issues_async(vec![updated_element], pool).await?;
         //area_element::service::generate_mapping(&vec![updated_element], &sp)?;
     }
     Ok(res)
@@ -319,7 +318,7 @@ pub async fn sync_new_elements(
                     pool,
                 )
                 .await?;
-                element::service::generate_issues_async(vec![element], pool).await?;
+                service::element::generate_issues_async(vec![element], pool).await?;
                 //area_element::service::generate_mapping(&vec![element], &sp)?;
             }
         }

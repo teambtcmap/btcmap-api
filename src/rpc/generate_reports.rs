@@ -3,7 +3,7 @@ use crate::{
     db::{self, area::schema::Area, element::schema::Element, user::schema::User},
     discord,
     report::Report,
-    Result,
+    service, Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
@@ -62,7 +62,7 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
     .await?;
     let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
     for area in all_areas {
-        let area_elements = crate::element::service::filter_by_area(&all_elements, &area)?;
+        let area_elements = service::element::filter_by_area(&all_elements, &area)?;
         if let Some(report) = generate_new_report_if_necessary(&area, area_elements, pool).await? {
             reports.insert(area.id, report);
         }

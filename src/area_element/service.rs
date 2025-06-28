@@ -1,6 +1,6 @@
 use crate::db::area::schema::Area;
 use crate::db::element::schema::Element;
-use crate::{db, element, Result};
+use crate::{db, service, Result};
 use deadpool_sqlite::Pool;
 use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
@@ -36,7 +36,7 @@ pub async fn generate_element_areas_mapping(
     let mut removed_areas: Vec<i64> = vec![];
     let old_mappings =
         db::area_element::queries_async::select_by_element_id(element.id, pool).await?;
-    let new_mappings = element::service::find_areas(&element, &areas)?;
+    let new_mappings = service::element::find_areas(&element, &areas)?;
     // mark no longer active mappings as deleted
     for old_mapping in &old_mappings {
         if old_mapping.deleted_at.is_none() {

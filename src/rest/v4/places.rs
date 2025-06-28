@@ -3,6 +3,7 @@ use crate::db::element_comment::schema::ElementComment;
 use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
+use crate::service;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -56,7 +57,7 @@ pub async fn get(
 
     let items = items
         .into_iter()
-        .map(|it| super::service::generate_tags(&it, &fields))
+        .map(|it| service::element::generate_tags(&it, &fields))
         .collect();
 
     Ok(Json(items))
@@ -71,7 +72,7 @@ pub async fn get_by_id(
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     db::element::queries_async::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
-        .map(|it| Json(super::service::generate_tags(&it, &fields)))
+        .map(|it| Json(service::element::generate_tags(&it, &fields)))
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),

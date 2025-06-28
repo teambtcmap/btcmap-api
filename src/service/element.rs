@@ -152,7 +152,7 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
     let started_at = OffsetDateTime::now_utc();
     let mut affected_elements = 0;
     for element in elements {
-        let issues = crate::element::service::get_issues(element);
+        let issues = get_issues(element);
         let old_issues = ElementIssue::select_by_element_id(element.id, conn)?;
         for old_issue in &old_issues {
             let still_exists = issues.iter().find(|it| it.code() == old_issue.code);
@@ -204,21 +204,17 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
 
 fn get_issues(element: &Element) -> Vec<Issue> {
     let mut res: Vec<Issue> = vec![];
-    res.append(&mut crate::element::service::get_date_format_issues(
-        element,
-    ));
-    res.append(&mut crate::element::service::get_misspelled_tag_issues(
-        element,
-    ));
-    if let Some(issue) = crate::element::service::get_missing_icon_issue(element) {
+    res.append(&mut get_date_format_issues(element));
+    res.append(&mut get_misspelled_tag_issues(element));
+    if let Some(issue) = get_missing_icon_issue(element) {
         res.push(issue);
     };
-    if let Some(issue) = crate::element::service::get_not_verified_issue(element) {
+    if let Some(issue) = get_not_verified_issue(element) {
         res.push(issue);
     };
-    if let Some(issue) = crate::element::service::get_out_of_date_issue(element) {
+    if let Some(issue) = get_out_of_date_issue(element) {
         res.push(issue);
-    } else if let Some(issue) = crate::element::service::get_soon_out_of_date_issue(element) {
+    } else if let Some(issue) = get_soon_out_of_date_issue(element) {
         res.push(issue);
     };
     res

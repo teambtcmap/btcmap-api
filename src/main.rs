@@ -6,7 +6,6 @@ use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod conf;
 mod discord;
-mod element;
 mod error;
 mod event;
 mod osm;
@@ -37,6 +36,7 @@ mod db;
 mod element_issue;
 mod og;
 mod rest;
+mod service;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -71,8 +71,8 @@ async fn main() -> Result<()> {
                 scope("v2")
                     .service(
                         scope("elements")
-                            .service(element::v2::get)
-                            .service(element::v2::get_by_id),
+                            .service(rest::v2::elements::get)
+                            .service(rest::v2::elements::get_by_id),
                     )
                     .service(
                         scope("events")
@@ -99,8 +99,8 @@ async fn main() -> Result<()> {
                 scope("v3")
                     .service(
                         scope("elements")
-                            .service(element::v3::get)
-                            .service(element::v3::get_by_id),
+                            .service(rest::v3::elements::get)
+                            .service(rest::v3::elements::get_by_id),
                     )
                     .service(
                         scope("element-comments")
@@ -150,9 +150,9 @@ async fn main() -> Result<()> {
                     })
                     .service(
                         scope("places")
-                            .service(element::v4::get)
-                            .service(element::v4::get_by_id)
-                            .service(element::v4::get_by_id_comments),
+                            .service(rest::v4::places::get)
+                            .service(rest::v4::places::get_by_id)
+                            .service(rest::v4::places::get_by_id_comments),
                     )
                     .service(
                         scope("place-issues")
