@@ -12,7 +12,6 @@ mod osm;
 mod report;
 #[cfg(test)]
 mod test;
-mod tile;
 mod user;
 use std::env;
 use tracing_subscriber::fmt::Layer;
