@@ -1,7 +1,7 @@
 use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
 use crate::event::Event;
-use crate::{db, Result};
+use crate::{db, service, Result};
 use actix_web::{
     get,
     web::{Data, Path},
@@ -163,7 +163,7 @@ pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Resu
     let area = db::area::queries_async::select_by_id_or_alias(area.to_string(), &pool).await?;
     let area_id = area.id;
     let area_name = area.name();
-    let comments = crate::area::service::get_comments_async(area, false, &pool).await?;
+    let comments = service::area::get_comments_async(area, false, &pool).await?;
     let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
     for comment in comments {
         let element = db::element::queries_async::select_by_id(comment.element_id, &pool).await?;

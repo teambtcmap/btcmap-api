@@ -1,8 +1,8 @@
 use super::model::RpcArea;
 use crate::conf::Conf;
 use crate::db::user::schema::User;
-use crate::Result;
-use crate::{area, discord};
+use crate::discord;
+use crate::{service, Result};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 
@@ -12,7 +12,7 @@ pub struct Params {
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
-    let area = area::service::soft_delete_async(params.id, pool).await?;
+    let area = service::area::soft_delete_async(params.id, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!("{} removed area {} ({})", user.name, area.name(), area.id,),

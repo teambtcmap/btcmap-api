@@ -1,8 +1,8 @@
 use super::model::RpcArea;
 use crate::conf::Conf;
 use crate::db::user::schema::User;
-use crate::Result;
-use crate::{area, discord};
+use crate::discord;
+use crate::{service, Result};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -18,7 +18,7 @@ pub async fn run(
     pool: &Pool,
     conf: &Conf,
 ) -> Result<RpcArea> {
-    let area = area::service::insert(params.tags, pool).await?;
+    let area = service::area::insert(params.tags, pool).await?;
     discord::post_message(
         &conf.discord_webhook_api,
         format!(
