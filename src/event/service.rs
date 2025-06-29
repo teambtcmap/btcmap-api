@@ -1,8 +1,8 @@
 use crate::conf::Conf;
 use crate::db;
-use crate::discord;
 use crate::event::Event;
 use crate::osm;
+use crate::service::discord;
 use crate::user;
 use crate::Result;
 use deadpool_sqlite::Pool;
@@ -35,7 +35,7 @@ pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
     };
     info!(message);
     let conf = Conf::select_async(pool).await?;
-    discord::post_message(conf.discord_webhook_osm_changes, message).await;
+    discord::send(message, discord::Channel::OsmChanges, &conf);
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {
         info!(user.osm_data.id, "This user is missing from OSM, skipping");

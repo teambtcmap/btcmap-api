@@ -1,7 +1,8 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord, Result,
+    service::discord,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
@@ -25,14 +26,14 @@ pub async fn run(params: Params, source_user: &User, pool: &Pool, conf: &Conf) -
         roles.push(params.action.clone());
     }
     db::user::queries_async::set_roles(target_user.id, &roles, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} added role {} for user {}",
             source_user.name, params.action, target_user.name
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         name: target_user.name,
         allowed_actions: roles,

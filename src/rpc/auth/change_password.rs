@@ -1,5 +1,6 @@
 use crate::db;
-use crate::{conf::Conf, discord, Result};
+use crate::service::discord;
+use crate::{conf::Conf, Result};
 use argon2::PasswordHasher;
 use argon2::PasswordVerifier;
 use argon2::{
@@ -43,7 +44,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         "User {} changed their password ({time_passed_ms} ms)",
         user.name,
     );
-    discord::post_message(&conf.discord_webhook_api, discord_message).await;
+    discord::send(discord_message, discord::Channel::Api, conf);
     Ok(Res {
         time_ms: time_passed_ms,
     })

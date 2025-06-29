@@ -1,8 +1,8 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord,
     osm::overpass::OverpassElement,
+    service::discord,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -40,8 +40,7 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
         })
         .await??;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} generated element icons (id range {}..{}, elements affected: {})",
             requesting_user.name,
@@ -49,8 +48,9 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
             params.to_element_id,
             updated_elements.len(),
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         updated_elements,
         time_s,

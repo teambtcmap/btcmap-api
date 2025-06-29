@@ -1,7 +1,8 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord, Result,
+    service::discord,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
@@ -49,7 +50,7 @@ pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Res
         params.user_name,
         user.id,
     );
-    discord::post_message(&conf.discord_webhook_api, discord_message).await;
+    discord::send(discord_message, discord::Channel::Api, conf);
     Ok(Res {
         id: user.id,
         tags: user.tags,

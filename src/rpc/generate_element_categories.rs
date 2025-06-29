@@ -1,8 +1,8 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord,
     osm::overpass::OverpassElement,
+    service::discord,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -28,14 +28,14 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
             generate_element_categories(params.from_element_id, params.to_element_id, conn)
         })
         .await??;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} generated element categories (id range {}..{})",
             requesting_user.name, params.from_element_id, params.to_element_id,
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(res)
 }
 

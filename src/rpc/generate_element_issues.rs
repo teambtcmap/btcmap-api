@@ -1,9 +1,9 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord,
     element_issue::model::ElementIssue,
-    service, Result,
+    service::{self, discord},
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
@@ -44,14 +44,14 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
     )
     .await?;
     let res = service::element::generate_issues_async(elements, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} generated element issues. Affected elements: {}",
             requesting_user.name, res.affected_elements
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         started_at: res.started_at,
         finished_at: res.finished_at,

@@ -1,5 +1,10 @@
 use super::model::RpcArea;
-use crate::{conf::Conf, db::user::schema::User, discord, service, Result};
+use crate::{
+    conf::Conf,
+    db::user::schema::User,
+    service::{self, discord},
+    Result,
+};
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -14,8 +19,7 @@ pub struct Params {
 pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
     let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())].into_iter());
     let area = service::area::patch_tags(&params.id, patch_set, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} set tag {} = {} for area {} ({})",
             user.name,
@@ -24,8 +28,9 @@ pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Resul
             area.name(),
             area.id,
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(area.into())
 }
 

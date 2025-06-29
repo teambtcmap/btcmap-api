@@ -1,8 +1,7 @@
 use crate::{
     conf::Conf,
     db::{self, element::schema::Element, user::schema::User},
-    discord,
-    service::{self, area_element::Diff},
+    service::{self, area_element::Diff, discord},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -22,8 +21,7 @@ pub struct Res {
 pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res =
         generate_areas_elements_mapping(params.from_element_id, params.to_element_id, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} generated areas to elements mappings (id range {}..{}, elements affected: {})",
             requesting_user.name,
@@ -31,8 +29,9 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
             params.to_element_id,
             res.affected_elements.len()
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(res)
 }
 

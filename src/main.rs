@@ -5,7 +5,6 @@ use conf::Conf;
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod conf;
-mod discord;
 mod error;
 mod event;
 mod osm;

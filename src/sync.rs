@@ -4,9 +4,9 @@ use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
-use crate::service;
 use crate::service::area_element::Diff;
-use crate::{db, discord, user, Result};
+use crate::service::{self, discord};
+use crate::{db, user, Result};
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use serde_json::Value;
@@ -204,7 +204,7 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<Osm
             osm_type, osm_id,
         );
         error!(message);
-        discord::post_message(&conf.discord_webhook_osm_changes, &message).await;
+        discord::send(&message, discord::Channel::OsmChanges, conf);
         Err(message)?
     }
     Ok(osm_element)

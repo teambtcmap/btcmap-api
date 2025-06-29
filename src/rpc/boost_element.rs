@@ -2,7 +2,8 @@ use crate::{
     boost::Boost,
     conf::Conf,
     db::{self, element::schema::Element, user::schema::User},
-    discord, Result,
+    service::discord,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
@@ -30,8 +31,7 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
         .await?
         .interact(move |conn| _boost(requesting_user_id, &params.id, params.days, conn))
         .await??;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} boosted element {} ({}) for {} days",
             requesting_user.name,
@@ -39,8 +39,9 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
             element.id,
             params.days
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         id: element.id,
         tags: element.tags,

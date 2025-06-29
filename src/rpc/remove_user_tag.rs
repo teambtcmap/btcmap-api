@@ -1,7 +1,8 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord, Result,
+    service::discord,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
@@ -34,14 +35,14 @@ pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Res
             db::osm_user::queries::remove_tag(user.id, &cloned_args_tag_name, conn)
         })
         .await??;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} removed tag {} for user {} ({})",
             caller.name, params.tag_name, params.user_name, user.id,
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         id: user.id,
         tags: user.tags,

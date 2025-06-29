@@ -1,7 +1,8 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord, Result,
+    service::discord,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
@@ -21,8 +22,7 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
     let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
     let comment =
         db::element_comment::queries_async::insert(element.id, &params.comment, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} added a comment to element {} ({}): {}",
             requesting_user.name,
@@ -30,7 +30,8 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
             element.id,
             params.comment,
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res { id: comment.id })
 }

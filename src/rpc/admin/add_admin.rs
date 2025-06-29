@@ -1,4 +1,4 @@
-use crate::{conf::Conf, db::user::schema::User, discord, Result};
+use crate::{conf::Conf, db::user::schema::User, service::discord, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -22,11 +22,11 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
     )
     .await?;
     let new_user = crate::db::user::queries_async::select_by_id(new_admin_id, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!("{} added new user {}", requesting_user.name, new_user.name),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         name: new_user.name,
         allowed_actions: new_user.roles,

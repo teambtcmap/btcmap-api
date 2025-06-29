@@ -1,7 +1,7 @@
-use crate::conf::Conf;
+use crate::db;
 use crate::db::user::schema::User;
 use crate::Result;
-use crate::{db, discord};
+use crate::{conf::Conf, service::discord};
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::{Deserialize, Serialize};
@@ -22,8 +22,7 @@ pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Resul
     let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
     let element =
         db::element::queries_async::remove_tag(element.id, &params.tag_name, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} removed tag {} from element {} ({})",
             user.name,
@@ -31,8 +30,9 @@ pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Resul
             element.name(),
             element.id,
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         id: element.id,
         tags: element.tags,

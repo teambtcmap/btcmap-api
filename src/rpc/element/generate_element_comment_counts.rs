@@ -1,7 +1,8 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    discord, Result,
+    service::discord,
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
@@ -50,14 +51,14 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
             }
         }
     }
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} generated comment counts for all elements",
             requesting_user.name,
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         elements_affected,
         time_sec: (OffsetDateTime::now_utc() - started_at).as_seconds_f64(),

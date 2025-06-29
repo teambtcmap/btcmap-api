@@ -4,7 +4,8 @@ use crate::{
         self,
         invoice::schema::{Invoice, InvoiceStatus},
     },
-    discord, Result,
+    service::discord::{self, Channel},
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
@@ -26,7 +27,7 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
     let args = json!({"out": false, "amount": amount_sats, "memo": description});
     let lnbits_response = client
         .post("https://core.btcmap.org/api/v1/payments")
-        .header("X-Api-Key", conf.lnbits_invoice_key)
+        .header("X-Api-Key", &conf.lnbits_invoice_key)
         .json(&args)
         .send()
         .await?;
@@ -43,14 +44,14 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
         pool,
     )
     .await?;
-    discord::post_message(
-        conf.discord_webhook_api,
+    discord::send(
         format!(
             "Created invoice (id = {}, sat = {}, description = {})",
             invoice.id, invoice.amount_sats, invoice.description,
         ),
-    )
-    .await;
+        Channel::Api,
+        &conf,
+    );
     Ok(invoice)
 }
 
@@ -128,14 +129,14 @@ pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool>
 
 pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
     let conf = Conf::select_async(pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "Invoice has been paid (id = {}, sat = {}, description = {})",
             invoice.id, invoice.amount_sats, invoice.description,
         ),
-    )
-    .await;
+        Channel::Api,
+        &conf,
+    );
     if invoice.description.starts_with("element_comment") {
         let parts: Vec<&str> = invoice.description.split(":").collect();
         let id = parts.get(1).unwrap_or(&"");
@@ -148,14 +149,14 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
             let comment = db::element_comment::queries_async::select_by_id(id, pool).await;
             if comment.is_ok() {
                 db::element_comment::queries_async::set_deleted_at(id, None, pool).await?;
-                discord::post_message(
-                    &conf.discord_webhook_api,
+                discord::send(
                     format!(
                         "Published comment since invoice has been paid: {}",
                         comment.unwrap().comment,
                     ),
-                )
-                .await;
+                    Channel::Api,
+                    &conf,
+                );
             }
         }
     }
@@ -191,16 +192,16 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
             pool,
         )
         .await?;
-        discord::post_message(
-            conf.discord_webhook_api,
+        discord::send(
             format!(
                 "Boosted element since invoice has been paid (id = {}, name = {}, days = {})",
                 element_id,
                 element.name(),
                 days,
             ),
-        )
-        .await;
+            Channel::Api,
+            &conf,
+        );
     }
 
     Ok(())

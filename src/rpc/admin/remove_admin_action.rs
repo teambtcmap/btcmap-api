@@ -1,4 +1,4 @@
-use crate::{conf::Conf, db::user::schema::User, discord, Result};
+use crate::{conf::Conf, db::user::schema::User, service::discord, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -23,14 +23,14 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
         .collect();
     crate::db::user::queries_async::set_roles(target_user.id, &roles, pool).await?;
     let target_user = crate::db::user::queries_async::select_by_id(target_user.id, pool).await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} removed role {} for user {}",
             requesting_user.name, params.action, target_user.name
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(Res {
         name: target_user.name,
         allowed_actions: target_user.roles,

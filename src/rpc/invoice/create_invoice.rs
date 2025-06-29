@@ -1,8 +1,8 @@
 use crate::{
     conf::Conf,
     db::{invoice::schema::Invoice, user::schema::User},
-    discord,
     invoice::{self},
+    service::discord,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -36,13 +36,13 @@ pub async fn run(params: Params, author: &User, pool: &Pool, conf: &Conf) -> Res
         pool,
     )
     .await?;
-    discord::post_message(
-        &conf.discord_webhook_api,
+    discord::send(
         format!(
             "{} created a new invoice (uuid: {}, sats: {}, description: {})",
             author.name, invoice.uuid, params.amount_sats, invoice.description,
         ),
-    )
-    .await;
+        discord::Channel::Api,
+        conf,
+    );
     Ok(invoice.into())
 }

@@ -1,8 +1,9 @@
 use crate::conf::Conf;
 use crate::db::user::schema::User;
 use crate::osm::overpass;
+use crate::service::discord;
 use crate::sync::MergeResult;
-use crate::{discord, sync, Result};
+use crate::{sync, Result};
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 
@@ -22,16 +23,17 @@ pub async fn run(user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
         + merge_res.elements_deleted.len()
         > 5
     {
-        discord::post_message(
-            &conf.discord_webhook_api,
+        discord::send(
             format!(
                 "{} ran a sync with a high number of changes (created: {}, updated: {}, deleted: {})",
                 user.name,
                 merge_res.elements_created.len(),
                 merge_res.elements_updated.len(),
                 merge_res.elements_deleted.len()
-            )
-        ).await;
+            ),
+            discord::Channel::Api,
+            conf,
+        );
     }
     Ok(Res {
         overpass_query_time_s: overpass_res.time_s,

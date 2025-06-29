@@ -1,9 +1,9 @@
 use crate::{
     conf::Conf,
     db::{self, area::schema::Area, element::schema::Element, user::schema::User},
-    discord,
     report::Report,
-    service, Result,
+    service::{self, discord},
+    Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
@@ -27,14 +27,14 @@ pub async fn run(caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let res = generate_reports(pool).await?;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     if res > 0 {
-        discord::post_message(
-            &conf.discord_webhook_api,
+        discord::send(
             format!(
                 "{} generated {} reports in {} seconds",
                 caller.name, res, time_s
             ),
-        )
-        .await;
+            discord::Channel::Api,
+            conf,
+        );
     }
     Ok(Res {
         started_at: OffsetDateTime::now_utc(),
