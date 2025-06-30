@@ -28,7 +28,6 @@ use actix_web::web::{scope, Data};
 mod ban;
 use log::Log;
 mod db;
-mod element_issue;
 mod og;
 mod rest;
 mod service;
@@ -152,8 +151,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("place-issues")
-                            .service(element_issue::v4::get)
-                            .service(element_issue::v4::get_by_id),
+                            .service(rest::v4::element_issues::get)
+                            .service(rest::v4::element_issues::get_by_id),
                     ),
             )
     })

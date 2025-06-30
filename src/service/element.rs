@@ -1,7 +1,6 @@
 use crate::db;
 use crate::db::area::schema::Area;
 use crate::db::element::schema::Element;
-use crate::element_issue::model::ElementIssue;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use geo::Contains;
@@ -153,11 +152,15 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
     let mut affected_elements = 0;
     for element in elements {
         let issues = get_issues(element);
-        let old_issues = ElementIssue::select_by_element_id(element.id, conn)?;
+        let old_issues = db::element_issue::queries::select_by_element_id(element.id, conn)?;
         for old_issue in &old_issues {
             let still_exists = issues.iter().find(|it| it.code() == old_issue.code);
             if old_issue.deleted_at.is_none() && still_exists.is_none() {
-                ElementIssue::set_deleted_at(old_issue.id, Some(OffsetDateTime::now_utc()), conn)?;
+                db::element_issue::queries::set_deleted_at(
+                    old_issue.id,
+                    Some(OffsetDateTime::now_utc()),
+                    conn,
+                )?;
             }
         }
         for issue in &issues {
@@ -165,14 +168,23 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
             match old_issue {
                 Some(old_issue) => {
                     if old_issue.deleted_at.is_some() {
-                        ElementIssue::set_deleted_at(old_issue.id, None, conn)?;
+                        db::element_issue::queries::set_deleted_at(old_issue.id, None, conn)?;
                     }
                     if old_issue.severity != issue.severity {
-                        ElementIssue::set_severity(old_issue.id, issue.severity, conn)?;
+                        db::element_issue::queries::set_severity(
+                            old_issue.id,
+                            issue.severity,
+                            conn,
+                        )?;
                     }
                 }
                 None => {
-                    ElementIssue::insert(element.id, issue.code(), issue.severity, conn)?;
+                    db::element_issue::queries::insert(
+                        element.id,
+                        issue.code(),
+                        issue.severity,
+                        conn,
+                    )?;
                 }
             }
         }

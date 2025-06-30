@@ -1,6 +1,5 @@
 use crate::conf::Conf;
 use crate::db::element::schema::Element;
-use crate::element_issue::model::ElementIssue;
 use crate::event::{self, Event};
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
@@ -181,9 +180,15 @@ async fn mark_element_as_deleted(
     }
     db::element::queries_async::set_deleted_at(element.id, Some(OffsetDateTime::now_utc()), pool)
         .await?;
-    let element_issues = ElementIssue::select_by_element_id_async(element.id, pool).await?;
+    let element_issues =
+        db::element_issue::queries_async::select_by_element_id(element.id, pool).await?;
     for issue in element_issues {
-        ElementIssue::set_deleted_at_async(issue.id, Some(OffsetDateTime::now_utc()), pool).await?;
+        db::element_issue::queries_async::set_deleted_at(
+            issue.id,
+            Some(OffsetDateTime::now_utc()),
+            pool,
+        )
+        .await?;
     }
     let event = Event::insert_async(fresh_osm_element.uid, element.id, "delete", pool).await?;
     let event = Event::patch_tags_async(event.id, event_tags, pool).await?;

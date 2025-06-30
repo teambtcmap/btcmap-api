@@ -1,4 +1,5 @@
-use super::model::ElementIssue;
+use crate::db;
+use crate::db::element_issue::schema::ElementIssue;
 use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
@@ -28,11 +29,14 @@ pub struct GetItem {
     pub element_id: i64,
     pub code: String,
     pub severity: i64,
-    pub created_at: String,
-    pub updated_at: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub deleted_at: Option<String>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub deleted_at: Option<OffsetDateTime>,
 }
 
 impl From<ElementIssue> for GetItem {
@@ -61,19 +65,13 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let items = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            ElementIssue::select_updated_since(
-                &args
-                    .updated_since
-                    .unwrap_or(datetime!(2000-01-01 00:00 UTC)),
-                args.limit,
-                conn,
-            )
-        })
-        .await??;
+    let items = db::element_issue::queries_async::select_updated_since(
+        args.updated_since
+            .unwrap_or(datetime!(2000-01-01 00:00 UTC)),
+        args.limit,
+        &pool,
+    )
+    .await?;
     req.extensions_mut()
         .insert(RequestExtension::new(items.len()));
     Ok(Json(items.into_iter().map(|it| it.into()).collect()))
@@ -81,9 +79,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    pool.get()
-        .await?
-        .interact(move |conn| ElementIssue::select_by_id(*id, conn))
-        .await?
+    db::element_issue::queries_async::select_by_id(*id, &pool)
+        .await
         .map(|it| it.into())
 }

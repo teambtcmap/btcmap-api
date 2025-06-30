@@ -1,5 +1,5 @@
 use crate::{
-    element_issue::model::{ElementIssue, SelectOrderedBySeverityRes},
+    db::{self, element_issue::schema::SelectOrderedBySeverityRow},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -26,8 +26,8 @@ pub struct ResItem {
     pub issue_code: String,
 }
 
-impl From<SelectOrderedBySeverityRes> for ResItem {
-    fn from(val: SelectOrderedBySeverityRes) -> Self {
+impl From<SelectOrderedBySeverityRow> for ResItem {
+    fn from(val: SelectOrderedBySeverityRow) -> Self {
         ResItem {
             element_osm_type: val.element_osm_type,
             element_osm_id: val.element_osm_id,
@@ -38,8 +38,9 @@ impl From<SelectOrderedBySeverityRes> for ResItem {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let total_issues = ElementIssue::select_count_async(params.area_id, false, pool).await?;
-    let requested_issues = ElementIssue::select_ordered_by_severity_async(
+    let total_issues =
+        db::element_issue::queries_async::select_count(params.area_id, false, pool).await?;
+    let requested_issues = db::element_issue::queries_async::select_ordered_by_severity(
         params.area_id,
         params.limit,
         params.offset,
