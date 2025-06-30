@@ -19,7 +19,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod boost;
 mod db_utils;
-mod element_comment;
 mod feed;
 mod invoice;
 mod log;
@@ -100,8 +99,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("element-comments")
-                            .service(element_comment::v3::get)
-                            .service(element_comment::v3::get_by_id),
+                            .service(rest::v3::element_comments::get)
+                            .service(rest::v3::element_comments::get_by_id),
                     )
                     .service(
                         scope("events")
