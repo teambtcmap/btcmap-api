@@ -15,6 +15,17 @@ pub async fn insert(
         .await?
 }
 
+pub async fn select_created_between(
+    period_start: OffsetDateTime,
+    period_end: OffsetDateTime,
+    pool: &Pool,
+) -> Result<Vec<ElementComment>> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_created_between(&period_start, &period_end, conn))
+        .await?
+}
+
 pub async fn select_by_element_id(
     element_id: i64,
     include_deleted: bool,

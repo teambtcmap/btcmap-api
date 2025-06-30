@@ -84,6 +84,8 @@ pub enum RpcMethod {
     SyncUnpaidInvoices,
     // search
     Search,
+    // analytics
+    GetReport,
 }
 
 impl Role {
@@ -497,6 +499,10 @@ pub async fn handle(
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),
             super::search::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::GetReport => RpcResponse::from(
+            req.id.clone(),
+            super::analytics::get_report::run(params(req.params)?, &pool).await?,
         ),
     }?;
     Ok(Json(res))

@@ -1,4 +1,5 @@
 use crate::Result;
+use deadpool_sqlite::Pool;
 use rusqlite::{named_params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 #[cfg(not(test))]
@@ -50,6 +51,13 @@ impl Boost {
         conn.execute(&query, named_params! { ":admin_id": admin_id, ":element_id": element_id, ":duration_days": duration_days })?;
         let res = Boost::select_by_id(conn.last_insert_rowid(), conn)?;
         Ok(res)
+    }
+
+    pub async fn select_all_async(pool: &Pool) -> Result<Vec<Boost>> {
+        pool.get()
+            .await?
+            .interact(|conn| Self::select_all(conn))
+            .await?
     }
 
     pub fn select_all(conn: &Connection) -> Result<Vec<Boost>> {
