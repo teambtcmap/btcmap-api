@@ -288,7 +288,6 @@ pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -
 mod test {
     use crate::{
         db,
-        event::Event,
         osm::{
             api::{Blocks, BlocksReceived, Changesets, ContributorTerms, EditingApiUser, Traces},
             overpass::OverpassElement,
@@ -348,9 +347,9 @@ mod test {
         assert_eq!(0, res.len());
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
-        let _event_1 = Event::insert(user.id, element.id, "update", &conn)?;
-        let _event_2 = Event::insert(user.id, element.id, "update", &conn)?;
-        let _event_3 = Event::insert(user.id, element.id, "update", &conn)?;
+        let _event_1 = db::event::queries::insert(user.id, element.id, "update", &conn)?;
+        let _event_2 = db::event::queries::insert(user.id, element.id, "update", &conn)?;
+        let _event_3 = db::event::queries::insert(user.id, element.id, "update", &conn)?;
         let res = super::select_most_active(
             OffsetDateTime::now_utc().saturating_add(Duration::days(-1)),
             OffsetDateTime::now_utc().saturating_add(Duration::days(1)),

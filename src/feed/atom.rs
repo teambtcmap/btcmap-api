@@ -1,6 +1,6 @@
 use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
-use crate::event::Event;
+use crate::db::event::schema::Event;
 use crate::{db, service, Result};
 use actix_web::{
     get,
@@ -18,7 +18,7 @@ pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
         .get()
         .await?
         .interact(move |conn| {
-            Event::select_by_type("create", Some("DESC".into()), Some(100), conn)
+            db::event::queries::select_by_type("create", Some("DESC".into()), Some(100), conn)
                 .unwrap()
                 .into_iter()
                 .map(|it| {
@@ -54,8 +54,8 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
         .get()
         .await?
         .interact(move |conn| {
-            Event::select_updated_since(
-                &OffsetDateTime::now_utc()
+            db::event::queries::select_updated_since(
+                OffsetDateTime::now_utc()
                     .checked_sub(Duration::days(180))
                     .unwrap(),
                 None,

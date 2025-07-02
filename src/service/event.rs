@@ -1,12 +1,13 @@
 use crate::conf::Conf;
 use crate::db;
-use crate::event::Event;
+use crate::db::event::schema::Event;
 use crate::osm;
 use crate::service::discord;
 use crate::user;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::ops::Add;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -14,22 +15,42 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
+    for event in db::event::queries_async::select_all(None, None, pool).await? {
+        if event.tags.get("element_osm_type").is_none()
+            || event.tags.get("element_osm_id").is_none()
+        {
+            warn!(id = event.id, "Event is not v2 compatible, upgrading");
+            let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
+            let mut event_tags: HashMap<String, Value> = HashMap::new();
+            event_tags.insert(
+                "element_osm_type".into(),
+                element.overpass_data.r#type.clone().into(),
+            );
+            event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
+            db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
+        }
+    }
+    Ok(())
+}
+
 pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
     user::service::insert_user_if_not_exists(event.user_id, pool).await?;
     let user = db::osm_user::queries_async::select_by_id(event.user_id, pool).await?;
+    let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
 
     let message = match event.r#type.as_str() {
         "create" => format!(
             "{} added https://www.openstreetmap.org/{}/{}",
-            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
+            user.osm_data.display_name, element.overpass_data.r#type, element.overpass_data.id,
         ),
         "update" => format!(
             "{} updated https://www.openstreetmap.org/{}/{}",
-            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
+            user.osm_data.display_name, element.overpass_data.r#type, element.overpass_data.id,
         ),
         "delete" => format!(
             "{} removed https://www.openstreetmap.org/{}/{}",
-            user.osm_data.display_name, event.element_osm_type, event.element_osm_id
+            user.osm_data.display_name, element.overpass_data.r#type, element.overpass_data.id,
         ),
         _ => "".into(),
     };

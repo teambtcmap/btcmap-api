@@ -1,4 +1,5 @@
-use super::Event;
+use crate::db;
+use crate::db::event::schema::Event;
 use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
@@ -11,10 +12,9 @@ use actix_web::Either;
 use actix_web::HttpMessage;
 use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
+use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
-use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
@@ -33,7 +33,7 @@ pub struct GetItem {
     pub user_id: i64,
     pub element_id: String,
     pub r#type: String,
-    pub tags: HashMap<String, Value>,
+    pub tags: JsonObject,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -43,10 +43,28 @@ pub struct GetItem {
 
 impl From<Event> for GetItem {
     fn from(val: Event) -> GetItem {
+        let element_osm_type = val
+            .tags
+            .get("element_osm_type")
+            .map(|it| it.as_str().unwrap_or(""))
+            .unwrap_or("");
+
+        let element_osm_id = val
+            .tags
+            .get("element_osm_id")
+            .map(|it| it.as_i64().unwrap_or(-1))
+            .unwrap_or(-1);
+
+        let element_id = if element_osm_type.is_empty() || element_osm_id == -1 {
+            String::new()
+        } else {
+            format!("{}:{}", element_osm_type, element_osm_id)
+        };
+
         GetItem {
             id: val.id,
             user_id: val.user_id,
-            element_id: format!("{}:{}", val.element_osm_type, val.element_osm_id),
+            element_id: element_id,
             r#type: val.r#type,
             tags: val.tags,
             created_at: val.created_at,
@@ -79,10 +97,12 @@ pub async fn get(
     let events = pool
         .get()
         .await?
-        .interact(move |conn| match &args.updated_since {
-            Some(updated_since) => Event::select_updated_since(updated_since, args.limit, conn),
-            None => Event::select_updated_since(
-                &OffsetDateTime::now_utc()
+        .interact(move |conn| match args.updated_since {
+            Some(updated_since) => {
+                db::event::queries::select_updated_since(updated_since, args.limit, conn)
+            }
+            None => db::event::queries::select_updated_since(
+                OffsetDateTime::now_utc()
                     .checked_sub(Duration::days(30))
                     .unwrap(),
                 args.limit,
@@ -102,17 +122,16 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
     let id = id.into_inner();
     pool.get()
         .await?
-        .interact(move |conn| Event::select_by_id(id, conn))
+        .interact(move |conn| db::event::queries::select_by_id(id, conn))
         .await?
         .map(|it| it.into())
 }
 
 #[cfg(test)]
 mod test {
-    use crate::event::v2::GetItem;
-    use crate::event::Event;
     use crate::osm::api::EditingApiUser;
     use crate::osm::overpass::OverpassElement;
+    use crate::rest::v2::events::GetItem;
     use crate::test::mock_db;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
@@ -141,7 +160,7 @@ mod test {
         let db = mock_db();
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        Event::insert(user.id, element.id, "", &db.conn)?;
+        db::event::queries::insert(user.id, element.id, "", &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -159,9 +178,9 @@ mod test {
         let db = mock_db();
         db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
         db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        Event::insert(1, 1, "", &db.conn)?;
-        Event::insert(1, 1, "", &db.conn)?;
-        Event::insert(1, 1, "", &db.conn)?;
+        db::event::queries::insert(1, 1, "", &db.conn)?;
+        db::event::queries::insert(1, 1, "", &db.conn)?;
+        db::event::queries::insert(1, 1, "", &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -179,10 +198,18 @@ mod test {
         let db = mock_db();
         db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
         db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        let event_1 = Event::insert(1, 1, "", &db.conn)?;
-        Event::set_updated_at(event_1.id, &datetime!(2022-01-05 00:00:00 UTC), &db.conn)?;
-        let event_2 = Event::insert(1, 1, "", &db.conn)?;
-        Event::set_updated_at(event_2.id, &datetime!(2022-02-05 00:00:00 UTC), &db.conn)?;
+        let event_1 = db::event::queries::insert(1, 1, "", &db.conn)?;
+        db::event::queries::set_updated_at(
+            event_1.id,
+            &datetime!(2022-01-05 00:00:00 UTC),
+            &db.conn,
+        )?;
+        let event_2 = db::event::queries::insert(1, 1, "", &db.conn)?;
+        db::event::queries::set_updated_at(
+            event_2.id,
+            &datetime!(2022-02-05 00:00:00 UTC),
+            &db.conn,
+        )?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))
@@ -203,7 +230,7 @@ mod test {
         let event_id = 1;
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        Event::insert(user.id, element.id, "", &db.conn)?;
+        db::event::queries::insert(user.id, element.id, "", &db.conn)?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(db.pool))

@@ -1,6 +1,5 @@
 use crate::{
-    db::{self, element::schema::Element},
-    event::Event,
+    db::{self, element::schema::Element, event::schema::Event},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -32,7 +31,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let events = pool
         .get()
         .await?
-        .interact(move |conn| Event::select_by_user(user.id, params.limit, conn))
+        .interact(move |conn| db::event::queries::select_by_user(user.id, params.limit, conn))
         .await??;
     let events_elements: Vec<(Event, Element)> = pool
         .get()
@@ -63,11 +62,11 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
             ),
             osm_url: format!(
                 "https://www.openstreetmap.org/{}/{}",
-                it.0.element_osm_type, it.0.element_osm_id
+                it.1.overpass_data.r#type, it.1.overpass_data.id
             ),
             btcmap_url: format!(
                 "https://btcmap.org/merchant/{}:{}",
-                it.0.element_osm_type, it.0.element_osm_id
+                it.1.overpass_data.r#type, it.1.overpass_data.id
             ),
         })
         .collect();

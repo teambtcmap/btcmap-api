@@ -1,6 +1,6 @@
 use crate::conf::Conf;
 use crate::db::element::schema::Element;
-use crate::event::{self, Event};
+use crate::db::event::schema::Event;
 use crate::osm::overpass::OverpassElement;
 use crate::osm::{self, api::OsmElement};
 use crate::service::area_element::Diff;
@@ -86,7 +86,7 @@ pub async fn merge_overpass_elements(
     all_events.extend(updated_element_events);
     all_events.extend(deleted_element_events);
     for event in all_events {
-        event::service::on_new_event(&event, pool).await?;
+        service::event::on_new_event(&event, pool).await?;
     }
     let events_processing_time_s =
         (OffsetDateTime::now_utc() - events_processing_started_at).as_seconds_f64();
@@ -190,8 +190,9 @@ async fn mark_element_as_deleted(
         )
         .await?;
     }
-    let event = Event::insert_async(fresh_osm_element.uid, element.id, "delete", pool).await?;
-    let event = Event::patch_tags_async(event.id, event_tags, pool).await?;
+    let event =
+        db::event::queries_async::insert(fresh_osm_element.uid, element.id, "delete", pool).await?;
+    let event = db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
     Ok(event)
 }
 
@@ -245,13 +246,20 @@ pub async fn sync_updated_elements(
         }
         user::service::insert_user_if_not_exists(fresh_overpass_element.uid.unwrap(), pool).await?;
         if fresh_overpass_element.changeset != cached_element.overpass_data.changeset {
-            let event = Event::insert_async(
+            let mut event_tags: HashMap<String, Value> = HashMap::new();
+            event_tags.insert(
+                "element_osm_type".into(),
+                fresh_overpass_element.r#type.clone().into(),
+            );
+            event_tags.insert("element_osm_id".into(), fresh_overpass_element.id.into());
+            let event = db::event::queries_async::insert(
                 fresh_overpass_element.uid.unwrap(),
                 cached_element.id,
                 "update",
                 pool,
             )
             .await?;
+            let event = db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
             res.push(event);
         }
         let mut updated_element = db::element::queries_async::set_overpass_data(
@@ -305,8 +313,17 @@ pub async fn sync_new_elements(
                 user::service::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
                 let element =
                     db::element::queries_async::insert(fresh_element.clone(), pool).await?;
+                let mut event_tags: HashMap<String, Value> = HashMap::new();
+                event_tags.insert(
+                    "element_osm_type".into(),
+                    element.overpass_data.r#type.clone().into(),
+                );
+                event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
                 let event =
-                    Event::insert_async(user_id.unwrap(), element.id, "create", pool).await?;
+                    db::event::queries_async::insert(user_id.unwrap(), element.id, "create", pool)
+                        .await?;
+                let event =
+                    db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
                 res.push(event);
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
@@ -360,10 +377,7 @@ mod test {
         let res = res.unwrap();
         assert!(res.len() == 1);
         let res = res.first().unwrap();
-        assert_eq!(
-            element_3.overpass_data.btcmap_id(),
-            format!("{}:{}", res.element_osm_type, res.element_osm_id),
-        );
+        assert_eq!(element_3.id, res.element_id,);
         Ok(())
     }
 

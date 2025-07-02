@@ -6,7 +6,6 @@ use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod conf;
 mod error;
-mod event;
 mod osm;
 mod report;
 #[cfg(test)]
@@ -39,6 +38,7 @@ async fn main() -> Result<()> {
     init_env();
     let pool = db_utils::pool()?;
     db_utils::migrate_async(&pool).await?;
+    service::event::enforce_v2_compat(&pool).await?;
     let conf = Conf::select_async(&pool).await?;
     HttpServer::new(move || {
         App::new()
@@ -70,8 +70,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("events")
-                            .service(event::v2::get)
-                            .service(event::v2::get_by_id),
+                            .service(rest::v2::events::get)
+                            .service(rest::v2::events::get_by_id),
                     )
                     .service(
                         scope("users")
@@ -103,8 +103,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("events")
-                            .service(event::v3::get)
-                            .service(event::v3::get_by_id),
+                            .service(rest::v3::events::get)
+                            .service(rest::v3::events::get_by_id),
                     )
                     .service(
                         scope("areas")

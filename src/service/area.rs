@@ -1,9 +1,9 @@
+use crate::db::event::schema::Event;
 use crate::service;
 use crate::{
     db::{
         self, area::schema::Area, element::schema::Element, element_comment::schema::ElementComment,
     },
-    event::Event,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -129,7 +129,7 @@ pub fn get_trending_areas(
     period_end: &OffsetDateTime,
     conn: &Connection,
 ) -> Result<Vec<TrendingArea>> {
-    let events = Event::select_created_between(period_start, period_end, conn)?;
+    let events = db::event::queries::select_created_between(period_start, period_end, conn)?;
     let mut areas_to_events: HashMap<i64, Vec<&Event>> = HashMap::new();
     for event in &events {
         let element = db::element::queries::select_by_id(event.element_id, conn)?;
