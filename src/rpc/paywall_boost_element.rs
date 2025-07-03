@@ -1,4 +1,4 @@
-use crate::{conf::Conf, db, invoice, Result};
+use crate::{conf::Conf, db, service, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         365 => conf.paywall_boost_element_365d_price_sat,
         _ => Err("Invalid duration")?,
     };
-    let invoice = invoice::service::create(
+    let invoice = service::invoice::create(
         format!("element_boost:{}:{}", params.element_id, params.days),
         sats,
         pool,

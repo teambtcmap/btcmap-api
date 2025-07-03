@@ -19,7 +19,6 @@ use tracing_subscriber::EnvFilter;
 mod boost;
 mod db_utils;
 mod feed;
-mod invoice;
 mod log;
 mod rpc;
 mod sync;

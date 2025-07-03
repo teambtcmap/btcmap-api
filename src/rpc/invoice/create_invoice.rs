@@ -1,8 +1,7 @@
 use crate::{
     conf::Conf,
     db::{invoice::schema::Invoice, user::schema::User},
-    invoice::{self},
-    service::discord,
+    service::{self, discord},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -30,7 +29,7 @@ impl From<Invoice> for Res {
 }
 
 pub async fn run(params: Params, author: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let invoice = invoice::service::create(
+    let invoice = service::invoice::create(
         params.description.unwrap_or_default(),
         params.amount_sats,
         pool,

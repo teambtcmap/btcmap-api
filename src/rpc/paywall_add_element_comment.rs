@@ -1,9 +1,4 @@
-use crate::{
-    conf::Conf,
-    db,
-    invoice::{self},
-    Result,
-};
+use crate::{conf::Conf, db, service, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -31,7 +26,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         pool,
     )
     .await?;
-    let invoice = invoice::service::create(
+    let invoice = service::invoice::create(
         format!("element_comment:{}:publish", comment.id),
         conf.paywall_add_element_comment_price_sat,
         pool,
