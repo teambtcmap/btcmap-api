@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
     let pool = db_utils::pool()?;
     db_utils::migrate_async(&pool).await?;
     service::event::enforce_v2_compat(&pool).await?;
+    service::report::enforce_v2_compat(&pool).await?;
     let conf = Conf::select_async(&pool).await?;
     HttpServer::new(move || {
         App::new()

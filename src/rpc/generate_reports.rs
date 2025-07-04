@@ -1,7 +1,6 @@
 use crate::{
     conf::Conf,
     db::{self, area::schema::Area, element::schema::Element, user::schema::User},
-    report::Report,
     service::{self, discord},
     Result,
 };
@@ -47,7 +46,7 @@ pub async fn run(caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
 pub async fn generate_reports(pool: &Pool) -> Result<usize> {
     let today = OffsetDateTime::now_utc().date();
     info!(date = ?today, "Generating report");
-    let today_reports = Report::select_by_date_async(today, None, pool).await?;
+    let today_reports = db::report::queries_async::select_by_date(today, None, pool).await?;
     if !today_reports.is_empty() {
         info!("Found existing reports for today, aborting");
         return Ok(0);
@@ -79,16 +78,16 @@ async fn generate_new_report_if_necessary(
     pool: &Pool,
 ) -> Result<Option<Map<String, Value>>> {
     let new_report_tags = generate_report_tags(&area_elements)?;
-    let prev_report = Report::select_latest_by_area_id_async(area.id, pool).await?;
+    let prev_report = db::report::queries_async::select_latest_by_area_id(area.id, pool).await;
     Ok(match prev_report {
-        None => Some(new_report_tags),
-        Some(latest_report) => {
+        Ok(latest_report) => {
             if new_report_tags != latest_report.tags {
                 Some(new_report_tags)
             } else {
                 None
             }
         }
+        Err(_) => Some(new_report_tags),
     })
 }
 
@@ -194,7 +193,7 @@ fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
 async fn insert_report(area_id: i64, tags: &Map<String, Value>, pool: &Pool) -> Result<()> {
     let date = OffsetDateTime::now_utc().date();
     info!(area_id, ?date, ?tags, "Inserting new report");
-    Report::insert_async(area_id, date, tags.clone(), pool).await?;
+    db::report::queries_async::insert(area_id, date, tags.clone(), pool).await?;
     info!(area_id, ?date, "Inserted new report");
     Ok(())
 }
@@ -214,7 +213,7 @@ mod test {
         area_tags.insert("url_alias".into(), json!("test"));
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         for _ in 1..100 {
-            Report::insert_async(1, date!(2023 - 11 - 12), Map::new(), &pool).await?;
+            db::report::queries_async::insert(1, date!(2023 - 11 - 12), Map::new(), &pool).await?;
         }
         Ok(())
     }

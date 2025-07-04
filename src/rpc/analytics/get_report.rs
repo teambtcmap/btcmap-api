@@ -1,4 +1,4 @@
-use crate::{boost::Boost, db, report::Report, Result};
+use crate::{boost::Boost, db, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -28,8 +28,10 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let reports_start = Report::select_by_date_async(params.start.date(), None, pool).await?;
-    let reports_end = Report::select_by_date_async(params.end.date(), None, pool).await?;
+    let reports_start =
+        db::report::queries_async::select_by_date(params.start.date(), None, pool).await?;
+    let reports_end =
+        db::report::queries_async::select_by_date(params.end.date(), None, pool).await?;
     let global_report_start = reports_start.iter().find(|it| it.area_id == 662).unwrap();
     let global_report_end = reports_end.iter().find(|it| it.area_id == 662).unwrap();
     let total_places_start = global_report_start.tags["total_elements"].as_i64().unwrap();

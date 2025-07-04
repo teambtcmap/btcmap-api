@@ -7,4 +7,5 @@ pub mod element_issue;
 pub mod event;
 pub mod invoice;
 pub mod osm_user;
+pub mod report;
 pub mod user;

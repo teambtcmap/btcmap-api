@@ -1,4 +1,5 @@
-use super::Report;
+use crate::db;
+use crate::db::report::schema::Report;
 use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
@@ -83,7 +84,7 @@ pub async fn get(
         .get()
         .await?
         .interact(move |conn| {
-            Report::select_updated_since(&args.updated_since, Some(args.limit), conn)
+            db::report::queries::select_updated_since(args.updated_since, Some(args.limit), conn)
         })
         .await??;
     req.extensions_mut()
@@ -96,7 +97,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
     let id = id.into_inner();
     pool.get()
         .await?
-        .interact(move |conn| Report::select_by_id(id, conn))
+        .interact(move |conn| db::report::queries::select_by_id(id, conn))
         .await?
         .map(|it| it.into())
 }
@@ -104,7 +105,6 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::report::Report;
     use crate::test::{mock_db, mock_pool};
     use crate::{db, Result};
     use actix_web::http::StatusCode;
@@ -166,9 +166,13 @@ mod test {
     async fn get_not_empty_array() -> Result<()> {
         let pool = mock_pool().await;
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
-        let report =
-            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
-                .await?;
+        let report = db::report::queries_async::insert(
+            area.id,
+            OffsetDateTime::now_utc().date(),
+            Map::new(),
+            &pool,
+        )
+        .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -187,15 +191,27 @@ mod test {
     async fn get_with_limit() -> Result<()> {
         let pool = mock_pool().await;
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
-        let report_1 =
-            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
-                .await?;
-        let report_2 =
-            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
-                .await?;
-        let _report_3 =
-            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
-                .await?;
+        let report_1 = db::report::queries_async::insert(
+            area.id,
+            OffsetDateTime::now_utc().date(),
+            Map::new(),
+            &pool,
+        )
+        .await?;
+        let report_2 = db::report::queries_async::insert(
+            area.id,
+            OffsetDateTime::now_utc().date(),
+            Map::new(),
+            &pool,
+        )
+        .await?;
+        let _report_3 = db::report::queries_async::insert(
+            area.id,
+            OffsetDateTime::now_utc().date(),
+            Map::new(),
+            &pool,
+        )
+        .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -214,15 +230,32 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let pool = mock_pool().await;
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
-        let report_1 =
-            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
-                .await?;
-        Report::set_updated_at(report_1.id, datetime!(2022-01-05 00:00 UTC), &pool).await?;
-        let report_2 =
-            Report::insert_async(area.id, OffsetDateTime::now_utc().date(), Map::new(), &pool)
-                .await?;
-        let report_2 =
-            Report::set_updated_at(report_2.id, datetime!(2022-02-05 00:00 UTC), &pool).await?;
+        let report_1 = db::report::queries_async::insert(
+            area.id,
+            OffsetDateTime::now_utc().date(),
+            Map::new(),
+            &pool,
+        )
+        .await?;
+        db::report::queries_async::set_updated_at(
+            report_1.id,
+            datetime!(2022-01-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
+        let report_2 = db::report::queries_async::insert(
+            area.id,
+            OffsetDateTime::now_utc().date(),
+            Map::new(),
+            &pool,
+        )
+        .await?;
+        let report_2 = db::report::queries_async::set_updated_at(
+            report_2.id,
+            datetime!(2022-02-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
