@@ -154,10 +154,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::element_issues::get)
                             .service(rest::v4::element_issues::get_by_id),
                     )
-                    .service(
-                        scope("search")
-                            .service(rest::v4::search::get),
-                    ),
+                    .service(scope("search").service(rest::v4::search::get)),
             )
     })
     .bind(("127.0.0.1", 8000))?

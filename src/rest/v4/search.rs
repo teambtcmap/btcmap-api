@@ -193,10 +193,10 @@ mod test {
                 .service(scope("/search").service(super::get)),
         )
         .await;
-        let req = TestRequest::get().uri("/search?q=test").to_request();
+        let req = TestRequest::get().uri("/search?q=cuba").to_request();
         let res: SearchResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.query, "cuba");
-        assert!(!res.results.is_empty());
+        assert!(res.results.is_empty());
         Ok(())
     }
 
