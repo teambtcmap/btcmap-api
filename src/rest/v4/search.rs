@@ -1,8 +1,8 @@
 use crate::db;
-use crate::rest::error::{RestApiError, RestApiErrorCode};
-use crate::rest::error::RestResult as Res;
 use crate::log::RequestExtension;
-use actix_web::{get, web::Data, web::Json, web::Query, HttpRequest, HttpMessage};
+use crate::rest::error::RestResult as Res;
+use crate::rest::error::{RestApiError, RestApiErrorCode};
+use actix_web::{get, web::Data, web::Json, web::Query, HttpMessage, HttpRequest};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -50,16 +50,21 @@ pub async fn get(
     args: Query<SearchArgs>,
     pool: Data<Pool>,
 ) -> Res<SearchResponse> {
-
     // query validation
     let query = args.q.trim();
     if query.is_empty() {
-        return Err(RestApiError::new(RestApiErrorCode::InvalidInput,"Search query cannot be empty"));
+        return Err(RestApiError::new(
+            RestApiErrorCode::InvalidInput,
+            "Search query cannot be empty",
+        ));
     }
 
     // minimal query length
     if query.len() < 2 {
-        return Err(RestApiError::new(RestApiErrorCode::InvalidInput, "Search query must be at least 2 characters long"));
+        return Err(RestApiError::new(
+            RestApiErrorCode::InvalidInput,
+            "Search query must be at least 2 characters long",
+        ));
     }
 
     // maximal length
@@ -84,7 +89,9 @@ pub async fn get(
     }
 
     // search elements by default or if specified
-    if args.type_filter.is_none() || args.type_filter.as_ref().map(|s| s.as_str()) == Some("element") {
+    if args.type_filter.is_none()
+        || args.type_filter.as_ref().map(|s| s.as_str()) == Some("element")
+    {
         let elements = db::element::queries_async::select_by_search_query(query, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
@@ -138,7 +145,6 @@ pub async fn get(
     Ok(Json(response))
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -156,7 +162,7 @@ mod test {
                 .app_data(Data::new(mock_pool().await))
                 .service(scope("/search").service(super::get)),
         )
-            .await;
+        .await;
         let req = TestRequest::get().uri("/search?q=").to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), 400);
@@ -170,7 +176,7 @@ mod test {
                 .app_data(Data::new(mock_pool().await))
                 .service(scope("/search").service(super::get)),
         )
-            .await;
+        .await;
         let req = TestRequest::get().uri("/search?q=a").to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), 400);
@@ -186,11 +192,11 @@ mod test {
                 .app_data(Data::new(pool))
                 .service(scope("/search").service(super::get)),
         )
-            .await;
+        .await;
         let req = TestRequest::get().uri("/search?q=test").to_request();
         let res: SearchResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.query, "cuba");
-        assert!(res.results.len() >= 0);
+        assert!(!res.results.is_empty());
         Ok(())
     }
 
@@ -198,15 +204,18 @@ mod test {
     async fn search_with_pagination_works() -> Result<()> {
         let pool = mock_pool().await;
         for i in 1..=5 {
-            let _element = db::element::queries_async::insert(OverpassElement::mock(i), &pool).await?;
+            let _element =
+                db::element::queries_async::insert(OverpassElement::mock(i), &pool).await?;
         }
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .service(scope("/search").service(super::get)),
         )
-            .await;
-        let req = TestRequest::get().uri("/search?q=test&limit=2&offset=0").to_request();
+        .await;
+        let req = TestRequest::get()
+            .uri("/search?q=test&limit=2&offset=0")
+            .to_request();
         let res: SearchResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.pagination.limit, 2);
         assert_eq!(res.pagination.offset, 0);
@@ -222,8 +231,10 @@ mod test {
                 .app_data(Data::new(pool))
                 .service(scope("/search").service(super::get)),
         )
-            .await;
-        let req = TestRequest::get().uri("/search?q=test&type_filter=element").to_request();
+        .await;
+        let req = TestRequest::get()
+            .uri("/search?q=test&type_filter=element")
+            .to_request();
         let res: SearchResponse = test::call_and_read_body_json(&app, req).await;
         for result in res.results {
             assert_eq!(result.r#type, "element");
