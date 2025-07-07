@@ -6,7 +6,6 @@ use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod conf;
 mod error;
-mod report;
 #[cfg(test)]
 mod test;
 mod user;
@@ -84,8 +83,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("reports")
-                            .service(report::v2::get)
-                            .service(report::v2::get_by_id),
+                            .service(rest::v2::reports::get)
+                            .service(rest::v2::reports::get_by_id),
                     ),
             )
             .service(
@@ -112,8 +111,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("reports")
-                            .service(report::v3::get)
-                            .service(report::v3::get_by_id),
+                            .service(rest::v3::reports::get)
+                            .service(rest::v3::reports::get_by_id),
                     )
                     .service(
                         scope("users")

@@ -123,7 +123,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::report::v2::GetItem;
+    use crate::rest::v2::reports::GetItem;
     use crate::test::{mock_db, mock_pool};
     use crate::{db, Result};
     use actix_web::test::TestRequest;
