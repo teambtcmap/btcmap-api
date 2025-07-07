@@ -1,11 +1,12 @@
 pub mod area;
 pub mod area_element;
+pub mod ban;
 pub mod discord;
 pub mod element;
 pub mod event;
 pub mod invoice;
+pub mod og;
 pub mod osm;
 pub mod overpass;
 pub mod report;
 pub mod user;
-pub mod og;

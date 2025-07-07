@@ -20,7 +20,6 @@ mod log;
 mod rpc;
 mod sync;
 use actix_web::web::{scope, Data};
-mod ban;
 use log::Log;
 mod db;
 mod og;
@@ -42,7 +41,7 @@ async fn main() -> Result<()> {
             .wrap(Log)
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
-            .wrap(from_fn(ban::check_if_banned))
+            .wrap(from_fn(service::ban::check_if_banned))
             .app_data(Data::new(pool.clone()))
             .app_data(Data::new(conf.clone()))
             .service(og::element::get_element)
