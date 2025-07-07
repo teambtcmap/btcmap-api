@@ -1,4 +1,7 @@
-use crate::{boost::Boost, db, Result};
+use crate::{
+    db::{self, boost::schema::Boost},
+    Result,
+};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -54,7 +57,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let avg_verification_date_end = OffsetDateTime::parse(avg_verification_date_end, &Rfc3339)?;
     let days_since_verified_end =
         (global_report_end.created_at - avg_verification_date_end).whole_days();
-    let boosts = Boost::select_all_async(pool).await?;
+    let boosts = db::boost::queries_async::select_all(pool).await?;
     let boosts: Vec<Boost> = boosts
         .into_iter()
         .filter(|it| it.created_at > params.start && it.created_at < params.end)

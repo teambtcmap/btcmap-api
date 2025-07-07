@@ -1,5 +1,4 @@
 use crate::{
-    boost::Boost,
     conf::Conf,
     db::{self, element::schema::Element, user::schema::User},
     service::discord,
@@ -69,6 +68,6 @@ fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Re
         &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),
         conn,
     )?;
-    Boost::insert(admin_id, element.id, days, conn)?;
+    db::boost::queries::insert(admin_id, element.id, days, conn)?;
     Ok(element)
 }

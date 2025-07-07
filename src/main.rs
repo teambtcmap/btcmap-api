@@ -13,7 +13,6 @@ use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-mod boost;
 mod db_utils;
 mod feed;
 mod log;
