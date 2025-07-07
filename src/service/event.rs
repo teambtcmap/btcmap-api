@@ -3,7 +3,6 @@ use crate::db;
 use crate::db::event::schema::Event;
 use crate::service;
 use crate::service::discord;
-use crate::user;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
@@ -35,7 +34,7 @@ pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
 }
 
 pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
-    user::service::insert_user_if_not_exists(event.user_id, pool).await?;
+    service::user::insert_user_if_not_exists(event.user_id, pool).await?;
     let user = db::osm_user::queries_async::select_by_id(event.user_id, pool).await?;
     let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
 

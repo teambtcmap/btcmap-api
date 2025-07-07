@@ -5,7 +5,7 @@ use crate::service::area_element::Diff;
 use crate::service::osm::OsmElement;
 use crate::service::overpass::OverpassElement;
 use crate::service::{self, discord};
-use crate::{db, user, Result};
+use crate::{db, Result};
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use serde_json::Value;
@@ -157,7 +157,7 @@ pub async fn sync_deleted_elements(
             &conf,
         )
         .await?;
-        user::service::insert_user_if_not_exists(fresh_osm_element.uid, pool).await?;
+        service::user::insert_user_if_not_exists(fresh_osm_element.uid, pool).await?;
         res.push(mark_element_as_deleted(&absent_element, &fresh_osm_element, pool).await?);
     }
     Ok(res)
@@ -244,7 +244,7 @@ pub async fn sync_updated_elements(
         if *fresh_overpass_element == cached_element.overpass_data {
             continue;
         }
-        user::service::insert_user_if_not_exists(fresh_overpass_element.uid.unwrap(), pool).await?;
+        service::user::insert_user_if_not_exists(fresh_overpass_element.uid.unwrap(), pool).await?;
         if fresh_overpass_element.changeset != cached_element.overpass_data.changeset {
             let mut event_tags: HashMap<String, Value> = HashMap::new();
             event_tags.insert(
@@ -310,7 +310,7 @@ pub async fn sync_new_elements(
         {
             Some(_) => {}
             None => {
-                user::service::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
+                service::user::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
                 let element =
                     db::element::queries_async::insert(fresh_element.clone(), pool).await?;
                 let mut event_tags: HashMap<String, Value> = HashMap::new();
@@ -354,9 +354,8 @@ mod test {
     use crate::{
         conf::Conf,
         db,
-        service::{osm::EditingApiUser, overpass::OverpassElement},
+        service::{self, osm::EditingApiUser, overpass::OverpassElement},
         test::mock_db,
-        user::{self},
         Result,
     };
     use actix_web::test;
@@ -397,7 +396,7 @@ mod test {
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
         let db = mock_db();
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        assert!(user::service::insert_user_if_not_exists(user.id, &db.pool)
+        assert!(service::user::insert_user_if_not_exists(user.id, &db.pool)
             .await
             .is_ok());
         Ok(())
@@ -409,7 +408,7 @@ mod test {
         let db = mock_db();
         let btc_map_user_id = 18545877;
         assert!(
-            user::service::insert_user_if_not_exists(btc_map_user_id, &db.pool)
+            service::user::insert_user_if_not_exists(btc_map_user_id, &db.pool)
                 .await
                 .is_ok()
         );

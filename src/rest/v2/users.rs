@@ -102,9 +102,9 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
+    use crate::rest::v2::users::GetItem;
     use crate::service::osm::EditingApiUser;
     use crate::test::mock_db;
-    use crate::user::v2::GetItem;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};

@@ -8,7 +8,6 @@ mod conf;
 mod error;
 #[cfg(test)]
 mod test;
-mod user;
 use std::env;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -73,8 +72,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("users")
-                            .service(user::v2::get)
-                            .service(user::v2::get_by_id),
+                            .service(rest::v2::users::get)
+                            .service(rest::v2::users::get_by_id),
                     )
                     .service(
                         scope("areas")
@@ -116,8 +115,8 @@ async fn main() -> Result<()> {
                     )
                     .service(
                         scope("users")
-                            .service(user::v3::get)
-                            .service(user::v3::get_by_id),
+                            .service(rest::v3::users::get)
+                            .service(rest::v3::users::get_by_id),
                     )
                     .service(
                         scope("area-elements")

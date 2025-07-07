@@ -7,3 +7,4 @@ pub mod invoice;
 pub mod osm;
 pub mod overpass;
 pub mod report;
+pub mod user;
