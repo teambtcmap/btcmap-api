@@ -8,3 +8,4 @@ pub mod osm;
 pub mod overpass;
 pub mod report;
 pub mod user;
+pub mod og;

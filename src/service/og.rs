@@ -1,9 +1,4 @@
 use crate::{db, Result};
-use actix_web::{
-    get,
-    web::{Data, Path},
-    HttpResponse, Responder,
-};
 use deadpool_sqlite::Pool;
 use include_dir::include_dir;
 use include_dir::Dir;
@@ -11,14 +6,7 @@ use staticmap::{tools::IconBuilder, StaticMapBuilder};
 
 static ICONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/icons");
 
-#[get("/og/element/{id}")]
-pub async fn get_element(id: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
-    Ok(HttpResponse::Ok()
-        .content_type("image/png")
-        .body(element_og(&id, &pool).await?))
-}
-
-async fn element_og(id: &str, pool: &Pool) -> Result<Vec<u8>> {
+pub async fn element_og(id: &str, pool: &Pool) -> Result<Vec<u8>> {
     let Ok(element) = db::element::queries_async::select_by_id_or_osm_id(id, pool).await else {
         return Err("Element not found".into());
     };
