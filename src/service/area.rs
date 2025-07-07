@@ -248,7 +248,7 @@ fn get_comments(
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::osm::overpass::OverpassElement;
+    use crate::service::overpass::OverpassElement;
     use crate::test::{earth_geo_json, mock_pool, phuket_geo_json};
     use crate::{db, Result};
     use actix_web::test;

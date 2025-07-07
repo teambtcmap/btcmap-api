@@ -551,7 +551,7 @@ fn extract_access_token(headers: &HeaderMap, params: &Option<Value>) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{osm::overpass::OverpassElement, test::mock_pool};
+    use crate::{service::overpass::OverpassElement, test::mock_pool};
     use actix_web::{
         http::{header, StatusCode},
         test,

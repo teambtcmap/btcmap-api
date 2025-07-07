@@ -1,5 +1,5 @@
 use super::schema::{self, Columns, Element};
-use crate::{osm::overpass::OverpassElement, Result};
+use crate::{service::overpass::OverpassElement, Result};
 use rusqlite::{named_params, params, Connection};
 use serde_json::{Map, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -243,8 +243,9 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
+    use crate::service::overpass::OverpassElement;
     use crate::Error;
-    use crate::{osm::overpass::OverpassElement, test::mock_conn, Result};
+    use crate::{test::mock_conn, Result};
     use serde_json::{json, Map};
     use time::macros::datetime;
     use time::OffsetDateTime;

@@ -1,6 +1,6 @@
 use super::schema;
 use super::schema::Columns;
-use crate::{osm::api::EditingApiUser, Result};
+use crate::{service::osm::EditingApiUser, Result};
 use rusqlite::{params, Connection, Row};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -288,8 +288,8 @@ pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -
 mod test {
     use crate::{
         db,
-        osm::{
-            api::{Blocks, BlocksReceived, Changesets, ContributorTerms, EditingApiUser, Traces},
+        service::{
+            osm::{Blocks, BlocksReceived, Changesets, ContributorTerms, EditingApiUser, Traces},
             overpass::OverpassElement,
         },
         test::mock_conn,

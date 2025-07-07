@@ -1,7 +1,7 @@
 use crate::db;
 use crate::db::element::schema::Element;
 use crate::log::RequestExtension;
-use crate::osm::overpass::OverpassElement;
+use crate::service::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;

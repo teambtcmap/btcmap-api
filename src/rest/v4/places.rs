@@ -160,7 +160,7 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<C
 
 #[cfg(test)]
 mod test {
-    use crate::osm::overpass::OverpassElement;
+    use crate::service::overpass::OverpassElement;
     use crate::test::{mock_db, mock_pool};
     use crate::{db, Result};
     use actix_web::test::TestRequest;

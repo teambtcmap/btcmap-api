@@ -1,8 +1,9 @@
-use crate::osm::overpass::OverpassElement;
 use rusqlite::Row;
 use serde_json::{Map, Value};
 use std::sync::OnceLock;
 use time::OffsetDateTime;
+
+use crate::service::overpass::OverpassElement;
 
 pub const TABLE_NAME: &str = "element";
 

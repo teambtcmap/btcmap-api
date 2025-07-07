@@ -1,7 +1,7 @@
 use crate::db;
 use crate::db::element::schema::Element;
 use crate::log::RequestExtension;
-use crate::osm::overpass::OverpassElement;
+use crate::service::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -99,7 +99,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
 
 #[cfg(test)]
 mod test {
-    use crate::osm::overpass::OverpassElement;
+    use crate::service::overpass::OverpassElement;
     use crate::test::mock_db;
     use crate::{db, Result};
     use actix_web::http::StatusCode;

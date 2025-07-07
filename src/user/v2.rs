@@ -1,7 +1,7 @@
 use crate::db;
 use crate::db::osm_user::queries::OsmUser;
 use crate::log::RequestExtension;
-use crate::osm::api::EditingApiUser;
+use crate::service::osm::EditingApiUser;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -102,7 +102,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
-    use crate::osm::api::EditingApiUser;
+    use crate::service::osm::EditingApiUser;
     use crate::test::mock_db;
     use crate::user::v2::GetItem;
     use crate::{db, Result};

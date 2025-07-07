@@ -209,7 +209,7 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::{db, osm::overpass::OverpassElement, test::mock_db, Result};
+    use crate::{db, service::overpass::OverpassElement, test::mock_db, Result};
     use actix_web::test;
     use serde_json::Value;
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};

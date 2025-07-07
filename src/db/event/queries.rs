@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use super::schema::{self, Columns, Event};
 use crate::Result;
 use rusqlite::{named_params, params, Connection};
 use serde_json::Value;
+use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub fn insert(user_id: i64, element_id: i64, r#type: &str, conn: &Connection) -> Result<Event> {
@@ -211,7 +210,7 @@ pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -
 mod test {
     use crate::{
         db,
-        osm::{api::EditingApiUser, overpass::OverpassElement},
+        service::{osm::EditingApiUser, overpass::OverpassElement},
         test::mock_conn,
         Result,
     };

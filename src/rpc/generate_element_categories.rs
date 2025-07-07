@@ -1,8 +1,7 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    osm::overpass::OverpassElement,
-    service::discord,
+    service::{discord, overpass::OverpassElement},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -103,7 +102,7 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
-    use crate::osm::overpass::OverpassElement;
+    use crate::service::overpass::OverpassElement;
     use crate::Result;
     use crate::{db, db_utils};
     use rusqlite::Connection;

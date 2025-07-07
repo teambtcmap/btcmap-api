@@ -1,6 +1,6 @@
 use super::queries;
 use super::schema::Element;
-use crate::osm::overpass::OverpassElement;
+use crate::service::overpass::OverpassElement;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::Value;

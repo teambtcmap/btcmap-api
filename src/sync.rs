@@ -1,9 +1,9 @@
 use crate::conf::Conf;
 use crate::db::element::schema::Element;
 use crate::db::event::schema::Event;
-use crate::osm::overpass::OverpassElement;
-use crate::osm::{self, api::OsmElement};
 use crate::service::area_element::Diff;
+use crate::service::osm::OsmElement;
+use crate::service::overpass::OverpassElement;
 use crate::service::{self, discord};
 use crate::{db, user, Result};
 use deadpool_sqlite::Pool;
@@ -197,7 +197,7 @@ async fn mark_element_as_deleted(
 }
 
 async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<OsmElement> {
-    let osm_element = match osm::api::get_element(osm_type, osm_id).await? {
+    let osm_element = match service::osm::get_element(osm_type, osm_id).await? {
         Some(v) => v,
         None => Err(format!(
             "Failed to fetch element {}:{} from OSM",
@@ -354,7 +354,7 @@ mod test {
     use crate::{
         conf::Conf,
         db,
-        osm::{api::EditingApiUser, overpass::OverpassElement},
+        service::{osm::EditingApiUser, overpass::OverpassElement},
         test::mock_db,
         user::{self},
         Result,

@@ -1,5 +1,5 @@
 use super::queries::{OsmUser, SelectMostActive};
-use crate::{osm::api::EditingApiUser, Result};
+use crate::{service::osm::EditingApiUser, Result};
 use deadpool_sqlite::Pool;
 use serde_json::Value;
 use time::OffsetDateTime;

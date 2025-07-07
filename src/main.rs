@@ -6,7 +6,6 @@ use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod conf;
 mod error;
-mod osm;
 mod report;
 #[cfg(test)]
 mod test;

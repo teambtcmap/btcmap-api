@@ -148,7 +148,7 @@ pub async fn get(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::osm::overpass::OverpassElement;
+    use crate::service::overpass::OverpassElement;
     use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;

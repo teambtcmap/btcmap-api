@@ -201,7 +201,7 @@ async fn insert_report(area_id: i64, tags: &Map<String, Value>, pool: &Pool) -> 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{osm::overpass::OverpassElement, test::mock_pool};
+    use crate::{service::overpass::OverpassElement, test::mock_pool};
     use actix_web::test;
     use serde_json::{json, Map};
     use time::{macros::date, Duration};

@@ -1,8 +1,7 @@
 use crate::{
     conf::Conf,
     db::{self, user::schema::User},
-    osm::overpass::OverpassElement,
-    service::discord,
+    service::{discord, overpass::OverpassElement},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -1670,7 +1669,7 @@ mod test {
 
     use crate::{
         db,
-        osm::overpass::OverpassElement,
+        service::overpass::OverpassElement,
         test::{mock_conn, mock_osm_tags},
         Result,
     };

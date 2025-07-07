@@ -1,7 +1,7 @@
 use crate::conf::Conf;
 use crate::db;
 use crate::db::event::schema::Event;
-use crate::osm;
+use crate::service;
 use crate::service::discord;
 use crate::user;
 use crate::Result;
@@ -78,7 +78,7 @@ pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
         }
     }
 
-    match osm::api::get_user(user.osm_data.id).await {
+    match service::osm::get_user(user.osm_data.id).await {
         Ok(new_osm_data) => match new_osm_data {
             Some(new_osm_data) => {
                 if new_osm_data != user.osm_data {

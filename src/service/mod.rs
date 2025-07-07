@@ -4,4 +4,6 @@ pub mod discord;
 pub mod element;
 pub mod event;
 pub mod invoice;
+pub mod osm;
+pub mod overpass;
 pub mod report;
