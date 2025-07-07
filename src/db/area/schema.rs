@@ -28,6 +28,7 @@ impl Columns {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct Area {
     pub id: i64,
     pub alias: String,

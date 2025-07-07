@@ -59,15 +59,15 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
         pool,
     )
     .await?;
-    let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
+    let mut reports: HashMap<Area, Map<String, Value>> = HashMap::new();
     for area in all_areas {
         let area_elements = service::element::filter_by_area(&all_elements, &area)?;
         if let Some(report) = generate_new_report_if_necessary(&area, area_elements, pool).await? {
-            reports.insert(area.id, report);
+            reports.insert(area, report);
         }
     }
-    for (area_id, report) in &reports {
-        insert_report(*area_id, report, pool).await?;
+    for (area, report) in &reports {
+        insert_report(area.id, report, pool).await?;
     }
     Ok(reports.len())
 }
@@ -77,7 +77,7 @@ async fn generate_new_report_if_necessary(
     area_elements: Vec<Element>,
     pool: &Pool,
 ) -> Result<Option<Map<String, Value>>> {
-    let new_report_tags = generate_report_tags(&area_elements)?;
+    let new_report_tags = generate_report_tags(&area_elements, &area.alias())?;
     let prev_report = db::report::queries_async::select_latest_by_area_id(area.id, pool).await;
     Ok(match prev_report {
         Ok(latest_report) => {
@@ -91,7 +91,7 @@ async fn generate_new_report_if_necessary(
     })
 }
 
-fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
+fn generate_report_tags(elements: &[Element], area_url_alias: &str) -> Result<Map<String, Value>> {
     info!("Generating report tags");
 
     let atms: Vec<_> = elements
@@ -133,6 +133,7 @@ fn generate_report_tags(elements: &[Element]) -> Result<Map<String, Value>> {
     let up_to_date_percent: i64 = up_to_date_percent as i64;
 
     let mut tags: Map<String, Value> = Map::new();
+    tags.insert("area_url_alias".into(), area_url_alias.into());
     tags.insert("total_elements".into(), elements.len().into());
     tags.insert("total_atms".into(), atms.len().into());
     tags.insert(
@@ -318,7 +319,7 @@ mod test {
             updated_at: OffsetDateTime::now_utc(),
             deleted_at: None,
         };
-        let report_tags = super::generate_report_tags(&vec![element_1, element_2])?;
+        let report_tags = super::generate_report_tags(&vec![element_1, element_2], "")?;
 
         assert_eq!(
             2,
