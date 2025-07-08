@@ -1,10 +1,8 @@
 use actix_web::error::InternalError;
 use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
 use actix_web::{web, App, HttpServer, ResponseError};
-use conf::Conf;
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
-mod conf;
 mod error;
 #[cfg(test)]
 mod test;
@@ -34,7 +32,7 @@ async fn main() -> Result<()> {
     db_utils::migrate_async(&pool).await?;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
-    let conf = Conf::select_async(&pool).await?;
+    let conf = db::conf::queries_async::select(&pool).await?;
     HttpServer::new(move || {
         App::new()
             .wrap(Log)

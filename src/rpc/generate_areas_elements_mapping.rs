@@ -1,6 +1,5 @@
 use crate::{
-    conf::Conf,
-    db::{self, element::schema::Element, user::schema::User},
+    db::{self, conf::schema::Conf, element::schema::Element, user::schema::User},
     service::{self, area_element::Diff, discord},
     Result,
 };

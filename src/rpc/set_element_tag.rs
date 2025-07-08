@@ -1,7 +1,7 @@
-use crate::db;
 use crate::db::user::schema::User;
+use crate::db::{self, conf::schema::Conf};
+use crate::service::discord;
 use crate::Result;
-use crate::{conf::Conf, service::discord};
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,4 @@
 use crate::{
-    conf::Conf,
     db::{
         self,
         invoice::schema::{Invoice, InvoiceStatus},
@@ -19,7 +18,7 @@ pub struct CreateLNbitsInvoiceResponse {
 }
 
 pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Result<Invoice> {
-    let conf = Conf::select_async(pool).await?;
+    let conf = db::conf::queries_async::select(pool).await?;
     if conf.lnbits_invoice_key.is_empty() {
         Err("lnbits invoice key is not set")?
     }
@@ -61,7 +60,7 @@ pub struct CheckInvoiceResponse {
 }
 
 pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<i64> {
-    let conf = Conf::select_async(pool).await?;
+    let conf = db::conf::queries_async::select(pool).await?;
     if conf.lnbits_invoice_key.is_empty() {
         Err("lnbits invoice key is not set")?
     }
@@ -103,7 +102,7 @@ pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool>
     if invoice.status != InvoiceStatus::Unpaid {
         return Ok(false);
     }
-    let conf = Conf::select_async(pool).await?;
+    let conf = db::conf::queries_async::select(pool).await?;
     let client = reqwest::Client::new();
     let url = format!(
         "https://core.btcmap.org/api/v1/payments/{}",
@@ -128,7 +127,7 @@ pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool>
 }
 
 pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
-    let conf = Conf::select_async(pool).await?;
+    let conf = db::conf::queries_async::select(pool).await?;
     discord::send(
         format!(
             "Invoice has been paid (id = {}, sat = {}, description = {})",

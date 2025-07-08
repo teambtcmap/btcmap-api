@@ -1,4 +1,7 @@
-use crate::{conf::Conf, db, service, Result};
+use crate::{
+    db::{self, conf::schema::Conf},
+    service, Result,
+};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;

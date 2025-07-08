@@ -1,4 +1,4 @@
-use crate::conf::Conf;
+use crate::db::conf::schema::Conf;
 use crate::db::user::schema::User;
 use crate::service::{self, discord};
 use crate::sync::MergeResult;

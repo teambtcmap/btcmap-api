@@ -1,7 +1,6 @@
 use super::model::RpcArea;
 use crate::{
-    conf::Conf,
-    db::user::schema::User,
+    db::{conf::schema::Conf, user::schema::User},
     service::{self, discord},
     Result,
 };

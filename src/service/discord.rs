@@ -1,4 +1,4 @@
-use crate::conf::Conf;
+use crate::db::conf::schema::Conf;
 use std::collections::HashMap;
 use strum::Display;
 use tracing::{error, info, warn};

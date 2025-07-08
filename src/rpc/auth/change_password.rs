@@ -1,6 +1,7 @@
 use crate::db;
+use crate::db::conf::schema::Conf;
 use crate::service::discord;
-use crate::{conf::Conf, Result};
+use crate::Result;
 use argon2::PasswordHasher;
 use argon2::PasswordVerifier;
 use argon2::{

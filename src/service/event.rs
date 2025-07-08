@@ -1,4 +1,3 @@
-use crate::conf::Conf;
 use crate::db;
 use crate::db::event::schema::Event;
 use crate::service;
@@ -54,7 +53,7 @@ pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
         _ => "".into(),
     };
     info!(message);
-    let conf = Conf::select_async(pool).await?;
+    let conf = db::conf::queries_async::select(pool).await?;
     discord::send(message, discord::Channel::OsmChanges, &conf);
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {

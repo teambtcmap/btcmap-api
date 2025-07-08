@@ -1,5 +1,5 @@
 use super::model::RpcArea;
-use crate::conf::Conf;
+use crate::db::conf::schema::Conf;
 use crate::db::user::schema::User;
 use crate::service::discord;
 use crate::{service, Result};

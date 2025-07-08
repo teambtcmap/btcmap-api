@@ -1,8 +1,8 @@
 use crate::{
-    conf::Conf,
     db::{
         self,
         access_token::queries::{AccessToken, Role},
+        conf::schema::Conf,
         user::schema::User,
     },
     Result,

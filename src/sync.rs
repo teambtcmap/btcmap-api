@@ -1,4 +1,4 @@
-use crate::conf::Conf;
+use crate::db::conf::schema::Conf;
 use crate::db::element::schema::Element;
 use crate::db::event::schema::Event;
 use crate::service::area_element::Diff;
@@ -149,7 +149,7 @@ pub async fn sync_deleted_elements(
     .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
     .collect();
     let mut res = vec![];
-    let conf = Conf::select_async(pool).await?;
+    let conf = db::conf::queries_async::select(pool).await?;
     for absent_element in absent_elements {
         let fresh_osm_element = confirm_deleted(
             &absent_element.overpass_data.r#type,
@@ -352,8 +352,7 @@ pub async fn sync_new_elements(
 #[cfg(test)]
 mod test {
     use crate::{
-        conf::Conf,
-        db,
+        db::{self, conf::schema::Conf},
         service::{self, osm::EditingApiUser, overpass::OverpassElement},
         test::mock_db,
         Result,

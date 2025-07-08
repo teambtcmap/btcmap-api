@@ -1,4 +1,8 @@
-use crate::{conf::Conf, db::user::schema::User, service::discord, Result};
+use crate::{
+    db::{conf::schema::Conf, user::schema::User},
+    service::discord,
+    Result,
+};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 

@@ -1,6 +1,5 @@
 use crate::{
-    conf::Conf,
-    db::{invoice::schema::Invoice, user::schema::User},
+    db::{conf::schema::Conf, invoice::schema::Invoice, user::schema::User},
     service::{self, discord},
     Result,
 };

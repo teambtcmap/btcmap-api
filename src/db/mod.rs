@@ -3,6 +3,7 @@ pub mod area;
 pub mod area_element;
 pub mod ban;
 pub mod boost;
+pub mod conf;
 pub mod element;
 pub mod element_comment;
 pub mod element_issue;
