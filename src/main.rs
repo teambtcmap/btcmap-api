@@ -15,7 +15,6 @@ mod db_utils;
 mod feed;
 mod log;
 mod rpc;
-mod sync;
 use actix_web::web::{scope, Data};
 use log::Log;
 mod db;

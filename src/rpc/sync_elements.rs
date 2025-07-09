@@ -1,8 +1,8 @@
 use crate::db::conf::schema::Conf;
 use crate::db::user::schema::User;
+use crate::service::sync::MergeResult;
 use crate::service::{self, discord};
-use crate::sync::MergeResult;
-use crate::{sync, Result};
+use crate::Result;
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 
@@ -16,7 +16,7 @@ pub struct Res {
 pub async fn run(user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let overpass_res = service::overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
-    let merge_res = sync::merge_overpass_elements(overpass_res.elements, pool).await?;
+    let merge_res = service::sync::merge_overpass_elements(overpass_res.elements, pool).await?;
     if merge_res.elements_created.len()
         + merge_res.elements_updated.len()
         + merge_res.elements_deleted.len()

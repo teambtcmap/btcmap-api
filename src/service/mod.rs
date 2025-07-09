@@ -9,4 +9,5 @@ pub mod og;
 pub mod osm;
 pub mod overpass;
 pub mod report;
+pub mod sync;
 pub mod user;
