@@ -55,7 +55,6 @@ Available fields include:
 | line | URL **OR** username | Satoshi | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:contact:line) for more details on expected format. |
 | email | email | foo@bar.com | Email address that can be used to contact a place. |
 | boosted_until | ISO 8601 datetime | 2025-01-01T00:00:00Z | This property indicates that a place is currently boosted, which is a good quality signal and you can display such places differently. |
-| comments | Number | 2 | Place comment count. |
 
 #### Examples:
 
