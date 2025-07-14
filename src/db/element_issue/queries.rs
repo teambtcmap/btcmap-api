@@ -208,14 +208,12 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
+    use crate::{db::test::conn, Result};
     use time::{Duration, OffsetDateTime};
-
-    use crate::test::mock_conn;
-    use crate::Result;
 
     #[test]
     fn insert_and_select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -237,7 +235,7 @@ mod test {
 
     #[test]
     fn select_by_element_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -259,7 +257,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -287,7 +285,7 @@ mod test {
 
     #[test]
     fn select_count() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -311,7 +309,7 @@ mod test {
 
     #[test]
     fn set_severity() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let issue = super::insert(1, "code1", 1, &conn)?;
@@ -326,7 +324,7 @@ mod test {
 
     #[test]
     fn set_deleted_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let issue = super::insert(1, "code1", 1, &conn).unwrap();

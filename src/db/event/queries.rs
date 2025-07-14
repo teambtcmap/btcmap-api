@@ -209,9 +209,8 @@ pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) ->
 #[cfg(test)]
 mod test {
     use crate::{
-        db,
+        db::{self, test::conn},
         service::{osm::EditingApiUser, overpass::OverpassElement},
-        test::mock_conn,
         Result,
     };
     use serde_json::json;
@@ -220,7 +219,7 @@ mod test {
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "create", &conn)?;
@@ -230,7 +229,7 @@ mod test {
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(
@@ -246,7 +245,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event_1 = super::insert(user.id, element.id, "", &conn)?;
@@ -264,7 +263,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
@@ -274,7 +273,7 @@ mod test {
 
     #[test]
     fn patch_tags() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let tag_1_name = "tag_1_name";
         let tag_1_value_1 = json!("tag_1_value_1");
         let tag_1_value_2 = json!("tag_1_value_2");
@@ -300,7 +299,7 @@ mod test {
 
     #[test]
     fn set_updated_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let updated_at = OffsetDateTime::now_utc();
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;

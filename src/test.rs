@@ -1,13 +1,6 @@
 use crate::db_utils;
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
-use rusqlite::Connection;
 use serde_json::{json, Map, Value};
-
-pub fn mock_conn() -> Connection {
-    let mut conn = Connection::open_in_memory().unwrap();
-    db_utils::migrate(&mut conn).unwrap();
-    conn
-}
 
 pub fn mock_pool() -> Pool {
     Config::new(":memory:")

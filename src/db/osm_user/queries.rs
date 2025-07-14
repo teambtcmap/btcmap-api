@@ -287,12 +287,11 @@ pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) ->
 #[cfg(test)]
 mod test {
     use crate::{
-        db,
+        db::{self, test::conn},
         service::{
             osm::{Blocks, BlocksReceived, Changesets, ContributorTerms, EditingApiUser, Traces},
             overpass::OverpassElement,
         },
-        test::mock_conn,
         Result,
     };
     use serde_json::Value;
@@ -301,7 +300,7 @@ mod test {
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         super::insert(1, &EditingApiUser::mock(), &conn)?;
         let users = super::select_all(None, &conn)?;
         assert_eq!(1, users.len());
@@ -310,7 +309,7 @@ mod test {
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         super::insert(1, &EditingApiUser::mock(), &conn)?;
         super::insert(2, &EditingApiUser::mock(), &conn)?;
         super::insert(3, &EditingApiUser::mock(), &conn)?;
@@ -321,7 +320,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let _u1 = super::insert(1, &EditingApiUser::mock(), &conn)?;
         let _u1 = super::set_updated_at(_u1.id, datetime!(2020-01-01 00:00:00 UTC), &conn)?;
         let _u2 = super::insert(2, &EditingApiUser::mock(), &conn)?;
@@ -337,7 +336,7 @@ mod test {
 
     #[test]
     fn select_most_active() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let res = super::select_most_active(
             OffsetDateTime::now_utc(),
             OffsetDateTime::now_utc(),
@@ -364,7 +363,7 @@ mod test {
 
     #[test]
     fn select_by_id_or_name() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         assert_eq!(user.id, super::select_by_id(1, &conn)?.id);
         assert_eq!(
@@ -378,7 +377,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         super::insert(1, &EditingApiUser::mock(), &conn)?;
         assert!(super::select_by_id(1, &conn).is_ok());
         Ok(())
@@ -387,7 +386,7 @@ mod test {
     #[test]
     fn select_by_name() -> Result<()> {
         let name = "";
-        let conn = mock_conn();
+        let conn = conn();
         let _user = EditingApiUser {
             id: 1,
             display_name: name.into(),
@@ -415,7 +414,7 @@ mod test {
 
     #[test]
     fn set_osm_data() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user = EditingApiUser {
             id: 1,
             ..EditingApiUser::mock()
@@ -435,7 +434,7 @@ mod test {
     fn set_tag() -> Result<()> {
         let tag_name = "foo";
         let tag_value = Value::String("bar".into());
-        let conn = mock_conn();
+        let conn = conn();
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         let user = super::set_tag(user.id, tag_name, &tag_value, &conn)?;
         assert_eq!(tag_value, user.tags[tag_name]);
@@ -444,7 +443,7 @@ mod test {
 
     #[test]
     fn patch_tags() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let tag_1_name = "foo";
         let tag_1_value = "bar";
         let tag_2_name = "qwerty";
@@ -468,7 +467,7 @@ mod test {
     fn remove_tag() -> Result<()> {
         let tag_name = "foo";
         let tag_value = Value::String("bar".into());
-        let conn = mock_conn();
+        let conn = conn();
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         let user = super::set_tag(user.id, tag_name, &tag_value, &conn)?;
         assert_eq!(tag_value, user.tags[tag_name]);
@@ -480,7 +479,7 @@ mod test {
     #[test]
     fn set_updated_at() -> Result<()> {
         let updated_at = OffsetDateTime::now_utc().saturating_add(Duration::hours(1));
-        let conn = mock_conn();
+        let conn = conn();
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         let user = super::set_updated_at(user.id, updated_at, &conn)?;
         assert_eq!(updated_at, user.updated_at);

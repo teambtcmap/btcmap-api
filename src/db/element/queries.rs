@@ -243,16 +243,17 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
+    use crate::db::test::conn;
     use crate::service::overpass::OverpassElement;
     use crate::Error;
-    use crate::{test::mock_conn, Result};
+    use crate::Result;
     use serde_json::{json, Map};
     use time::macros::datetime;
     use time::OffsetDateTime;
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let overpass_data = OverpassElement::mock(1);
         let element = super::insert(&overpass_data, &conn)?;
         assert_eq!(overpass_data, element.overpass_data);
@@ -263,7 +264,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let element_1 = super::insert(&OverpassElement::mock(1), &conn)?;
         let _element_1 =
             super::set_updated_at(element_1.id, datetime!(2023-10-01 00:00 UTC), &conn)?;
@@ -284,7 +285,7 @@ mod test {
 
     #[test]
     fn select_by_search_query() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
 
         // Insert test data with different name patterns
         let element1 = super::insert(
@@ -332,7 +333,7 @@ mod test {
 
     #[test]
     fn select_by_search_query_special_chars() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
 
         let element = super::insert(
             &OverpassElement::mock_with_tag(1, "name", "Café 'Le Paris'"),
@@ -361,7 +362,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let element = super::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(element, super::select_by_id(element.id, &conn)?);
         Ok(())
@@ -369,7 +370,7 @@ mod test {
 
     #[test]
     fn select_by_id_found() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
 
         let test_id = 1;
         let test_overpass_id = 2;
@@ -386,14 +387,14 @@ mod test {
     #[test]
     fn select_by_id_not_found() {
         assert!(matches!(
-            super::select_by_id(1, &mock_conn()),
+            super::select_by_id(1, &conn()),
             Err(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)),
         ));
     }
 
     #[test]
     fn select_by_osm_type_and_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let element = super::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(
             element,
@@ -408,7 +409,7 @@ mod test {
 
     #[test]
     fn set_overpass_data() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let orig_data = OverpassElement::mock(1);
         let override_data = OverpassElement::mock(2);
         let element = super::insert(&orig_data, &conn)?;
@@ -419,7 +420,7 @@ mod test {
 
     #[test]
     fn patch_tags() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let tag_1_name = "tag_1_name";
         let tag_1_value_1 = json!("tag_1_value_1");
         let tag_1_value_2 = json!("tag_1_value_2");
@@ -443,7 +444,7 @@ mod test {
 
     #[test]
     fn set_tag() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let tag_name = "foo";
         let tag_value = json!("bar");
         let element = super::insert(&OverpassElement::mock(1), &conn)?;
@@ -454,7 +455,7 @@ mod test {
 
     #[test]
     fn remove_tag() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let tag_name = "foo";
         let element = super::insert(&OverpassElement::mock(1), &conn)?;
         let element = super::set_tag(element.id, tag_name, &"bar".into(), &conn)?;
@@ -465,7 +466,7 @@ mod test {
 
     #[test]
     fn set_updated_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let updated_at = OffsetDateTime::now_utc();
         let element = super::insert(&OverpassElement::mock(1), &conn)?;
         let element = super::set_updated_at(element.id, updated_at, &conn)?;
@@ -478,7 +479,7 @@ mod test {
 
     #[test]
     fn set_deleted_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let deleted_at = OffsetDateTime::now_utc();
         let element = super::insert(&OverpassElement::mock(1), &conn)?;
         let element = super::set_deleted_at(element.id, Some(deleted_at), &conn)?;

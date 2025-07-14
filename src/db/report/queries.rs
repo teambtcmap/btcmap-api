@@ -221,7 +221,7 @@ pub fn set_deleted_at(id: i64, deleted_at: OffsetDateTime, conn: &Connection) ->
 mod test {
     use crate::db;
     use crate::db::area::schema::Area;
-    use crate::test::mock_conn;
+    use crate::db::test::conn;
     use crate::Result;
     use serde_json::Map;
     use serde_json::Value;
@@ -231,7 +231,7 @@ mod test {
 
     #[test]
     fn insert_1() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = db::area::queries::insert(Area::mock_tags(), &conn)?;
         let date = date!(2023 - 01 - 01);
         let mut tags = Map::new();
@@ -245,7 +245,7 @@ mod test {
 
     #[test]
     fn insert_2() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         db::area::queries::insert(Area::mock_tags(), &conn)?;
         super::insert(1, OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         let reports = super::select_updated_since(datetime!(2000-01-01 00:00 UTC), None, &conn)?;
@@ -255,7 +255,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         db::area::queries::insert(Area::mock_tags(), &conn)?;
         let report_1 = super::insert(1, OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         super::set_updated_at(report_1.id, datetime!(2020-01-01 00:00:00 UTC), &conn)?;
@@ -272,7 +272,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         db::area::queries::insert(Area::mock_tags(), &conn)?;
         super::insert(1, OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         assert!(super::select_by_id(1, &conn).is_ok());
@@ -281,7 +281,7 @@ mod test {
 
     #[test]
     fn select_latest_by_area_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = db::area::queries::insert(Area::mock_tags(), &conn)?;
         super::insert(
             area.id,
@@ -304,7 +304,7 @@ mod test {
 
     #[test]
     fn merge_tags() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         db::area::queries::insert(Area::mock_tags(), &conn)?;
         let tag_1_name = "foo";
         let tag_1_value = "bar";
@@ -327,7 +327,7 @@ mod test {
 
     #[test]
     fn set_deleted_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         db::area::queries::insert(Area::mock_tags(), &conn)?;
         let report = super::insert(1, OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         let new_deleted_at = OffsetDateTime::now_utc().add(Duration::days(1));

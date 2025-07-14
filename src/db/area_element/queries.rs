@@ -162,14 +162,13 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod tests {
+    use crate::{db::test::conn, error::Error, Result};
     use time::{Duration, OffsetDateTime};
-
-    use crate::{error::Error, test::mock_conn, Result};
 
     #[test]
     fn insert() -> Result<()> {
         // Setup in-memory database
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -194,7 +193,7 @@ mod tests {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -242,7 +241,7 @@ mod tests {
 
     #[test]
     fn select_updated_since_empty_db() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let now = OffsetDateTime::now_utc();
         let result = super::select_updated_since(&now, None, &conn)?;
         assert_eq!(result.len(), 0);
@@ -251,7 +250,7 @@ mod tests {
 
     #[test]
     fn select_updated_since_ordering() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let time = OffsetDateTime::now_utc();
@@ -276,7 +275,7 @@ mod tests {
 
     #[test]
     fn select_by_area_id_basic() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let now = OffsetDateTime::now_utc();
@@ -312,7 +311,7 @@ mod tests {
 
     #[test]
     fn select_by_area_id_ordering() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let now = OffsetDateTime::now_utc();
@@ -337,7 +336,7 @@ mod tests {
 
     #[test]
     fn select_by_area_id_empty_db() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let results = super::select_by_area_id(10, &conn)?;
         assert_eq!(results.len(), 0);
         Ok(())
@@ -345,7 +344,7 @@ mod tests {
 
     #[test]
     fn select_by_element_id_basic() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let now = OffsetDateTime::now_utc();
@@ -381,7 +380,7 @@ mod tests {
 
     #[test]
     fn select_by_element_id_ordering() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let now = OffsetDateTime::now_utc();
@@ -406,7 +405,7 @@ mod tests {
 
     #[test]
     fn select_by_element_id_empty_db() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let results = super::select_by_element_id(10, &conn)?;
         assert_eq!(results.len(), 0);
         Ok(())
@@ -415,7 +414,7 @@ mod tests {
     #[test]
     fn select_by_id() -> Result<()> {
         // Setup in-memory database
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -443,7 +442,7 @@ mod tests {
     #[test]
     fn test_set_updated_at() -> Result<()> {
         // Setup test database
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -470,7 +469,7 @@ mod tests {
 
     #[test]
     fn set_updated_at_nonexistent_id() {
-        let conn = mock_conn();
+        let conn = conn();
         let res = super::set_updated_at(1, &OffsetDateTime::now_utc(), &conn);
         assert!(res.is_err());
         assert!(matches!(
@@ -482,7 +481,7 @@ mod tests {
     #[test]
     fn set_deleted_at_with_timestamp() -> Result<()> {
         // Setup test database
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -506,7 +505,7 @@ mod tests {
 
     #[test]
     fn set_deleted_at_with_null() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let deleted_time = OffsetDateTime::now_utc();
@@ -529,7 +528,7 @@ mod tests {
 
     #[test]
     fn set_deleted_at_nonexistent_id() {
-        let conn = mock_conn();
+        let conn = conn();
         let res = super::set_deleted_at(1, Some(&OffsetDateTime::now_utc()), &conn);
         assert!(res.is_err());
         assert!(matches!(

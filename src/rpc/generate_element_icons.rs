@@ -1664,39 +1664,44 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
-    use time::OffsetDateTime;
-
     use crate::{
         db,
         service::overpass::OverpassElement,
-        test::{mock_conn, mock_osm_tags},
+        test::{mock_osm_tags, mock_pool},
         Result,
     };
+    use time::OffsetDateTime;
 
     #[actix_web::test]
     async fn run() -> Result<()> {
-        let conn = mock_conn();
-        db::element::queries::insert(
-            &OverpassElement {
+        let pool = mock_pool();
+        db::element::queries_async::insert(
+            OverpassElement {
                 tags: Some(mock_osm_tags(&["golf", "clubhouse"])),
                 ..OverpassElement::mock(1)
             },
-            &conn,
-        )?;
-        db::element::queries::insert(
-            &OverpassElement {
+            &pool,
+        )
+        .await?;
+        db::element::queries_async::insert(
+            OverpassElement {
                 tags: Some(mock_osm_tags(&["building", "industrial"])),
                 ..OverpassElement::mock(2)
             },
-            &conn,
-        )?;
-        super::generate_element_icons(1, 100, &conn)?;
-        let elements = db::element::queries::select_updated_since(
+            &pool,
+        )
+        .await?;
+        pool.get()
+            .await?
+            .interact(move |conn| super::generate_element_icons(1, 100, &conn))
+            .await??;
+        let elements = db::element::queries_async::select_updated_since(
             OffsetDateTime::UNIX_EPOCH,
             None,
             true,
-            &conn,
-        )?;
+            &pool,
+        )
+        .await?;
         assert_eq!(
             "golf_course",
             elements[0].tag("icon:android").as_str().unwrap()

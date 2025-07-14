@@ -238,12 +238,12 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
-    use crate::{test::mock_conn, Result};
+    use crate::{db::test::conn, Result};
     use time::{Duration, OffsetDateTime};
 
     #[test]
     fn insert_and_select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let now = OffsetDateTime::now_utc();
@@ -265,7 +265,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -287,7 +287,7 @@ mod test {
 
     #[test]
     fn select_latest() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let time1 = OffsetDateTime::now_utc().saturating_sub(Duration::hours(1));
@@ -308,7 +308,7 @@ mod test {
 
     #[test]
     fn select_created_between() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 
@@ -334,7 +334,7 @@ mod test {
 
     #[test]
     fn select_by_element_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
         let comment = super::insert(1, "First", &conn)?;
@@ -349,7 +349,7 @@ mod test {
 
     #[test]
     fn set_deleted_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
 

@@ -178,13 +178,14 @@ impl AccessToken {
 #[cfg(test)]
 mod test {
     use crate::db;
-    use crate::{test::mock_conn, Result};
+    use crate::db::test::conn;
+    use crate::Result;
 
     #[test]
     fn insert() -> Result<()> {
         let token_name = "name";
         let token_secret = "secret";
-        let conn = mock_conn();
+        let conn = conn();
         let user_id = db::user::queries::insert("", "", &conn)?;
         let token_id = super::insert(user_id, token_name, token_secret, &[], &conn)?;
         let token = super::select_by_id(token_id, &conn)?;
@@ -196,7 +197,7 @@ mod test {
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user_id = db::user::queries::insert("", "", &conn)?;
         let token_1_id = super::insert(user_id, "name_1", "pwd_1", &[], &conn)?;
         let token_2_id = super::insert(user_id, "name_2", "pwd_2", &[], &conn)?;
@@ -209,7 +210,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user_id = db::user::queries::insert("", "", &conn)?;
         let token_id = super::insert(user_id, "name", "pwd", &[], &conn)?;
         let res_token = super::select_by_id(token_id, &conn)?;
@@ -219,7 +220,7 @@ mod test {
 
     #[test]
     fn select_by_secret() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let secret = "xxx";
         let user_id = db::user::queries::insert("", "", &conn)?;
         let token_id = super::insert(user_id, "", secret, &[], &conn)?;
@@ -231,7 +232,7 @@ mod test {
 
     #[test]
     fn set_roles() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let user_id = db::user::queries::insert("", "", &conn)?;
         let token_id = super::insert(user_id, "name", "pwd", &[], &conn)?;
         let roles = vec![super::Role::User, super::Role::Admin];

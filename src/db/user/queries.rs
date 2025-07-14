@@ -97,13 +97,13 @@ pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<(
 
 #[cfg(test)]
 mod test {
-    use crate::{test::mock_conn, Result};
+    use crate::{db::test::conn, Result};
 
     #[test]
     fn insert() -> Result<()> {
         let admin_name = "name";
         let admin_pwd = "pwd";
-        let conn = mock_conn();
+        let conn = conn();
         let admin_id = super::insert(admin_name, admin_pwd, &conn)?;
         let res_admin = super::select_by_id(admin_id, &conn)?;
         assert_eq!(admin_id, res_admin.id);
@@ -114,7 +114,7 @@ mod test {
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let admin_1_id = super::insert("name_1", "pwd_1", &conn)?;
         let admin_2_id = super::insert("name_2", "pwd_2", &conn)?;
         let query_res = super::select_all(&conn)?;
@@ -126,7 +126,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let admin_id = super::insert("name", "pwd", &conn)?;
         let res_admin = super::select_by_id(admin_id, &conn)?;
         assert_eq!(admin_id, res_admin.id);
@@ -136,7 +136,7 @@ mod test {
     #[test]
     fn select_by_name() -> Result<()> {
         let admin_name = "admin_1";
-        let conn = mock_conn();
+        let conn = conn();
         let admin_id = super::insert(admin_name, "", &conn)?;
         let res_admin = super::select_by_name(admin_name, &conn)?;
         assert_eq!(admin_id, res_admin.id);
@@ -146,7 +146,7 @@ mod test {
 
     #[test]
     fn set_roles() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let admin_id = super::insert("name", "pwd", &conn)?;
         let roles = vec!["action_1".into(), "action_2".into()];
         super::set_roles(admin_id, &roles, &conn)?;

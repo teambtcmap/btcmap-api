@@ -231,7 +231,7 @@ pub fn set_deleted_at(
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::test::mock_conn;
+    use crate::db::test::conn;
     use crate::Result;
     use serde_json::{json, Map};
     use time::ext::NumericalDuration;
@@ -240,7 +240,7 @@ mod test {
 
     #[test]
     fn insert() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let tags = Area::mock_tags();
         let area = super::insert(tags, &conn)?;
         assert_eq!(area.id, super::select_by_id(area.id, &conn)?.id);
@@ -249,7 +249,7 @@ mod test {
 
     #[test]
     fn insert_without_alias() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let mut tags = Area::mock_tags();
         tags.remove("url_alias");
         assert!(super::insert(tags, &conn).is_err());
@@ -258,7 +258,7 @@ mod test {
 
     #[test]
     fn insert_without_geo_json() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let mut tags = Area::mock_tags();
         tags.remove("geo_json");
         assert!(super::insert(tags, &conn).is_err());
@@ -267,7 +267,7 @@ mod test {
 
     #[test]
     fn select_all() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         super::insert(Area::mock_tags(), &conn)?;
         super::insert(Area::mock_tags(), &conn)?;
         super::insert(Area::mock_tags(), &conn)?;
@@ -277,7 +277,7 @@ mod test {
 
     #[test]
     fn select_all_should_sort_by_updated_at_asc() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area_1 = super::insert(Area::mock_tags(), &conn)?;
         let area_1 = super::set_updated_at(
             area_1.id,
@@ -306,7 +306,7 @@ mod test {
 
     #[test]
     fn select_all_except_deleted() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let mut areas = vec![
             super::insert(Area::mock_tags(), &conn)?,
             super::insert(Area::mock_tags(), &conn)?,
@@ -319,7 +319,7 @@ mod test {
 
     #[test]
     fn select_updated_since() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let _area_1 = super::insert(Area::mock_tags(), &conn)?;
         let _area_1 = super::set_updated_at(_area_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
         let area_2 = super::insert(Area::mock_tags(), &conn)?;
@@ -335,7 +335,7 @@ mod test {
 
     #[test]
     fn select_by_search_query() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let areas = vec![
             super::insert(Area::mock_tags(), &conn)?,
             super::insert(Area::mock_tags(), &conn)?,
@@ -354,7 +354,7 @@ mod test {
 
     #[test]
     fn select_by_id_or_alias() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         assert_eq!(
             area.id,
@@ -369,7 +369,7 @@ mod test {
 
     #[test]
     fn select_by_id() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         assert_eq!(area.id, super::select_by_id(area.id, &conn)?.id);
         Ok(())
@@ -377,7 +377,7 @@ mod test {
 
     #[test]
     fn select_by_alias() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         assert_eq!(
             area.id,
@@ -388,7 +388,7 @@ mod test {
 
     #[test]
     fn patch_tags() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let tag_1_name = "tag_1_name";
         let tag_1_value = json!("tag_1_value");
         let tag_2_name = "tag_2_name";
@@ -406,7 +406,7 @@ mod test {
 
     #[test]
     fn set_updated_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         let area = super::set_updated_at(
             area.id,
@@ -419,7 +419,7 @@ mod test {
 
     #[test]
     fn set_deleted_at() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         let area = super::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &conn)?;
         assert!(area.deleted_at.is_some());
@@ -430,7 +430,7 @@ mod test {
 
     #[test]
     fn name() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         assert_eq!(String::default(), area.name());
         let name = "foo";
@@ -445,7 +445,7 @@ mod test {
 
     #[test]
     fn alias() -> Result<()> {
-        let conn = mock_conn();
+        let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         assert_eq!(area.tags["url_alias"], area.alias());
         Ok(())
