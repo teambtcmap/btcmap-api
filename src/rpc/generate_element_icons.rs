@@ -1665,16 +1665,16 @@ impl OverpassElement {
 #[cfg(test)]
 mod test {
     use crate::{
-        db,
+        db::{self, test::pool},
         service::overpass::OverpassElement,
-        test::{mock_osm_tags, mock_pool},
+        test::mock_osm_tags,
         Result,
     };
     use time::OffsetDateTime;
 
     #[actix_web::test]
     async fn run() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         db::element::queries_async::insert(
             OverpassElement {
                 tags: Some(mock_osm_tags(&["golf", "clubhouse"])),

@@ -248,15 +248,16 @@ fn get_comments(
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
+    use crate::db::test::pool;
     use crate::service::overpass::OverpassElement;
-    use crate::test::{earth_geo_json, mock_pool, phuket_geo_json};
+    use crate::test::{earth_geo_json, phuket_geo_json};
     use crate::{db, Result};
     use actix_web::test;
     use serde_json::{json, Map};
 
     #[test]
     async fn insert() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let area = super::insert(Area::mock_tags(), &pool).await?;
         assert_eq!(
             area.id,
@@ -267,7 +268,7 @@ mod test {
 
     #[test]
     async fn insert_should_create_area_mappings() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element_1 = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
@@ -294,7 +295,7 @@ mod test {
 
     #[test]
     async fn patch_tags() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let mut patch_set = Map::new();
         let new_tag_name = "foo";
@@ -309,7 +310,7 @@ mod test {
 
     #[test]
     async fn patch_tags_should_update_area_mappings() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element_in_phuket = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
@@ -377,7 +378,7 @@ mod test {
 
     #[test]
     async fn soft_delete() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         super::soft_delete_async(&area.id.to_string(), &pool).await?;
         let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
@@ -387,7 +388,7 @@ mod test {
 
     #[test]
     async fn soft_delete_should_update_areas_tags() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let area_element = OverpassElement {
             lat: Some(7.979623499157051),
             lon: Some(98.33448362485439),
@@ -411,7 +412,7 @@ mod test {
 
     #[test]
     async fn get_comments() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let comment = db::element_comment::queries_async::insert(element.id, "test", &pool).await?;
         let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;

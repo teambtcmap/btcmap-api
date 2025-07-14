@@ -208,14 +208,18 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::{db, service::overpass::OverpassElement, test::mock_pool, Result};
+    use crate::{
+        db::{self, test::pool},
+        service::overpass::OverpassElement,
+        Result,
+    };
     use actix_web::test;
     use serde_json::Value;
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
     #[test]
     async fn on_invoice_paid_on_unboosted_element() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let invoice = db::invoice::queries_async::insert(
             "element_boost:1:10",
@@ -237,7 +241,7 @@ mod test {
 
     #[test]
     async fn on_invoice_paid_on_boosted_element() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let old_boost_expires = OffsetDateTime::now_utc().saturating_sub(Duration::days(5));
         let old_boost_expires = old_boost_expires.format(&Rfc3339)?;

@@ -102,9 +102,9 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
+    use crate::db::test::pool;
     use crate::rest::v2::users::GetItem;
     use crate::service::osm::EditingApiUser;
-    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -114,7 +114,7 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -129,7 +129,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -145,7 +145,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let _u1 = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         db::osm_user::queries_async::set_updated_at(
             _u1.id,
@@ -176,7 +176,7 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let user_id = 1;
         db::osm_user::queries_async::insert(user_id, EditingApiUser::mock(), &pool).await?;
         let app = test::init_service(

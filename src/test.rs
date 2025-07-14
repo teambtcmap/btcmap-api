@@ -1,20 +1,4 @@
-use crate::db_utils;
-use deadpool_sqlite::{Config, Hook, Pool, Runtime};
 use serde_json::{json, Map, Value};
-
-pub fn mock_pool() -> Pool {
-    Config::new(":memory:")
-        .builder(Runtime::Tokio1)
-        .unwrap()
-        .max_size(1)
-        .post_create(Hook::Fn(Box::new(|conn, _| {
-            let mut conn = conn.lock().unwrap();
-            db_utils::migrate(&mut conn).unwrap();
-            Ok(())
-        })))
-        .build()
-        .unwrap()
-}
 
 pub fn mock_osm_tags(kv_pairs: &[&str]) -> Map<String, Value> {
     let mut res = Map::new();

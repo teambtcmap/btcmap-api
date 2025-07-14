@@ -551,7 +551,7 @@ fn extract_access_token(headers: &HeaderMap, params: &Option<Value>) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{service::overpass::OverpassElement, test::mock_pool};
+    use crate::{db::test::pool, service::overpass::OverpassElement};
     use actix_web::{
         http::{header, StatusCode},
         test,
@@ -562,7 +562,7 @@ mod test {
 
     #[test]
     async fn invalid_json() {
-        let pool = mock_pool();
+        let pool = pool();
         let conf = Conf {
             paywall_add_element_comment_price_sat: 1,
             paywall_boost_element_30d_price_sat: 2,
@@ -594,7 +594,7 @@ mod test {
 
     #[test]
     async fn missing_method() {
-        let pool = mock_pool();
+        let pool = pool();
         let conf = Conf {
             paywall_add_element_comment_price_sat: 1,
             paywall_boost_element_30d_price_sat: 2,
@@ -626,7 +626,7 @@ mod test {
 
     #[test]
     async fn anonymous_method_allowed() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let conf = Conf {
             paywall_add_element_comment_price_sat: 1,
@@ -662,7 +662,7 @@ mod test {
 
     #[test]
     async fn protected_method_without_auth() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let conf = Conf {
             paywall_add_element_comment_price_sat: 1,
             paywall_boost_element_30d_price_sat: 2,
@@ -697,7 +697,7 @@ mod test {
 
     #[test]
     async fn invalid_jsonrpc_version() {
-        let pool = mock_pool();
+        let pool = pool();
         let conf = Conf {
             paywall_add_element_comment_price_sat: 1,
             paywall_boost_element_30d_price_sat: 2,
@@ -731,7 +731,7 @@ mod test {
 
     #[test]
     async fn valid_request_with_auth() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let user = db::user::queries_async::insert("root", "", &pool).await?;
         let _token = db::access_token::queries_async::insert(
             user,
@@ -775,7 +775,7 @@ mod test {
 
     #[test]
     async fn unauthorized_method() {
-        let pool = mock_pool();
+        let pool = pool();
         let conf = Conf {
             paywall_add_element_comment_price_sat: 1,
             paywall_boost_element_30d_price_sat: 2,

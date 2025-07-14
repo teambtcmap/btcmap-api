@@ -97,8 +97,8 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
+    use crate::db::test::pool;
     use crate::service::osm::EditingApiUser;
-    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -110,7 +110,7 @@ mod test {
     async fn get_no_updated_since() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_pool()))
+                .app_data(Data::new(pool()))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -124,7 +124,7 @@ mod test {
     async fn get_no_limit() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_pool()))
+                .app_data(Data::new(pool()))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -138,7 +138,7 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -155,7 +155,7 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -173,7 +173,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let user_1 = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let user_2 = db::osm_user::queries_async::insert(2, EditingApiUser::mock(), &pool).await?;
         let _user_3 = db::osm_user::queries_async::insert(3, EditingApiUser::mock(), &pool).await?;
@@ -193,7 +193,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let user_1 = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         db::osm_user::queries_async::set_updated_at(
             user_1.id,

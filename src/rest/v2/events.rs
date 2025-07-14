@@ -129,10 +129,10 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 
 #[cfg(test)]
 mod test {
+    use crate::db::test::pool;
     use crate::rest::v2::events::GetItem;
     use crate::service::osm::EditingApiUser;
     use crate::service::overpass::OverpassElement;
-    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -142,7 +142,7 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -157,7 +157,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         db::event::queries_async::insert(user.id, element.id, "", &pool).await?;
@@ -175,7 +175,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         db::event::queries_async::insert(1, 1, "", &pool).await?;
@@ -195,7 +195,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let event_1 = db::event::queries_async::insert(1, 1, "", &pool).await?;
@@ -228,7 +228,7 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let event_id = 1;
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;

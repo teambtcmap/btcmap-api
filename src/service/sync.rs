@@ -352,9 +352,8 @@ pub async fn sync_new_elements(
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, conf::schema::Conf},
+        db::{self, conf::schema::Conf, test::pool},
         service::{self, osm::EditingApiUser, overpass::OverpassElement},
-        test::mock_pool,
         Result,
     };
     use actix_web::test;
@@ -362,7 +361,7 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element_1 = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let element_2 = db::element::queries_async::insert(OverpassElement::mock(2), &pool).await?;
         let element_3 =
@@ -394,7 +393,7 @@ mod test {
 
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         assert!(service::user::insert_user_if_not_exists(user.id, &pool)
             .await
@@ -405,7 +404,7 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn insert_user_if_not_exists_when_exists_on_osm() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let btc_map_user_id = 18545877;
         assert!(
             service::user::insert_user_if_not_exists(btc_map_user_id, &pool)

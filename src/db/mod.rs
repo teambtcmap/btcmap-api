@@ -14,10 +14,28 @@ pub mod report;
 pub mod user;
 
 #[cfg(test)]
-mod test {
-    pub(super) fn conn() -> rusqlite::Connection {
-        let mut conn = rusqlite::Connection::open_in_memory().unwrap();
-        crate::db_utils::migrate(&mut conn).unwrap();
+pub mod test {
+    use crate::db_utils;
+    use deadpool_sqlite::{Config, Hook, Pool, Runtime};
+    use rusqlite::Connection;
+
+    pub fn pool() -> Pool {
+        Config::new(":memory:")
+            .builder(Runtime::Tokio1)
+            .unwrap()
+            .max_size(1)
+            .post_create(Hook::Fn(Box::new(|conn, _| {
+                let mut conn = conn.lock().unwrap();
+                db_utils::migrate(&mut conn).unwrap();
+                Ok(())
+            })))
+            .build()
+            .unwrap()
+    }
+
+    pub(super) fn conn() -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        db_utils::migrate(&mut conn).unwrap();
         conn
     }
 }

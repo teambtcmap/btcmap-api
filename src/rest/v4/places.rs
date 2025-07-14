@@ -160,8 +160,8 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<C
 
 #[cfg(test)]
 mod test {
+    use crate::db::test::pool;
     use crate::service::overpass::OverpassElement;
-    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -174,7 +174,7 @@ mod test {
     async fn get_empty_array() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_pool()))
+                .app_data(Data::new(pool()))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -186,7 +186,7 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -203,7 +203,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let _element_1 =
             db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let _element_2 =
@@ -224,7 +224,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element_1 = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         db::element::queries_async::set_updated_at(
             element_1.id,
@@ -255,7 +255,7 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()

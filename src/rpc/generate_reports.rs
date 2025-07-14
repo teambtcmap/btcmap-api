@@ -203,14 +203,14 @@ async fn insert_report(area_id: i64, tags: &Map<String, Value>, pool: &Pool) -> 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{service::overpass::OverpassElement, test::mock_pool};
+    use crate::{db::test::pool, service::overpass::OverpassElement};
     use actix_web::test;
     use serde_json::{json, Map};
     use time::{macros::date, Duration};
 
     #[test]
     async fn insert_report() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;

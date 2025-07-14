@@ -112,7 +112,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test::mock_pool;
+    use crate::db::test::pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -121,7 +121,7 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -136,7 +136,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -153,7 +153,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         db::element::queries_async::insert(OverpassElement::mock(2), &pool).await?;
         db::element::queries_async::insert(OverpassElement::mock(3), &pool).await?;
@@ -171,7 +171,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element_1 = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         db::element::queries_async::set_updated_at(
             element_1.id,
@@ -202,7 +202,7 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let pool = mock_pool();
+        let pool = pool();
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
