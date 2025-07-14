@@ -159,7 +159,7 @@ mod test {
     async fn search_empty_query_returns_400() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_pool().await))
+                .app_data(Data::new(mock_pool()))
                 .service(scope("/search").service(super::get)),
         )
         .await;
@@ -173,7 +173,7 @@ mod test {
     async fn search_too_short_returns_400() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_pool().await))
+                .app_data(Data::new(mock_pool()))
                 .service(scope("/search").service(super::get)),
         )
         .await;
@@ -185,7 +185,7 @@ mod test {
 
     #[test]
     async fn search_valid_query_returns_results() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         let _element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -202,7 +202,7 @@ mod test {
 
     #[test]
     async fn search_with_pagination_works() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         for i in 1..=5 {
             let _element =
                 db::element::queries_async::insert(OverpassElement::mock(i), &pool).await?;
@@ -225,7 +225,7 @@ mod test {
 
     #[test]
     async fn search_with_type_filter_element_only() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))

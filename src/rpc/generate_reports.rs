@@ -210,7 +210,7 @@ mod test {
 
     #[test]
     async fn insert_report() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;

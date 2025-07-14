@@ -269,7 +269,7 @@ pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<OsmUser> {
 }
 
 #[cfg(test)]
-pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -> Result<OsmUser> {
+pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) -> Result<OsmUser> {
     let sql = format!(
         r#"
             UPDATE {table}
@@ -323,11 +323,11 @@ mod test {
     fn select_updated_since() -> Result<()> {
         let conn = mock_conn();
         let _u1 = super::insert(1, &EditingApiUser::mock(), &conn)?;
-        let _u1 = super::set_updated_at(_u1.id, &datetime!(2020-01-01 00:00:00 UTC), &conn)?;
+        let _u1 = super::set_updated_at(_u1.id, datetime!(2020-01-01 00:00:00 UTC), &conn)?;
         let _u2 = super::insert(2, &EditingApiUser::mock(), &conn)?;
-        let _u2 = super::set_updated_at(_u2.id, &datetime!(2020-01-02 00:00:00 UTC), &conn)?;
+        let _u2 = super::set_updated_at(_u2.id, datetime!(2020-01-02 00:00:00 UTC), &conn)?;
         let _u3 = super::insert(3, &EditingApiUser::mock(), &conn)?;
-        let _u3 = super::set_updated_at(_u3.id, &datetime!(2020-01-03 00:00:00 UTC), &conn)?;
+        let _u3 = super::set_updated_at(_u3.id, datetime!(2020-01-03 00:00:00 UTC), &conn)?;
         assert_eq!(
             2,
             super::select_updated_since(&datetime!(2020-01-01 00:00:00 UTC), None, &conn)?.len()
@@ -482,7 +482,7 @@ mod test {
         let updated_at = OffsetDateTime::now_utc().saturating_add(Duration::hours(1));
         let conn = mock_conn();
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
-        let user = super::set_updated_at(user.id, &updated_at, &conn)?;
+        let user = super::set_updated_at(user.id, updated_at, &conn)?;
         assert_eq!(updated_at, user.updated_at);
         Ok(())
     }

@@ -208,25 +208,26 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::{db, service::overpass::OverpassElement, test::mock_db, Result};
+    use crate::{db, service::overpass::OverpassElement, test::mock_pool, Result};
     use actix_web::test;
     use serde_json::Value;
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
     #[test]
     async fn on_invoice_paid_on_unboosted_element() -> Result<()> {
-        let db = mock_db();
-        db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        let invoice = db::invoice::queries::insert(
+        let pool = mock_pool();
+        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let invoice = db::invoice::queries_async::insert(
             "element_boost:1:10",
             0,
             "",
             "",
             db::invoice::schema::InvoiceStatus::Unpaid,
-            &db.conn,
-        )?;
-        super::on_invoice_paid(&invoice, &db.pool).await?;
-        let element = db::element::queries::select_by_id(1, &db.conn)?;
+            &pool,
+        )
+        .await?;
+        super::on_invoice_paid(&invoice, &pool).await?;
+        let element = db::element::queries_async::select_by_id(1, &pool).await?;
         assert!(element.tags.contains_key("boost:expires"));
         let boost_expires =
             OffsetDateTime::parse(element.tags["boost:expires"].as_str().unwrap(), &Rfc3339)?;
@@ -236,26 +237,28 @@ mod test {
 
     #[test]
     async fn on_invoice_paid_on_boosted_element() -> Result<()> {
-        let db = mock_db();
-        let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
+        let pool = mock_pool();
+        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let old_boost_expires = OffsetDateTime::now_utc().saturating_sub(Duration::days(5));
         let old_boost_expires = old_boost_expires.format(&Rfc3339)?;
-        db::element::queries::set_tag(
+        db::element::queries_async::set_tag(
             element.id,
             "boost:expires",
             &Value::String(old_boost_expires),
-            &db.conn,
-        )?;
-        let invoice = db::invoice::queries::insert(
+            &pool,
+        )
+        .await?;
+        let invoice = db::invoice::queries_async::insert(
             "element_boost:1:10",
             0,
             "",
             "",
             db::invoice::schema::InvoiceStatus::Unpaid,
-            &db.conn,
-        )?;
-        super::on_invoice_paid(&invoice, &db.pool).await?;
-        let element = db::element::queries::select_by_id(1, &db.conn)?;
+            &pool,
+        )
+        .await?;
+        super::on_invoice_paid(&invoice, &pool).await?;
+        let element = db::element::queries_async::select_by_id(1, &pool).await?;
         assert!(element.tags.contains_key("boost:expires"));
         let boost_expires =
             OffsetDateTime::parse(element.tags["boost:expires"].as_str().unwrap(), &Rfc3339)?;

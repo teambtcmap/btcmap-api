@@ -90,6 +90,14 @@ pub async fn remove_tag(
         .await?
 }
 
+#[cfg(test)]
+pub async fn set_updated_at(id: i64, updated_at: OffsetDateTime, pool: &Pool) -> Result<Element> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::set_updated_at(id, updated_at, conn))
+        .await?
+}
+
 pub async fn set_deleted_at(
     id: i64,
     deleted_at: Option<OffsetDateTime>,

@@ -354,7 +354,7 @@ mod test {
     use crate::{
         db::{self, conf::schema::Conf},
         service::{self, osm::EditingApiUser, overpass::OverpassElement},
-        test::mock_db,
+        test::mock_pool,
         Result,
     };
     use actix_web::test;
@@ -362,13 +362,14 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
-        let db = mock_db();
-        let element_1 = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        let element_2 = db::element::queries::insert(&OverpassElement::mock(2), &db.conn)?;
-        let element_3 = db::element::queries::insert(&OverpassElement::mock(2702291726), &db.conn)?;
+        let pool = mock_pool();
+        let element_1 = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element_2 = db::element::queries_async::insert(OverpassElement::mock(2), &pool).await?;
+        let element_3 =
+            db::element::queries_async::insert(OverpassElement::mock(2702291726), &pool).await?;
         let res = super::sync_deleted_elements(
             &vec![element_1.overpass_data, element_2.overpass_data],
-            &db.pool,
+            &pool,
         )
         .await;
         assert!(res.is_ok());
@@ -393,9 +394,9 @@ mod test {
 
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
-        let db = mock_db();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        assert!(service::user::insert_user_if_not_exists(user.id, &db.pool)
+        let pool = mock_pool();
+        let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        assert!(service::user::insert_user_if_not_exists(user.id, &pool)
             .await
             .is_ok());
         Ok(())
@@ -404,14 +405,18 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn insert_user_if_not_exists_when_exists_on_osm() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool();
         let btc_map_user_id = 18545877;
         assert!(
-            service::user::insert_user_if_not_exists(btc_map_user_id, &db.pool)
+            service::user::insert_user_if_not_exists(btc_map_user_id, &pool)
                 .await
                 .is_ok()
         );
-        assert!(db::osm_user::queries::select_by_id(btc_map_user_id, &db.conn).is_ok());
+        assert!(
+            db::osm_user::queries_async::select_by_id(btc_map_user_id, &pool)
+                .await
+                .is_ok()
+        );
         Ok(())
     }
 }

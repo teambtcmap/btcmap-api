@@ -124,7 +124,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 mod test {
     use crate::db::area::schema::Area;
     use crate::rest::v2::reports::GetItem;
-    use crate::test::{mock_db, mock_pool};
+    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -135,10 +135,10 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -150,7 +150,7 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         db::report::queries_async::insert(1, OffsetDateTime::now_utc().date(), Map::new(), &pool)
             .await?;
@@ -168,7 +168,7 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         db::report::queries_async::insert(1, date!(2023 - 05 - 06), Map::new(), &pool).await?;
         db::report::queries_async::insert(1, date!(2023 - 05 - 07), Map::new(), &pool).await?;
@@ -187,7 +187,7 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let report_1 = db::report::queries_async::insert(
             1,

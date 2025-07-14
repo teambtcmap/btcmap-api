@@ -112,7 +112,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test::mock_db;
+    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -121,10 +121,10 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -136,11 +136,11 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let db = mock_db();
-        let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
+        let pool = mock_pool();
+        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -153,13 +153,13 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db();
-        db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        db::element::queries::insert(&OverpassElement::mock(2), &db.conn)?;
-        db::element::queries::insert(&OverpassElement::mock(3), &db.conn)?;
+        let pool = mock_pool();
+        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::element::queries_async::insert(OverpassElement::mock(2), &pool).await?;
+        db::element::queries_async::insert(OverpassElement::mock(3), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -171,22 +171,24 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db();
-        let element_1 = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        db::element::queries::set_updated_at(
+        let pool = mock_pool();
+        let element_1 = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::element::queries_async::set_updated_at(
             element_1.id,
-            &datetime!(2022-01-05 00:00 UTC),
-            &db.conn,
-        )?;
-        let element_2 = db::element::queries::insert(&OverpassElement::mock(2), &db.conn)?;
-        db::element::queries::set_updated_at(
+            datetime!(2022-01-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
+        let element_2 = db::element::queries_async::insert(OverpassElement::mock(2), &pool).await?;
+        db::element::queries_async::set_updated_at(
             element_2.id,
-            &datetime!(2022-02-05 00:00 UTC),
-            &db.conn,
-        )?;
+            datetime!(2022-02-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -200,11 +202,11 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let db = mock_db();
-        let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
+        let pool = mock_pool();
+        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(super::get_by_id),
         )
         .await;

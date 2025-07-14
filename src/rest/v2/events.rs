@@ -132,7 +132,7 @@ mod test {
     use crate::rest::v2::events::GetItem;
     use crate::service::osm::EditingApiUser;
     use crate::service::overpass::OverpassElement;
-    use crate::test::mock_db;
+    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
@@ -142,10 +142,10 @@ mod test {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -157,13 +157,13 @@ mod test {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let db = mock_db();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        db::event::queries::insert(user.id, element.id, "", &db.conn)?;
+        let pool = mock_pool();
+        let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::event::queries_async::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -175,15 +175,15 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db();
-        db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        db::event::queries::insert(1, 1, "", &db.conn)?;
-        db::event::queries::insert(1, 1, "", &db.conn)?;
-        db::event::queries::insert(1, 1, "", &db.conn)?;
+        let pool = mock_pool();
+        db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::event::queries_async::insert(1, 1, "", &pool).await?;
+        db::event::queries_async::insert(1, 1, "", &pool).await?;
+        db::event::queries_async::insert(1, 1, "", &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -195,24 +195,26 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db();
-        db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        let event_1 = db::event::queries::insert(1, 1, "", &db.conn)?;
-        db::event::queries::set_updated_at(
+        let pool = mock_pool();
+        db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let event_1 = db::event::queries_async::insert(1, 1, "", &pool).await?;
+        db::event::queries_async::set_updated_at(
             event_1.id,
-            &datetime!(2022-01-05 00:00:00 UTC),
-            &db.conn,
-        )?;
-        let event_2 = db::event::queries::insert(1, 1, "", &db.conn)?;
-        db::event::queries::set_updated_at(
+            datetime!(2022-01-05 00:00:00 UTC),
+            &pool,
+        )
+        .await?;
+        let event_2 = db::event::queries_async::insert(1, 1, "", &pool).await?;
+        db::event::queries_async::set_updated_at(
             event_2.id,
-            &datetime!(2022-02-05 00:00:00 UTC),
-            &db.conn,
-        )?;
+            datetime!(2022-02-05 00:00:00 UTC),
+            &pool,
+        )
+        .await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -226,14 +228,14 @@ mod test {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool();
         let event_id = 1;
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        let element = db::element::queries::insert(&OverpassElement::mock(1), &db.conn)?;
-        db::event::queries::insert(user.id, element.id, "", &db.conn)?;
+        let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::event::queries_async::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(super::get_by_id),
         )
         .await;

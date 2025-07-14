@@ -1,4 +1,4 @@
-use super::queries::{OsmUser, SelectMostActive};
+use super::queries::{self, OsmUser, SelectMostActive};
 use crate::{service::osm::EditingApiUser, Result};
 use deadpool_sqlite::Pool;
 use serde_json::Value;
@@ -42,6 +42,14 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<OsmUser> {
 pub async fn set_osm_data(id: i64, osm_data: EditingApiUser, pool: &Pool) -> Result<()> {
     pool.get()
         .await?
-        .interact(move |conn| super::queries::set_osm_data(id, &osm_data, conn))
+        .interact(move |conn| queries::set_osm_data(id, &osm_data, conn))
+        .await?
+}
+
+#[cfg(test)]
+pub async fn set_updated_at(id: i64, updated_at: OffsetDateTime, pool: &Pool) -> Result<OsmUser> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::set_updated_at(id, updated_at, conn))
         .await?
 }

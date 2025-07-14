@@ -190,7 +190,7 @@ pub fn remove_tag(element_id: i64, tag_name: &str, conn: &Connection) -> Result<
 }
 
 #[cfg(test)]
-pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Element> {
+pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) -> Result<Element> {
     let sql = format!(
         r#"
             UPDATE {table}
@@ -266,10 +266,10 @@ mod test {
         let conn = mock_conn();
         let element_1 = super::insert(&OverpassElement::mock(1), &conn)?;
         let _element_1 =
-            super::set_updated_at(element_1.id, &datetime!(2023-10-01 00:00 UTC), &conn)?;
+            super::set_updated_at(element_1.id, datetime!(2023-10-01 00:00 UTC), &conn)?;
         let element_2 = super::insert(&OverpassElement::mock(2), &conn)?;
         let element_2 =
-            super::set_updated_at(element_2.id, &datetime!(2023-10-02 00:00 UTC), &conn)?;
+            super::set_updated_at(element_2.id, datetime!(2023-10-02 00:00 UTC), &conn)?;
         assert_eq!(
             vec![element_2.clone()],
             super::select_updated_since(datetime!(2023-10-01 00:00 UTC), None, false, &conn)?
@@ -468,7 +468,7 @@ mod test {
         let conn = mock_conn();
         let updated_at = OffsetDateTime::now_utc();
         let element = super::insert(&OverpassElement::mock(1), &conn)?;
-        let element = super::set_updated_at(element.id, &updated_at, &conn)?;
+        let element = super::set_updated_at(element.id, updated_at, &conn)?;
         assert_eq!(
             updated_at,
             super::select_by_id(element.id, &conn)?.updated_at

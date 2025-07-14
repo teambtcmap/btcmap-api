@@ -191,7 +191,7 @@ pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> 
 }
 
 #[cfg(test)]
-pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -> Result<Event> {
+pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) -> Result<Event> {
     let sql = format!(
         r#"
             UPDATE {table}
@@ -250,11 +250,11 @@ mod test {
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event_1 = super::insert(user.id, element.id, "", &conn)?;
-        let _event_1 = super::set_updated_at(event_1.id, &datetime!(2020-01-01 00:00 UTC), &conn)?;
+        let _event_1 = super::set_updated_at(event_1.id, datetime!(2020-01-01 00:00 UTC), &conn)?;
         let event_2 = super::insert(1, element.id, "", &conn)?;
-        let event_2 = super::set_updated_at(event_2.id, &datetime!(2020-01-02 00:00 UTC), &conn)?;
+        let event_2 = super::set_updated_at(event_2.id, datetime!(2020-01-02 00:00 UTC), &conn)?;
         let event_3 = super::insert(1, element.id, "", &conn)?;
-        let event_3 = super::set_updated_at(event_3.id, &datetime!(2020-01-03 00:00 UTC), &conn)?;
+        let event_3 = super::set_updated_at(event_3.id, datetime!(2020-01-03 00:00 UTC), &conn)?;
         assert_eq!(
             vec![event_2, event_3,],
             super::select_updated_since(datetime!(2020-01-01 00:00 UTC), None, &conn,)?
@@ -305,7 +305,7 @@ mod test {
         let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
-        let event = super::set_updated_at(event.id, &updated_at, &conn)?;
+        let event = super::set_updated_at(event.id, updated_at, &conn)?;
         assert_eq!(updated_at, super::select_by_id(event.id, &conn)?.updated_at);
         Ok(())
     }

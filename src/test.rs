@@ -1,30 +1,10 @@
 use crate::db_utils;
-use deadpool_sqlite::{Config, Pool, Runtime};
+use deadpool_sqlite::{Config, Hook, Pool, Runtime};
 use rusqlite::Connection;
 use serde_json::{json, Map, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static MEM_DB_COUNTER: AtomicUsize = AtomicUsize::new(1);
-
-pub struct Database {
-    pub conn: Connection,
-    pub pool: Pool,
-}
-
-pub async fn mock_pool() -> Pool {
-    let db = _mock_db();
-    db_utils::migrate_async(&db.1).await.unwrap();
-    db.1
-}
-
-pub fn mock_db() -> Database {
-    let mut db = _mock_db();
-    db_utils::migrate(&mut db.0).unwrap();
-    Database {
-        conn: db.0,
-        pool: db.1,
-    }
-}
 
 pub fn mock_conn() -> Connection {
     let mut conn = Connection::open_in_memory().unwrap();
@@ -32,21 +12,21 @@ pub fn mock_conn() -> Connection {
     conn
 }
 
-fn _mock_db() -> (Connection, Pool) {
-    let uri = format!(
+pub fn mock_pool() -> Pool {
+    Config::new(format!(
         "file::testdb_{}:?mode=memory&cache=shared",
         MEM_DB_COUNTER.fetch_add(1, Ordering::Relaxed)
-    );
-    let conn = Connection::open(uri.clone()).unwrap();
-    (
-        conn,
-        Config::new(uri)
-            .builder(Runtime::Tokio1)
-            .unwrap()
-            .max_size(8)
-            .build()
-            .unwrap(),
-    )
+    ))
+    .builder(Runtime::Tokio1)
+    .unwrap()
+    .max_size(1)
+    .post_create(Hook::Fn(Box::new(|conn, _| {
+        let mut conn = conn.lock().unwrap();
+        db_utils::migrate(&mut conn).unwrap();
+        Ok(())
+    })))
+    .build()
+    .unwrap()
 }
 
 pub fn mock_osm_tags(kv_pairs: &[&str]) -> Map<String, Value> {

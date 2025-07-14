@@ -28,7 +28,10 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 async fn main() -> Result<()> {
     init_env();
     let pool = db_utils::pool()?;
-    db_utils::migrate_async(&pool).await?;
+    pool.get()
+        .await?
+        .interact(|conn| db_utils::migrate(conn))
+        .await??;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
     let conf = db::conf::queries_async::select(&pool).await?;

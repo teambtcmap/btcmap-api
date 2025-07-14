@@ -94,7 +94,7 @@ pub async fn get_by_url_alias(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test::{mock_db, mock_pool};
+    use crate::test::mock_pool;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;
@@ -102,10 +102,10 @@ mod tests {
 
     #[test]
     async fn get_empty_table() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     async fn get_one_row() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
         db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     async fn get_by_id() -> Result<()> {
-        let pool = mock_pool().await;
+        let pool = mock_pool();
         let mut tags = Area::mock_tags();
         let area_url_alias = "test";
         tags.insert("url_alias".into(), area_url_alias.into());

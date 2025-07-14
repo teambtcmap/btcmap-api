@@ -98,7 +98,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>,
 #[cfg(test)]
 mod test {
     use crate::service::osm::EditingApiUser;
-    use crate::test::mock_db;
+    use crate::test::mock_pool;
     use crate::{db, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
@@ -110,7 +110,7 @@ mod test {
     async fn get_no_updated_since() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_db().pool))
+                .app_data(Data::new(mock_pool()))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -124,7 +124,7 @@ mod test {
     async fn get_no_limit() -> Result<()> {
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(mock_db().pool))
+                .app_data(Data::new(mock_pool()))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -138,10 +138,10 @@ mod test {
 
     #[test]
     async fn get_empty_array() -> Result<()> {
-        let db = mock_db();
+        let pool = mock_pool();
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -155,11 +155,11 @@ mod test {
 
     #[test]
     async fn get_not_empty_array() -> Result<()> {
-        let db = mock_db();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
+        let pool = mock_pool();
+        let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -173,13 +173,13 @@ mod test {
 
     #[test]
     async fn get_with_limit() -> Result<()> {
-        let db = mock_db();
-        let user_1 = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        let user_2 = db::osm_user::queries::insert(2, &EditingApiUser::mock(), &db.conn)?;
-        let _user_3 = db::osm_user::queries::insert(3, &EditingApiUser::mock(), &db.conn)?;
+        let pool = mock_pool();
+        let user_1 = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        let user_2 = db::osm_user::queries_async::insert(2, EditingApiUser::mock(), &pool).await?;
+        let _user_3 = db::osm_user::queries_async::insert(3, EditingApiUser::mock(), &pool).await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;
@@ -193,22 +193,24 @@ mod test {
 
     #[test]
     async fn get_updated_since() -> Result<()> {
-        let db = mock_db();
-        let user_1 = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &db.conn)?;
-        db::osm_user::queries::set_updated_at(
+        let pool = mock_pool();
+        let user_1 = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        db::osm_user::queries_async::set_updated_at(
             user_1.id,
-            &datetime!(2022-01-05 00:00 UTC),
-            &db.conn,
-        )?;
-        let user_2 = db::osm_user::queries::insert(2, &EditingApiUser::mock(), &db.conn)?;
-        let user_2 = db::osm_user::queries::set_updated_at(
+            datetime!(2022-01-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
+        let user_2 = db::osm_user::queries_async::insert(2, EditingApiUser::mock(), &pool).await?;
+        let user_2 = db::osm_user::queries_async::set_updated_at(
             user_2.id,
-            &datetime!(2022-02-05 00:00 UTC),
-            &db.conn,
-        )?;
+            datetime!(2022-02-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
         let app = test::init_service(
             App::new()
-                .app_data(Data::new(db.pool))
+                .app_data(Data::new(pool))
                 .service(scope("/").service(super::get)),
         )
         .await;

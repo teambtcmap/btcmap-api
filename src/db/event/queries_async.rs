@@ -34,3 +34,15 @@ pub async fn patch_tags(id: i64, tags: HashMap<String, Value>, pool: &Pool) -> R
         .interact(move |conn| queries::patch_tags(id, &tags, conn))
         .await?
 }
+
+#[cfg(test)]
+pub async fn set_updated_at(
+    id: i64,
+    updated_at: time::OffsetDateTime,
+    pool: &Pool,
+) -> Result<Event> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::set_updated_at(id, updated_at, conn))
+        .await?
+}
