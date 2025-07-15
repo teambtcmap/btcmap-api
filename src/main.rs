@@ -4,8 +4,6 @@ use actix_web::{web, App, HttpServer, ResponseError};
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod error;
-#[cfg(test)]
-mod test;
 use std::env;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;

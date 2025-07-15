@@ -1667,9 +1667,9 @@ mod test {
     use crate::{
         db::{self, test::pool},
         service::overpass::OverpassElement,
-        test::mock_osm_tags,
         Result,
     };
+    use serde_json::{Map, Value};
     use time::OffsetDateTime;
 
     #[actix_web::test]
@@ -1722,5 +1722,13 @@ mod test {
             ..OverpassElement::mock(1)
         };
         assert_eq!("factory", &element.generate_android_icon());
+    }
+
+    fn mock_osm_tags(kv_pairs: &[&str]) -> Map<String, Value> {
+        let mut res = Map::new();
+        for chunk in kv_pairs.chunks(2) {
+            res.insert(chunk[0].into(), chunk[1].into());
+        }
+        res
     }
 }

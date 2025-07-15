@@ -250,7 +250,6 @@ mod test {
     use crate::db::area::schema::Area;
     use crate::db::test::pool;
     use crate::service::overpass::OverpassElement;
-    use crate::test::{earth_geo_json, phuket_geo_json};
     use crate::{db, Result};
     use actix_web::test;
     use serde_json::{json, Map};
@@ -282,7 +281,33 @@ mod test {
         };
         db::element::queries_async::insert(element_2, &pool).await?;
         let mut tags = Area::mock_tags();
-        tags.insert("geo_json".into(), phuket_geo_json());
+        // Phuket
+        tags.insert(
+            "geo_json".into(),
+            json!(
+                {
+                    "type": "FeatureCollection",
+                    "features": [
+                      {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                          "coordinates": [
+                            [
+                              [98.2181205776469, 8.20412838698085],
+                              [98.2181205776469, 7.74024270965898],
+                              [98.4806081271079, 7.74024270965898],
+                              [98.4806081271079, 8.20412838698085],
+                              [98.2181205776469, 8.20412838698085]
+                            ]
+                          ],
+                          "type": "Polygon"
+                        }
+                      }
+                    ]
+                  }
+            ),
+        );
         super::insert(tags, &pool).await?;
         assert_eq!(
             1,
@@ -324,13 +349,65 @@ mod test {
         };
         db::element::queries_async::insert(element_in_london.clone(), &pool).await?;
         let mut tags = Area::mock_tags();
-        tags.insert("geo_json".into(), earth_geo_json());
+        // Earth
+        tags.insert(
+            "geo_json".into(),
+            json!(
+                {
+                    "type": "FeatureCollection",
+                    "features": [
+                      {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                          "coordinates": [
+                            [
+                              [-180,-90],
+                              [-180,90],
+                              [180,90],
+                              [180,-90],
+                              [-180,-90]
+                            ]
+                          ],
+                          "type": "Polygon"
+                        }
+                      }
+                    ]
+                  }
+            ),
+        );
         let area = db::area::queries_async::insert(tags.clone(), &pool).await?;
         let area_element_phuket =
             db::area_element::queries_async::insert(area.id, element_in_phuket.id, &pool).await?;
         let area_element_london =
             db::area_element::queries_async::insert(area.id, element_in_london.id, &pool).await?;
-        tags.insert("geo_json".into(), phuket_geo_json());
+        // Phuket
+        tags.insert(
+            "geo_json".into(),
+            json!(
+                {
+                    "type": "FeatureCollection",
+                    "features": [
+                      {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                          "coordinates": [
+                            [
+                              [98.2181205776469, 8.20412838698085],
+                              [98.2181205776469, 7.74024270965898],
+                              [98.4806081271079, 7.74024270965898],
+                              [98.4806081271079, 8.20412838698085],
+                              [98.2181205776469, 8.20412838698085]
+                            ]
+                          ],
+                          "type": "Polygon"
+                        }
+                      }
+                    ]
+                  }
+            ),
+        );
         tags.remove("url_alias");
         let area = super::patch_tags(&area.id.to_string(), tags.clone(), &pool).await?;
         let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
@@ -353,7 +430,33 @@ mod test {
                 .await?
                 .len()
         );
-        tags.insert("geo_json".into(), earth_geo_json());
+        // Earth
+        tags.insert(
+            "geo_json".into(),
+            json!(
+                {
+                    "type": "FeatureCollection",
+                    "features": [
+                      {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                          "coordinates": [
+                            [
+                              [-180,-90],
+                              [-180,90],
+                              [180,90],
+                              [180,-90],
+                              [-180,-90]
+                            ]
+                          ],
+                          "type": "Polygon"
+                        }
+                      }
+                    ]
+                  }
+            ),
+        );
         let area = super::patch_tags(&area.id.to_string(), tags, &pool).await?;
         assert_eq!(
             2,
