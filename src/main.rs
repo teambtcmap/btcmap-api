@@ -1,6 +1,7 @@
 use actix_web::error::InternalError;
 use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
 use actix_web::{web, App, HttpServer, ResponseError};
+use db::pool;
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod error;
@@ -9,7 +10,6 @@ use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-mod db_utils;
 mod feed;
 mod log;
 mod rpc;
@@ -25,10 +25,10 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[actix_web::main]
 async fn main() -> Result<()> {
     init_env();
-    let pool = db_utils::pool()?;
+    let pool = pool()?;
     pool.get()
         .await?
-        .interact(|conn| db_utils::migrate(conn))
+        .interact(|conn| db::migration::run(conn))
         .await??;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;

@@ -1,4 +1,4 @@
-use crate::db_utils::data_dir_file;
+use crate::service::filesystem::data_dir_file_path;
 use crate::Result;
 use rusqlite::named_params;
 use rusqlite::Connection;
@@ -12,7 +12,7 @@ thread_local! {
 }
 
 fn conn() -> Result<Connection> {
-    let conn = Connection::open(data_dir_file("log.db")?)?;
+    let conn = Connection::open(data_dir_file_path("log.db")?)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     migrate(&conn)?;

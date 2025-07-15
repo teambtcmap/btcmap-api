@@ -4,7 +4,6 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -19,13 +18,8 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let res = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            generate_element_categories(params.from_element_id, params.to_element_id, conn)
-        })
-        .await??;
+    let res =
+        generate_element_categories(params.from_element_id, params.to_element_id, pool).await?;
     discord::send(
         format!(
             "{} generated element categories (id range {}..{})",
@@ -37,25 +31,26 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
     Ok(res)
 }
 
-fn generate_element_categories(
+async fn generate_element_categories(
     from_element_id: i64,
     to_element_id: i64,
-    conn: &Connection,
+    pool: &Pool,
 ) -> Result<Res> {
     let mut changes = 0;
     for element_id in from_element_id..=to_element_id {
-        let Ok(element) = db::element::queries::select_by_id(element_id, conn) else {
+        let Ok(element) = db::element::queries_async::select_by_id(element_id, pool).await else {
             continue;
         };
         let old_category = element.tag("category").as_str().unwrap_or_default();
         let new_category = element.overpass_data.generate_category();
         if old_category != new_category {
-            db::element::queries::set_tag(
+            db::element::queries_async::set_tag(
                 element.id,
                 "category",
                 &new_category.clone().into(),
-                conn,
-            )?;
+                pool,
+            )
+            .await?;
             changes += 1;
         }
     }
@@ -101,46 +96,48 @@ impl OverpassElement {
 
 #[cfg(test)]
 mod test {
+    use crate::db;
+    use crate::db::test::pool;
     use crate::service::overpass::OverpassElement;
     use crate::Result;
-    use crate::{db, db_utils};
-    use rusqlite::Connection;
     use serde_json::Map;
     use time::OffsetDateTime;
 
     #[actix_web::test]
     async fn run() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        db_utils::migrate(&mut conn)?;
+        let pool = pool();
 
         let mut tags = Map::new();
         tags.insert("amenity".into(), "atm".into());
-        db::element::queries::insert(
-            &OverpassElement {
+        db::element::queries_async::insert(
+            OverpassElement {
                 tags: Some(tags),
                 ..OverpassElement::mock(1)
             },
-            &conn,
-        )?;
+            &pool,
+        )
+        .await?;
 
         let mut tags = Map::new();
         tags.insert("amenity".into(), "cafe".into());
-        db::element::queries::insert(
-            &OverpassElement {
+        db::element::queries_async::insert(
+            OverpassElement {
                 tags: Some(tags),
                 ..OverpassElement::mock(2)
             },
-            &conn,
-        )?;
+            &pool,
+        )
+        .await?;
 
-        super::generate_element_categories(1, 100, &conn)?;
+        super::generate_element_categories(1, 100, &pool).await?;
 
-        let elements = db::element::queries::select_updated_since(
+        let elements = db::element::queries_async::select_updated_since(
             OffsetDateTime::UNIX_EPOCH,
             None,
             true,
-            &conn,
-        )?;
+            &pool,
+        )
+        .await?;
 
         assert_eq!("atm", elements[0].tag("category").as_str().unwrap());
         assert_eq!("cafe", elements[1].tag("category").as_str().unwrap());

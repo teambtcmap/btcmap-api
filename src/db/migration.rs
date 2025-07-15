@@ -1,14 +1,8 @@
 use crate::Result;
-use deadpool_sqlite::Config;
-use deadpool_sqlite::Hook;
-use deadpool_sqlite::Pool;
-use deadpool_sqlite::Runtime;
 use include_dir::include_dir;
 use include_dir::Dir;
 use rusqlite::Connection;
 use std::fmt;
-use std::fs::create_dir_all;
-use std::path::PathBuf;
 use tracing::info;
 use tracing::warn;
 
@@ -30,65 +24,8 @@ impl fmt::Display for Migration {
     }
 }
 
-pub fn migrate(db: &mut Connection) -> Result<()> {
+pub fn run(db: &mut Connection) -> Result<()> {
     execute_migrations(&get_migrations()?, db)
-}
-
-pub fn pool() -> Result<Pool> {
-    Ok(Config::new(data_dir_file("btcmap.db")?)
-        .builder(Runtime::Tokio1)?
-        .post_create(Hook::Fn(Box::new(|conn, _| {
-            let conn = conn.lock().unwrap();
-            init_pragmas(&conn);
-            Ok(())
-        })))
-        .build()?)
-}
-
-pub fn data_dir_file(name: &str) -> Result<PathBuf> {
-    #[allow(deprecated)]
-    let data_dir = std::env::home_dir()
-        .ok_or("Home directory does not exist")?
-        .join(".local/share/btcmap");
-    if !data_dir.exists() {
-        create_dir_all(&data_dir)?;
-    }
-    Ok(data_dir.join(name))
-}
-
-fn init_pragmas(conn: &Connection) {
-    conn.pragma_update(None, "journal_mode", "WAL").unwrap();
-    conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
-    conn.pragma_update(None, "foreign_keys", "ON").unwrap();
-    conn.pragma_update(None, "busy_timeout", 10 * 60 * 1000)
-        .unwrap();
-    // > The default suggested cache size is -2000, which means the cache size is limited to 2048000 bytes of memory
-    // Source: https://www.sqlite.org/pragma.html#pragma_cache_size
-    // The default page size is 4096 bytes, cache_size sets the number of pages
-    // conn.pragma_update(None, "cache_size", 25000).unwrap();
-}
-
-fn execute_migrations(migrations: &[Migration], db: &mut Connection) -> Result<()> {
-    let mut schema_ver: i16 =
-        db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
-            row.get(0)
-        })?;
-
-    let new_migrations: Vec<&Migration> =
-        migrations.iter().filter(|it| it.0 > schema_ver).collect();
-
-    for migration in new_migrations {
-        warn!(%migration, "Found new migration");
-        let tx = db.transaction()?;
-        tx.execute_batch(&migration.1)?;
-        tx.execute_batch(&format!("PRAGMA user_version={}", migration.0))?;
-        tx.commit()?;
-        schema_ver = migration.0;
-    }
-
-    info!(schema_ver, "Database schema is up to date");
-
-    Ok(())
 }
 
 fn get_migrations() -> Result<Vec<Migration>> {
@@ -116,6 +53,29 @@ fn get_migrations() -> Result<Vec<Migration>> {
     }
 
     Ok(res)
+}
+
+fn execute_migrations(migrations: &[Migration], db: &mut Connection) -> Result<()> {
+    let mut schema_ver: i16 =
+        db.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
+            row.get(0)
+        })?;
+
+    let new_migrations: Vec<&Migration> =
+        migrations.iter().filter(|it| it.0 > schema_ver).collect();
+
+    for migration in new_migrations {
+        warn!(%migration, "Found new migration");
+        let tx = db.transaction()?;
+        tx.execute_batch(&migration.1)?;
+        tx.execute_batch(&format!("PRAGMA user_version={}", migration.0))?;
+        tx.commit()?;
+        schema_ver = migration.0;
+    }
+
+    info!(schema_ver, "Database schema is up to date");
+
+    Ok(())
 }
 
 #[cfg(test)]

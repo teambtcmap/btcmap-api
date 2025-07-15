@@ -4,6 +4,7 @@ pub mod ban;
 pub mod discord;
 pub mod element;
 pub mod event;
+pub mod filesystem;
 pub mod invoice;
 pub mod og;
 pub mod osm;
