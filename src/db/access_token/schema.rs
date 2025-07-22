@@ -1,3 +1,8 @@
+use rusqlite::Row;
+use serde_json::Value;
+use std::{str::FromStr, sync::OnceLock};
+use time::OffsetDateTime;
+
 pub const NAME: &str = "access_token";
 
 pub enum Columns {
@@ -22,6 +27,94 @@ impl Columns {
             Columns::CreatedAt => "created_at",
             Columns::UpdatedAt => "updated_at",
             Columns::DeletedAt => "deleted_at",
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Eq, PartialEq, Debug)]
+pub struct AccessToken {
+    pub id: i64,
+    pub user_id: i64,
+    pub name: Option<String>,
+    pub secret: String,
+    pub roles: Vec<Role>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+    pub deleted_at: Option<OffsetDateTime>,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+pub enum Role {
+    User,
+    Admin,
+    Root,
+}
+
+impl AccessToken {
+    pub fn projection() -> &'static str {
+        static PROJECTION: OnceLock<String> = OnceLock::new();
+        PROJECTION.get_or_init(|| {
+            [
+                Columns::Id,
+                Columns::UserId,
+                Columns::Name,
+                Columns::Secret,
+                Columns::Roles,
+                Columns::CreatedAt,
+                Columns::UpdatedAt,
+                Columns::DeletedAt,
+            ]
+            .iter()
+            .map(Columns::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+        })
+    }
+
+    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
+        |row: &Row| -> rusqlite::Result<Self> {
+            Ok(AccessToken {
+                id: row.get(Columns::Id.as_str())?,
+                user_id: row.get(Columns::UserId.as_str())?,
+                name: row.get(Columns::Name.as_str())?,
+                secret: row.get(Columns::Secret.as_str())?,
+                roles: Self::parse_roles(row.get(Columns::Roles.as_str())?),
+                created_at: row.get(Columns::CreatedAt.as_str())?,
+                updated_at: row.get(Columns::UpdatedAt.as_str())?,
+                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+            })
+        }
+    }
+
+    fn parse_roles(column_value: Value) -> Vec<Role> {
+        let roles: Vec<String> = serde_json::from_value(column_value).unwrap_or_default();
+        roles
+            .into_iter()
+            .filter_map(|s| Role::from_str(&s).ok())
+            .collect()
+    }
+}
+
+impl FromStr for Role {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "user" => Ok(Role::User),
+            "admin" => Ok(Role::Admin),
+            "root" => Ok(Role::Root),
+            _ => Err(format!("'{}' is not a valid Role", s)),
+        }
+    }
+}
+
+impl ToString for Role {
+    fn to_string(&self) -> String {
+        match self {
+            Role::User => "user".to_string(),
+            Role::Admin => "admin".to_string(),
+            Role::Root => "root".to_string(),
         }
     }
 }

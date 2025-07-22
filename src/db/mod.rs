@@ -58,6 +58,7 @@ pub mod test {
     pub(super) fn conn() -> Connection {
         let mut conn = Connection::open_in_memory().unwrap();
         migration::run(&mut conn).unwrap();
+        conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
         conn
     }
 }

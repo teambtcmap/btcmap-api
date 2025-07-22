@@ -1,7 +1,7 @@
 use crate::{
     db::{
         self,
-        access_token::queries::{AccessToken, Role},
+        access_token::schema::{AccessToken, Role},
         conf::schema::Conf,
         user::schema::User,
     },
@@ -283,8 +283,7 @@ pub async fn handle(
     let user: Option<User> = if access_token.is_empty() {
         None
     } else {
-        let access_token =
-            db::access_token::queries_async::select_by_secret(access_token, &pool).await?;
+        let access_token = db::access_token::queries::select_by_secret(access_token, &pool).await?;
         let user = db::user::queries_async::select_by_id(access_token.user_id, &pool).await?;
         if !access_token.allowed_methods().contains(&req.method) {
             return Ok(Json(RpcResponse::error(RpcError {
@@ -733,11 +732,11 @@ mod test {
     async fn valid_request_with_auth() -> Result<()> {
         let pool = pool();
         let user = db::user::queries_async::insert("root", "", &pool).await?;
-        let _token = db::access_token::queries_async::insert(
+        let _token = db::access_token::queries::insert(
             user,
-            "",
-            "secret",
-            &vec!["root".into()],
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
             &pool,
         )
         .await?;
