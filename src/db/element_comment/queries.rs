@@ -17,13 +17,19 @@ pub fn insert(
                 ?1,
                 ?2
             )
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         element_id = Columns::ElementId.as_str(),
         comment = Columns::Comment.as_str(),
+        projection = ElementComment::projection(),
     );
-    conn.execute(&sql, params![element_id, comment.into()])?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    conn.query_row(
+        &sql,
+        params![element_id, comment.into()],
+        ElementComment::mapper(),
+    )
+    .map_err(Into::into)
 }
 
 pub fn select_updated_since(
@@ -157,7 +163,8 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementComment> {
         table = schema::TABLE_NAME,
         id = Columns::Id.as_str(),
     );
-    Ok(conn.query_row(&sql, params![id], ElementComment::mapper())?)
+    conn.query_row(&sql, params![id], ElementComment::mapper())
+        .map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -244,8 +251,6 @@ mod test {
     #[test]
     fn insert_and_select_by_id() -> Result<()> {
         let conn = conn();
-        // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
         let now = OffsetDateTime::now_utc();
 
         // Test insert

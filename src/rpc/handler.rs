@@ -733,7 +733,7 @@ mod test {
         let pool = pool();
         let user = db::user::queries_async::insert("root", "", &pool).await?;
         let _token = db::access_token::queries::insert(
-            user,
+            user.id,
             "".into(),
             "secret".into(),
             vec![Role::Root],

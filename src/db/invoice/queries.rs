@@ -28,6 +28,7 @@ pub fn insert(
                 :payment_request,
                 :status
             )
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         uuid = Columns::Uuid.as_str(),
@@ -36,19 +37,18 @@ pub fn insert(
         payment_hash = Columns::PaymentHash.as_str(),
         payment_request = Columns::PaymentRequest.as_str(),
         status = Columns::Status.as_str(),
+        projection = Invoice::projection(),
     );
-    conn.execute(
-        &sql,
-        named_params! {
-            ":uuid": Uuid::new_v4().to_string(),
-            ":amount_sats": amount_sats,
-            ":description": description.into(),
-            ":payment_hash": payment_hash.into(),
-            ":payment_request": payment_request.into(),
-            ":status": status,
-        },
-    )?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    let params = named_params! {
+        ":uuid": Uuid::new_v4().to_string(),
+        ":amount_sats": amount_sats,
+        ":description": description.into(),
+        ":payment_hash": payment_hash.into(),
+        ":payment_request": payment_request.into(),
+        ":status": status,
+    };
+    conn.query_row(&sql, params, Invoice::mapper())
+        .map_err(Into::into)
 }
 
 pub fn select_by_status(status: InvoiceStatus, conn: &Connection) -> Result<Vec<Invoice>> {
@@ -114,4 +114,24 @@ pub fn set_status(invoice_id: i64, status: InvoiceStatus, conn: &Connection) -> 
     );
     conn.execute(&sql, params![invoice_id, status])?;
     select_by_id(invoice_id, conn)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{db::test::conn, Result};
+
+    #[test]
+    fn insert() -> Result<()> {
+        let conn = conn();
+        let invoice = super::insert(
+            "desc",
+            1,
+            "hash",
+            "req",
+            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            &conn,
+        )?;
+        assert_eq!(invoice, super::select_by_id(invoice.id, &conn)?);
+        Ok(())
+    }
 }

@@ -17,21 +17,21 @@ pub fn insert(user_id: i64, element_id: i64, r#type: &str, conn: &Connection) ->
                 :element_id,
                 :type
             )
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         user_id = Columns::UserId.as_str(),
         element_id = Columns::ElementId.as_str(),
         r#type = Columns::Type.as_str(),
+        projection = Event::projection(),
     );
-    conn.execute(
-        &sql,
-        named_params! {
-            ":user_id": user_id,
-            ":element_id": element_id,
-            ":type": r#type,
-        },
-    )?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    let params = named_params! {
+        ":user_id": user_id,
+        ":element_id": element_id,
+        ":type": r#type,
+    };
+    conn.query_row(&sql, params, Event::mapper())
+        .map_err(Into::into)
 }
 
 pub fn select_all(

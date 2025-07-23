@@ -19,13 +19,12 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let new_admin_id = crate::db::user::queries_async::insert(
+    let new_user = crate::db::user::queries_async::insert(
         params.new_admin_name,
         params.new_admin_password,
         pool,
     )
     .await?;
-    let new_user = crate::db::user::queries_async::select_by_id(new_admin_id, pool).await?;
     discord::send(
         format!("{} added new user {}", requesting_user.name, new_user.name),
         discord::Channel::Api,

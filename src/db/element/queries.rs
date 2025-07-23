@@ -9,12 +9,18 @@ pub fn insert(overpass_data: &OverpassElement, conn: &Connection) -> Result<Elem
         r#"
             INSERT INTO {table} ({overpass_data}) 
             VALUES (json(?1))
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         overpass_data = Columns::OverpassData.as_str(),
+        projection = Element::projection(),
     );
-    conn.execute(&sql, params![serde_json::to_string(overpass_data)?])?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    conn.query_row(
+        &sql,
+        params![serde_json::to_string(overpass_data)?],
+        Element::mapper(),
+    )
+    .map_err(Into::into)
 }
 
 pub fn select_updated_since(

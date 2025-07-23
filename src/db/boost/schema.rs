@@ -29,6 +29,7 @@ impl Columns {
 }
 
 #[allow(dead_code)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Boost {
     pub id: i64,
     pub admin_id: i64,

@@ -4,18 +4,20 @@ use crate::Result;
 use rusqlite::{params, Connection};
 use tracing::warn;
 
-pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<i64> {
+pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<User> {
     let sql = format!(
         r#"
             INSERT INTO {table} ({name}, {password})
             VALUES (?1, ?2)
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         name = Columns::Name.as_str(),
         password = Columns::Password.as_str(),
+        projection = User::projection(),
     );
-    conn.execute(&sql, params![name, password])?;
-    Ok(conn.last_insert_rowid())
+    conn.query_row(&sql, params![name, password], User::mapper())
+        .map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -104,7 +106,7 @@ mod test {
         let admin_name = "name";
         let admin_pwd = "pwd";
         let conn = conn();
-        let admin_id = super::insert(admin_name, admin_pwd, &conn)?;
+        let admin_id = super::insert(admin_name, admin_pwd, &conn)?.id;
         let res_admin = super::select_by_id(admin_id, &conn)?;
         assert_eq!(admin_id, res_admin.id);
         assert_eq!(admin_name, res_admin.name);
@@ -115,8 +117,8 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = conn();
-        let admin_1_id = super::insert("name_1", "pwd_1", &conn)?;
-        let admin_2_id = super::insert("name_2", "pwd_2", &conn)?;
+        let admin_1_id = super::insert("name_1", "pwd_1", &conn)?.id;
+        let admin_2_id = super::insert("name_2", "pwd_2", &conn)?.id;
         let query_res = super::select_all(&conn)?;
         assert_eq!(2, query_res.len());
         assert_eq!(admin_1_id, query_res.first().unwrap().id);
@@ -127,7 +129,7 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = conn();
-        let admin_id = super::insert("name", "pwd", &conn)?;
+        let admin_id = super::insert("name", "pwd", &conn)?.id;
         let res_admin = super::select_by_id(admin_id, &conn)?;
         assert_eq!(admin_id, res_admin.id);
         Ok(())
@@ -137,7 +139,7 @@ mod test {
     fn select_by_name() -> Result<()> {
         let admin_name = "admin_1";
         let conn = conn();
-        let admin_id = super::insert(admin_name, "", &conn)?;
+        let admin_id = super::insert(admin_name, "", &conn)?.id;
         let res_admin = super::select_by_name(admin_name, &conn)?;
         assert_eq!(admin_id, res_admin.id);
         assert_eq!(admin_name, res_admin.name);
@@ -147,7 +149,7 @@ mod test {
     #[test]
     fn set_roles() -> Result<()> {
         let conn = conn();
-        let admin_id = super::insert("name", "pwd", &conn)?;
+        let admin_id = super::insert("name", "pwd", &conn)?.id;
         let roles = vec!["action_1".into(), "action_2".into()];
         super::set_roles(admin_id, &roles, &conn)?;
         assert_eq!(roles, super::select_by_id(admin_id, &conn)?.roles,);

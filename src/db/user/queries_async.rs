@@ -6,7 +6,7 @@ pub async fn insert(
     name: impl Into<String>,
     password: impl Into<String>,
     pool: &Pool,
-) -> Result<i64> {
+) -> Result<User> {
     let name = name.into();
     let password = password.into();
     pool.get()

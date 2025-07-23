@@ -15,18 +15,21 @@ pub fn insert(
         r#"
             INSERT INTO {table} ({user_id}, {name}, {secret}, {roles})
             VALUES (?1, ?2, ?3, json(?4))
+            RETURNING {projection}
         "#,
         table = schema::NAME,
         user_id = Columns::UserId.as_str(),
         name = Columns::Name.as_str(),
         secret = Columns::Secret.as_str(),
         roles = Columns::Roles.as_str(),
+        projection = AccessToken::projection(),
     );
-    conn.execute(
+    conn.query_row(
         &sql,
         params![user_id, name, secret, serde_json::to_string(&roles)?],
-    )?;
-    select_by_id(conn.last_insert_rowid(), conn)
+        AccessToken::mapper(),
+    )
+    .map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -45,6 +48,7 @@ pub fn select_all(conn: &Connection) -> Result<Vec<AccessToken>> {
         .map_err(Into::into)
 }
 
+#[cfg(test)]
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<AccessToken> {
     let sql = format!(
         r#"

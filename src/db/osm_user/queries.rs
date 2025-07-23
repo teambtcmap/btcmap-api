@@ -6,6 +6,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
+#[derive(PartialEq, Debug)]
 pub struct OsmUser {
     pub id: i64,
     pub osm_data: EditingApiUser,
@@ -58,13 +59,19 @@ pub fn insert(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<O
                 ?1,
                 ?2
             )
+            RETURNING {projection}
         "#,
         id = Columns::Id.as_str(),
         osm_data = Columns::OsmData.as_str(),
-        table = schema::NAME
+        table = schema::NAME,
+        projection = OsmUser::projection(),
     );
-    conn.execute(&sql, params![id, serde_json::to_string(osm_data)?])?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    conn.query_row(
+        &sql,
+        params![id, serde_json::to_string(osm_data)?],
+        OsmUser::mapper(),
+    )
+    .map_err(Into::into)
 }
 
 pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<OsmUser>> {
@@ -301,9 +308,8 @@ mod test {
     #[test]
     fn insert() -> Result<()> {
         let conn = conn();
-        super::insert(1, &EditingApiUser::mock(), &conn)?;
-        let users = super::select_all(None, &conn)?;
-        assert_eq!(1, users.len());
+        let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
+        assert_eq!(user, super::select_by_id(1, &conn)?);
         Ok(())
     }
 

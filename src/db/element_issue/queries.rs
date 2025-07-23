@@ -13,17 +13,21 @@ pub fn insert(
         r#"
             INSERT INTO {table} ({element_id}, {code}, {severity})
             VALUES (:element_id, :code, :severity)
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         element_id = Columns::ElementId.as_str(),
         code = Columns::Code.as_str(),
         severity = Columns::Severity.as_str(),
+        projection = ElementIssue::projection(),
     );
-    conn.execute(
-        &sql,
-        named_params! { ":element_id": element_id, ":code": code.into(), ":severity": severity },
-    )?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    let params = named_params! {
+        ":element_id": element_id,
+        ":code": code.into(),
+        ":severity": severity
+    };
+    conn.query_row(&sql, params, ElementIssue::mapper())
+        .map_err(Into::into)
 }
 
 pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<ElementIssue>> {

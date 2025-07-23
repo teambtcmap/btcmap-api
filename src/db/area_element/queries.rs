@@ -13,13 +13,15 @@ pub fn insert(area_id: i64, element_id: i64, conn: &Connection) -> Result<AreaEl
                 ?1,
                 ?2
             )
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         area_id = Columns::AreaId.as_str(),
         element_id = Columns::ElementId.as_str(),
+        projection = AreaElement::projection(),
     );
-    conn.execute(&sql, params![area_id, element_id,])?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    conn.query_row(&sql, params![area_id, element_id], AreaElement::mapper())
+        .map_err(Into::into)
 }
 
 pub fn select_updated_since(
@@ -167,27 +169,15 @@ mod tests {
 
     #[test]
     fn insert() -> Result<()> {
-        // Setup in-memory database
         let conn = conn();
-        // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
-
-        // Test data
         let test_area_id = 42;
         let test_element_id = 123;
-
-        // Execute insert
         let item = super::insert(test_area_id, test_element_id, &conn)?;
-
-        // Verify the returned struct has correct values
         assert_eq!(item.area_id, test_area_id);
         assert_eq!(item.element_id, test_element_id);
-
-        // Verify the data was actually inserted in the database
         let db_item = super::select_by_id(item.id, &conn)?;
         assert_eq!(db_item.area_id, test_area_id);
         assert_eq!(db_item.element_id, test_element_id);
-
         Ok(())
     }
 

@@ -25,13 +25,15 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
         r#"
                 INSERT INTO {table} ({alias}, {tags})
                 VALUES (?1, json(?2))
+                RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         tags = Columns::Tags.as_str(),
         alias = Columns::Alias.as_str(),
+        projection = Area::projection(),
     );
-    conn.execute(&sql, params![alias, Value::from(tags)])?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    conn.query_row(&sql, params![alias, Value::from(tags)], Area::mapper())
+        .map_err(Into::into)
 }
 
 pub fn select(

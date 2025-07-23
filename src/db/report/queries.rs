@@ -16,21 +16,21 @@ pub fn insert(area_id: i64, date: Date, tags: &JsonObject, conn: &Connection) ->
                 :date,
                 :tags
             )
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         area_id = Columns::AreaId.as_str(),
         date = Columns::Date.as_str(),
         tags = Columns::Tags.as_str(),
+        projection = Report::projection(),
     );
-    conn.execute(
-        &sql,
-        named_params! {
-            ":area_id" : area_id,
-            ":date" : date.to_string(),
-            ":tags" : serde_json::to_string(&tags)?,
-        },
-    )?;
-    select_by_id(conn.last_insert_rowid(), conn)
+    let params = named_params! {
+        ":area_id" : area_id,
+        ":date" : date.to_string(),
+        ":tags" : serde_json::to_string(&tags)?,
+    };
+    conn.query_row(&sql, params, Report::mapper())
+        .map_err(Into::into)
 }
 
 pub fn select_all(

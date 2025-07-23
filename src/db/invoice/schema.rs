@@ -37,6 +37,7 @@ impl Columns {
 }
 
 #[allow(dead_code)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Invoice {
     pub id: i64,
     pub uuid: String,
@@ -91,7 +92,7 @@ impl Invoice {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InvoiceStatus {
     Paid,
     Unpaid,
