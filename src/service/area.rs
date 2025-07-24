@@ -7,7 +7,6 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
-use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -215,31 +214,22 @@ pub async fn get_trending_areas(
     Ok(res.into_iter().take(10).collect())
 }
 
-pub async fn get_comments_async(
-    area: Area,
+pub async fn get_comments(
+    area: &Area,
     include_deleted: bool,
     pool: &Pool,
 ) -> Result<Vec<ElementComment>> {
-    pool.get()
-        .await?
-        .interact(move |conn| get_comments(&area, include_deleted, conn))
-        .await?
-}
-
-fn get_comments(
-    area: &Area,
-    include_deleted: bool,
-    conn: &Connection,
-) -> Result<Vec<ElementComment>> {
-    let area_elements = db::area_element::queries::select_by_area_id(area.id, conn)?;
+    let area_elements = db::area_element::queries_async::select_by_area_id(area.id, pool).await?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
-        for comment in db::element_comment::queries::select_by_element_id(
+        for comment in db::element_comment::queries_async::select_by_element_id(
             area_element.element_id,
             include_deleted,
             i64::MAX,
-            conn,
-        )? {
+            &pool,
+        )
+        .await?
+        {
             comments.push(comment);
         }
     }
@@ -524,7 +514,7 @@ mod test {
             db::area_element::queries_async::insert(area.id, element.id, &pool).await?;
         assert_eq!(
             Some(&comment),
-            super::get_comments_async(area, false, &pool).await?.first()
+            super::get_comments(&area, false, &pool).await?.first()
         );
         Ok(())
     }
