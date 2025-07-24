@@ -3,6 +3,7 @@ use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
 use std::collections::HashMap;
+use time::OffsetDateTime;
 
 pub async fn insert(
     user_id: i64,
@@ -14,6 +15,17 @@ pub async fn insert(
     pool.get()
         .await?
         .interact(move |conn| queries::insert(user_id, element_id, &r#type, conn))
+        .await?
+}
+
+pub async fn select_created_between(
+    period_start: OffsetDateTime,
+    period_end: OffsetDateTime,
+    pool: &Pool,
+) -> Result<Vec<Event>> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_created_between(&period_start, &period_end, conn))
         .await?
 }
 

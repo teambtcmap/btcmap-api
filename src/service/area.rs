@@ -117,24 +117,23 @@ pub async fn get_trending_areas_async(
     let r#type = r#type.into();
     let period_start = *period_start;
     let period_end = *period_end;
-    pool.get()
-        .await?
-        .interact(move |conn| get_trending_areas(&r#type, &period_start, &period_end, conn))
-        .await?
+    get_trending_areas(&r#type, period_start, period_end, pool).await
 }
 
-pub fn get_trending_areas(
+pub async fn get_trending_areas(
     r#type: &str,
-    period_start: &OffsetDateTime,
-    period_end: &OffsetDateTime,
-    conn: &Connection,
+    period_start: OffsetDateTime,
+    period_end: OffsetDateTime,
+    pool: &Pool,
 ) -> Result<Vec<TrendingArea>> {
-    let events = db::event::queries::select_created_between(period_start, period_end, conn)?;
+    let events =
+        db::event::queries_async::select_created_between(period_start, period_end, pool).await?;
     let mut areas_to_events: HashMap<i64, Vec<&Event>> = HashMap::new();
     for event in &events {
-        let element = db::element::queries::select_by_id(event.element_id, conn)?;
+        let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
-            db::area_element::queries::select_by_element_id(element.id, conn)?
+            db::area_element::queries_async::select_by_element_id(element.id, pool)
+                .await?
                 .into_iter()
                 .map(|it| it.area_id)
                 .collect();
@@ -145,16 +144,18 @@ pub fn get_trending_areas(
         }
     }
     let comments =
-        db::element_comment::queries::select_created_between(period_start, period_end, conn)?;
+        db::element_comment::queries_async::select_created_between(period_start, period_end, pool)
+            .await?;
     let comments: Vec<ElementComment> = comments
         .into_iter()
         .filter(|it| it.deleted_at.is_none())
         .collect();
     let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
     for comment in &comments {
-        let element = db::element::queries::select_by_id(comment.element_id, conn)?;
+        let element = db::element::queries_async::select_by_id(comment.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
-            db::area_element::queries::select_by_element_id(element.id, conn)?
+            db::area_element::queries_async::select_by_element_id(element.id, pool)
+                .await?
                 .into_iter()
                 .map(|it| it.area_id)
                 .collect();
@@ -164,17 +165,17 @@ pub fn get_trending_areas(
             area_comments.push(comment);
         }
     }
-    let mut areas: HashSet<i64> = HashSet::new();
+    let mut area_ids: HashSet<i64> = HashSet::new();
     for area_id in areas_to_events.keys() {
-        areas.insert(*area_id);
+        area_ids.insert(*area_id);
     }
     for area_id in areas_to_comments.keys() {
-        areas.insert(*area_id);
+        area_ids.insert(*area_id);
     }
-    let areas: Vec<_> = areas
-        .into_iter()
-        .map(|it| db::area::queries::select_by_id(it, conn).unwrap())
-        .collect();
+    let mut areas: Vec<Area> = vec![];
+    for id in area_ids {
+        areas.push(db::area::queries_async::select_by_id(id, pool).await?);
+    }
     let mut res: Vec<TrendingArea> = areas
         .into_iter()
         .filter(|it| it.tags.contains_key("type") && it.tags["type"].as_str() == Some(r#type))

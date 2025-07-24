@@ -15,7 +15,6 @@ pub mod get_area_dashboard;
 pub mod get_boosted_elements;
 pub mod get_element_issues;
 pub mod get_most_active_users;
-pub mod get_most_commented_countries;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
 pub mod get_user_activity;

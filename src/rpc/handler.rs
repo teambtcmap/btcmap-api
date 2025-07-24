@@ -68,7 +68,6 @@ pub enum RpcMethod {
     SetAreaIcon,
     RemoveArea,
     GetTrendingCountries,
-    GetMostCommentedCountries,
     GetTrendingCommunities,
     GenerateAreasElementsMapping,
     GenerateReports,
@@ -407,10 +406,6 @@ pub async fn handle(
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
             super::get_trending_countries::run(params(req.params)?, &pool).await?,
-        ),
-        RpcMethod::GetMostCommentedCountries => RpcResponse::from(
-            req.id.clone(),
-            super::get_most_commented_countries::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetTrendingCommunities => RpcResponse::from(
             req.id.clone(),
