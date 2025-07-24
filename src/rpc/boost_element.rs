@@ -5,7 +5,6 @@ use crate::{
 };
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use time::{format_description::well_known::Iso8601, Duration, OffsetDateTime};
@@ -24,11 +23,7 @@ pub struct Res {
 
 pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let requesting_user_id = requesting_user.id;
-    let element = pool
-        .get()
-        .await?
-        .interact(move |conn| _boost(requesting_user_id, &params.id, params.days, conn))
-        .await??;
+    let element = boost(requesting_user_id, &params.id, params.days, pool).await?;
     discord::send(
         format!(
             "{} boosted element {} ({}) for {} days",
@@ -46,8 +41,8 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
     })
 }
 
-fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Result<Element> {
-    let element = db::element::queries::select_by_id_or_osm_id(id_or_osm_id, conn)?;
+async fn boost(admin_id: i64, id_or_osm_id: &str, days: i64, pool: &Pool) -> Result<Element> {
+    let element = db::element::queries_async::select_by_id_or_osm_id(id_or_osm_id, pool).await?;
     let boost_expires = element.tag("boost:expires");
     let boost_expires = match boost_expires {
         Value::String(v) => {
@@ -61,12 +56,13 @@ fn _boost(admin_id: i64, id_or_osm_id: &str, days: i64, conn: &Connection) -> Re
         boost_expires
     };
     let boost_expires = boost_expires.checked_add(Duration::days(days)).unwrap();
-    let element = db::element::queries::set_tag(
+    let element = db::element::queries_async::set_tag(
         element.id,
         "boost:expires",
         &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),
-        conn,
-    )?;
-    db::boost::queries::insert(admin_id, element.id, days, conn)?;
+        pool,
+    )
+    .await?;
+    db::boost::queries_async::insert(admin_id, element.id, days, pool).await?;
     Ok(element)
 }
