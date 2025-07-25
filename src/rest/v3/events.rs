@@ -103,22 +103,24 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let events = pool
-        .get()
-        .await?
-        .interact(move |conn| match args.updated_since {
-            Some(updated_since) => db::event::queries::select_updated_since(
+    let events = match args.updated_since {
+        Some(updated_since) => {
+            db::event::queries_async::select_updated_since(
                 updated_since,
                 Some(args.limit.unwrap_or(100)),
-                conn,
-            ),
-            None => db::event::queries::select_all(
+                &pool,
+            )
+            .await?
+        }
+        None => {
+            db::event::queries_async::select_all(
                 Some("DESC".into()),
                 Some(args.limit.unwrap_or(100)),
-                conn,
-            ),
-        })
-        .await??;
+                &pool,
+            )
+            .await?
+        }
+    };
     req.extensions_mut()
         .insert(RequestExtension::new(events.len()));
     Ok(Json(events.into_iter().map(|it| it.into()).collect()))
@@ -126,11 +128,8 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id = id.into_inner();
-    pool.get()
-        .await?
-        .interact(move |conn| db::event::queries::select_by_id(id, conn))
-        .await?
+    db::event::queries_async::select_by_id(*id, &pool)
+        .await
         .map(|it| it.into())
 }
 

@@ -94,22 +94,21 @@ pub async fn get(
             Redirect::to("https://static.btcmap.org/api/v2/events.json").permanent(),
         ));
     }
-    let events = pool
-        .get()
-        .await?
-        .interact(move |conn| match args.updated_since {
-            Some(updated_since) => {
-                db::event::queries::select_updated_since(updated_since, args.limit, conn)
-            }
-            None => db::event::queries::select_updated_since(
+    let events = match args.updated_since {
+        Some(updated_since) => {
+            db::event::queries_async::select_updated_since(updated_since, args.limit, &pool).await?
+        }
+        None => {
+            db::event::queries_async::select_updated_since(
                 OffsetDateTime::now_utc()
                     .checked_sub(Duration::days(30))
                     .unwrap(),
                 args.limit,
-                conn,
-            ),
-        })
-        .await??;
+                &pool,
+            )
+            .await?
+        }
+    };
     let events_len = events.len();
     let res = Either::Left(Json(events.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
@@ -119,11 +118,8 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id = id.into_inner();
-    pool.get()
-        .await?
-        .interact(move |conn| db::event::queries::select_by_id(id, conn))
-        .await?
+    db::event::queries_async::select_by_id(*id, &pool)
+        .await
         .map(|it| it.into())
 }
 

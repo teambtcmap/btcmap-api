@@ -70,6 +70,13 @@ pub async fn select_updated_since(
         .await?
 }
 
+pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Event> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_by_id(id, conn))
+        .await?
+}
+
 pub async fn patch_tags(id: i64, tags: HashMap<String, Value>, pool: &Pool) -> Result<Event> {
     pool.get()
         .await?
