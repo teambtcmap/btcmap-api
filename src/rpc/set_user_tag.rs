@@ -21,26 +21,14 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let cloned_args_user_name = params.user_name.clone();
-    let cloned_args_tag_name = params.tag_name.clone();
-    let cloned_args_tag_value = params.tag_value.clone();
-    let user = pool
-        .get()
-        .await?
-        .interact(move |conn| db::osm_user::queries::select_by_name(&cloned_args_user_name, conn))
-        .await??;
-    let user = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            db::osm_user::queries::set_tag(
-                user.id,
-                &cloned_args_tag_name,
-                &cloned_args_tag_value,
-                conn,
-            )
-        })
-        .await??;
+    let user = db::osm_user::queries_async::select_by_name(params.user_name.clone(), pool).await?;
+    let user = db::osm_user::queries_async::set_tag(
+        user.id,
+        params.tag_name.clone(),
+        params.tag_value.clone(),
+        pool,
+    )
+    .await?;
     let discord_message = format!(
         "{} set tag {} = {} for user {} https://api.btcmap.org/v3/users/{}",
         caller.name,

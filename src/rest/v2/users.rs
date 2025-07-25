@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::osm_user::queries::OsmUser;
+use crate::db::osm_user::schema::OsmUser;
 use crate::log::RequestExtension;
 use crate::service::osm::EditingApiUser;
 use crate::Error;
@@ -73,16 +73,13 @@ pub async fn get(
             Redirect::to("https://static.btcmap.org/api/v2/users.json").permanent(),
         ));
     }
-    let users = pool
-        .get()
-        .await?
-        .interact(move |conn| match &args.updated_since {
-            Some(updated_since) => {
-                db::osm_user::queries::select_updated_since(updated_since, args.limit, conn)
-            }
-            None => db::osm_user::queries::select_all(args.limit, conn),
-        })
-        .await??;
+    let users = match &args.updated_since {
+        Some(updated_since) => {
+            db::osm_user::queries_async::select_updated_since(*updated_since, args.limit, &pool)
+                .await?
+        }
+        None => db::osm_user::queries_async::select_all(args.limit, &pool).await?,
+    };
     let users_len = users.len();
     let res = Either::Left(Json(users.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
@@ -92,11 +89,8 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id = id.into_inner();
-    pool.get()
-        .await?
-        .interact(move |conn| db::osm_user::queries::select_by_id(id, conn))
-        .await?
+    db::osm_user::queries_async::select_by_id(*id, &pool)
+        .await
         .map(|it| it.into())
 }
 

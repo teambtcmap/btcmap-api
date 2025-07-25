@@ -1,53 +1,10 @@
 use super::schema;
 use super::schema::Columns;
-use crate::{service::osm::EditingApiUser, Result};
+use crate::{db::osm_user::schema::OsmUser, service::osm::EditingApiUser, Result};
 use rusqlite::{params, Connection, Row};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-
-#[derive(PartialEq, Debug)]
-pub struct OsmUser {
-    pub id: i64,
-    pub osm_data: EditingApiUser,
-    pub tags: Map<String, Value>,
-    pub created_at: OffsetDateTime,
-    pub updated_at: OffsetDateTime,
-    pub deleted_at: Option<OffsetDateTime>,
-}
-
-impl OsmUser {
-    fn projection() -> String {
-        [
-            Columns::Id,
-            Columns::OsmData,
-            Columns::Tags,
-            Columns::CreatedAt,
-            Columns::UpdatedAt,
-            Columns::DeletedAt,
-        ]
-        .iter()
-        .map(Columns::as_str)
-        .collect::<Vec<_>>()
-        .join(", ")
-    }
-
-    fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
-        |row: &Row| -> rusqlite::Result<Self> {
-            let osm_data: String = row.get(1)?;
-            let tags: String = row.get(2)?;
-
-            Ok(Self {
-                id: row.get(0)?,
-                osm_data: serde_json::from_str(&osm_data).unwrap(),
-                tags: serde_json::from_str(&tags).unwrap(),
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
-            })
-        }
-    }
-}
 
 pub fn insert(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<OsmUser> {
     let sql = format!(

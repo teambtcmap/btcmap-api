@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::osm_user::queries::OsmUser;
+use crate::db::osm_user::schema::OsmUser;
 use crate::log::RequestExtension;
 use crate::service::osm::EditingApiUser;
 use crate::Error;
@@ -73,13 +73,12 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let users = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            db::osm_user::queries::select_updated_since(&args.updated_since, Some(args.limit), conn)
-        })
-        .await??;
+    let users = db::osm_user::queries_async::select_updated_since(
+        args.updated_since,
+        Some(args.limit),
+        &pool,
+    )
+    .await?;
     req.extensions_mut()
         .insert(RequestExtension::new(users.len()));
     Ok(Json(users.into_iter().map(|it| it.into()).collect()))
@@ -87,11 +86,8 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id = id.into_inner();
-    pool.get()
-        .await?
-        .interact(move |conn| db::osm_user::queries::select_by_id(id, conn))
-        .await?
+    db::osm_user::queries_async::select_by_id(*id, &pool)
+        .await
         .map(|it| it.into())
 }
 
