@@ -3,7 +3,7 @@ use rusqlite::Row;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
 
-pub const TABLE_NAME: &str = "event";
+pub const TABLE_NAME: &str = "element_event";
 
 pub enum Columns {
     Id,
@@ -32,7 +32,7 @@ impl Columns {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Event {
+pub struct ElementEvent {
     pub id: i64,
     pub user_id: i64,
     pub element_id: i64,
@@ -43,7 +43,7 @@ pub struct Event {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-impl Event {
+impl ElementEvent {
     pub fn projection() -> &'static str {
         static PROJECTION: OnceLock<String> = OnceLock::new();
         PROJECTION.get_or_init(|| {
@@ -64,7 +64,7 @@ impl Event {
         })
     }
 
-    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Event> {
+    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<ElementEvent> {
         |row| {
             let tags: String = row.get(Columns::Tags.as_str())?;
             let tags = serde_json::from_str(&tags).map_err(|e| {
@@ -74,7 +74,7 @@ impl Event {
                     Box::new(e),
                 )
             })?;
-            Ok(Event {
+            Ok(ElementEvent {
                 id: row.get(Columns::Id.as_str())?,
                 user_id: row.get(Columns::UserId.as_str())?,
                 element_id: row.get(Columns::ElementId.as_str())?,

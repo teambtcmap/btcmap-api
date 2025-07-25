@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, element::schema::Element, event::schema::Event},
+    db::{self, element::schema::Element, element_event::schema::ElementEvent},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -23,8 +23,9 @@ pub struct Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let user = db::osm_user::queries_async::select_by_id_or_name(params.id, pool).await?;
-    let user_events = db::event::queries_async::select_by_user(user.id, params.limit, pool).await?;
-    let mut user_events_to_elements: Vec<(Event, Element)> = vec![];
+    let user_events =
+        db::element_event::queries_async::select_by_user(user.id, params.limit, pool).await?;
+    let mut user_events_to_elements: Vec<(ElementEvent, Element)> = vec![];
     for event in user_events {
         let element_id = event.element_id;
         user_events_to_elements.push((

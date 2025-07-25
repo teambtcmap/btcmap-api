@@ -1,11 +1,16 @@
-use super::schema::{self, Columns, Event};
+use super::schema::{self, Columns, ElementEvent};
 use crate::Result;
 use rusqlite::{named_params, params, Connection};
 use serde_json::Value;
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-pub fn insert(user_id: i64, element_id: i64, r#type: &str, conn: &Connection) -> Result<Event> {
+pub fn insert(
+    user_id: i64,
+    element_id: i64,
+    r#type: &str,
+    conn: &Connection,
+) -> Result<ElementEvent> {
     let sql = format!(
         r#"
             INSERT INTO {table} (
@@ -23,14 +28,14 @@ pub fn insert(user_id: i64, element_id: i64, r#type: &str, conn: &Connection) ->
         user_id = Columns::UserId.as_str(),
         element_id = Columns::ElementId.as_str(),
         r#type = Columns::Type.as_str(),
-        projection = Event::projection(),
+        projection = ElementEvent::projection(),
     );
     let params = named_params! {
         ":user_id": user_id,
         ":element_id": element_id,
         ":type": r#type,
     };
-    conn.query_row(&sql, params, Event::mapper())
+    conn.query_row(&sql, params, ElementEvent::mapper())
         .map_err(Into::into)
 }
 
@@ -38,7 +43,7 @@ pub fn select_all(
     sort_order: Option<String>,
     limit: Option<i64>,
     conn: &Connection,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     let sort_order = sort_order.unwrap_or("ASC".into());
     let sql = format!(
         r#"
@@ -47,14 +52,14 @@ pub fn select_all(
             ORDER BY {updated_at} {sort_order}, {id} {sort_order}
             LIMIT ?1
         "#,
-        projection = Event::projection(),
+        projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
         updated_at = Columns::UpdatedAt.as_str(),
         id = Columns::Id.as_str(),
     );
     Ok(conn
         .prepare(&sql)?
-        .query_map(params![limit.unwrap_or(i64::MAX)], Event::mapper())?
+        .query_map(params![limit.unwrap_or(i64::MAX)], ElementEvent::mapper())?
         .collect::<Result<Vec<_>, _>>()?)
 }
 
@@ -63,7 +68,7 @@ pub fn select_by_type(
     sort_order: Option<String>,
     limit: Option<i64>,
     conn: &Connection,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     let sort_order = sort_order.unwrap_or("ASC".into());
     let sql = format!(
         r#"
@@ -73,7 +78,7 @@ pub fn select_by_type(
             ORDER BY {updated_at} {sort_order}, {id} {sort_order}
             LIMIT ?2
         "#,
-        projection = Event::projection(),
+        projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
         r#type = Columns::Type.as_str(),
         updated_at = Columns::UpdatedAt.as_str(),
@@ -81,7 +86,10 @@ pub fn select_by_type(
     );
     Ok(conn
         .prepare(&sql)?
-        .query_map(params![r#type, limit.unwrap_or(i64::MAX)], Event::mapper())?
+        .query_map(
+            params![r#type, limit.unwrap_or(i64::MAX)],
+            ElementEvent::mapper(),
+        )?
         .collect::<Result<Vec<_>, _>>()?)
 }
 
@@ -89,7 +97,7 @@ pub fn select_updated_since(
     updated_since: OffsetDateTime,
     limit: Option<i64>,
     conn: &Connection,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     let sql = format!(
         r#"
             SELECT {projection}
@@ -98,7 +106,7 @@ pub fn select_updated_since(
             ORDER BY {updated_at}, {id}
             LIMIT ?2
         "#,
-        projection = Event::projection(),
+        projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
         updated_at = Columns::UpdatedAt.as_str(),
         id = Columns::Id.as_str(),
@@ -107,7 +115,7 @@ pub fn select_updated_since(
         .prepare(&sql)?
         .query_map(
             params![updated_since.format(&Rfc3339)?, limit.unwrap_or(i64::MAX),],
-            Event::mapper(),
+            ElementEvent::mapper(),
         )?
         .collect::<Result<Vec<_>, _>>()?)
 }
@@ -116,7 +124,7 @@ pub fn select_created_between(
     period_start: &OffsetDateTime,
     period_end: &OffsetDateTime,
     conn: &Connection,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     let sql = format!(
         r#"
             SELECT {projection}
@@ -124,7 +132,7 @@ pub fn select_created_between(
             WHERE {created_at} > ?1 AND {created_at} < ?2
             ORDER BY {updated_at}, {id}
         "#,
-        projection = Event::projection(),
+        projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
         created_at = Columns::CreatedAt.as_str(),
         updated_at = Columns::UpdatedAt.as_str(),
@@ -134,13 +142,13 @@ pub fn select_created_between(
         .prepare(&sql)?
         .query_map(
             params![period_start.format(&Rfc3339)?, period_end.format(&Rfc3339)?,],
-            Event::mapper(),
+            ElementEvent::mapper(),
         )?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(res)
 }
 
-pub fn select_by_user(id: i64, limit: i64, conn: &Connection) -> Result<Vec<Event>> {
+pub fn select_by_user(id: i64, limit: i64, conn: &Connection) -> Result<Vec<ElementEvent>> {
     let sql = format!(
         r#"
             SELECT {projection}
@@ -149,33 +157,37 @@ pub fn select_by_user(id: i64, limit: i64, conn: &Connection) -> Result<Vec<Even
             ORDER BY {created_at} DESC
             LIMIT ?2
         "#,
-        projection = Event::projection(),
+        projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
         user_id = Columns::UserId.as_str(),
         created_at = Columns::CreatedAt.as_str(),
     );
     conn.prepare(&sql)?
-        .query_map(params![id, limit], Event::mapper())?
+        .query_map(params![id, limit], ElementEvent::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
 
-pub fn select_by_id(id: i64, conn: &Connection) -> Result<Event> {
+pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementEvent> {
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
             WHERE {id} = ?1
         "#,
-        projection = Event::projection(),
+        projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
         id = Columns::Id.as_str(),
     );
-    conn.query_row(&sql, params![id], Event::mapper())
+    conn.query_row(&sql, params![id], ElementEvent::mapper())
         .map_err(Into::into)
 }
 
-pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> Result<Event> {
+pub fn patch_tags(
+    id: i64,
+    tags: &HashMap<String, Value>,
+    conn: &Connection,
+) -> Result<ElementEvent> {
     let sql = format!(
         r#"
             UPDATE {table}
@@ -191,7 +203,11 @@ pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> 
 }
 
 #[cfg(test)]
-pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) -> Result<Event> {
+pub fn set_updated_at(
+    id: i64,
+    updated_at: OffsetDateTime,
+    conn: &Connection,
+) -> Result<ElementEvent> {
     let sql = format!(
         r#"
             UPDATE {table}

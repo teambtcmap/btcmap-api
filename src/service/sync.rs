@@ -1,6 +1,6 @@
 use crate::db::conf::schema::Conf;
 use crate::db::element::schema::Element;
-use crate::db::event::schema::Event;
+use crate::db::element_event::schema::ElementEvent;
 use crate::service::area_element::Diff;
 use crate::service::osm::OsmElement;
 use crate::service::overpass::OverpassElement;
@@ -81,7 +81,7 @@ pub async fn merge_overpass_elements(
         (OffsetDateTime::now_utc() - created_sync_started_at).as_seconds_f64();
 
     let events_processing_started_at = OffsetDateTime::now_utc();
-    let mut all_events: Vec<Event> = vec![];
+    let mut all_events: Vec<ElementEvent> = vec![];
     all_events.extend(created_element_events);
     all_events.extend(updated_element_events);
     all_events.extend(deleted_element_events);
@@ -129,7 +129,7 @@ pub async fn merge_overpass_elements(
 pub async fn sync_deleted_elements(
     fresh_overpass_elements: &[OverpassElement],
     pool: &Pool,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     info!(
         fresh_overpass_elements = fresh_overpass_elements.len(),
         "Syncing deleted elements"
@@ -167,7 +167,7 @@ async fn mark_element_as_deleted(
     element: &Element,
     fresh_osm_element: &OsmElement,
     pool: &Pool,
-) -> Result<Event> {
+) -> Result<ElementEvent> {
     let mut event_tags: HashMap<String, Value> = HashMap::new();
     event_tags.insert(
         "element_osm_type".into(),
@@ -191,8 +191,9 @@ async fn mark_element_as_deleted(
         .await?;
     }
     let event =
-        db::event::queries_async::insert(fresh_osm_element.uid, element.id, "delete", pool).await?;
-    let event = db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
+        db::element_event::queries_async::insert(fresh_osm_element.uid, element.id, "delete", pool)
+            .await?;
+    let event = db::element_event::queries_async::patch_tags(event.id, event_tags, pool).await?;
     Ok(event)
 }
 
@@ -219,7 +220,7 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<Osm
 pub async fn sync_updated_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
     pool: &Pool,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     let mut res = vec![];
     let cached_elements = db::element::queries_async::select_updated_since(
         OffsetDateTime::UNIX_EPOCH,
@@ -252,14 +253,15 @@ pub async fn sync_updated_elements(
                 fresh_overpass_element.r#type.clone().into(),
             );
             event_tags.insert("element_osm_id".into(), fresh_overpass_element.id.into());
-            let event = db::event::queries_async::insert(
+            let event = db::element_event::queries_async::insert(
                 fresh_overpass_element.uid.unwrap(),
                 cached_element.id,
                 "update",
                 pool,
             )
             .await?;
-            let event = db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
+            let event =
+                db::element_event::queries_async::patch_tags(event.id, event_tags, pool).await?;
             res.push(event);
         }
         let mut updated_element = db::element::queries_async::set_overpass_data(
@@ -291,7 +293,7 @@ pub async fn sync_updated_elements(
 pub async fn sync_new_elements(
     fresh_overpass_elements: &Vec<OverpassElement>,
     pool: &Pool,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     let mut res = vec![];
     let cached_elements = db::element::queries_async::select_updated_since(
         OffsetDateTime::UNIX_EPOCH,
@@ -319,11 +321,16 @@ pub async fn sync_new_elements(
                     element.overpass_data.r#type.clone().into(),
                 );
                 event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
+                let event = db::element_event::queries_async::insert(
+                    user_id.unwrap(),
+                    element.id,
+                    "create",
+                    pool,
+                )
+                .await?;
                 let event =
-                    db::event::queries_async::insert(user_id.unwrap(), element.id, "create", pool)
+                    db::element_event::queries_async::patch_tags(event.id, event_tags, pool)
                         .await?;
-                let event =
-                    db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
                 res.push(event);
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();

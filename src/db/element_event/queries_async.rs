@@ -1,4 +1,4 @@
-use super::{queries, schema::Event};
+use super::{queries, schema::ElementEvent};
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
@@ -10,7 +10,7 @@ pub async fn insert(
     element_id: i64,
     r#type: impl Into<String>,
     pool: &Pool,
-) -> Result<Event> {
+) -> Result<ElementEvent> {
     let r#type = r#type.into();
     pool.get()
         .await?
@@ -22,7 +22,7 @@ pub async fn select_created_between(
     period_start: OffsetDateTime,
     period_end: OffsetDateTime,
     pool: &Pool,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     pool.get()
         .await?
         .interact(move |conn| queries::select_created_between(&period_start, &period_end, conn))
@@ -33,14 +33,14 @@ pub async fn select_all(
     sort_order: Option<String>,
     limit: Option<i64>,
     pool: &Pool,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     pool.get()
         .await?
         .interact(move |conn| queries::select_all(sort_order, limit, conn))
         .await?
 }
 
-pub async fn select_by_user(id: i64, limit: i64, pool: &Pool) -> Result<Vec<Event>> {
+pub async fn select_by_user(id: i64, limit: i64, pool: &Pool) -> Result<Vec<ElementEvent>> {
     pool.get()
         .await?
         .interact(move |conn| queries::select_by_user(id, limit, conn))
@@ -52,7 +52,7 @@ pub async fn select_by_type(
     sort_order: Option<String>,
     limit: Option<i64>,
     pool: &Pool,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     pool.get()
         .await?
         .interact(move |conn| queries::select_by_type(&r#type, sort_order, limit, conn))
@@ -63,21 +63,25 @@ pub async fn select_updated_since(
     updated_since: OffsetDateTime,
     limit: Option<i64>,
     pool: &Pool,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<ElementEvent>> {
     pool.get()
         .await?
         .interact(move |conn| queries::select_updated_since(updated_since, limit, conn))
         .await?
 }
 
-pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Event> {
+pub async fn select_by_id(id: i64, pool: &Pool) -> Result<ElementEvent> {
     pool.get()
         .await?
         .interact(move |conn| queries::select_by_id(id, conn))
         .await?
 }
 
-pub async fn patch_tags(id: i64, tags: HashMap<String, Value>, pool: &Pool) -> Result<Event> {
+pub async fn patch_tags(
+    id: i64,
+    tags: HashMap<String, Value>,
+    pool: &Pool,
+) -> Result<ElementEvent> {
     pool.get()
         .await?
         .interact(move |conn| queries::patch_tags(id, &tags, conn))
@@ -89,7 +93,7 @@ pub async fn set_updated_at(
     id: i64,
     updated_at: time::OffsetDateTime,
     pool: &Pool,
-) -> Result<Event> {
+) -> Result<ElementEvent> {
     pool.get()
         .await?
         .interact(move |conn| queries::set_updated_at(id, updated_at, conn))

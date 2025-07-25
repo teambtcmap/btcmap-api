@@ -1,0 +1,1 @@
+ALTER TABLE event RENAME TO element_event;

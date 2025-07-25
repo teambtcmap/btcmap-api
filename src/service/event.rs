@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::event::schema::Event;
+use crate::db::element_event::schema::ElementEvent;
 use crate::service;
 use crate::service::discord;
 use crate::Result;
@@ -14,7 +14,7 @@ use tracing::info;
 use tracing::warn;
 
 pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
-    for event in db::event::queries_async::select_all(None, None, pool).await? {
+    for event in db::element_event::queries_async::select_all(None, None, pool).await? {
         if event.tags.get("element_osm_type").is_none()
             || event.tags.get("element_osm_id").is_none()
         {
@@ -26,13 +26,13 @@ pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
                 element.overpass_data.r#type.clone().into(),
             );
             event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
-            db::event::queries_async::patch_tags(event.id, event_tags, pool).await?;
+            db::element_event::queries_async::patch_tags(event.id, event_tags, pool).await?;
         }
     }
     Ok(())
 }
 
-pub async fn on_new_event(event: &Event, pool: &Pool) -> Result<()> {
+pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
     service::user::insert_user_if_not_exists(event.user_id, pool).await?;
     let user = db::osm_user::queries_async::select_by_id(event.user_id, pool).await?;
     let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;

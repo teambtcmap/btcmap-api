@@ -1,4 +1,4 @@
-use crate::db::event::schema::Event;
+use crate::db::element_event::schema::ElementEvent;
 use crate::service;
 use crate::{
     db::{
@@ -124,8 +124,9 @@ pub async fn get_trending_areas(
     pool: &Pool,
 ) -> Result<Vec<TrendingArea>> {
     let events =
-        db::event::queries_async::select_created_between(period_start, period_end, pool).await?;
-    let mut areas_to_events: HashMap<i64, Vec<&Event>> = HashMap::new();
+        db::element_event::queries_async::select_created_between(period_start, period_end, pool)
+            .await?;
+    let mut areas_to_events: HashMap<i64, Vec<&ElementEvent>> = HashMap::new();
     for event in &events {
         let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
@@ -179,9 +180,9 @@ pub async fn get_trending_areas(
         .map(|it| {
             areas_to_events.entry(it.id).or_default();
             let events = areas_to_events.get(&it.id).unwrap();
-            let mut created: Vec<&Event> = vec![];
-            let mut updated: Vec<&Event> = vec![];
-            let mut deleted: Vec<&Event> = vec![];
+            let mut created: Vec<&ElementEvent> = vec![];
+            let mut updated: Vec<&ElementEvent> = vec![];
+            let mut deleted: Vec<&ElementEvent> = vec![];
             for event in events {
                 match event.r#type.as_str() {
                     "create" => created.push(event),

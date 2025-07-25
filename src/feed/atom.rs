@@ -1,6 +1,6 @@
 use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
-use crate::db::event::schema::Event;
+use crate::db::element_event::schema::ElementEvent;
 use crate::{db, service, Result};
 use actix_web::{
     get,
@@ -14,14 +14,14 @@ use time::{Duration, OffsetDateTime};
 
 #[get("/new-places")]
 pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
-    let events = db::event::queries_async::select_by_type(
+    let events = db::element_event::queries_async::select_by_type(
         "create".into(),
         Some("DESC".into()),
         Some(100),
         &pool,
     )
     .await?;
-    let mut events_to_elements: Vec<(Event, Element)> = Vec::new();
+    let mut events_to_elements: Vec<(ElementEvent, Element)> = Vec::new();
     for event in events {
         let element_id = event.element_id;
         events_to_elements.push((
@@ -44,7 +44,7 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
     let area_elements = db::area_element::queries_async::select_by_area_id(area.id, &pool).await?;
     let area_element_ids: HashSet<i64> =
         area_elements.into_iter().map(|it| it.element_id).collect();
-    let events = db::event::queries_async::select_updated_since(
+    let events = db::element_event::queries_async::select_updated_since(
         OffsetDateTime::now_utc()
             .checked_sub(Duration::days(180))
             .unwrap(),
@@ -52,11 +52,11 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
         &pool,
     )
     .await?;
-    let events: Vec<Event> = events
+    let events: Vec<ElementEvent> = events
         .into_iter()
         .filter(|it| it.r#type == "create" && area_element_ids.contains(&it.element_id))
         .collect();
-    let mut events_to_elements: Vec<(Event, Element)> = Vec::new();
+    let mut events_to_elements: Vec<(ElementEvent, Element)> = Vec::new();
     for event in events {
         let element_id = event.element_id;
         events_to_elements.push((
@@ -74,7 +74,11 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
         )))
 }
 
-fn events_to_atom_feed(feed_id: &str, feed_title: &str, events: Vec<(Event, Element)>) -> String {
+fn events_to_atom_feed(
+    feed_id: &str,
+    feed_title: &str,
+    events: Vec<(ElementEvent, Element)>,
+) -> String {
     let feed_title = xml_escape(feed_title.into());
     let mut res = String::new();
     res.push_str(r#"<?xml version="1.0" encoding="utf-8"?>"#);
@@ -96,7 +100,7 @@ fn events_to_atom_feed(feed_id: &str, feed_title: &str, events: Vec<(Event, Elem
     res
 }
 
-fn event_to_atom_entry(event: (Event, Element)) -> String {
+fn event_to_atom_entry(event: (ElementEvent, Element)) -> String {
     let event_id = event.0.id;
     let event_created_at = event.0.created_at.format(&Rfc3339).unwrap();
     let element_id = event.1.overpass_data.btcmap_id();
