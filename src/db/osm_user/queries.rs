@@ -1,6 +1,10 @@
 use super::schema;
 use super::schema::Columns;
-use crate::{db::osm_user::schema::OsmUser, service::osm::EditingApiUser, Result};
+use crate::{
+    db::{self, osm_user::schema::OsmUser},
+    service::osm::EditingApiUser,
+    Result,
+};
 use rusqlite::{params, Connection, Row};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -119,10 +123,10 @@ pub fn select_most_active(
                 json_extract(u.{u_osm_data}, '$.img.href'),
                 json_extract(u.{u_osm_data}, '$.description'),
                 count(*) AS edits,
-                (SELECT count(*) FROM event WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'create'),
-                (SELECT count(*) FROM event WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'update'),
-                (SELECT count(*) FROM event WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'delete')
-            FROM event e JOIN {table} u ON u.{u_id} = e.user_id WHERE e.created_at BETWEEN ?1 AND ?2
+                (SELECT count(*) FROM {event_table} WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'create'),
+                (SELECT count(*) FROM {event_table} WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'update'),
+                (SELECT count(*) FROM {event_table} WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'delete')
+            FROM {event_table} e JOIN {table} u ON u.{u_id} = e.user_id WHERE e.created_at BETWEEN ?1 AND ?2
             GROUP BY e.user_id
             ORDER BY edits DESC
             LIMIT ?3
@@ -130,6 +134,7 @@ pub fn select_most_active(
         u_id = Columns::Id.as_str(),
         u_osm_data = Columns::OsmData.as_str(),
         table = schema::NAME,
+        event_table = db::event::schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
         .query_map(

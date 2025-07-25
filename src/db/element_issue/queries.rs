@@ -1,5 +1,5 @@
 use super::schema::{self, Columns, ElementIssue, SelectOrderedBySeverityRow};
-use crate::Result;
+use crate::{db, Result};
 use rusqlite::{named_params, params, Connection};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -85,12 +85,15 @@ pub fn select_ordered_by_severity(
 ) -> Result<Vec<SelectOrderedBySeverityRow>> {
     let area_join = match area_id {
             662 => "".into(),
-            _ => format!("INNER JOIN area_element ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}")
+            _ => format!(
+                "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}", 
+                area_element_table = db::area_element::schema::TABLE_NAME
+            )
         };
     let sql = format!(
         r#"
                 SELECT json_extract(e.overpass_data, '$.type'), json_extract(e.overpass_data, '$.id'), json_extract(e.overpass_data, '$.tags.name'), ei.{code}
-                FROM {table} ei join element e ON e.id = ei.{element_id} {area_join}
+                FROM {table} ei join {element_table} e ON e.id = ei.{element_id} {area_join}
                 WHERE ei.{deleted_at} IS NULL
                 ORDER BY ei.{severity} DESC
                 LIMIT :limit
@@ -101,6 +104,7 @@ pub fn select_ordered_by_severity(
         element_id = Columns::ElementId.as_str(),
         deleted_at = Columns::DeletedAt.as_str(),
         severity = Columns::Severity.as_str(),
+        element_table = db::element::schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
         .query_map(
@@ -132,7 +136,10 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementIssue> {
 pub fn select_count(area_id: i64, include_deleted: bool, conn: &Connection) -> Result<i64> {
     let area_join = match area_id {
             662 => "".into(),
-            _ => format!("INNER JOIN area_element ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}")
+            _ => format!(
+                "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}",
+                area_element_table = db::area_element::schema::TABLE_NAME
+            )
         };
     let sql = if include_deleted {
         format!(
