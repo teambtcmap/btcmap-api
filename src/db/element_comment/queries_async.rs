@@ -15,6 +15,13 @@ pub async fn insert(
         .await?
 }
 
+pub async fn select_latest(limit: i64, pool: &Pool) -> Result<Vec<ElementComment>> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_latest(limit, conn))
+        .await?
+}
+
 pub async fn select_created_between(
     period_start: OffsetDateTime,
     period_end: OffsetDateTime,

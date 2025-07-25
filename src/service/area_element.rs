@@ -4,7 +4,6 @@ use crate::{db, service, Result};
 use deadpool_sqlite::Pool;
 use geo::{Contains, LineString, MultiPolygon, Polygon};
 use geojson::Geometry;
-use rusqlite::Connection;
 use serde::Serialize;
 use time::OffsetDateTime;
 
@@ -89,23 +88,18 @@ pub async fn generate_element_areas_mapping(
     Ok(res)
 }
 
-pub async fn get_elements_within_geometries_async(
+pub async fn get_elements_within_geometries(
     geometries: Vec<Geometry>,
     pool: &Pool,
 ) -> Result<Vec<Element>> {
-    pool.get()
-        .await?
-        .interact(|conn| get_elements_within_geometries(geometries, conn))
-        .await?
-}
-
-pub fn get_elements_within_geometries(
-    geometries: Vec<Geometry>,
-    conn: &Connection,
-) -> Result<Vec<Element>> {
     let mut area_elements: Vec<Element> = vec![];
-    for element in
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, conn)?
+    for element in db::element::queries_async::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?
     {
         for geometry in &geometries {
             match &geometry.value {

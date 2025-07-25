@@ -282,7 +282,7 @@ pub async fn sync_updated_elements(
             )
             .await?;
         }
-        service::element::generate_issues_async(vec![updated_element], pool).await?;
+        service::element::generate_issues(vec![&updated_element], pool).await?;
         //area_element::service::generate_mapping(&vec![updated_element], &sp)?;
     }
     Ok(res)
@@ -341,7 +341,7 @@ pub async fn sync_new_elements(
                     pool,
                 )
                 .await?;
-                service::element::generate_issues_async(vec![element], pool).await?;
+                service::element::generate_issues(vec![&element], pool).await?;
                 //area_element::service::generate_mapping(&vec![element], &sp)?;
             }
         }

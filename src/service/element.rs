@@ -7,7 +7,6 @@ use geo::Contains;
 use geo::LineString;
 use geo::MultiPolygon;
 use geo::Polygon;
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -112,16 +111,6 @@ pub struct GenerateIssuesResult {
     pub affected_elements: i64,
 }
 
-pub async fn generate_issues_async(
-    elements: Vec<Element>,
-    pool: &Pool,
-) -> Result<GenerateIssuesResult> {
-    pool.get()
-        .await?
-        .interact(move |conn| generate_issues(elements.iter().collect(), conn))
-        .await?
-}
-
 impl Issue {
     fn code(&self) -> String {
         match self.description.as_str() {
@@ -147,20 +136,22 @@ impl Issue {
     }
 }
 
-pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<GenerateIssuesResult> {
+pub async fn generate_issues(elements: Vec<&Element>, pool: &Pool) -> Result<GenerateIssuesResult> {
     let started_at = OffsetDateTime::now_utc();
     let mut affected_elements = 0;
     for element in elements {
         let issues = get_issues(element);
-        let old_issues = db::element_issue::queries::select_by_element_id(element.id, conn)?;
+        let old_issues =
+            db::element_issue::queries_async::select_by_element_id(element.id, pool).await?;
         for old_issue in &old_issues {
             let still_exists = issues.iter().find(|it| it.code() == old_issue.code);
             if old_issue.deleted_at.is_none() && still_exists.is_none() {
-                db::element_issue::queries::set_deleted_at(
+                db::element_issue::queries_async::set_deleted_at(
                     old_issue.id,
                     Some(OffsetDateTime::now_utc()),
-                    conn,
-                )?;
+                    pool,
+                )
+                .await?;
             }
         }
         for issue in &issues {
@@ -168,23 +159,26 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
             match old_issue {
                 Some(old_issue) => {
                     if old_issue.deleted_at.is_some() {
-                        db::element_issue::queries::set_deleted_at(old_issue.id, None, conn)?;
+                        db::element_issue::queries_async::set_deleted_at(old_issue.id, None, pool)
+                            .await?;
                     }
                     if old_issue.severity != issue.severity {
-                        db::element_issue::queries::set_severity(
+                        db::element_issue::queries_async::set_severity(
                             old_issue.id,
                             issue.severity,
-                            conn,
-                        )?;
+                            pool,
+                        )
+                        .await?;
                     }
                 }
                 None => {
-                    db::element_issue::queries::insert(
+                    db::element_issue::queries_async::insert(
                         element.id,
                         issue.code(),
                         issue.severity,
-                        conn,
-                    )?;
+                        pool,
+                    )
+                    .await?;
                 }
             }
         }
@@ -194,14 +188,14 @@ pub fn generate_issues(elements: Vec<&Element>, conn: &Connection) -> Result<Gen
         }
         // No current issues found but an element has some old issues which need to be deleted
         if issues.is_empty() && element.tags.contains_key("issues") {
-            db::element::queries::remove_tag(element.id, "issues", conn)?;
+            db::element::queries_async::remove_tag(element.id, "issues", pool).await?;
             affected_elements += 1;
             continue;
         }
         let issues = serde_json::to_value(&issues)?;
         // We should avoid toucing the elements if the issues didn't change
         if element.tag("issues") != &issues {
-            db::element::queries::set_tag(element.id, "issues", &issues, conn)?;
+            db::element::queries_async::set_tag(element.id, "issues", &issues, pool).await?;
             affected_elements += 1;
         }
     }

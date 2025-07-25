@@ -22,11 +22,9 @@ use time::OffsetDateTime;
 // but wat if an element was moved? It could change its area set... TODO
 pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
     let area = db::area::queries_async::insert(tags, pool).await?;
-    let area_elements = service::area_element::get_elements_within_geometries_async(
-        area.geo_json_geometries()?,
-        pool,
-    )
-    .await?;
+    let area_elements =
+        service::area_element::get_elements_within_geometries(area.geo_json_geometries()?, pool)
+            .await?;
     for element in area_elements {
         db::area_element::queries_async::insert(area.id, element.id, pool).await?;
     }
@@ -52,7 +50,7 @@ pub async fn patch_tags(
             affected_element_ids.insert(element.id);
         }
         let area = db::area::queries_async::patch_tags(area.id, tags, pool).await?;
-        let elements_in_new_bounds = service::area_element::get_elements_within_geometries_async(
+        let elements_in_new_bounds = service::area_element::get_elements_within_geometries(
             area.geo_json_geometries()?,
             pool,
         )

@@ -32,6 +32,13 @@ pub async fn select_most_active(
         .await?
 }
 
+pub async fn select_by_id_or_name(id_or_name: String, pool: &Pool) -> Result<OsmUser> {
+    pool.get()
+        .await?
+        .interact(move |conn| super::queries::select_by_id_or_name(&id_or_name, conn))
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<OsmUser> {
     pool.get()
         .await?

@@ -40,6 +40,36 @@ pub async fn select_all(
         .await?
 }
 
+pub async fn select_by_user(id: i64, limit: i64, pool: &Pool) -> Result<Vec<Event>> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_by_user(id, limit, conn))
+        .await?
+}
+
+pub async fn select_by_type(
+    r#type: String,
+    sort_order: Option<String>,
+    limit: Option<i64>,
+    pool: &Pool,
+) -> Result<Vec<Event>> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_by_type(&r#type, sort_order, limit, conn))
+        .await?
+}
+
+pub async fn select_updated_since(
+    updated_since: OffsetDateTime,
+    limit: Option<i64>,
+    pool: &Pool,
+) -> Result<Vec<Event>> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_updated_since(updated_since, limit, conn))
+        .await?
+}
+
 pub async fn patch_tags(id: i64, tags: HashMap<String, Value>, pool: &Pool) -> Result<Event> {
     pool.get()
         .await?

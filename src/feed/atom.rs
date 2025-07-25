@@ -14,29 +14,27 @@ use time::{Duration, OffsetDateTime};
 
 #[get("/new-places")]
 pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
-    let events: Vec<(Event, Element)> = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            db::event::queries::select_by_type("create", Some("DESC".into()), Some(100), conn)
-                .unwrap()
-                .into_iter()
-                .map(|it| {
-                    let cloned_element_id = it.element_id;
-                    (
-                        it,
-                        db::element::queries::select_by_id(cloned_element_id, conn).unwrap(),
-                    )
-                })
-                .collect()
-        })
-        .await?;
+    let events = db::event::queries_async::select_by_type(
+        "create".into(),
+        Some("DESC".into()),
+        Some(100),
+        &pool,
+    )
+    .await?;
+    let mut events_to_elements: Vec<(Event, Element)> = Vec::new();
+    for event in events {
+        let element_id = event.element_id;
+        events_to_elements.push((
+            event,
+            db::element::queries_async::select_by_id(element_id, &pool).await?,
+        ));
+    }
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(events_to_atom_feed(
             "https://api.btcmap.org/feeds/new-places",
             "BTC Map - New Places",
-            events,
+            events_to_elements,
         )))
 }
 
@@ -46,37 +44,33 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
     let area_elements = db::area_element::queries_async::select_by_area_id(area.id, &pool).await?;
     let area_element_ids: HashSet<i64> =
         area_elements.into_iter().map(|it| it.element_id).collect();
-    let mut events: Vec<(Event, Element)> = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            db::event::queries::select_updated_since(
-                OffsetDateTime::now_utc()
-                    .checked_sub(Duration::days(180))
-                    .unwrap(),
-                None,
-                conn,
-            )
-            .unwrap()
-            .into_iter()
-            .filter(|it| it.r#type == "create" && area_element_ids.contains(&it.element_id))
-            .map(|it| {
-                let cloned_element_id = it.element_id;
-                (
-                    it,
-                    db::element::queries::select_by_id(cloned_element_id, conn).unwrap(),
-                )
-            })
-            .collect()
-        })
-        .await?;
-    events.sort_by(|a, b| b.0.updated_at.cmp(&a.0.updated_at));
+    let events = db::event::queries_async::select_updated_since(
+        OffsetDateTime::now_utc()
+            .checked_sub(Duration::days(180))
+            .unwrap(),
+        None,
+        &pool,
+    )
+    .await?;
+    let events: Vec<Event> = events
+        .into_iter()
+        .filter(|it| it.r#type == "create" && area_element_ids.contains(&it.element_id))
+        .collect();
+    let mut events_to_elements: Vec<(Event, Element)> = Vec::new();
+    for event in events {
+        let element_id = event.element_id;
+        events_to_elements.push((
+            event,
+            db::element::queries_async::select_by_id(element_id, &pool).await?,
+        ));
+    }
+    events_to_elements.sort_by(|a, b| b.0.updated_at.cmp(&a.0.updated_at));
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(events_to_atom_feed(
             &format!("https://api.btcmap.org/feeds/new-places?area={}", area.id),
             &format!("BTC Map - New Places in {}", area.name()),
-            events,
+            events_to_elements,
         )))
 }
 
@@ -124,24 +118,16 @@ fn event_to_atom_entry(event: (Event, Element)) -> String {
 
 #[get("/new-comments")]
 pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
-    let comments: Vec<(ElementComment, Element)> = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            db::element_comment::queries::select_latest(100, conn)
-                .unwrap()
-                .into_iter()
-                .map(|it| {
-                    let cloned_element_id = it.element_id;
-                    (
-                        it,
-                        db::element::queries::select_by_id(cloned_element_id, conn).unwrap(),
-                    )
-                })
-                .collect()
-        })
-        .await?;
-    let comments = comments
+    let comments = db::element_comment::queries_async::select_latest(100, &pool).await?;
+    let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
+    for comment in comments {
+        let element_id = comment.element_id;
+        comments_to_elements.push((
+            comment,
+            db::element::queries_async::select_by_id(element_id, &pool).await?,
+        ));
+    }
+    let comments_to_elements = comments_to_elements
         .into_iter()
         .filter(|it| it.0.deleted_at.is_none())
         .collect();
@@ -150,7 +136,7 @@ pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
         .body(comments_to_atom_feed(
             "https://api.btcmap.org/feeds/new-comments",
             "BTC Map - New Comments",
-            comments,
+            comments_to_elements,
         )))
 }
 

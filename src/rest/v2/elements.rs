@@ -73,21 +73,26 @@ pub async fn get(
             Redirect::to("https://static.btcmap.org/api/v2/elements.json").permanent(),
         ));
     }
-    let elements = pool
-        .get()
-        .await?
-        .interact(move |conn| match &args.updated_since {
-            Some(updated_since) => {
-                db::element::queries::select_updated_since(*updated_since, args.limit, true, conn)
-            }
-            None => db::element::queries::select_updated_since(
+    let elements = match &args.updated_since {
+        Some(updated_since) => {
+            db::element::queries_async::select_updated_since(
+                *updated_since,
+                args.limit,
+                true,
+                &pool,
+            )
+            .await?
+        }
+        None => {
+            db::element::queries_async::select_updated_since(
                 OffsetDateTime::UNIX_EPOCH,
                 args.limit,
                 true,
-                conn,
-            ),
-        })
-        .await??;
+                &pool,
+            )
+            .await?
+        }
+    };
     let elements_len = elements.len();
     let res = Either::Left(Json(elements.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
@@ -101,11 +106,8 @@ pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetIte
     let id_parts: Vec<String> = id.split(":").map(|it| it.into()).collect();
     let r#type = id_parts[0].clone();
     let id = id_parts[1].parse::<i64>().map_err(|_| "Invalid ID")?;
-
-    pool.get()
-        .await?
-        .interact(move |conn| db::element::queries::select_by_osm_type_and_id(&r#type, id, conn))
-        .await?
+    db::element::queries_async::select_by_osm_type_and_id(r#type, id, &pool)
+        .await
         .map(Into::into)
 }
 

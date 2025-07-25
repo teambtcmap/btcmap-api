@@ -46,7 +46,7 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
         pool,
     )
     .await?;
-    let res = service::element::generate_issues_async(elements, pool).await?;
+    let res = service::element::generate_issues(elements.iter().collect(), pool).await?;
     discord::send(
         format!(
             "{} generated element issues. Affected elements: {}",

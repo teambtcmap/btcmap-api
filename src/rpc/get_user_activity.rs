@@ -22,35 +22,17 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
-    let cloned_args_id = params.id.clone();
-    let user = pool
-        .get()
-        .await?
-        .interact(move |conn| db::osm_user::queries::select_by_id_or_name(&cloned_args_id, conn))
-        .await??;
-    let events = pool
-        .get()
-        .await?
-        .interact(move |conn| db::event::queries::select_by_user(user.id, params.limit, conn))
-        .await??;
-    let events_elements: Vec<(Event, Element)> = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            events
-                .into_iter()
-                .map(|it| {
-                    let cloned_id = it.element_id;
-                    (
-                        it,
-                        db::element::queries::select_by_id(cloned_id, conn).unwrap(),
-                    )
-                    // TODO remove unwraps
-                })
-                .collect()
-        })
-        .await?;
-    let res = events_elements
+    let user = db::osm_user::queries_async::select_by_id_or_name(params.id, pool).await?;
+    let user_events = db::event::queries_async::select_by_user(user.id, params.limit, pool).await?;
+    let mut user_events_to_elements: Vec<(Event, Element)> = vec![];
+    for event in user_events {
+        let element_id = event.element_id;
+        user_events_to_elements.push((
+            event,
+            db::element::queries_async::select_by_id(element_id, pool).await?,
+        ));
+    }
+    let res = user_events_to_elements
         .into_iter()
         .map(|it| Res {
             date: it.0.created_at,

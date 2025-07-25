@@ -6,6 +6,18 @@ use crate::Result;
 use deadpool_sqlite::Pool;
 use time::OffsetDateTime;
 
+pub async fn insert(
+    element_id: i64,
+    code: String,
+    severity: i64,
+    pool: &Pool,
+) -> Result<ElementIssue> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::insert(element_id, code, severity, conn))
+        .await?
+}
+
 pub async fn select_by_element_id(element_id: i64, pool: &Pool) -> Result<Vec<ElementIssue>> {
     pool.get()
         .await?
@@ -47,6 +59,13 @@ pub async fn select_count(area_id: i64, include_deleted: bool, pool: &Pool) -> R
     pool.get()
         .await?
         .interact(move |conn| queries::select_count(area_id, include_deleted, conn))
+        .await?
+}
+
+pub async fn set_severity(id: i64, severity: i64, pool: &Pool) -> Result<ElementIssue> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::set_severity(id, severity, conn))
         .await?
 }
 

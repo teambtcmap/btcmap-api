@@ -4,7 +4,6 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -30,13 +29,8 @@ pub struct UpdatedElement {
 
 pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let updated_elements = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            generate_element_icons(params.from_element_id, params.to_element_id, conn)
-        })
-        .await??;
+    let updated_elements =
+        generate_element_icons(params.from_element_id, params.to_element_id, pool).await?;
     let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
     discord::send(
         format!(
@@ -55,25 +49,26 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
     })
 }
 
-fn generate_element_icons(
+async fn generate_element_icons(
     from_element_id: i64,
     to_element_id: i64,
-    conn: &Connection,
+    pool: &Pool,
 ) -> Result<Vec<UpdatedElement>> {
     let mut updated_elements = vec![];
     for element_id in from_element_id..=to_element_id {
-        let Ok(element) = db::element::queries::select_by_id(element_id, conn) else {
+        let Ok(element) = db::element::queries_async::select_by_id(element_id, pool).await else {
             continue;
         };
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {
-            db::element::queries::set_tag(
+            db::element::queries_async::set_tag(
                 element.id,
                 "icon:android",
                 &new_icon.clone().into(),
-                conn,
-            )?;
+                pool,
+            )
+            .await?;
             updated_elements.push(UpdatedElement {
                 id: element_id,
                 osm_url: element.osm_url(),
@@ -1691,10 +1686,7 @@ mod test {
             &pool,
         )
         .await?;
-        pool.get()
-            .await?
-            .interact(move |conn| super::generate_element_icons(1, 100, &conn))
-            .await??;
+        super::generate_element_icons(1, 100, &pool).await?;
         let elements = db::element::queries_async::select_updated_since(
             OffsetDateTime::UNIX_EPOCH,
             None,
