@@ -80,13 +80,12 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let reports = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            db::report::queries::select_updated_since(args.updated_since, Some(args.limit), conn)
-        })
-        .await??;
+    let reports = db::report::queries_async::select_updated_since(
+        args.updated_since,
+        Some(args.limit),
+        &pool,
+    )
+    .await?;
     req.extensions_mut()
         .insert(RequestExtension::new(reports.len()));
     Ok(Json(reports.into_iter().map(|it| it.into()).collect()))
@@ -94,11 +93,8 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    let id = id.into_inner();
-    pool.get()
-        .await?
-        .interact(move |conn| db::report::queries::select_by_id(id, conn))
-        .await?
+    db::report::queries_async::select_by_id(*id, &pool)
+        .await
         .map(|it| it.into())
 }
 

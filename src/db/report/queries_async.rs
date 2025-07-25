@@ -2,7 +2,7 @@ use super::{queries, schema::Report};
 use crate::Result;
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
-use time::Date;
+use time::{Date, OffsetDateTime};
 
 pub async fn insert(area_id: i64, date: Date, tags: JsonObject, pool: &Pool) -> Result<Report> {
     pool.get()
@@ -19,6 +19,17 @@ pub async fn select_all(
     pool.get()
         .await?
         .interact(move |conn| queries::select_all(sort_order, limit, conn))
+        .await?
+}
+
+pub async fn select_updated_since(
+    updated_since: OffsetDateTime,
+    limit: Option<i64>,
+    pool: &Pool,
+) -> Result<Vec<Report>> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_updated_since(updated_since, limit, conn))
         .await?
 }
 
@@ -44,6 +55,13 @@ pub async fn select_by_area_id(
     pool.get()
         .await?
         .interact(move |conn| queries::select_by_area_id(area_id, limit, conn))
+        .await?
+}
+
+pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Report> {
+    pool.get()
+        .await?
+        .interact(move |conn| queries::select_by_id(id, conn))
         .await?
 }
 
