@@ -15,6 +15,20 @@ pub async fn insert(
         .await?
 }
 
+pub async fn select_updated_since(
+    updated_since: OffsetDateTime,
+    include_deleted: bool,
+    limit: Option<i64>,
+    pool: &Pool,
+) -> Result<Vec<ElementComment>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            queries::select_updated_since(&updated_since, include_deleted, limit, conn)
+        })
+        .await?
+}
+
 pub async fn select_latest(limit: i64, pool: &Pool) -> Result<Vec<ElementComment>> {
     pool.get()
         .await?

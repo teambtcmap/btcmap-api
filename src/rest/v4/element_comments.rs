@@ -76,18 +76,13 @@ pub async fn get(
     args: Query<Args>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<Item>>, Error> {
-    let items = pool
-        .get()
-        .await?
-        .interact(move |conn| {
-            db::element_comment::queries::select_updated_since(
-                &args.updated_since,
-                args.include_deleted,
-                Some(args.limit),
-                conn,
-            )
-        })
-        .await??;
+    let items = db::element_comment::queries_async::select_updated_since(
+        args.updated_since,
+        args.include_deleted,
+        Some(args.limit),
+        &pool,
+    )
+    .await?;
     req.extensions_mut()
         .insert(RequestExtension::new(items.len()));
     Ok(Json(items.into_iter().map(|it| it.into()).collect()))
