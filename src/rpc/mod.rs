@@ -5,6 +5,7 @@ pub mod analytics;
 pub mod auth;
 pub mod boost_element;
 pub mod element;
+pub mod event;
 pub mod generate_areas_elements_mapping;
 pub mod generate_element_categories;
 pub mod generate_element_icons;

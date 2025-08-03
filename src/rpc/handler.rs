@@ -85,6 +85,11 @@ pub enum RpcMethod {
     Search,
     // analytics
     GetReport,
+    // Event management
+    CreateEvent,
+    GetEvents,
+    GetEvent,
+    DeleteEvent,
 }
 
 impl Role {
@@ -497,6 +502,21 @@ pub async fn handle(
         RpcMethod::GetReport => RpcResponse::from(
             req.id.clone(),
             super::analytics::get_report::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::CreateEvent => RpcResponse::from(
+            req.id.clone(),
+            super::event::create_event::run(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::GetEvents => {
+            RpcResponse::from(req.id.clone(), super::event::get_events::run(&pool).await?)
+        }
+        RpcMethod::GetEvent => RpcResponse::from(
+            req.id.clone(),
+            super::event::get_event::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::DeleteEvent => RpcResponse::from(
+            req.id.clone(),
+            super::event::delete_event::run(params(req.params)?, &pool, &conf).await?,
         ),
     }?;
     Ok(Json(res))
