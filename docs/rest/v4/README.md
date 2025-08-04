@@ -5,7 +5,8 @@ The latest and recommended version of the BTCMap API, offering improved performa
 ## Endpoints  
 
 ### Implemented  
-- **[Places](places.md)** – Fetch places (single or batch).  
+- **[Places](places.md)** – Fetch places (single or batch). 
+- **[Events](events.md)** – Fetch events (single or batch).  
 ### Planned  
 - **[Areas](areas.md)** *(Coming soon)* 
 ### Proposed
