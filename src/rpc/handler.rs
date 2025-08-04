@@ -23,6 +23,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use strum::VariantArray;
+use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -36,7 +37,7 @@ pub struct RpcRequest {
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
     // auth
-    AddAdmin,
+    AddUser,
     GetAdmin,
     ChangePassword,
     CreateApiKey,
@@ -94,6 +95,7 @@ pub enum RpcMethod {
 
 impl Role {
     const ANON_METHODS: &[RpcMethod] = &[
+        RpcMethod::AddUser,
         RpcMethod::ChangePassword,
         RpcMethod::CreateApiKey,
         // Anons can use some paid features so they need to be able to check their invoice status
@@ -274,7 +276,11 @@ pub async fn handle(
         }
     };
 
-    let access_token = extract_access_token(headers, &req.params);
+    let mut access_token = extract_access_token(headers, &req.params);
+    // TODO remove
+    if req.method == RpcMethod::AddUser {
+        access_token.clear();
+    }
 
     if access_token.is_empty() && !Role::ANON_METHODS.contains(&req.method) {
         return Ok(Json(RpcResponse::error(RpcError {
@@ -298,6 +304,8 @@ pub async fn handle(
         }
         Some(user)
     };
+
+    warn!("POST USER");
 
     if req.jsonrpc != "2.0" {
         return Ok(Json(RpcResponse::invalid_request(Value::Null)));
@@ -455,9 +463,9 @@ pub async fn handle(
             req.id.clone(),
             super::auth::create_api_key::run(params(req.params)?, &pool, &conf).await?,
         ),
-        RpcMethod::AddAdmin => RpcResponse::from(
+        RpcMethod::AddUser => RpcResponse::from(
             req.id.clone(),
-            super::admin::add_admin::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
+            super::auth::add_user::run(params(req.params)?, &pool, &conf).await?,
         ),
         RpcMethod::GetAdmin => RpcResponse::from(
             req.id.clone(),

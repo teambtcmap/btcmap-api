@@ -82,19 +82,22 @@ pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> 
     Ok(())
 }
 
-pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<()> {
+pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<User> {
     let sql = format!(
         r#"
             UPDATE {table}
             SET {roles} = json(?1)
             WHERE {id} = ?2
+            RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
         roles = Columns::Roles.as_str(),
         id = Columns::Id.as_str(),
+        projection = User::projection(),
     );
-    conn.execute(&sql, params![serde_json::to_string(roles)?, admin_id])?;
-    Ok(())
+    let params = params![serde_json::to_string(roles)?, admin_id];
+    conn.query_row(&sql, params, User::mapper())
+        .map_err(Into::into)
 }
 
 #[cfg(test)]
