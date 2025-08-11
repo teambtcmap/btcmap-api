@@ -152,6 +152,11 @@ async fn main() -> Result<()> {
                             .service(rest::v4::element_issues::get)
                             .service(rest::v4::element_issues::get_by_id),
                     )
+                    .service(
+                        scope("place-comments")
+                            .service(rest::v4::place_comments::get)
+                            .service(rest::v4::place_comments::get_by_id),
+                    )
                     .service(scope("search").service(rest::v4::search::get)),
             )
     })

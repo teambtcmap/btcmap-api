@@ -1,3 +1,5 @@
+use std::i64;
+
 use crate::db;
 use crate::db::element_comment::schema::ElementComment;
 use crate::log::RequestExtension;
@@ -30,7 +32,7 @@ const fn default_updated_since() -> OffsetDateTime {
 }
 
 const fn default_limit() -> i64 {
-    10
+    i64::MAX
 }
 
 const fn default_include_deleted() -> bool {
