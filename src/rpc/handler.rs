@@ -278,7 +278,7 @@ pub async fn handle(
 
     let mut access_token = extract_access_token(headers, &req.params);
     // TODO remove
-    if req.method == RpcMethod::AddUser {
+    if req.method == RpcMethod::AddUser || req.method == RpcMethod::CreateApiKey {
         access_token.clear();
     }
 
