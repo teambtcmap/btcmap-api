@@ -114,7 +114,7 @@ impl Role {
         RpcMethod::GetMostActiveUsers,
     ];
 
-    const USER_METHODS: &[RpcMethod] = &[];
+    const USER_METHODS: &[RpcMethod] = &[RpcMethod::Whoami];
 
     const ADMIN_METHODS: &[RpcMethod] = &[
         // Admins can set and override custom place tags
