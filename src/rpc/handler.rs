@@ -1,9 +1,8 @@
 use crate::{
     db::{
         self,
-        access_token::schema::{AccessToken, Role},
         conf::schema::Conf,
-        user::schema::User,
+        user::schema::{Role, User},
     },
     Result,
 };
@@ -23,7 +22,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use strum::VariantArray;
-use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -225,20 +223,18 @@ impl RpcResponse {
     }
 }
 
-impl AccessToken {
-    fn allowed_methods(&self) -> HashSet<RpcMethod> {
-        let mut res = HashSet::new();
-        // All anonymous methods are also acessible to authorized users
-        for method in Role::ANON_METHODS {
+fn allowed_methods(roles: &[Role]) -> HashSet<RpcMethod> {
+    let mut res = HashSet::new();
+    // All anonymous methods are also acessible to authorized users
+    for method in Role::ANON_METHODS {
+        res.insert(method.clone());
+    }
+    for role in roles {
+        for method in role.allowed_methods() {
             res.insert(method.clone());
         }
-        for role in &self.roles {
-            for method in role.allowed_methods() {
-                res.insert(method.clone());
-            }
-        }
-        res
     }
+    res
 }
 
 #[post("")]
@@ -295,17 +291,25 @@ pub async fn handle(
     } else {
         let access_token = db::access_token::queries::select_by_secret(access_token, &pool).await?;
         let user = db::user::queries_async::select_by_id(access_token.user_id, &pool).await?;
-        if !access_token.allowed_methods().contains(&req.method) {
-            return Ok(Json(RpcResponse::error(RpcError {
-                code: 1,
-                message: "You don't have permissions to call this method".into(),
-                data: None,
-            })));
+        if access_token.roles.is_empty() {
+            if !allowed_methods(&user.roles).contains(&req.method) {
+                return Ok(Json(RpcResponse::error(RpcError {
+                    code: 1,
+                    message: "You don't have permissions to call this method".into(),
+                    data: None,
+                })));
+            }
+        } else {
+            if !allowed_methods(&access_token.roles).contains(&req.method) {
+                return Ok(Json(RpcResponse::error(RpcError {
+                    code: 1,
+                    message: "You don't have permissions to call this method".into(),
+                    data: None,
+                })));
+            }
         }
         Some(user)
     };
-
-    warn!("POST USER");
 
     if req.jsonrpc != "2.0" {
         return Ok(Json(RpcResponse::invalid_request(Value::Null)));

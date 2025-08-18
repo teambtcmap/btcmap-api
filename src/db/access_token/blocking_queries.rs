@@ -1,5 +1,6 @@
+use super::schema::Columns;
 use super::schema::{self, AccessToken};
-use super::schema::{Columns, Role};
+use crate::db::user::schema::Role;
 use crate::Result;
 use rusqlite::{params, Connection};
 
@@ -98,8 +99,8 @@ pub fn set_roles(token_id: i64, roles: &[Role], conn: &Connection) -> Result<()>
 
 #[cfg(test)]
 mod test {
-    use crate::db::access_token::schema::Role;
     use crate::db::test::conn;
+    use crate::db::user::schema::Role;
     use crate::Result;
 
     #[test]

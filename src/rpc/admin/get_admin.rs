@@ -19,10 +19,11 @@ pub struct Res {
 
 impl From<User> for Res {
     fn from(val: User) -> Self {
+        let allowed_actions: Vec<String> = val.roles.into_iter().map(|it| it.to_string()).collect();
         Self {
             id: val.id,
             name: val.name,
-            allowed_actions: val.roles,
+            allowed_actions,
             created_at: val.created_at,
             updated_at: val.updated_at,
             deleted_at: val.deleted_at,

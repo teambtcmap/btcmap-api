@@ -13,16 +13,17 @@ pub struct Res {
 }
 
 pub async fn run(user: &User) -> Result<Res> {
+    let roles: Vec<String> = user.roles.iter().map(|it| it.to_string()).collect();
     Ok(Res {
         name: user.name.clone(),
-        roles: user.roles.clone(),
+        roles,
         created_at: OffsetDateTime::parse(&user.created_at, &Rfc3339)?,
     })
 }
 
 #[cfg(test)]
 mod test {
-    use crate::db::user::schema::User;
+    use crate::db::user::schema::{Role, User};
     use crate::Result;
     use actix_web::test;
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
@@ -33,7 +34,7 @@ mod test {
             id: 1,
             name: "Test User".to_string(),
             password: "".to_string(),
-            roles: vec!["admin".to_string(), "user".to_string()],
+            roles: vec![Role::Admin, Role::User],
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
@@ -56,7 +57,7 @@ mod test {
             id: 1,
             name: "".into(),
             password: "".to_string(),
-            roles: vec!["admin".to_string(), "user".to_string()],
+            roles: vec![Role::Admin, Role::User],
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,

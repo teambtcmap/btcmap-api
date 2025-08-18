@@ -1,10 +1,15 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::User},
+    db::{
+        self,
+        conf::schema::Conf,
+        user::schema::{Role, User},
+    },
     service::discord,
     Result,
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -19,10 +24,11 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, source_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let new_role = Role::from_str(&params.action)?;
     let target_user = db::user::queries_async::select_by_name(&params.admin, pool).await?;
     let mut roles = target_user.roles;
-    if !roles.contains(&params.action) {
-        roles.push(params.action.clone());
+    if !roles.contains(&new_role) {
+        roles.push(new_role);
     }
     db::user::queries_async::set_roles(target_user.id, &roles, pool).await?;
     discord::send(
@@ -35,6 +41,6 @@ pub async fn run(params: Params, source_user: &User, pool: &Pool, conf: &Conf) -
     );
     Ok(Res {
         name: target_user.name,
-        allowed_actions: roles,
+        allowed_actions: roles.into_iter().map(|it| it.to_string()).collect(),
     })
 }

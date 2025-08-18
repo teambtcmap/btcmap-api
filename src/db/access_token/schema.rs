@@ -1,3 +1,4 @@
+use crate::db::user::schema::Role;
 use rusqlite::Row;
 use serde_json::Value;
 use std::{str::FromStr, sync::OnceLock};
@@ -44,13 +45,6 @@ pub struct AccessToken {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
-pub enum Role {
-    User,
-    Admin,
-    Root,
-}
-
 impl AccessToken {
     pub fn projection() -> &'static str {
         static PROJECTION: OnceLock<String> = OnceLock::new();
@@ -93,28 +87,5 @@ impl AccessToken {
             .into_iter()
             .filter_map(|s| Role::from_str(&s).ok())
             .collect()
-    }
-}
-
-impl FromStr for Role {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "user" => Ok(Role::User),
-            "admin" => Ok(Role::Admin),
-            "root" => Ok(Role::Root),
-            _ => Err(format!("'{}' is not a valid Role", s)),
-        }
-    }
-}
-
-impl ToString for Role {
-    fn to_string(&self) -> String {
-        match self {
-            Role::User => "user".to_string(),
-            Role::Admin => "admin".to_string(),
-            Role::Root => "root".to_string(),
-        }
     }
 }

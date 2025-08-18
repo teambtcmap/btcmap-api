@@ -1,5 +1,10 @@
+use std::str::FromStr;
+
 use crate::{
-    db::{conf::schema::Conf, user::schema::User},
+    db::{
+        conf::schema::Conf,
+        user::schema::{Role, User},
+    },
     service::discord,
     Result,
 };
@@ -19,13 +24,14 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+    let role_to_remove = Role::from_str(&params.action)?;
     let target_user = crate::db::user::queries_async::select_by_name(&params.admin, pool).await?;
-    let roles: Vec<String> = target_user
+    let new_roles: Vec<Role> = target_user
         .roles
         .into_iter()
-        .filter(|it| it != &params.action)
+        .filter(|it| it != &role_to_remove)
         .collect();
-    crate::db::user::queries_async::set_roles(target_user.id, &roles, pool).await?;
+    crate::db::user::queries_async::set_roles(target_user.id, &new_roles, pool).await?;
     let target_user = crate::db::user::queries_async::select_by_id(target_user.id, pool).await?;
     discord::send(
         format!(
@@ -37,6 +43,10 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
     );
     Ok(Res {
         name: target_user.name,
-        allowed_actions: target_user.roles,
+        allowed_actions: target_user
+            .roles
+            .into_iter()
+            .map(|it| it.to_string())
+            .collect(),
     })
 }

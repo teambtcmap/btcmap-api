@@ -1,5 +1,4 @@
 use crate::db;
-use crate::db::access_token::schema::Role;
 use crate::db::conf::schema::Conf;
 use crate::service::discord;
 use crate::Result;
@@ -7,7 +6,6 @@ use argon2::PasswordVerifier;
 use argon2::{Argon2, PasswordHash};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -35,12 +33,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         .verify_password(params.password.as_bytes(), &password_hash)
         .map_err(|_| error_cause_mask)?;
     let token = Uuid::new_v4().to_string();
-    let roles: Vec<Role> = user
-        .roles
-        .iter()
-        .map(|it| Role::from_str(&it).unwrap())
-        .collect();
-    db::access_token::queries::insert(user.id, params.label.clone(), token.clone(), roles, &pool)
+    db::access_token::queries::insert(user.id, params.label.clone(), token.clone(), vec![], &pool)
         .await?;
     let time_passed_ms = (OffsetDateTime::now_utc() - start_time).whole_milliseconds();
     let discord_message = format!(

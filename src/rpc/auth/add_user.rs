@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf},
+    db::{self, conf::schema::Conf, user::schema::Role},
     service::discord,
     Result,
 };
@@ -10,7 +10,6 @@ use argon2::{
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -30,17 +29,8 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         .hash_password(params.password.as_bytes(), &salt)
         .map_err(|e| e.to_string())?
         .to_string();
-    warn!("creating user");
     let user = crate::db::user::queries_async::insert(params.name, password_hash, pool).await?;
-    warn!("created user");
-    warn!("setting roles");
-    let user = db::user::queries_async::set_roles(
-        user.id,
-        &[db::access_token::schema::Role::User.to_string()],
-        pool,
-    )
-    .await?;
-    warn!("roles are set");
+    let user = db::user::queries_async::set_roles(user.id, &[Role::User], pool).await?;
     discord::send(
         format!("New user: {}", user.name),
         discord::Channel::Api,
@@ -48,6 +38,6 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     );
     Ok(Res {
         name: user.name,
-        roles: user.roles,
+        roles: user.roles.into_iter().map(|it| it.to_string()).collect(),
     })
 }

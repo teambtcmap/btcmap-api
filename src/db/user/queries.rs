@@ -1,5 +1,6 @@
 use super::schema::Columns;
 use super::schema::{self, User};
+use crate::db::user::schema::Role;
 use crate::Result;
 use rusqlite::{params, Connection};
 use tracing::warn;
@@ -82,7 +83,7 @@ pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> 
     Ok(())
 }
 
-pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<User> {
+pub fn set_roles(admin_id: i64, roles: &[Role], conn: &Connection) -> Result<User> {
     let sql = format!(
         r#"
             UPDATE {table}
@@ -95,14 +96,18 @@ pub fn set_roles(admin_id: i64, roles: &[String], conn: &Connection) -> Result<U
         id = Columns::Id.as_str(),
         projection = User::projection(),
     );
-    let params = params![serde_json::to_string(roles)?, admin_id];
+    let roles: Vec<String> = roles.iter().map(|role| role.to_string()).collect();
+    let params = params![serde_json::to_string(&roles)?, admin_id];
     conn.query_row(&sql, params, User::mapper())
         .map_err(Into::into)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{db::test::conn, Result};
+    use crate::{
+        db::{test::conn, user::schema::Role},
+        Result,
+    };
 
     #[test]
     fn insert() -> Result<()> {
@@ -153,7 +158,7 @@ mod test {
     fn set_roles() -> Result<()> {
         let conn = conn();
         let admin_id = super::insert("name", "pwd", &conn)?.id;
-        let roles = vec!["action_1".into(), "action_2".into()];
+        let roles = vec![Role::User, Role::Admin];
         super::set_roles(admin_id, &roles, &conn)?;
         assert_eq!(roles, super::select_by_id(admin_id, &conn)?.roles,);
         Ok(())

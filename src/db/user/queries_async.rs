@@ -1,5 +1,5 @@
 use super::schema::User;
-use crate::Result;
+use crate::{db::user::schema::Role, Result};
 use deadpool_sqlite::Pool;
 
 pub async fn insert(
@@ -38,7 +38,7 @@ pub async fn set_password(id: i64, password: impl Into<String>, pool: &Pool) -> 
         .await?
 }
 
-pub async fn set_roles(admin_id: i64, roles: &[String], pool: &Pool) -> Result<User> {
+pub async fn set_roles(admin_id: i64, roles: &[Role], pool: &Pool) -> Result<User> {
     let roles = roles.to_vec();
     pool.get()
         .await?
