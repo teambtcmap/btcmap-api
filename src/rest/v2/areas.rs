@@ -72,8 +72,7 @@ pub async fn get(
             Redirect::to("https://static.btcmap.org/api/v2/areas.json").permanent(),
         ));
     }
-    let areas =
-        db::area::queries_async::select(args.updated_since, true, args.limit, &pool).await?;
+    let areas = db::area::queries::select(args.updated_since, true, args.limit, &pool).await?;
     let areas_len = areas.len();
     let res = Either::Left(Json(areas.into_iter().map(|it| it.into()).collect()));
     req.extensions_mut()
@@ -86,7 +85,7 @@ pub async fn get_by_url_alias(
     url_alias: Path<String>,
     pool: Data<Pool>,
 ) -> Result<Json<GetItem>, Error> {
-    db::area::queries_async::select_by_alias(url_alias.to_string(), &pool)
+    db::area::queries::select_by_alias(url_alias.to_string(), &pool)
         .await
         .map(Into::into)
 }
@@ -117,7 +116,7 @@ mod tests {
     #[test]
     async fn get_one_row() -> Result<()> {
         let pool = pool();
-        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -133,9 +132,9 @@ mod tests {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
-        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
-        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -156,7 +155,7 @@ mod tests {
         let mut tags = Area::mock_tags();
         let area_url_alias = "test";
         tags.insert("url_alias".into(), area_url_alias.into());
-        db::area::queries_async::insert(tags, &pool).await?;
+        db::area::queries::insert(tags, &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))

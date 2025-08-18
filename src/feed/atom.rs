@@ -40,7 +40,7 @@ pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
 
 #[get("/new-places/{area}")]
 pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
-    let area = db::area::queries_async::select_by_id_or_alias(area.to_string(), &pool).await?;
+    let area = db::area::queries::select_by_id_or_alias(area.to_string(), &pool).await?;
     let area_elements = db::area_element::queries_async::select_by_area_id(area.id, &pool).await?;
     let area_element_ids: HashSet<i64> =
         area_elements.into_iter().map(|it| it.element_id).collect();
@@ -146,7 +146,7 @@ pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
 
 #[get("/new-comments/{area}")]
 pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Result<impl Responder> {
-    let area = db::area::queries_async::select_by_id_or_alias(area.to_string(), &pool).await?;
+    let area = db::area::queries::select_by_id_or_alias(area.to_string(), &pool).await?;
     let area_id = area.id;
     let area_name = area.name();
     let comments = service::area::get_comments(&area, false, &pool).await?;

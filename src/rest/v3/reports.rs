@@ -161,7 +161,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let pool = pool();
-        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let report = db::report::queries_async::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
@@ -186,7 +186,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let report_1 = db::report::queries_async::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
@@ -225,7 +225,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
-        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let report_1 = db::report::queries_async::insert(
             area.id,
             OffsetDateTime::now_utc().date(),

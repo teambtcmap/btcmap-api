@@ -52,7 +52,7 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
         info!("Found existing reports for today, aborting");
         return Ok(0);
     }
-    let all_areas = db::area::queries_async::select(None, false, None, pool).await?;
+    let all_areas = db::area::queries::select(None, false, None, pool).await?;
     let all_elements = db::element::queries_async::select_updated_since(
         OffsetDateTime::UNIX_EPOCH,
         None,
@@ -213,7 +213,7 @@ mod test {
         let pool = pool();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
-        db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        db::area::queries::insert(Area::mock_tags(), &pool).await?;
         for _ in 1..100 {
             db::report::queries_async::insert(1, date!(2023 - 11 - 12), Map::new(), &pool).await?;
         }

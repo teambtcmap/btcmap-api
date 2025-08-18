@@ -21,7 +21,7 @@ use time::OffsetDateTime;
 // and if an element was deleted, that's not an issue since we never fully delete elements
 // but wat if an element was moved? It could change its area set... TODO
 pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
-    let area = db::area::queries_async::insert(tags, pool).await?;
+    let area = db::area::queries::insert(tags, pool).await?;
     let area_elements =
         service::area_element::get_elements_within_geometries(area.geo_json_geometries()?, pool)
             .await?;
@@ -39,7 +39,7 @@ pub async fn patch_tags(
     if tags.contains_key("url_alias") {
         return Err("url_alias can't be changed".into());
     }
-    let area = db::area::queries_async::select_by_id_or_alias(area_id_or_alias, pool).await?;
+    let area = db::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
         let mut affected_element_ids: HashSet<i64> = HashSet::new();
         for area_element in
@@ -49,7 +49,7 @@ pub async fn patch_tags(
                 db::element::queries_async::select_by_id(area_element.element_id, pool).await?;
             affected_element_ids.insert(element.id);
         }
-        let area = db::area::queries_async::patch_tags(area.id, tags, pool).await?;
+        let area = db::area::queries::patch_tags(area.id, tags, pool).await?;
         let elements_in_new_bounds = service::area_element::get_elements_within_geometries(
             area.geo_json_geometries()?,
             pool,
@@ -65,7 +65,7 @@ pub async fn patch_tags(
         service::area_element::generate_mapping(&affected_elements, pool).await?;
         Ok(area)
     } else {
-        db::area::queries_async::patch_tags(area.id, tags, pool).await
+        db::area::queries::patch_tags(area.id, tags, pool).await
     }
 }
 
@@ -83,14 +83,14 @@ pub async fn remove_tag_async(
     if tag_name == "geo_json" {
         return Err("geo_json can't be removed".into());
     }
-    let area = db::area::queries_async::select_by_id_or_alias(area_id_or_alias, pool).await?;
-    db::area::queries_async::remove_tag(area.id, tag_name, pool).await
+    let area = db::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
+    db::area::queries::remove_tag(area.id, tag_name, pool).await
 }
 
 pub async fn soft_delete_async(area_id_or_alias: impl Into<String>, pool: &Pool) -> Result<Area> {
     let area_id_or_alias = area_id_or_alias.into();
-    let area = db::area::queries_async::select_by_id_or_alias(area_id_or_alias, pool).await?;
-    db::area::queries_async::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), pool).await
+    let area = db::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
+    db::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), pool).await
 }
 
 #[derive(Serialize)]
@@ -172,7 +172,7 @@ pub async fn get_trending_areas(
     }
     let mut areas: Vec<Area> = vec![];
     for id in area_ids {
-        areas.push(db::area::queries_async::select_by_id(id, pool).await?);
+        areas.push(db::area::queries::select_by_id(id, pool).await?);
     }
     let mut res: Vec<TrendingArea> = areas
         .into_iter()
@@ -248,10 +248,7 @@ mod test {
     async fn insert() -> Result<()> {
         let pool = pool();
         let area = super::insert(Area::mock_tags(), &pool).await?;
-        assert_eq!(
-            area.id,
-            db::area::queries_async::select_by_id(1, &pool).await?.id
-        );
+        assert_eq!(area.id, db::area::queries::select_by_id(1, &pool).await?.id);
         Ok(())
     }
 
@@ -311,13 +308,13 @@ mod test {
     #[test]
     async fn patch_tags() -> Result<()> {
         let pool = pool();
-        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let mut patch_set = Map::new();
         let new_tag_name = "foo";
         let new_tag_value = json!("bar");
         patch_set.insert(new_tag_name.into(), new_tag_value.clone());
         let area = super::patch_tags(&area.id.to_string(), patch_set, &pool).await?;
-        let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
+        let db_area = db::area::queries::select_by_id(area.id, &pool).await?;
         assert_eq!(area.id, db_area.id);
         assert_eq!(new_tag_value, db_area.tags[new_tag_name]);
         Ok(())
@@ -366,7 +363,7 @@ mod test {
                   }
             ),
         );
-        let area = db::area::queries_async::insert(tags.clone(), &pool).await?;
+        let area = db::area::queries::insert(tags.clone(), &pool).await?;
         let area_element_phuket =
             db::area_element::queries_async::insert(area.id, element_in_phuket.id, &pool).await?;
         let area_element_london =
@@ -400,7 +397,7 @@ mod test {
         );
         tags.remove("url_alias");
         let area = super::patch_tags(&area.id.to_string(), tags.clone(), &pool).await?;
-        let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
+        let db_area = db::area::queries::select_by_id(area.id, &pool).await?;
         assert_eq!(area.id, db_area.id);
         assert!(
             db::area_element::queries_async::select_by_id(area_element_phuket.id, &pool)
@@ -472,9 +469,9 @@ mod test {
     #[test]
     async fn soft_delete() -> Result<()> {
         let pool = pool();
-        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         super::soft_delete_async(&area.id.to_string(), &pool).await?;
-        let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
+        let db_area = db::area::queries::select_by_id(area.id, &pool).await?;
         assert!(db_area.deleted_at.is_some());
         Ok(())
     }
@@ -495,9 +492,9 @@ mod test {
             &pool,
         )
         .await?;
-        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         super::soft_delete_async(&area.id.to_string(), &pool).await?;
-        let db_area = db::area::queries_async::select_by_id(area.id, &pool).await?;
+        let db_area = db::area::queries::select_by_id(area.id, &pool).await?;
         assert!(db_area.deleted_at.is_some());
         assert!(db_area.tags.get("areas").is_none());
         Ok(())
@@ -508,7 +505,7 @@ mod test {
         let pool = pool();
         let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
         let comment = db::element_comment::queries_async::insert(element.id, "test", &pool).await?;
-        let area = db::area::queries_async::insert(Area::mock_tags(), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let _area_element =
             db::area_element::queries_async::insert(area.id, element.id, &pool).await?;
         assert_eq!(

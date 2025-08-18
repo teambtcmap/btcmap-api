@@ -75,7 +75,7 @@ pub async fn get(
 
     // search areas by default or if specified
     if args.type_filter.is_none() || args.type_filter.as_ref().map(|s| s.as_str()) == Some("area") {
-        let areas = db::area::queries_async::select_by_search_query(query, &pool)
+        let areas = db::area::queries::select_by_search_query(query, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
 
