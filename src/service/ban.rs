@@ -23,7 +23,7 @@ pub async fn check_if_banned(
         return next.call(req).await;
     };
     let addr = addr.to_owned();
-    let current_ban = db::ban::queries_async::select_by_ip(addr, pool).await?;
+    let current_ban = db::ban::queries::select_by_ip(addr, pool).await?;
     match current_ban {
         Some(current_ban) => {
             Err(actix_web::error::ErrorForbidden(format!(
