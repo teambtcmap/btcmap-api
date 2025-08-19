@@ -21,7 +21,7 @@ pub struct Res {
 }
 
 pub async fn run(pool: &Pool) -> Result<Vec<Res>> {
-    let boosts = db::boost::queries_async::select_all(pool).await?;
+    let boosts = db::boost::queries::select_all(pool).await?;
     Ok(boosts
         .iter()
         .map(|it| Res {

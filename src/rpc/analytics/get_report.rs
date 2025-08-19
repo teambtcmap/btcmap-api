@@ -57,7 +57,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let avg_verification_date_end = OffsetDateTime::parse(avg_verification_date_end, &Rfc3339)?;
     let days_since_verified_end =
         (global_report_end.created_at - avg_verification_date_end).whole_days();
-    let boosts = db::boost::queries_async::select_all(pool).await?;
+    let boosts = db::boost::queries::select_all(pool).await?;
     let boosts: Vec<Boost> = boosts
         .into_iter()
         .filter(|it| it.created_at > params.start && it.created_at < params.end)

@@ -63,6 +63,6 @@ async fn boost(admin_id: i64, id_or_osm_id: &str, days: i64, pool: &Pool) -> Res
         pool,
     )
     .await?;
-    db::boost::queries_async::insert(admin_id, element.id, days, pool).await?;
+    db::boost::queries::insert(admin_id, element.id, days, pool).await?;
     Ok(element)
 }
