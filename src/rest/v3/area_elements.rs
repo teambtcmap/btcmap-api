@@ -66,7 +66,7 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>> {
-    let area_elements = db::area_element::queries_async::select_updated_since(
+    let area_elements = db::area_element::queries::select_updated_since(
         args.updated_since,
         Some(args.limit),
         &pool,
@@ -81,7 +81,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>> {
-    db::area_element::queries_async::select_by_id(*id, &pool)
+    db::area_element::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())
 }
