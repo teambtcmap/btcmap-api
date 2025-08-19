@@ -1,17 +1,10 @@
-use super::schema::{self, Conf};
+use super::{blocking_queries, schema::Conf};
 use crate::Result;
-use rusqlite::Connection;
+use deadpool_sqlite::Pool;
 
-pub fn select(conn: &Connection) -> Result<Conf> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM {table}
-        "#,
-        projection = Conf::projection(),
-        table = schema::TABLE_NAME,
-    );
-    conn.prepare(&sql)?
-        .query_row((), Conf::mapper())
-        .map_err(Into::into)
+pub async fn select(pool: &Pool) -> Result<Conf> {
+    pool.get()
+        .await?
+        .interact(|conn| blocking_queries::select(conn))
+        .await?
 }

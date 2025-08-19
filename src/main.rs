@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
         .await??;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
-    let conf = db::conf::queries_async::select(&pool).await?;
+    let conf = db::conf::queries::select(&pool).await?;
     HttpServer::new(move || {
         App::new()
             .wrap(Log)

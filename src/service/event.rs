@@ -53,7 +53,7 @@ pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
         _ => "".into(),
     };
     info!(message);
-    let conf = db::conf::queries_async::select(pool).await?;
+    let conf = db::conf::queries::select(pool).await?;
     discord::send(message, discord::Channel::OsmChanges, &conf);
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {

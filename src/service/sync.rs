@@ -149,7 +149,7 @@ pub async fn sync_deleted_elements(
     .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
     .collect();
     let mut res = vec![];
-    let conf = db::conf::queries_async::select(pool).await?;
+    let conf = db::conf::queries::select(pool).await?;
     for absent_element in absent_elements {
         let fresh_osm_element = confirm_deleted(
             &absent_element.overpass_data.r#type,
