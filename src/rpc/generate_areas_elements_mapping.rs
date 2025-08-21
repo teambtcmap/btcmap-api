@@ -41,7 +41,7 @@ async fn generate_areas_elements_mapping(
 ) -> Result<Res> {
     let mut elements: Vec<Element> = vec![];
     for element_id in from_element_id..=to_element_id {
-        let Ok(element) = db::element::queries_async::select_by_id(element_id, pool).await else {
+        let Ok(element) = db::element::queries::select_by_id(element_id, pool).await else {
             continue;
         };
         elements.push(element);

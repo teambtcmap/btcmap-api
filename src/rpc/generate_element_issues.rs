@@ -18,13 +18,9 @@ pub struct Res {
 }
 
 pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let elements = db::element::queries_async::select_updated_since(
-        OffsetDateTime::UNIX_EPOCH,
-        None,
-        true,
-        pool,
-    )
-    .await?;
+    let elements =
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
+            .await?;
     for element in elements {
         if element.deleted_at.is_some() {
             let issues =
@@ -39,13 +35,9 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
             }
         }
     }
-    let elements = db::element::queries_async::select_updated_since(
-        OffsetDateTime::UNIX_EPOCH,
-        None,
-        false,
-        pool,
-    )
-    .await?;
+    let elements =
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, false, pool)
+            .await?;
     let res = service::element::generate_issues(elements.iter().collect(), pool).await?;
     discord::send(
         format!(

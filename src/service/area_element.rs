@@ -90,13 +90,9 @@ pub async fn get_elements_within_geometries(
     pool: &Pool,
 ) -> Result<Vec<Element>> {
     let mut area_elements: Vec<Element> = vec![];
-    for element in db::element::queries_async::select_updated_since(
-        OffsetDateTime::UNIX_EPOCH,
-        None,
-        true,
-        pool,
-    )
-    .await?
+    for element in
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
+            .await?
     {
         for geometry in &geometries {
             match &geometry.value {

@@ -45,7 +45,7 @@ pub async fn get(
     let updated_since = args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
     let include_deleted = args.include_deleted.unwrap_or(false);
 
-    let items = db::element::queries_async::select_updated_since(
+    let items = db::element::queries::select_updated_since(
         updated_since,
         args.limit,
         include_deleted,
@@ -80,14 +80,10 @@ pub async fn get_boosted(
     let updated_since = OffsetDateTime::UNIX_EPOCH;
     let include_deleted = false;
 
-    let items = db::element::queries_async::select_updated_since(
-        updated_since,
-        None,
-        include_deleted,
-        &pool,
-    )
-    .await
-    .map_err(|_| RestApiError::database())?;
+    let items =
+        db::element::queries::select_updated_since(updated_since, None, include_deleted, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
 
     req.extensions_mut()
         .insert(RequestExtension::new(items.len()));
@@ -117,7 +113,7 @@ pub async fn get_by_id(
     pool: Data<Pool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
-    db::element::queries_async::select_by_id_or_osm_id(id.into_inner(), &pool)
+    db::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
         .map(|it| Json(service::element::generate_tags(&it, &fields)))
         .map_err(|e| match e {
@@ -146,7 +142,7 @@ impl From<ElementComment> for Comment {
 
 #[get("{id}/comments")]
 pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<Comment>> {
-    let element = db::element::queries_async::select_by_id_or_osm_id(id.as_str(), &pool)
+    let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
@@ -187,7 +183,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -204,12 +200,9 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        let _element_1 =
-            db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
-        let _element_2 =
-            db::element::queries_async::insert(OverpassElement::mock(2), &pool).await?;
-        let _element_3 =
-            db::element::queries_async::insert(OverpassElement::mock(3), &pool).await?;
+        let _element_1 = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let _element_2 = db::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let _element_3 = db::element::queries::insert(OverpassElement::mock(3), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -225,15 +218,11 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
-        let element_1 = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
-        db::element::queries_async::set_updated_at(
-            element_1.id,
-            datetime!(2022-01-05 00:00 UTC),
-            &pool,
-        )
-        .await?;
-        let element_2 = db::element::queries_async::insert(OverpassElement::mock(2), &pool).await?;
-        let _element_2 = db::element::queries_async::set_updated_at(
+        let element_1 = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        db::element::queries::set_updated_at(element_1.id, datetime!(2022-01-05 00:00 UTC), &pool)
+            .await?;
+        let element_2 = db::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let _element_2 = db::element::queries::set_updated_at(
             element_2.id,
             datetime!(2022-02-05 00:00 UTC),
             &pool,
@@ -256,7 +245,7 @@ mod test {
     #[test]
     async fn get_by_id() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))

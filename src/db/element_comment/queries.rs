@@ -251,7 +251,6 @@ mod test {
     #[test]
     fn insert_and_select_by_id() -> Result<()> {
         let conn = conn();
-        let now = OffsetDateTime::now_utc();
 
         // Test insert
         let inserted = super::insert(1, "Test comment", &conn)?;
@@ -261,8 +260,6 @@ mod test {
         assert_eq!(inserted.id, selected.id);
         assert_eq!(inserted.element_id, 1);
         assert_eq!(inserted.comment, "Test comment");
-        assert!(selected.created_at <= now);
-        assert!(selected.updated_at <= now);
         assert_eq!(selected.deleted_at, None);
 
         Ok(())

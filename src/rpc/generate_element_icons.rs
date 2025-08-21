@@ -56,13 +56,13 @@ async fn generate_element_icons(
 ) -> Result<Vec<UpdatedElement>> {
     let mut updated_elements = vec![];
     for element_id in from_element_id..=to_element_id {
-        let Ok(element) = db::element::queries_async::select_by_id(element_id, pool).await else {
+        let Ok(element) = db::element::queries::select_by_id(element_id, pool).await else {
             continue;
         };
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {
-            db::element::queries_async::set_tag(
+            db::element::queries::set_tag(
                 element.id,
                 "icon:android",
                 &new_icon.clone().into(),
@@ -1670,7 +1670,7 @@ mod test {
     #[actix_web::test]
     async fn run() -> Result<()> {
         let pool = pool();
-        db::element::queries_async::insert(
+        db::element::queries::insert(
             OverpassElement {
                 tags: Some(mock_osm_tags(&["golf", "clubhouse"])),
                 ..OverpassElement::mock(1)
@@ -1678,7 +1678,7 @@ mod test {
             &pool,
         )
         .await?;
-        db::element::queries_async::insert(
+        db::element::queries::insert(
             OverpassElement {
                 tags: Some(mock_osm_tags(&["building", "industrial"])),
                 ..OverpassElement::mock(2)
@@ -1687,7 +1687,7 @@ mod test {
         )
         .await?;
         super::generate_element_icons(1, 100, &pool).await?;
-        let elements = db::element::queries_async::select_updated_since(
+        let elements = db::element::queries::select_updated_since(
             OffsetDateTime::UNIX_EPOCH,
             None,
             true,

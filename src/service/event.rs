@@ -19,7 +19,7 @@ pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
             || event.tags.get("element_osm_id").is_none()
         {
             warn!(id = event.id, "Event is not v2 compatible, upgrading");
-            let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
+            let element = db::element::queries::select_by_id(event.element_id, pool).await?;
             let mut event_tags: HashMap<String, Value> = HashMap::new();
             event_tags.insert(
                 "element_osm_type".into(),
@@ -35,7 +35,7 @@ pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
 pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
     service::user::insert_user_if_not_exists(event.user_id, pool).await?;
     let user = db::osm_user::queries_async::select_by_id(event.user_id, pool).await?;
-    let element = db::element::queries_async::select_by_id(event.element_id, pool).await?;
+    let element = db::element::queries::select_by_id(event.element_id, pool).await?;
 
     let message = match event.r#type.as_str() {
         "create" => format!(

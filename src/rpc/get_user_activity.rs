@@ -30,7 +30,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
         let element_id = event.element_id;
         user_events_to_elements.push((
             event,
-            db::element::queries_async::select_by_id(element_id, pool).await?,
+            db::element::queries::select_by_id(element_id, pool).await?,
         ));
     }
     let res = user_events_to_elements

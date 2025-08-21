@@ -53,13 +53,9 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
         return Ok(0);
     }
     let all_areas = db::area::queries::select(None, false, None, pool).await?;
-    let all_elements = db::element::queries_async::select_updated_since(
-        OffsetDateTime::UNIX_EPOCH,
-        None,
-        false,
-        pool,
-    )
-    .await?;
+    let all_elements =
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, false, pool)
+            .await?;
     let mut reports: HashMap<Area, Map<String, Value>> = HashMap::new();
     for area in all_areas {
         let area_elements = service::element::filter_by_area(&all_elements, &area)?;

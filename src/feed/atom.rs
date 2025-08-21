@@ -26,7 +26,7 @@ pub async fn new_places(pool: Data<Pool>) -> Result<impl Responder> {
         let element_id = event.element_id;
         events_to_elements.push((
             event,
-            db::element::queries_async::select_by_id(element_id, &pool).await?,
+            db::element::queries::select_by_id(element_id, &pool).await?,
         ));
     }
     Ok(HttpResponse::Ok()
@@ -61,7 +61,7 @@ pub async fn new_places_for_area(area: Path<String>, pool: Data<Pool>) -> Result
         let element_id = event.element_id;
         events_to_elements.push((
             event,
-            db::element::queries_async::select_by_id(element_id, &pool).await?,
+            db::element::queries::select_by_id(element_id, &pool).await?,
         ));
     }
     events_to_elements.sort_by(|a, b| b.0.updated_at.cmp(&a.0.updated_at));
@@ -128,7 +128,7 @@ pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
         let element_id = comment.element_id;
         comments_to_elements.push((
             comment,
-            db::element::queries_async::select_by_id(element_id, &pool).await?,
+            db::element::queries::select_by_id(element_id, &pool).await?,
         ));
     }
     let comments_to_elements = comments_to_elements
@@ -152,7 +152,7 @@ pub async fn new_comments_for_area(area: Path<String>, pool: Data<Pool>) -> Resu
     let comments = service::area::get_comments(&area, false, &pool).await?;
     let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
     for comment in comments {
-        let element = db::element::queries_async::select_by_id(comment.element_id, &pool).await?;
+        let element = db::element::queries::select_by_id(comment.element_id, &pool).await?;
         if element.deleted_at.is_none() {
             comments_to_elements.push((comment, element));
         }

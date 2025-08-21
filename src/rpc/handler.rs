@@ -653,7 +653,7 @@ mod test {
     #[test]
     async fn anonymous_method_allowed() -> Result<()> {
         let pool = pool();
-        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let conf = Conf {
             paywall_add_element_comment_price_sat: 1,
             paywall_boost_element_30d_price_sat: 2,

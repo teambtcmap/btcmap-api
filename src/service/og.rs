@@ -7,7 +7,7 @@ use staticmap::{tools::IconBuilder, StaticMapBuilder};
 static ICONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/icons");
 
 pub async fn element_og(id: &str, pool: &Pool) -> Result<Vec<u8>> {
-    let Ok(element) = db::element::queries_async::select_by_id_or_osm_id(id, pool).await else {
+    let Ok(element) = db::element::queries::select_by_id_or_osm_id(id, pool).await else {
         return Err("Element not found".into());
     };
     let res = actix_web::web::block(move || {

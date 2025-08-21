@@ -188,14 +188,14 @@ pub async fn generate_issues(elements: Vec<&Element>, pool: &Pool) -> Result<Gen
         }
         // No current issues found but an element has some old issues which need to be deleted
         if issues.is_empty() && element.tags.contains_key("issues") {
-            db::element::queries_async::remove_tag(element.id, "issues", pool).await?;
+            db::element::queries::remove_tag(element.id, "issues", pool).await?;
             affected_elements += 1;
             continue;
         }
         let issues = serde_json::to_value(&issues)?;
         // We should avoid toucing the elements if the issues didn't change
         if element.tag("issues") != &issues {
-            db::element::queries_async::set_tag(element.id, "issues", &issues, pool).await?;
+            db::element::queries::set_tag(element.id, "issues", &issues, pool).await?;
             affected_elements += 1;
         }
     }

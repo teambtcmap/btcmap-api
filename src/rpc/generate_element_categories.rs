@@ -38,13 +38,13 @@ async fn generate_element_categories(
 ) -> Result<Res> {
     let mut changes = 0;
     for element_id in from_element_id..=to_element_id {
-        let Ok(element) = db::element::queries_async::select_by_id(element_id, pool).await else {
+        let Ok(element) = db::element::queries::select_by_id(element_id, pool).await else {
             continue;
         };
         let old_category = element.tag("category").as_str().unwrap_or_default();
         let new_category = element.overpass_data.generate_category();
         if old_category != new_category {
-            db::element::queries_async::set_tag(
+            db::element::queries::set_tag(
                 element.id,
                 "category",
                 &new_category.clone().into(),
@@ -109,7 +109,7 @@ mod test {
 
         let mut tags = Map::new();
         tags.insert("amenity".into(), "atm".into());
-        db::element::queries_async::insert(
+        db::element::queries::insert(
             OverpassElement {
                 tags: Some(tags),
                 ..OverpassElement::mock(1)
@@ -120,7 +120,7 @@ mod test {
 
         let mut tags = Map::new();
         tags.insert("amenity".into(), "cafe".into());
-        db::element::queries_async::insert(
+        db::element::queries::insert(
             OverpassElement {
                 tags: Some(tags),
                 ..OverpassElement::mock(2)
@@ -131,7 +131,7 @@ mod test {
 
         super::generate_element_categories(1, 100, &pool).await?;
 
-        let elements = db::element::queries_async::select_updated_since(
+        let elements = db::element::queries::select_updated_since(
             OffsetDateTime::UNIX_EPOCH,
             None,
             true,

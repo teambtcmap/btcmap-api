@@ -15,13 +15,9 @@ pub struct Res {
 
 pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let elements = db::element::queries_async::select_updated_since(
-        OffsetDateTime::UNIX_EPOCH,
-        None,
-        true,
-        pool,
-    )
-    .await?;
+    let elements =
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
+            .await?;
     let mut elements_affected = 0;
     for element in elements {
         let comments = db::element_comment::queries_async::select_by_element_id(
@@ -37,14 +33,14 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
             if new_len == 0 {
                 // do nothing
             } else {
-                db::element::queries_async::set_tag(element.id, "comments", &new_len.into(), pool)
+                db::element::queries::set_tag(element.id, "comments", &new_len.into(), pool)
                     .await?;
                 elements_affected += 1;
             }
         } else {
             let old_len = old_len.as_i64().unwrap_or(0) as usize;
             if new_len != old_len {
-                db::element::queries_async::set_tag(element.id, "comments", &new_len.into(), pool)
+                db::element::queries::set_tag(element.id, "comments", &new_len.into(), pool)
                     .await?;
                 elements_affected += 1;
             }

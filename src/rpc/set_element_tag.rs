@@ -21,9 +21,9 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
+    let element = db::element::queries::select_by_id(params.element_id, pool).await?;
     let element =
-        db::element::queries_async::set_tag(element.id, &params.tag_name, &params.tag_value, pool)
+        db::element::queries::set_tag(element.id, &params.tag_name, &params.tag_value, pool)
             .await?;
     discord::send(
         format!(

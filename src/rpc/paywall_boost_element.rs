@@ -18,7 +18,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    db::element::queries_async::select_by_id_or_osm_id(&params.element_id, pool).await?;
+    db::element::queries::select_by_id_or_osm_id(&params.element_id, pool).await?;
     let sats = match params.days {
         30 => conf.paywall_boost_element_30d_price_sat,
         90 => conf.paywall_boost_element_90d_price_sat,

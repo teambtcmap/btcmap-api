@@ -92,7 +92,7 @@ pub async fn get(
     if args.type_filter.is_none()
         || args.type_filter.as_ref().map(|s| s.as_str()) == Some("element")
     {
-        let elements = db::element::queries_async::select_by_search_query(query, &pool)
+        let elements = db::element::queries::select_by_search_query(query, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
 
@@ -186,7 +186,7 @@ mod test {
     #[test]
     async fn search_valid_query_returns_results() -> Result<()> {
         let pool = pool();
-        let _element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let _element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -204,8 +204,7 @@ mod test {
     async fn search_with_pagination_works() -> Result<()> {
         let pool = pool();
         for i in 1..=5 {
-            let _element =
-                db::element::queries_async::insert(OverpassElement::mock(i), &pool).await?;
+            let _element = db::element::queries::insert(OverpassElement::mock(i), &pool).await?;
         }
         let app = test::init_service(
             App::new()

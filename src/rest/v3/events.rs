@@ -165,7 +165,7 @@ mod test {
     async fn get_not_empty_array() -> Result<()> {
         let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
-        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let event =
             db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
@@ -186,7 +186,7 @@ mod test {
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
-        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let event_1 =
             db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
         let event_2 =
@@ -211,7 +211,7 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
-        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let event_1 =
             db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
         db::element_event::queries_async::set_updated_at(

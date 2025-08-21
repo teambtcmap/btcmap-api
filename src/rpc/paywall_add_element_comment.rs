@@ -19,8 +19,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let element =
-        db::element::queries_async::select_by_id_or_osm_id(params.element_id, pool).await?;
+    let element = db::element::queries::select_by_id_or_osm_id(params.element_id, pool).await?;
     let comment =
         db::element_comment::queries_async::insert(element.id, &params.comment, pool).await?;
     db::element_comment::queries_async::set_deleted_at(

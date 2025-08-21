@@ -156,7 +156,7 @@ mod test {
     async fn get_one_row() -> Result<()> {
         let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
-        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
             App::new()
@@ -174,7 +174,7 @@ mod test {
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
         db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
-        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         db::element_event::queries_async::insert(1, 1, "", &pool).await?;
         db::element_event::queries_async::insert(1, 1, "", &pool).await?;
         db::element_event::queries_async::insert(1, 1, "", &pool).await?;
@@ -194,7 +194,7 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
         db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
-        db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let event_1 = db::element_event::queries_async::insert(1, 1, "", &pool).await?;
         db::element_event::queries_async::set_updated_at(
             event_1.id,
@@ -228,7 +228,7 @@ mod test {
         let pool = pool();
         let event_id = 1;
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
-        let element = db::element::queries_async::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
             App::new()

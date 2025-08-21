@@ -42,7 +42,7 @@ pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Con
 }
 
 async fn boost(admin_id: i64, id_or_osm_id: &str, days: i64, pool: &Pool) -> Result<Element> {
-    let element = db::element::queries_async::select_by_id_or_osm_id(id_or_osm_id, pool).await?;
+    let element = db::element::queries::select_by_id_or_osm_id(id_or_osm_id, pool).await?;
     let boost_expires = element.tag("boost:expires");
     let boost_expires = match boost_expires {
         Value::String(v) => {
@@ -56,7 +56,7 @@ async fn boost(admin_id: i64, id_or_osm_id: &str, days: i64, pool: &Pool) -> Res
         boost_expires
     };
     let boost_expires = boost_expires.checked_add(Duration::days(days)).unwrap();
-    let element = db::element::queries_async::set_tag(
+    let element = db::element::queries::set_tag(
         element.id,
         "boost:expires",
         &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),

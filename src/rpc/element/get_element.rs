@@ -14,7 +14,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let element = db::element::queries_async::select_by_id(params.id, pool).await?;
+    let element = db::element::queries::select_by_id(params.id, pool).await?;
     Ok(Res {
         element: service::element::generate_tags(&element, service::element::TAGS),
     })

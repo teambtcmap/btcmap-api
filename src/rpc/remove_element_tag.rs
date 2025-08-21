@@ -20,9 +20,8 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let element = db::element::queries_async::select_by_id(params.element_id, pool).await?;
-    let element =
-        db::element::queries_async::remove_tag(element.id, &params.tag_name, pool).await?;
+    let element = db::element::queries::select_by_id(params.element_id, pool).await?;
+    let element = db::element::queries::remove_tag(element.id, &params.tag_name, pool).await?;
     discord::send(
         format!(
             "{} removed tag {} from element {} ({})",
