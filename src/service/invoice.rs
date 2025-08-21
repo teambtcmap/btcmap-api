@@ -34,7 +34,7 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
         return Err("Failed to generate LNBITS invoice".into());
     }
     let lnbits_response: CreateLNbitsInvoiceResponse = lnbits_response.json().await?;
-    let invoice = db::invoice::queries_async::insert(
+    let invoice = db::invoice::queries::insert(
         description,
         amount_sats,
         lnbits_response.payment_hash,
@@ -65,7 +65,7 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<i64> {
         Err("lnbits invoice key is not set")?
     }
     let unpaid_invoices =
-        db::invoice::queries_async::select_by_status(InvoiceStatus::Unpaid, pool).await?;
+        db::invoice::queries::select_by_status(InvoiceStatus::Unpaid, pool).await?;
     let now = OffsetDateTime::now_utc();
     let hour_ago = now.saturating_sub(Duration::hours(1)).format(&Rfc3339)?;
     let unpaid_invoices: Vec<Invoice> = unpaid_invoices
@@ -89,7 +89,7 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<i64> {
         }
         let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
         if lnbits_response.paid {
-            db::invoice::queries_async::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
+            db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
             on_invoice_paid(&invoice, pool).await?;
             affected_invoices.push(invoice);
         }
@@ -118,7 +118,7 @@ pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool>
     }
     let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
     if lnbits_response.paid {
-        db::invoice::queries_async::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
+        db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
         on_invoice_paid(&invoice, pool).await?;
         return Ok(true);
     } else {
@@ -221,7 +221,7 @@ mod test {
     async fn on_invoice_paid_on_unboosted_element() -> Result<()> {
         let pool = pool();
         db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let invoice = db::invoice::queries_async::insert(
+        let invoice = db::invoice::queries::insert(
             "element_boost:1:10",
             0,
             "",
@@ -252,7 +252,7 @@ mod test {
             &pool,
         )
         .await?;
-        let invoice = db::invoice::queries_async::insert(
+        let invoice = db::invoice::queries::insert(
             "element_boost:1:10",
             0,
             "",
