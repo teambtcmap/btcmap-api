@@ -186,9 +186,9 @@ async fn mark_element_as_deleted(
         .await?;
     }
     let event =
-        db::element_event::queries_async::insert(fresh_osm_element.uid, element.id, "delete", pool)
+        db::element_event::queries::insert(fresh_osm_element.uid, element.id, "delete", pool)
             .await?;
-    let event = db::element_event::queries_async::patch_tags(event.id, event_tags, pool).await?;
+    let event = db::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
     Ok(event)
 }
 
@@ -244,15 +244,14 @@ pub async fn sync_updated_elements(
                 fresh_overpass_element.r#type.clone().into(),
             );
             event_tags.insert("element_osm_id".into(), fresh_overpass_element.id.into());
-            let event = db::element_event::queries_async::insert(
+            let event = db::element_event::queries::insert(
                 fresh_overpass_element.uid.unwrap(),
                 cached_element.id,
                 "update",
                 pool,
             )
             .await?;
-            let event =
-                db::element_event::queries_async::patch_tags(event.id, event_tags, pool).await?;
+            let event = db::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
             res.push(event);
         }
         let mut updated_element = db::element::queries::set_overpass_data(
@@ -307,7 +306,7 @@ pub async fn sync_new_elements(
                     element.overpass_data.r#type.clone().into(),
                 );
                 event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
-                let event = db::element_event::queries_async::insert(
+                let event = db::element_event::queries::insert(
                     user_id.unwrap(),
                     element.id,
                     "create",
@@ -315,8 +314,7 @@ pub async fn sync_new_elements(
                 )
                 .await?;
                 let event =
-                    db::element_event::queries_async::patch_tags(event.id, event_tags, pool)
-                        .await?;
+                    db::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
                 res.push(event);
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();

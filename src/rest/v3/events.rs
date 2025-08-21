@@ -105,7 +105,7 @@ pub async fn get(
 ) -> Result<Json<Vec<GetItem>>, Error> {
     let events = match args.updated_since {
         Some(updated_since) => {
-            db::element_event::queries_async::select_updated_since(
+            db::element_event::queries::select_updated_since(
                 updated_since,
                 Some(args.limit.unwrap_or(100)),
                 &pool,
@@ -113,7 +113,7 @@ pub async fn get(
             .await?
         }
         None => {
-            db::element_event::queries_async::select_all(
+            db::element_event::queries::select_all(
                 Some("DESC".into()),
                 Some(args.limit.unwrap_or(100)),
                 &pool,
@@ -128,7 +128,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    db::element_event::queries_async::select_by_id(*id, &pool)
+    db::element_event::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())
 }
@@ -166,8 +166,7 @@ mod test {
         let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let event =
-            db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
+        let event = db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -187,12 +186,9 @@ mod test {
         let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let event_1 =
-            db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
-        let event_2 =
-            db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
-        let _event_3 =
-            db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
+        let event_1 = db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
+        let event_2 = db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
+        let _event_3 = db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -212,17 +208,15 @@ mod test {
         let pool = pool();
         let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let event_1 =
-            db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
-        db::element_event::queries_async::set_updated_at(
+        let event_1 = db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
+        db::element_event::queries::set_updated_at(
             event_1.id,
             datetime!(2022-01-05 00:00 UTC),
             &pool,
         )
         .await?;
-        let event_2 =
-            db::element_event::queries_async::insert(user.id, element.id, "", &pool).await?;
-        let event_2 = db::element_event::queries_async::set_updated_at(
+        let event_2 = db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
+        let event_2 = db::element_event::queries::set_updated_at(
             event_2.id,
             datetime!(2022-02-05 00:00 UTC),
             &pool,

@@ -121,8 +121,7 @@ pub async fn get_trending_areas(
     pool: &Pool,
 ) -> Result<Vec<TrendingArea>> {
     let events =
-        db::element_event::queries_async::select_created_between(period_start, period_end, pool)
-            .await?;
+        db::element_event::queries::select_created_between(period_start, period_end, pool).await?;
     let mut areas_to_events: HashMap<i64, Vec<&ElementEvent>> = HashMap::new();
     for event in &events {
         let element = db::element::queries::select_by_id(event.element_id, pool).await?;
