@@ -23,10 +23,9 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
             .await?;
     for element in elements {
         if element.deleted_at.is_some() {
-            let issues =
-                db::element_issue::queries_async::select_by_element_id(element.id, pool).await?;
+            let issues = db::element_issue::queries::select_by_element_id(element.id, pool).await?;
             for issue in issues {
-                db::element_issue::queries_async::set_deleted_at(
+                db::element_issue::queries::set_deleted_at(
                     issue.id,
                     Some(OffsetDateTime::now_utc()),
                     pool,

@@ -65,7 +65,7 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let items = db::element_issue::queries_async::select_updated_since(
+    let items = db::element_issue::queries::select_updated_since(
         args.updated_since
             .unwrap_or(datetime!(2000-01-01 00:00 UTC)),
         args.limit,
@@ -79,7 +79,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    db::element_issue::queries_async::select_by_id(*id, &pool)
+    db::element_issue::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())
 }

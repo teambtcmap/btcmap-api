@@ -175,15 +175,10 @@ async fn mark_element_as_deleted(
         event_tags.insert("areas".into(), element.tags["areas"].clone());
     }
     db::element::queries::set_deleted_at(element.id, Some(OffsetDateTime::now_utc()), pool).await?;
-    let element_issues =
-        db::element_issue::queries_async::select_by_element_id(element.id, pool).await?;
+    let element_issues = db::element_issue::queries::select_by_element_id(element.id, pool).await?;
     for issue in element_issues {
-        db::element_issue::queries_async::set_deleted_at(
-            issue.id,
-            Some(OffsetDateTime::now_utc()),
-            pool,
-        )
-        .await?;
+        db::element_issue::queries::set_deleted_at(issue.id, Some(OffsetDateTime::now_utc()), pool)
+            .await?;
     }
     let event =
         db::element_event::queries::insert(fresh_osm_element.uid, element.id, "delete", pool)

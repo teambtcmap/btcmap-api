@@ -141,12 +141,11 @@ pub async fn generate_issues(elements: Vec<&Element>, pool: &Pool) -> Result<Gen
     let mut affected_elements = 0;
     for element in elements {
         let issues = get_issues(element);
-        let old_issues =
-            db::element_issue::queries_async::select_by_element_id(element.id, pool).await?;
+        let old_issues = db::element_issue::queries::select_by_element_id(element.id, pool).await?;
         for old_issue in &old_issues {
             let still_exists = issues.iter().find(|it| it.code() == old_issue.code);
             if old_issue.deleted_at.is_none() && still_exists.is_none() {
-                db::element_issue::queries_async::set_deleted_at(
+                db::element_issue::queries::set_deleted_at(
                     old_issue.id,
                     Some(OffsetDateTime::now_utc()),
                     pool,
@@ -159,11 +158,11 @@ pub async fn generate_issues(elements: Vec<&Element>, pool: &Pool) -> Result<Gen
             match old_issue {
                 Some(old_issue) => {
                     if old_issue.deleted_at.is_some() {
-                        db::element_issue::queries_async::set_deleted_at(old_issue.id, None, pool)
+                        db::element_issue::queries::set_deleted_at(old_issue.id, None, pool)
                             .await?;
                     }
                     if old_issue.severity != issue.severity {
-                        db::element_issue::queries_async::set_severity(
+                        db::element_issue::queries::set_severity(
                             old_issue.id,
                             issue.severity,
                             pool,
@@ -172,7 +171,7 @@ pub async fn generate_issues(elements: Vec<&Element>, pool: &Pool) -> Result<Gen
                     }
                 }
                 None => {
-                    db::element_issue::queries_async::insert(
+                    db::element_issue::queries::insert(
                         element.id,
                         issue.code(),
                         issue.severity,
