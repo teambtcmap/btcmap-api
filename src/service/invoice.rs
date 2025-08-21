@@ -145,9 +145,9 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
         }
         let id = id.parse::<i64>().unwrap_or(0);
         if *action == "publish" {
-            let comment = db::element_comment::queries_async::select_by_id(id, pool).await;
+            let comment = db::element_comment::queries::select_by_id(id, pool).await;
             if comment.is_ok() {
-                db::element_comment::queries_async::set_deleted_at(id, None, pool).await?;
+                db::element_comment::queries::set_deleted_at(id, None, pool).await?;
                 discord::send(
                     format!(
                         "Published comment since invoice has been paid: {}",

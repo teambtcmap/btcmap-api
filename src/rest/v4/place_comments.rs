@@ -78,7 +78,7 @@ pub async fn get(
     args: Query<Args>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<Item>>, Error> {
-    let items = db::element_comment::queries_async::select_updated_since(
+    let items = db::element_comment::queries::select_updated_since(
         args.updated_since,
         args.include_deleted,
         Some(args.limit),
@@ -92,7 +92,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<Item>, Error> {
-    db::element_comment::queries_async::select_by_id(*id, &pool)
+    db::element_comment::queries::select_by_id(*id, &pool)
         .await
         .map(Into::into)
 }

@@ -139,7 +139,7 @@ pub async fn get_trending_areas(
         }
     }
     let comments =
-        db::element_comment::queries_async::select_created_between(period_start, period_end, pool)
+        db::element_comment::queries::select_created_between(period_start, period_end, pool)
             .await?;
     let comments: Vec<ElementComment> = comments
         .into_iter()
@@ -218,7 +218,7 @@ pub async fn get_comments(
     let area_elements = db::area_element::queries::select_by_area_id(area.id, pool).await?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
-        for comment in db::element_comment::queries_async::select_by_element_id(
+        for comment in db::element_comment::queries::select_by_element_id(
             area_element.element_id,
             include_deleted,
             i64::MAX,
@@ -496,7 +496,7 @@ mod test {
     async fn get_comments() -> Result<()> {
         let pool = pool();
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let comment = db::element_comment::queries_async::insert(element.id, "test", &pool).await?;
+        let comment = db::element_comment::queries::insert(element.id, "test", &pool).await?;
         let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
         let _area_element = db::area_element::queries::insert(area.id, element.id, &pool).await?;
         assert_eq!(

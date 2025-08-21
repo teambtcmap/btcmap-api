@@ -122,7 +122,7 @@ fn event_to_atom_entry(event: (ElementEvent, Element)) -> String {
 
 #[get("/new-comments")]
 pub async fn new_comments(pool: Data<Pool>) -> Result<impl Responder> {
-    let comments = db::element_comment::queries_async::select_latest(100, &pool).await?;
+    let comments = db::element_comment::queries::select_latest(100, &pool).await?;
     let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
     for comment in comments {
         let element_id = comment.element_id;

@@ -64,7 +64,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         .collect();
     let boosts_total_days = boosts.iter().map(|it| it.duration_days).sum();
     let comments =
-        db::element_comment::queries_async::select_created_between(params.start, params.end, pool)
+        db::element_comment::queries::select_created_between(params.start, params.end, pool)
             .await?;
     let comments: Vec<_> = comments
         .into_iter()

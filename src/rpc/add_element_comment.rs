@@ -19,8 +19,7 @@ pub struct Res {
 
 pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let element = db::element::queries::select_by_id(params.element_id, pool).await?;
-    let comment =
-        db::element_comment::queries_async::insert(element.id, &params.comment, pool).await?;
+    let comment = db::element_comment::queries::insert(element.id, &params.comment, pool).await?;
     discord::send(
         format!(
             "{} added a comment to element {} ({}): {}",
