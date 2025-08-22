@@ -236,7 +236,7 @@ mod test {
     #[test]
     fn insert() -> Result<()> {
         let conn = conn();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "create", &conn)?;
         assert_eq!(event, super::select_by_id(event.id, &conn)?);
@@ -246,7 +246,7 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = conn();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(
             vec![
@@ -262,7 +262,7 @@ mod test {
     #[test]
     fn select_updated_since() -> Result<()> {
         let conn = conn();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event_1 = super::insert(user.id, element.id, "", &conn)?;
         let _event_1 = super::set_updated_at(event_1.id, datetime!(2020-01-01 00:00 UTC), &conn)?;
@@ -280,7 +280,7 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = conn();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
         assert_eq!(event, super::select_by_id(1, &conn)?);
@@ -295,7 +295,7 @@ mod test {
         let tag_1_value_2 = json!("tag_1_value_2");
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
         let mut tags = HashMap::new();
@@ -317,7 +317,7 @@ mod test {
     fn set_updated_at() -> Result<()> {
         let conn = conn();
         let updated_at = OffsetDateTime::now_utc();
-        let user = db::osm_user::queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
         let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
         let event = super::set_updated_at(event.id, updated_at, &conn)?;

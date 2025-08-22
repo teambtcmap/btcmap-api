@@ -20,9 +20,8 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let user = db::osm_user::queries_async::select_by_name(params.user_name.clone(), pool).await?;
-    let user =
-        db::osm_user::queries_async::remove_tag(user.id, params.tag_name.clone(), pool).await?;
+    let user = db::osm_user::queries::select_by_name(params.user_name.clone(), pool).await?;
+    let user = db::osm_user::queries::remove_tag(user.id, params.tag_name.clone(), pool).await?;
     discord::send(
         format!(
             "{} removed tag {} for user {} ({})",

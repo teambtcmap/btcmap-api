@@ -21,8 +21,8 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let user = db::osm_user::queries_async::select_by_name(params.user_name.clone(), pool).await?;
-    let user = db::osm_user::queries_async::set_tag(
+    let user = db::osm_user::queries::select_by_name(params.user_name.clone(), pool).await?;
+    let user = db::osm_user::queries::set_tag(
         user.id,
         params.tag_name.clone(),
         params.tag_value.clone(),

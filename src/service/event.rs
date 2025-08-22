@@ -34,7 +34,7 @@ pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
 
 pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
     service::user::insert_user_if_not_exists(event.user_id, pool).await?;
-    let user = db::osm_user::queries_async::select_by_id(event.user_id, pool).await?;
+    let user = db::osm_user::queries::select_by_id(event.user_id, pool).await?;
     let element = db::element::queries::select_by_id(event.element_id, pool).await?;
 
     let message = match event.r#type.as_str() {
@@ -85,14 +85,14 @@ pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
                         new_osm_data = serde_json::to_string(&new_osm_data)?,
                         "User data changed",
                     );
-                    db::osm_user::queries_async::set_osm_data(user.id, new_osm_data, pool).await?;
+                    db::osm_user::queries::set_osm_data(user.id, new_osm_data, pool).await?;
                 } else {
                     info!("User data didn't change")
                 }
 
                 let now = OffsetDateTime::now_utc();
                 let now: String = now.format(&Rfc3339)?;
-                db::osm_user::queries_async::set_tag(
+                db::osm_user::queries::set_tag(
                     user.id,
                     "osm:sync:date".into(),
                     Value::String(now),
@@ -102,7 +102,7 @@ pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
             }
             None => {
                 warn!(user.osm_data.id, "User no longer exists on OSM");
-                db::osm_user::queries_async::set_tag(
+                db::osm_user::queries::set_tag(
                     user.id,
                     "osm:missing".into(),
                     Value::Bool(true),

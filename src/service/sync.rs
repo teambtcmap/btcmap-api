@@ -380,7 +380,7 @@ mod test {
     #[test]
     async fn insert_user_if_not_exists_when_cached() -> Result<()> {
         let pool = pool();
-        let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        let user = db::osm_user::queries::insert(1, EditingApiUser::mock(), &pool).await?;
         assert!(service::user::insert_user_if_not_exists(user.id, &pool)
             .await
             .is_ok());
@@ -397,11 +397,9 @@ mod test {
                 .await
                 .is_ok()
         );
-        assert!(
-            db::osm_user::queries_async::select_by_id(btc_map_user_id, &pool)
-                .await
-                .is_ok()
-        );
+        assert!(db::osm_user::queries::select_by_id(btc_map_user_id, &pool)
+            .await
+            .is_ok());
         Ok(())
     }
 }

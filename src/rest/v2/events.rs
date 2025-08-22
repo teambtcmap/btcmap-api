@@ -155,7 +155,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let pool = pool();
-        let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        let user = db::osm_user::queries::insert(1, EditingApiUser::mock(), &pool).await?;
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
@@ -173,7 +173,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        db::osm_user::queries::insert(1, EditingApiUser::mock(), &pool).await?;
         db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         db::element_event::queries::insert(1, 1, "", &pool).await?;
         db::element_event::queries::insert(1, 1, "", &pool).await?;
@@ -193,7 +193,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
-        db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        db::osm_user::queries::insert(1, EditingApiUser::mock(), &pool).await?;
         db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let event_1 = db::element_event::queries::insert(1, 1, "", &pool).await?;
         db::element_event::queries::set_updated_at(
@@ -227,7 +227,7 @@ mod test {
     async fn get_by_id() -> Result<()> {
         let pool = pool();
         let event_id = 1;
-        let user = db::osm_user::queries_async::insert(1, EditingApiUser::mock(), &pool).await?;
+        let user = db::osm_user::queries::insert(1, EditingApiUser::mock(), &pool).await?;
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         db::element_event::queries::insert(user.id, element.id, "", &pool).await?;
         let app = test::init_service(
