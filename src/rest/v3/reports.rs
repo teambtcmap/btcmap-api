@@ -80,12 +80,9 @@ pub async fn get(
     args: Query<GetArgs>,
     pool: Data<Pool>,
 ) -> Result<Json<Vec<GetItem>>, Error> {
-    let reports = db::report::queries_async::select_updated_since(
-        args.updated_since,
-        Some(args.limit),
-        &pool,
-    )
-    .await?;
+    let reports =
+        db::report::queries::select_updated_since(args.updated_since, Some(args.limit), &pool)
+            .await?;
     req.extensions_mut()
         .insert(RequestExtension::new(reports.len()));
     Ok(Json(reports.into_iter().map(|it| it.into()).collect()))
@@ -93,7 +90,7 @@ pub async fn get(
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
-    db::report::queries_async::select_by_id(*id, &pool)
+    db::report::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())
 }
@@ -162,7 +159,7 @@ mod test {
     async fn get_not_empty_array() -> Result<()> {
         let pool = pool();
         let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
-        let report = db::report::queries_async::insert(
+        let report = db::report::queries::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
             Map::new(),
@@ -187,21 +184,21 @@ mod test {
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
         let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
-        let report_1 = db::report::queries_async::insert(
+        let report_1 = db::report::queries::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
             Map::new(),
             &pool,
         )
         .await?;
-        let report_2 = db::report::queries_async::insert(
+        let report_2 = db::report::queries::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
             Map::new(),
             &pool,
         )
         .await?;
-        let _report_3 = db::report::queries_async::insert(
+        let _report_3 = db::report::queries::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
             Map::new(),
@@ -226,27 +223,23 @@ mod test {
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
         let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
-        let report_1 = db::report::queries_async::insert(
+        let report_1 = db::report::queries::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
             Map::new(),
             &pool,
         )
         .await?;
-        db::report::queries_async::set_updated_at(
-            report_1.id,
-            datetime!(2022-01-05 00:00 UTC),
-            &pool,
-        )
-        .await?;
-        let report_2 = db::report::queries_async::insert(
+        db::report::queries::set_updated_at(report_1.id, datetime!(2022-01-05 00:00 UTC), &pool)
+            .await?;
+        let report_2 = db::report::queries::insert(
             area.id,
             OffsetDateTime::now_utc().date(),
             Map::new(),
             &pool,
         )
         .await?;
-        let report_2 = db::report::queries_async::set_updated_at(
+        let report_2 = db::report::queries::set_updated_at(
             report_2.id,
             datetime!(2022-02-05 00:00 UTC),
             &pool,
