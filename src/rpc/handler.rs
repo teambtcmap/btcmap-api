@@ -290,7 +290,7 @@ pub async fn handle(
         None
     } else {
         let access_token = db::access_token::queries::select_by_secret(access_token, &pool).await?;
-        let user = db::user::queries_async::select_by_id(access_token.user_id, &pool).await?;
+        let user = db::user::queries::select_by_id(access_token.user_id, &pool).await?;
         if access_token.roles.is_empty() {
             if !allowed_methods(&user.roles).contains(&req.method) {
                 return Ok(Json(RpcResponse::error(RpcError {
@@ -758,7 +758,7 @@ mod test {
     #[test]
     async fn valid_request_with_auth() -> Result<()> {
         let pool = pool();
-        let user = db::user::queries_async::insert("root", "", &pool).await?;
+        let user = db::user::queries::insert("root", "", &pool).await?;
         let _token = db::access_token::queries::insert(
             user.id,
             "".into(),

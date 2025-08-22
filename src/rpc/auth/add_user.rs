@@ -29,8 +29,8 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         .hash_password(params.password.as_bytes(), &salt)
         .map_err(|e| e.to_string())?
         .to_string();
-    let user = crate::db::user::queries_async::insert(params.name, password_hash, pool).await?;
-    let user = db::user::queries_async::set_roles(user.id, &[Role::User], pool).await?;
+    let user = crate::db::user::queries::insert(params.name, password_hash, pool).await?;
+    let user = db::user::queries::set_roles(user.id, &[Role::User], pool).await?;
     discord::send(
         format!("New user: {}", user.name),
         discord::Channel::Api,

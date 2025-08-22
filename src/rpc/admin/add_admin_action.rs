@@ -25,12 +25,12 @@ pub struct Res {
 
 pub async fn run(params: Params, source_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
     let new_role = Role::from_str(&params.action)?;
-    let target_user = db::user::queries_async::select_by_name(&params.admin, pool).await?;
+    let target_user = db::user::queries::select_by_name(&params.admin, pool).await?;
     let mut roles = target_user.roles;
     if !roles.contains(&new_role) {
         roles.push(new_role);
     }
-    db::user::queries_async::set_roles(target_user.id, &roles, pool).await?;
+    db::user::queries::set_roles(target_user.id, &roles, pool).await?;
     discord::send(
         format!(
             "{} added role {} for user {}",

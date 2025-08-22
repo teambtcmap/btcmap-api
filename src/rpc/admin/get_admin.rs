@@ -32,7 +32,7 @@ impl From<User> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    crate::db::user::queries_async::select_by_id(params.id, pool)
+    crate::db::user::queries::select_by_id(params.id, pool)
         .await
         .map(Into::into)
 }
