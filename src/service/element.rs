@@ -375,188 +375,188 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
         .copied()
         .filter(|it| TAGS.contains(it) || it.starts_with("osm:"))
         .collect();
-    if let Some(osm_tags) = &element.overpass_data.tags {
-        for tag in &include_tags {
-            match *tag {
-                "icon" => match element.tags.get("icon:android") {
-                    Some(icon) => {
-                        if icon.is_string() {
-                            res.insert("icon".into(), icon.clone());
-                        } else {
-                            res.insert("icon".into(), "question_mark".into());
-                        }
-                    }
-                    None => {
+    let empty_map = Map::new();
+    let osm_tags = element.overpass_data.tags.as_ref().unwrap_or(&empty_map);
+    for tag in &include_tags {
+        match *tag {
+            "icon" => match element.tags.get("icon:android") {
+                Some(icon) => {
+                    if icon.is_string() {
+                        res.insert("icon".into(), icon.clone());
+                    } else {
                         res.insert("icon".into(), "question_mark".into());
                     }
-                },
-                "boosted_until" => {
-                    if element.tags.contains_key("boost:expires") {
-                        res.insert(
-                            "boosted_until".into(),
-                            element.tags["boost:expires"].clone(),
-                        );
-                    }
                 }
-                "name" => {
-                    let name = element.overpass_data.tag("name");
-                    if name.is_empty() {
-                        res.insert("name".into(), "Unnamed".into());
-                    } else {
-                        res.insert("name".into(), name.into());
-                    }
+                None => {
+                    res.insert("icon".into(), "question_mark".into());
                 }
-                "opening_hours" => {
-                    if !element.overpass_data.tag("opening_hours").is_empty() {
-                        res.insert(
-                            "opening_hours".into(),
-                            element.overpass_data.tag("opening_hours").into(),
-                        );
-                    }
-                }
-                "required_app_url" => {
-                    let required_app_url = element
-                        .overpass_data
-                        .tag("payment:lightning:companion_app_url");
-                    if is_valid_url(required_app_url) {
-                        res.insert("required_app_url".into(), required_app_url.into());
-                    }
-                }
-                "comments" => {
-                    if element.tags.contains_key("comments") {
-                        res.insert("comments".into(), element.tags["comments"].clone());
-                    }
-                }
-                "phone" => {
-                    if !element.overpass_data.tag("phone").is_empty() {
-                        res.insert("phone".into(), element.overpass_data.tag("phone").into());
-                    } else if !element.overpass_data.tag("contact:phone").is_empty() {
-                        res.insert(
-                            "phone".into(),
-                            element.overpass_data.tag("contact:phone").into(),
-                        );
-                    }
-                }
-                "website" => {
-                    if !element.overpass_data.tag("website").is_empty() {
-                        let website = element.overpass_data.tag("website");
-                        if is_valid_url(website) {
-                            res.insert("website".into(), website.into());
-                        }
-                    } else {
-                        let website = element.overpass_data.tag("contact:website");
-                        if is_valid_url(website) {
-                            res.insert("website".into(), website.into());
-                        }
-                    }
-                }
-                "twitter" => {
-                    let twitter = element.overpass_data.tag("contact:twitter");
-                    if is_valid_url(twitter) {
-                        res.insert("twitter".into(), twitter.into());
-                    }
-                }
-                "facebook" => {
-                    let facebook = element.overpass_data.tag("contact:facebook");
-                    if is_valid_url(facebook) {
-                        res.insert("facebook".into(), facebook.into());
-                    }
-                }
-                "instagram" => {
-                    let instagram = element.overpass_data.tag("contact:instagram");
-                    if is_valid_url(instagram) {
-                        res.insert("instagram".into(), instagram.into());
-                    }
-                }
-                "line" => {
-                    let line = element.overpass_data.tag("contact:line");
-                    if is_valid_url(line) {
-                        res.insert("line".into(), line.into());
-                    }
-                }
-                "email" => {
-                    if !element.overpass_data.tag("email").is_empty() {
-                        res.insert("email".into(), element.overpass_data.tag("email").into());
-                    } else if !element.overpass_data.tag("contact:email").is_empty() {
-                        res.insert(
-                            "email".into(),
-                            element.overpass_data.tag("contact:email").into(),
-                        );
-                    }
-                }
-                "address" => {
-                    let mut addr = String::new();
-                    let housenumber = element.overpass_data.tag("addr:housenumber");
-                    if !housenumber.is_empty() {
-                        addr.push_str(housenumber);
-                        addr.push(' ');
-                    }
-                    let street = element.overpass_data.tag("addr:street");
-                    if !street.is_empty() {
-                        addr.push_str(street);
-                        addr.push(' ');
-                    }
-                    let city = element.overpass_data.tag("addr:city");
-                    if !city.is_empty() {
-                        addr.push_str(city);
-                        addr.push(' ');
-                    }
-                    let postcode = element.overpass_data.tag("addr:postcode");
-                    if !postcode.is_empty() {
-                        addr.push_str(postcode);
-                        addr.push(' ');
-                    }
-                    let addr = addr.trim();
-                    if !addr.is_empty() {
-                        res.insert("address".into(), addr.into());
-                    }
-                }
-                "osm_id" => {
-                    res.insert("osm_id".into(), element.overpass_data.btcmap_id().into());
-                }
-                "osm_url" => {
-                    res.insert("osm_url".into(), element.osm_url().into());
-                }
-                "created_at" => {
+            },
+            "boosted_until" => {
+                if element.tags.contains_key("boost:expires") {
                     res.insert(
-                        "created_at".into(),
-                        Value::String(element.created_at.format(&Rfc3339).unwrap_or_default()),
+                        "boosted_until".into(),
+                        element.tags["boost:expires"].clone(),
                     );
                 }
-                "updated_at" => {
+            }
+            "name" => {
+                let name = element.overpass_data.tag("name");
+                if name.is_empty() {
+                    res.insert("name".into(), "Unnamed".into());
+                } else {
+                    res.insert("name".into(), name.into());
+                }
+            }
+            "opening_hours" => {
+                if !element.overpass_data.tag("opening_hours").is_empty() {
                     res.insert(
-                        "updated_at".into(),
-                        Value::String(element.updated_at.format(&Rfc3339).unwrap_or_default()),
+                        "opening_hours".into(),
+                        element.overpass_data.tag("opening_hours").into(),
                     );
                 }
-                "deleted_at" => {
-                    if let Some(deleted_at) = element.deleted_at {
-                        res.insert(
-                            "deleted_at".into(),
-                            Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
-                        );
+            }
+            "required_app_url" => {
+                let required_app_url = element
+                    .overpass_data
+                    .tag("payment:lightning:companion_app_url");
+                if is_valid_url(required_app_url) {
+                    res.insert("required_app_url".into(), required_app_url.into());
+                }
+            }
+            "comments" => {
+                if element.tags.contains_key("comments") {
+                    res.insert("comments".into(), element.tags["comments"].clone());
+                }
+            }
+            "phone" => {
+                if !element.overpass_data.tag("phone").is_empty() {
+                    res.insert("phone".into(), element.overpass_data.tag("phone").into());
+                } else if !element.overpass_data.tag("contact:phone").is_empty() {
+                    res.insert(
+                        "phone".into(),
+                        element.overpass_data.tag("contact:phone").into(),
+                    );
+                }
+            }
+            "website" => {
+                if !element.overpass_data.tag("website").is_empty() {
+                    let website = element.overpass_data.tag("website");
+                    if is_valid_url(website) {
+                        res.insert("website".into(), website.into());
+                    }
+                } else {
+                    let website = element.overpass_data.tag("contact:website");
+                    if is_valid_url(website) {
+                        res.insert("website".into(), website.into());
                     }
                 }
-                "lat" => {
-                    res.insert("lat".into(), json! {element.lat()});
+            }
+            "twitter" => {
+                let twitter = element.overpass_data.tag("contact:twitter");
+                if is_valid_url(twitter) {
+                    res.insert("twitter".into(), twitter.into());
                 }
-                "lon" => {
-                    res.insert("lon".into(), json! {element.lon()});
+            }
+            "facebook" => {
+                let facebook = element.overpass_data.tag("contact:facebook");
+                if is_valid_url(facebook) {
+                    res.insert("facebook".into(), facebook.into());
                 }
-                "verified_at" => {
-                    if let Some(date) = element.overpass_data.verification_date() {
-                        res.insert("verified_at".into(), json! {date.date().to_string()});
+            }
+            "instagram" => {
+                let instagram = element.overpass_data.tag("contact:instagram");
+                if is_valid_url(instagram) {
+                    res.insert("instagram".into(), instagram.into());
+                }
+            }
+            "line" => {
+                let line = element.overpass_data.tag("contact:line");
+                if is_valid_url(line) {
+                    res.insert("line".into(), line.into());
+                }
+            }
+            "email" => {
+                if !element.overpass_data.tag("email").is_empty() {
+                    res.insert("email".into(), element.overpass_data.tag("email").into());
+                } else if !element.overpass_data.tag("contact:email").is_empty() {
+                    res.insert(
+                        "email".into(),
+                        element.overpass_data.tag("contact:email").into(),
+                    );
+                }
+            }
+            "address" => {
+                let mut addr = String::new();
+                let housenumber = element.overpass_data.tag("addr:housenumber");
+                if !housenumber.is_empty() {
+                    addr.push_str(housenumber);
+                    addr.push(' ');
+                }
+                let street = element.overpass_data.tag("addr:street");
+                if !street.is_empty() {
+                    addr.push_str(street);
+                    addr.push(' ');
+                }
+                let city = element.overpass_data.tag("addr:city");
+                if !city.is_empty() {
+                    addr.push_str(city);
+                    addr.push(' ');
+                }
+                let postcode = element.overpass_data.tag("addr:postcode");
+                if !postcode.is_empty() {
+                    addr.push_str(postcode);
+                    addr.push(' ');
+                }
+                let addr = addr.trim();
+                if !addr.is_empty() {
+                    res.insert("address".into(), addr.into());
+                }
+            }
+            "osm_id" => {
+                res.insert("osm_id".into(), element.overpass_data.btcmap_id().into());
+            }
+            "osm_url" => {
+                res.insert("osm_url".into(), element.osm_url().into());
+            }
+            "created_at" => {
+                res.insert(
+                    "created_at".into(),
+                    Value::String(element.created_at.format(&Rfc3339).unwrap_or_default()),
+                );
+            }
+            "updated_at" => {
+                res.insert(
+                    "updated_at".into(),
+                    Value::String(element.updated_at.format(&Rfc3339).unwrap_or_default()),
+                );
+            }
+            "deleted_at" => {
+                if let Some(deleted_at) = element.deleted_at {
+                    res.insert(
+                        "deleted_at".into(),
+                        Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
+                    );
+                }
+            }
+            "lat" => {
+                res.insert("lat".into(), json! {element.lat()});
+            }
+            "lon" => {
+                res.insert("lon".into(), json! {element.lon()});
+            }
+            "verified_at" => {
+                if let Some(date) = element.overpass_data.verification_date() {
+                    res.insert("verified_at".into(), json! {date.date().to_string()});
+                }
+            }
+            unrecognized_tag => {
+                if unrecognized_tag.starts_with("osm:") {
+                    let osm_tag = unrecognized_tag.trim_start_matches("osm:");
+                    if osm_tags.contains_key(osm_tag) {
+                        res.insert(tag.to_string(), osm_tags[osm_tag].clone());
                     }
                 }
-                unrecognized_tag => {
-                    if unrecognized_tag.starts_with("osm:") {
-                        let osm_tag = unrecognized_tag.trim_start_matches("osm:");
-                        if osm_tags.contains_key(osm_tag) {
-                            res.insert(tag.to_string(), osm_tags[osm_tag].clone());
-                        }
-                    }
-                }
-            };
+            }
         }
     }
     res
