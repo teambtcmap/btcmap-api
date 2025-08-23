@@ -1,6 +1,7 @@
 pub mod area;
 pub mod area_element;
 pub mod ban;
+pub mod comment;
 pub mod discord;
 pub mod element;
 pub mod event;

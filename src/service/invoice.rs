@@ -3,7 +3,10 @@ use crate::{
         self,
         invoice::schema::{Invoice, InvoiceStatus},
     },
-    service::discord::{self, Channel},
+    service::{
+        self,
+        discord::{self, Channel},
+    },
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -145,18 +148,18 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
         }
         let id = id.parse::<i64>().unwrap_or(0);
         if *action == "publish" {
-            let comment = db::element_comment::queries::select_by_id(id, pool).await;
-            if comment.is_ok() {
-                db::element_comment::queries::set_deleted_at(id, None, pool).await?;
-                discord::send(
-                    format!(
-                        "Published comment since invoice has been paid: {}",
-                        comment.unwrap().comment,
-                    ),
-                    Channel::Api,
-                    &conf,
-                );
-            }
+            let comment = db::element_comment::queries::select_by_id(id, pool).await?;
+            let element = db::element::queries::select_by_id(comment.element_id, pool).await?;
+            db::element_comment::queries::set_deleted_at(id, None, pool).await?;
+            service::comment::refresh_comment_count_tag(&element, pool).await?;
+            discord::send(
+                format!(
+                    "Published comment since invoice has been paid: {}",
+                    comment.comment,
+                ),
+                Channel::Api,
+                &conf,
+            );
         }
     }
 

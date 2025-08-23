@@ -392,8 +392,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementCommentCounts => RpcResponse::from(
             req.id.clone(),
-            super::element::generate_element_comment_counts::run(&user.unwrap(), &pool, &conf)
-                .await?,
+            super::element::generate_element_comment_counts::run(&pool).await?,
         ),
         // area
         RpcMethod::AddArea => RpcResponse::from(
