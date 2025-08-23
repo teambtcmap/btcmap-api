@@ -43,7 +43,7 @@ pub async fn get(
 ) -> Res<Vec<JsonObject>> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     let updated_since = args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
-    let include_deleted = args.include_deleted.unwrap_or(false);
+    let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
 
     let items = db::element::queries::select_updated_since(
         updated_since,
