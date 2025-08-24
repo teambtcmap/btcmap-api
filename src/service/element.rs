@@ -19,6 +19,20 @@ use time::OffsetDateTime;
 use tracing::info;
 use url::Url;
 
+pub async fn remove_areas_tag(pool: &Pool) -> Result<()> {
+    let elements =
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
+            .await?;
+    info!(elements = elements.len(), "preparing to remove areas tag");
+    for element in elements {
+        if element.tags.contains_key("areas") {
+            info!(element.id, "found legacy areas tag");
+            db::element::queries::remove_tag(element.id, "areas", pool).await?;
+        }
+    }
+    Ok(())
+}
+
 pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
     let geometries = area.geo_json_geometries()?;
     let mut area_elements: Vec<Element> = vec![];
