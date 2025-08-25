@@ -4,6 +4,7 @@ use actix_web::{web, App, HttpServer, ResponseError};
 use db::pool;
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
+use tracing::info;
 mod error;
 use std::env;
 use tracing_subscriber::fmt::Layer;

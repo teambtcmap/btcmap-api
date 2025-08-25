@@ -194,6 +194,31 @@ pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -
     select_by_id(id, conn)
 }
 
+pub fn set_bbox(
+    id: i64,
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+    conn: &Connection,
+) -> Result<Area> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {bbox_west} = ?2, {bbox_south} = ?3, {bbox_east} = ?4, {bbox_north} = ?5
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        bbox_west = Columns::BboxWest.as_str(),
+        bbox_south = Columns::BboxSouth.as_str(),
+        bbox_east = Columns::BboxEast.as_str(),
+        bbox_north = Columns::BboxNorth.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.execute(&sql, params![id, west, south, east, north])?;
+    select_by_id(id, conn)
+}
+
 pub fn set_deleted_at(
     id: i64,
     deleted_at: Option<OffsetDateTime>,

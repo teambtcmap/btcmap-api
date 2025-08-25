@@ -17,18 +17,27 @@ use tracing::info;
 pub async fn generate_bbox(pool: &Pool) -> Result<()> {
     let areas = db::area::queries::select(None, true, None, pool).await?;
     for area in areas {
-        if area.bbox_west == 0.0
-            && area.bbox_south == 0.0
-            && area.bbox_east == 0.0
-            && area.bbox_north == 0.0
+        if area.alias != "earth"
+            && area.bbox_west == -180.0
+            && area.bbox_south == -90.0
+            && area.bbox_east == 180.0
+            && area.bbox_north == 90.0
         {
             info!(
                 area.id,
                 area.alias, "found an area without bbox, generating..."
             );
             let bbox = area.geo_json()?.bbox().unwrap();
-            let message = format!("generated bbox: {:?}", bbox);
-            info!(message);
+            let abs = (bbox[0] - bbox[2]).abs();
+            if abs > 300.0 {
+                info!(area.alias, abs, "suspicious area, using catch-all bbox");
+                let message = format!("bbox: {:?}", bbox);
+                info!(message);
+                db::area::queries::set_bbox(area.id, -180.0, -90.0, 180.0, 90.0, pool).await?;
+            } else {
+                db::area::queries::set_bbox(area.id, bbox[0], bbox[1], bbox[2], bbox[3], pool)
+                    .await?;
+            }
         }
     }
     Ok(())

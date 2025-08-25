@@ -80,6 +80,20 @@ pub async fn set_updated_at(id: i64, updated_at: OffsetDateTime, pool: &Pool) ->
         .await?
 }
 
+pub async fn set_bbox(
+    id: i64,
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+    pool: &Pool,
+) -> Result<Area> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_bbox(id, west, south, east, north, conn))
+        .await?
+}
+
 pub async fn set_deleted_at(
     id: i64,
     deleted_at: Option<OffsetDateTime>,

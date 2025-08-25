@@ -71,9 +71,23 @@ pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<El
 
 pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a Area>> {
     let mut element_areas = vec![];
+    let mut rough_matches = 0;
 
     for area in areas {
         if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
+            continue;
+        }
+
+        let lat = element.lat();
+        let lon = element.lon();
+
+        if lon > area.bbox_west
+            && lon < area.bbox_east
+            && lat > area.bbox_south
+            && lat < area.bbox_north
+        {
+            rough_matches += 1;
+        } else {
             continue;
         }
 
@@ -107,6 +121,7 @@ pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a
         }
     }
 
+    info!(element.id, element.name = element.name(), rough_matches);
     Ok(element_areas)
 }
 
