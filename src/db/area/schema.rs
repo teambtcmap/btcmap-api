@@ -9,6 +9,10 @@ pub const TABLE_NAME: &str = "area";
 pub enum Columns {
     Id,
     Alias,
+    BboxWest,
+    BboxSouth,
+    BboxEast,
+    BboxNorth,
     Tags,
     CreatedAt,
     UpdatedAt,
@@ -20,6 +24,10 @@ impl Columns {
         match self {
             Columns::Id => "id",
             Columns::Alias => "alias",
+            Columns::BboxWest => "bbox_west",
+            Columns::BboxSouth => "bbox_south",
+            Columns::BboxEast => "bbox_east",
+            Columns::BboxNorth => "bbox_north",
             Columns::Tags => "tags",
             Columns::CreatedAt => "created_at",
             Columns::UpdatedAt => "updated_at",
@@ -28,10 +36,14 @@ impl Columns {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq)]
 pub struct Area {
     pub id: i64,
     pub alias: String,
+    pub bbox_west: f64,
+    pub bbox_south: f64,
+    pub bbox_east: f64,
+    pub bbox_north: f64,
     pub tags: Map<String, Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
@@ -43,6 +55,10 @@ impl Area {
         [
             Columns::Id,
             Columns::Alias,
+            Columns::BboxWest,
+            Columns::BboxSouth,
+            Columns::BboxEast,
+            Columns::BboxNorth,
             Columns::Tags,
             Columns::CreatedAt,
             Columns::UpdatedAt,
@@ -56,14 +72,18 @@ impl Area {
 
     pub fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
         |row: &Row| -> rusqlite::Result<Area> {
-            let tags: String = row.get(2)?;
+            let tags: String = row.get(Columns::Tags.as_str())?;
             Ok(Area {
-                id: row.get(0)?,
-                alias: row.get(1)?,
+                id: row.get(Columns::Id.as_str())?,
+                alias: row.get(Columns::Alias.as_str())?,
+                bbox_west: row.get(Columns::BboxWest.as_str())?,
+                bbox_south: row.get(Columns::BboxSouth.as_str())?,
+                bbox_east: row.get(Columns::BboxEast.as_str())?,
+                bbox_north: row.get(Columns::BboxNorth.as_str())?,
                 tags: serde_json::from_str(&tags).unwrap(),
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
+                created_at: row.get(Columns::CreatedAt.as_str())?,
+                updated_at: row.get(Columns::UpdatedAt.as_str())?,
+                deleted_at: row.get(Columns::DeletedAt.as_str())?,
             })
         }
     }
@@ -82,6 +102,12 @@ impl Area {
             .map(|it| it.as_str().unwrap_or_default())
             .unwrap_or_default()
             .into()
+    }
+
+    pub fn geo_json(&self) -> Result<GeoJson> {
+        let geo_json = self.tags["geo_json"].clone();
+        let geo_json: GeoJson = serde_json::to_string(&geo_json)?.parse()?;
+        Ok(geo_json)
     }
 
     pub fn geo_json_geometries(&self) -> Result<Vec<Geometry>> {

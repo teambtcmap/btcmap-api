@@ -56,15 +56,15 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
     let all_elements =
         db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, false, pool)
             .await?;
-    let mut reports: HashMap<Area, Map<String, Value>> = HashMap::new();
+    let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
     for area in all_areas {
         let area_elements = service::element::filter_by_area(&all_elements, &area)?;
         if let Some(report) = generate_new_report_if_necessary(&area, area_elements, pool).await? {
-            reports.insert(area, report);
+            reports.insert(area.id, report);
         }
     }
-    for (area, report) in &reports {
-        insert_report(area.id, report, pool).await?;
+    for (area_id, report) in &reports {
+        insert_report(*area_id, report, pool).await?;
     }
     Ok(reports.len())
 }

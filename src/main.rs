@@ -33,6 +33,7 @@ async fn main() -> Result<()> {
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
     service::element::remove_areas_tag(&pool).await?;
+    service::area::generate_bbox(&pool).await?;
     let conf = db::conf::queries::select(&pool).await?;
     HttpServer::new(move || {
         App::new()

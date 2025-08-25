@@ -7,10 +7,32 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
+use geojson::{Feature, FeatureCollection, GeoJson, Geometry};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
+use tracing::info;
+
+pub async fn generate_bbox(pool: &Pool) -> Result<()> {
+    let areas = db::area::queries::select(None, true, None, pool).await?;
+    for area in areas {
+        if area.bbox_west == 0.0
+            && area.bbox_south == 0.0
+            && area.bbox_east == 0.0
+            && area.bbox_north == 0.0
+        {
+            info!(
+                area.id,
+                area.alias, "found an area without bbox, generating..."
+            );
+            let bbox = area.geo_json()?.bbox().unwrap();
+            let message = format!("generated bbox: {:?}", bbox);
+            info!(message);
+        }
+    }
+    Ok(())
+}
 
 // it can take a long time to find area_elements
 // let's say it takes 10 minutes
@@ -229,6 +251,112 @@ pub async fn get_comments(
         }
     }
     Ok(comments)
+}
+
+trait BboxGenerator {
+    fn bbox(&self) -> Option<Vec<f64>>;
+}
+
+impl BboxGenerator for GeoJson {
+    fn bbox(&self) -> Option<Vec<f64>> {
+        match self {
+            GeoJson::Feature(feature) => feature.bbox(),
+            GeoJson::FeatureCollection(collection) => collection.bbox(),
+            GeoJson::Geometry(geometry) => geometry.bbox(),
+        }
+    }
+}
+
+impl BboxGenerator for Feature {
+    fn bbox(&self) -> Option<Vec<f64>> {
+        self.geometry.as_ref().and_then(|geom| geom.bbox())
+    }
+}
+
+impl BboxGenerator for FeatureCollection {
+    fn bbox(&self) -> Option<Vec<f64>> {
+        self.features
+            .iter()
+            .filter_map(|feature| feature.bbox())
+            .reduce(|acc, bbox| {
+                vec![
+                    acc[0].min(bbox[0]),
+                    acc[1].min(bbox[1]),
+                    acc[2].max(bbox[2]),
+                    acc[3].max(bbox[3]),
+                ]
+            })
+    }
+}
+
+impl BboxGenerator for Geometry {
+    fn bbox(&self) -> Option<Vec<f64>> {
+        match &self.value {
+            geojson::Value::Point(coords) => Some(vec![coords[0], coords[1], coords[0], coords[1]]),
+            geojson::Value::MultiPoint(points) => {
+                coordinates_bbox(points.iter().flatten().cloned())
+            }
+            geojson::Value::LineString(line) => coordinates_bbox(line.iter().flatten().cloned()),
+            geojson::Value::MultiLineString(lines) => {
+                coordinates_bbox(lines.iter().flat_map(|line| line.iter()).flatten().cloned())
+            }
+            geojson::Value::Polygon(polygon) => coordinates_bbox(
+                polygon
+                    .iter()
+                    .flat_map(|ring| ring.iter())
+                    .flatten()
+                    .cloned(),
+            ),
+            geojson::Value::MultiPolygon(polygons) => coordinates_bbox(
+                polygons
+                    .iter()
+                    .flat_map(|poly| poly.iter())
+                    .flat_map(|ring| ring.iter())
+                    .flatten()
+                    .cloned(),
+            ),
+            geojson::Value::GeometryCollection(geometries) => geometries
+                .iter()
+                .filter_map(|geom| geom.bbox())
+                .reduce(|acc, bbox| {
+                    vec![
+                        acc[0].min(bbox[0]),
+                        acc[1].min(bbox[1]),
+                        acc[2].max(bbox[2]),
+                        acc[3].max(bbox[3]),
+                    ]
+                }),
+        }
+    }
+}
+
+fn coordinates_bbox<I>(coords: I) -> Option<Vec<f64>>
+where
+    I: Iterator<Item = f64>,
+{
+    let (min_x, min_y, max_x, max_y) = coords
+        .collect::<Vec<f64>>()
+        .chunks(2)
+        .filter(|chunk| chunk.len() == 2)
+        .fold(
+            (
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ),
+            |(min_x, min_y, max_x, max_y), chunk| {
+                let x = chunk[0];
+                let y = chunk[1];
+                (min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y))
+            },
+        );
+
+    if min_x.is_finite() {
+        Some(vec![min_x, min_y, max_x, max_y])
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
