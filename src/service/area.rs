@@ -78,6 +78,7 @@ pub async fn patch_tags(
             affected_element_ids.insert(element.id);
         }
         let area = db::area::queries::patch_tags(area.id, tags, pool).await?;
+        let area = db::area::queries::set_bbox(area.id, -180.0, -90.0, 180.0, 90.0, pool).await?;
         let elements_in_new_bounds = service::area_element::get_elements_within_geometries(
             area.geo_json_geometries()?,
             pool,
