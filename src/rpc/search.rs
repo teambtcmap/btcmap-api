@@ -24,7 +24,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
             id: it.id,
         })
         .collect();
-    let elements = db::element::queries::select_by_search_query(params.query, pool).await?;
+    let elements = db::element::queries::select_by_search_query(&params.query, pool).await?;
     let mut res_elements: Vec<Res> = elements
         .into_iter()
         .map(|it| Res {
@@ -33,8 +33,26 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
             id: it.id,
         })
         .collect();
+    let events = db::event::queries::select_all(pool).await?;
+    let events: Vec<_> = events
+        .into_iter()
+        .filter(|it| {
+            it.name
+                .to_uppercase()
+                .contains(&params.query.to_uppercase())
+        })
+        .collect();
+    let mut res_events: Vec<Res> = events
+        .into_iter()
+        .map(|it| Res {
+            name: it.name,
+            r#type: "event".into(),
+            id: it.id,
+        })
+        .collect();
     let mut res = vec![];
     res.append(&mut res_areas);
     res.append(&mut res_elements);
+    res.append(&mut res_events);
     Ok(res)
 }

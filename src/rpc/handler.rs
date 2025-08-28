@@ -112,7 +112,7 @@ impl Role {
         RpcMethod::GetMostActiveUsers,
     ];
 
-    const USER_METHODS: &[RpcMethod] = &[RpcMethod::Whoami];
+    const USER_METHODS: &[RpcMethod] = &[RpcMethod::Whoami, RpcMethod::GetEvent];
 
     const ADMIN_METHODS: &[RpcMethod] = &[
         // Admins can set and override custom place tags
@@ -139,6 +139,10 @@ impl Role {
         RpcMethod::Search,
         // Admins can query user activity (TODO ask Rockedf if he still needs it)
         RpcMethod::GetUserActivity,
+        // Admins can create events
+        RpcMethod::CreateEvent,
+        // Admins can retreive events
+        RpcMethod::GetEvent,
     ];
 
     const fn allowed_methods(&self) -> &[RpcMethod] {

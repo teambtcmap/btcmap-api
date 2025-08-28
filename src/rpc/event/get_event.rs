@@ -4,6 +4,7 @@ use crate::{
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -13,11 +14,27 @@ pub struct Params {
 #[derive(Serialize)]
 pub struct Res {
     pub id: i64,
+    lat: f64,
+    lon: f64,
+    name: String,
+    website: String,
+    #[serde(with = "time::serde::rfc3339")]
+    starts_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    ends_at: Option<OffsetDateTime>,
 }
 
 impl From<Event> for Res {
     fn from(event: Event) -> Self {
-        Res { id: event.id }
+        Res {
+            id: event.id,
+            lat: event.lat,
+            lon: event.lon,
+            name: event.name,
+            website: event.website,
+            starts_at: event.starts_at,
+            ends_at: event.ends_at,
+        }
     }
 }
 
