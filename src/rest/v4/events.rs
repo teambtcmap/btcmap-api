@@ -46,6 +46,10 @@ pub async fn get(req: HttpRequest, pool: Data<Pool>) -> RestResult<Vec<Item>> {
     let items = db::event::queries::select_all(&pool)
         .await
         .map_err(|_| RestApiError::database())?;
+    let items: Vec<Event> = items
+        .into_iter()
+        .filter(|it| it.starts_at > OffsetDateTime::now_utc())
+        .collect();
     req.extensions_mut()
         .insert(RequestExtension::new(items.len()));
     Ok(Json(items.into_iter().map(|it| it.into()).collect()))
