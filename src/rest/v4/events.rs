@@ -48,7 +48,7 @@ pub async fn get(req: HttpRequest, pool: Data<Pool>) -> RestResult<Vec<Item>> {
         .map_err(|_| RestApiError::database())?;
     let items: Vec<Event> = items
         .into_iter()
-        .filter(|it| it.starts_at > OffsetDateTime::now_utc())
+        .filter(|it| it.deleted_at.is_none() && it.starts_at > OffsetDateTime::now_utc())
         .collect();
     req.extensions_mut()
         .insert(RequestExtension::new(items.len()));
