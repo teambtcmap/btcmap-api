@@ -142,7 +142,8 @@ async fn main() -> Result<()> {
                             .service(rest::v4::places::get)
                             .service(rest::v4::places::get_boosted)
                             .service(rest::v4::places::get_by_id)
-                            .service(rest::v4::places::get_by_id_comments),
+                            .service(rest::v4::places::get_by_id_comments)
+                            .service(rest::v4::places::get_boost_quote),
                     )
                     .service(
                         scope("events")

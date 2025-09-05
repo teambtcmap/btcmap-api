@@ -1,4 +1,5 @@
 use crate::db;
+use crate::db::conf::schema::Conf;
 use crate::db::element_comment::schema::ElementComment;
 use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
@@ -152,6 +153,22 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<C
         .await
         .map(|it| Json(it.into_iter().map(Comment::from).collect()))
         .map_err(|_| RestApiError::database())
+}
+
+#[derive(Serialize)]
+pub struct BoostQuote {
+    pub quote_30d_sat: i64,
+    pub quote_90d_sat: i64,
+    pub quote_365d_sat: i64,
+}
+
+#[get("/boost/quote")]
+pub async fn get_boost_quote(conf: Data<Conf>) -> Res<BoostQuote> {
+    Ok(Json(BoostQuote {
+        quote_30d_sat: conf.paywall_boost_element_30d_price_sat,
+        quote_90d_sat: conf.paywall_boost_element_90d_price_sat,
+        quote_365d_sat: conf.paywall_boost_element_365d_price_sat,
+    }))
 }
 
 #[cfg(test)]
