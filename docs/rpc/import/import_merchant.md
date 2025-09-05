@@ -29,11 +29,11 @@ The following fields are mandatory, as they represent the minimum required to di
 - `lat`: The merchant's latitude. Must be reasonably accurate.
 - `lon`: The merchant's longitude. Must be reasonably accurate.
 - `category`: The merchant's category. Use a short, single-word (if possible), lowercase identifier. We will map your categories to our icons.
-`name`: The merchant's name.
+- `name`: The merchant's name.
 
 Additionally, an optional field is available:
 
-- `extra_properties`: A JSON object containing a set of optional fields for our review and potential inclusion in OSM.
+- `extra_properties`: A JSON object containing a set of additional fields for our review and potential inclusion in OSM.
 
 ## Result Format
 
