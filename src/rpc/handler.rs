@@ -93,6 +93,7 @@ pub enum RpcMethod {
 
 impl Role {
     const ANON_METHODS: &[RpcMethod] = &[
+        RpcMethod::Search,
         RpcMethod::AddUser,
         RpcMethod::ChangePassword,
         RpcMethod::CreateApiKey,
