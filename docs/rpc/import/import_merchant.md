@@ -16,7 +16,7 @@ This RPC offers trusted external sources (major franchises, PoS providers, etc.)
   "lon": 98.5013,
   "category": "cafe",
   "name": "Satoshi Cafe",
-  "extra_properties": {
+  "extra_fields": {
     "website": "https://example.com"
   }
 }
@@ -33,7 +33,7 @@ The following fields are mandatory, as they represent the minimum required to di
 
 Additionally, an optional field is available:
 
-- `extra_properties`: A JSON object containing a set of additional fields for our review and potential inclusion in OSM.
+- `extra_fields`: A JSON object containing a set of additional fields for our review and potential inclusion in OSM. You can see the full list of supported fields [here](https://github.com/teambtcmap/btcmap-api/blob/master/docs/rest/v4/places.md#field-selection), but custom fields are also allowed if they are considered important for the merchants in question.
 
 ## Result Format
 
