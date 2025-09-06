@@ -20,7 +20,7 @@ case "$1" in
         ;;
 
     fetch-prod-db)
-        rsync -v --progress --stats btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
+        sqlite3_rsync -vvv btcmap-api:.local/share/btcmap/btcmap.db ~/.local/share/btcmap/btcmap.db
         ;;
 
     deploy)
