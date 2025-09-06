@@ -146,6 +146,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::places::get_boost_quote)
                             .service(rest::v4::places::boost_by_id),
                     )
+                    .service(scope("invoices").service(rest::v4::invoices::get_by_uuid))
                     .service(
                         scope("events")
                             .service(rest::v4::events::get)
