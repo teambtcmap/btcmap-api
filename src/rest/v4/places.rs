@@ -7,6 +7,7 @@ use crate::rest::error::RestResult as Res;
 use crate::service;
 use crate::Error;
 use actix_web::get;
+use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
@@ -168,6 +169,52 @@ pub async fn get_boost_quote(conf: Data<Conf>) -> Res<BoostQuote> {
         quote_30d_sat: conf.paywall_boost_element_30d_price_sat,
         quote_90d_sat: conf.paywall_boost_element_90d_price_sat,
         quote_365d_sat: conf.paywall_boost_element_365d_price_sat,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct BoostByIdArgs {
+    pub days: i64,
+}
+
+#[derive(Serialize)]
+pub struct BoostByIdResponse {
+    pub payment_request: String,
+    pub invoice_uuid: String,
+}
+
+#[post("{id}/boost")]
+pub async fn boost_by_id(
+    id: Path<String>,
+    args: Json<BoostByIdArgs>,
+    conf: Data<Conf>,
+    pool: Data<Pool>,
+) -> Res<BoostByIdResponse> {
+    let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+    let sats = match args.days {
+        30 => conf.paywall_boost_element_30d_price_sat,
+        90 => conf.paywall_boost_element_90d_price_sat,
+        365 => conf.paywall_boost_element_365d_price_sat,
+        _ => Err(RestApiError::new(
+            crate::rest::error::RestApiErrorCode::InvalidInput,
+            "invalid duration",
+        ))?,
+    };
+    let invoice = service::invoice::create(
+        format!("element_boost:{}:{}", element.id, args.days),
+        sats,
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
+    Ok(Json(BoostByIdResponse {
+        payment_request: invoice.payment_request,
+        invoice_uuid: invoice.uuid,
     }))
 }
 
