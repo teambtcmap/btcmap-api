@@ -38,12 +38,18 @@ impl From<SelectOrderedBySeverityRow> for ResItem {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let total_issues =
-        db::element_issue::queries::select_count(params.area_id, false, pool).await?;
+    let total_issues = db::element_issue::queries::select_count(
+        params.area_id,
+        false,
+        params.area_id != 662,
+        pool,
+    )
+    .await?;
     let requested_issues = db::element_issue::queries::select_ordered_by_severity(
         params.area_id,
         params.limit,
         params.offset,
+        params.area_id != 662,
         pool,
     )
     .await?;

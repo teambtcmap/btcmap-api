@@ -81,6 +81,7 @@ pub fn select_ordered_by_severity(
     area_id: i64,
     limit: i64,
     offset: i64,
+    include_outdated: bool,
     conn: &Connection,
 ) -> Result<Vec<SelectOrderedBySeverityRow>> {
     let area_join = match area_id {
@@ -94,7 +95,7 @@ pub fn select_ordered_by_severity(
         r#"
                 SELECT json_extract(e.overpass_data, '$.type'), json_extract(e.overpass_data, '$.id'), json_extract(e.overpass_data, '$.tags.name'), ei.{code}
                 FROM {table} ei join {element_table} e ON e.id = ei.{element_id} {area_join}
-                WHERE ei.{deleted_at} IS NULL
+                WHERE ei.{deleted_at} IS NULL {include_outdated}
                 ORDER BY ei.{severity} DESC
                 LIMIT :limit
                 OFFSET :offset;
@@ -105,6 +106,11 @@ pub fn select_ordered_by_severity(
         deleted_at = Columns::DeletedAt.as_str(),
         severity = Columns::Severity.as_str(),
         element_table = db::element::schema::TABLE_NAME,
+        include_outdated = if include_outdated {
+            ""
+        } else {
+            "AND ei.code <> 'outdated' AND ei.code <> 'outdated_soon' AND ei.code <> 'not_verified'"
+        }
     );
     conn.prepare(&sql)?
         .query_map(
@@ -133,7 +139,12 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementIssue> {
         .map_err(Into::into)
 }
 
-pub fn select_count(area_id: i64, include_deleted: bool, conn: &Connection) -> Result<i64> {
+pub fn select_count(
+    area_id: i64,
+    include_deleted: bool,
+    include_outdated: bool,
+    conn: &Connection,
+) -> Result<i64> {
     let area_join = match area_id {
             662 => "".into(),
             _ => format!(
@@ -146,20 +157,31 @@ pub fn select_count(area_id: i64, include_deleted: bool, conn: &Connection) -> R
             r#"
                 SELECT count(ei.{id})
                 FROM {table} ei {area_join}
+                {include_outdated}
             "#,
             id = Columns::Id.as_str(),
             table = schema::TABLE_NAME,
+            include_outdated = if include_outdated {
+                ""
+            } else {
+                "WHERE ei.code <> 'outdated' AND ei.code <> 'outdated_soon' AND ei.code <> 'not_verified'"
+            }
         )
     } else {
         format!(
             r#"
                 SELECT count(ei.{id})
                 FROM {table} ei {area_join}
-                WHERE ei.{deleted_at} IS NULL
+                WHERE ei.{deleted_at} IS NULL {include_outdated}
             "#,
             id = Columns::Id.as_str(),
             table = schema::TABLE_NAME,
             deleted_at = Columns::DeletedAt.as_str(),
+            include_outdated = if include_outdated {
+                ""
+            } else {
+                "AND ei.code <> 'outdated' AND ei.code <> 'outdated_soon' AND ei.code <> 'not_verified'"
+            }
         )
     };
     let res: rusqlite::Result<i64, _> = conn.query_row(&sql, [], |row| row.get(0));
@@ -309,11 +331,11 @@ mod test {
         super::set_deleted_at(deleted_issue.id, Some(OffsetDateTime::now_utc()), &conn)?;
 
         // Test count without deleted
-        let count = super::select_count(662, false, &conn)?;
+        let count = super::select_count(662, false, true, &conn)?;
         assert_eq!(count, 2);
 
         // Test count with deleted
-        let count = super::select_count(662, true, &conn)?;
+        let count = super::select_count(662, true, true, &conn)?;
         assert_eq!(count, 3);
         Ok(())
     }

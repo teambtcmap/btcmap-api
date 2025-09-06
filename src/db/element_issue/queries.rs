@@ -40,12 +40,19 @@ pub async fn select_ordered_by_severity(
     area_id: i64,
     limit: i64,
     offset: i64,
+    include_outdated: bool,
     pool: &Pool,
 ) -> Result<Vec<SelectOrderedBySeverityRow>> {
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::select_ordered_by_severity(area_id, limit, offset, conn)
+            blocking_queries::select_ordered_by_severity(
+                area_id,
+                limit,
+                offset,
+                include_outdated,
+                conn,
+            )
         })
         .await?
 }
@@ -57,10 +64,17 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<ElementIssue> {
         .await?
 }
 
-pub async fn select_count(area_id: i64, include_deleted: bool, pool: &Pool) -> Result<i64> {
+pub async fn select_count(
+    area_id: i64,
+    include_deleted: bool,
+    include_outdated: bool,
+    pool: &Pool,
+) -> Result<i64> {
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_count(area_id, include_deleted, conn))
+        .interact(move |conn| {
+            blocking_queries::select_count(area_id, include_deleted, include_outdated, conn)
+        })
         .await?
 }
 
