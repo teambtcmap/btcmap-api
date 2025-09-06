@@ -180,10 +180,16 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
         let boost_expires = if element.tags.contains_key("boost:expires") {
             let now = OffsetDateTime::now_utc();
             let now_str = now.format(&Rfc3339)?;
-            let old_boost_expires = element.tags["boost:expires"].as_str().unwrap_or(&now_str);
-            let old_boost_expires =
-                OffsetDateTime::parse(old_boost_expires, &Rfc3339).unwrap_or(now);
-            old_boost_expires + Duration::days(days)
+
+            let current_boost_expires = element.tags["boost:expires"].as_str().unwrap_or(&now_str);
+            let mut current_boost_expires =
+                OffsetDateTime::parse(current_boost_expires, &Rfc3339).unwrap_or(now);
+
+            if current_boost_expires < now {
+                current_boost_expires = now
+            }
+
+            current_boost_expires + Duration::days(days)
         } else {
             OffsetDateTime::now_utc().saturating_add(Duration::days(days))
         };
@@ -269,7 +275,7 @@ mod test {
         assert!(element.tags.contains_key("boost:expires"));
         let boost_expires =
             OffsetDateTime::parse(element.tags["boost:expires"].as_str().unwrap(), &Rfc3339)?;
-        assert_eq!(4, (boost_expires - OffsetDateTime::now_utc()).whole_days());
+        assert_eq!(9, (boost_expires - OffsetDateTime::now_utc()).whole_days());
         Ok(())
     }
 }
