@@ -16,7 +16,7 @@ This RPC offers trusted external sources (major franchises, PoS providers, etc.)
   "lon": 98.5013,
   "category": "cafe",
   "name": "Satoshi Cafe",
-  "extra_fields": {
+  "tags": {
     "website": "https://example.com"
   }
 }
@@ -31,9 +31,9 @@ The following fields are mandatory, as they represent the minimum required to di
 - `category`: The merchant's category. Use a short, single-word (if possible), lowercase identifier. We will map your categories to our icons.
 - `name`: The merchant's name.
 
-Additionally, an optional field is available:
+Additionally, a `tags` object is available:
 
-- `extra_fields`: A JSON object containing a set of additional fields for our review and potential inclusion in OSM. You can see the full list of supported fields [here](https://github.com/teambtcmap/btcmap-api/blob/master/docs/rest/v4/places.md#field-selection), but custom fields are also allowed if they are considered important for the merchant in question.
+- `tags`: A JSON object containing a set of additional tags for our review and potential inclusion in OSM. You can see the full list of supported tags [here](https://github.com/teambtcmap/btcmap-api/blob/master/docs/rest/v4/places.md#field-selection), but custom tags are also allowed if they are considered important for the merchant in question.
 
 ## Result Format
 
