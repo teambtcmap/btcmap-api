@@ -144,7 +144,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::places::get_by_id)
                             .service(rest::v4::places::get_by_id_comments),
                     )
-                    .service(scope("invoices").service(rest::v4::invoices::get_by_uuid))
+                    .service(scope("invoices").service(rest::v4::invoices::get_by_id))
                     .service(
                         scope("events")
                             .service(rest::v4::events::get)

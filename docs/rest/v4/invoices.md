@@ -16,9 +16,9 @@ Retrieves a specific invoice by its ID.
 
 #### Path Parameters
 
-| Parameter | Type | Example | Default | Description |
+| Parameter | Type | Example | Default | Required |
 |-----------|------|---------|---------|-------------|
-| `id` | String | `dd79bb72-6535-4ada-a683-88b6e8550f14` | - | **Required**. |
+| `id` | String | `dd79bb72-6535-4ada-a683-88b6e8550f14` | - | **Yes** |
 
 #### Examples
 
@@ -30,7 +30,7 @@ curl https://api.btcmap.org/v4/invoices/dd79bb72-6535-4ada-a683-88b6e8550f14 | j
 
 ```json
 {
-  "uuid": "dd79bb72-6535-4ada-a683-88b6e8550f14",
+  "id": "dd79bb72-6535-4ada-a683-88b6e8550f14",
   "status": "unpaid"
 }
 ```

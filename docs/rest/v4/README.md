@@ -6,8 +6,9 @@ The latest and recommended version of the BTCMap API, offering improved performa
 
 ### Implemented  
 - **[Places](places.md)** – Fetch places (single or batch). 
-- **[Events](events.md)** – Fetch events (single or batch).  
-### Planned  
+- **[Events](events.md)** – Fetch events (single or batch).
+- **[Invoices](invoices.md)** – Check invoice status.  
+### Planned
 - **[Areas](areas.md)** *(Coming soon)* 
 ### Proposed
 - Need something extra? Let us know!

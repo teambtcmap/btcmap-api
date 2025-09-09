@@ -12,12 +12,12 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct GetByIdRes {
-    uuid: String,
+    id: String,
     status: String,
 }
 
-#[get("{uuid}")]
-pub async fn get_by_uuid(uuid: Path<String>, pool: Data<Pool>) -> Res<GetByIdRes> {
+#[get("{id}")]
+pub async fn get_by_id(uuid: Path<String>, pool: Data<Pool>) -> Res<GetByIdRes> {
     let mut invoice = db::invoice::queries::select_by_uuid(uuid.as_str(), &pool)
         .await
         .map_err(|e| match e {
@@ -39,7 +39,7 @@ pub async fn get_by_uuid(uuid: Path<String>, pool: Data<Pool>) -> Res<GetByIdRes
     }
 
     Ok(Json(GetByIdRes {
-        uuid: invoice.uuid,
+        id: invoice.uuid,
         status: invoice.status.into(),
     }))
 }

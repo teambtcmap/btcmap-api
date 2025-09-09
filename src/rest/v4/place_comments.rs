@@ -153,7 +153,8 @@ pub async fn post(
         conf.paywall_add_element_comment_price_sat,
         &pool,
     )
-    .await.map_err(|_| RestApiError::database())?;
+    .await
+    .map_err(|_| RestApiError::database())?;
     Ok(Json(PostResponse {
         payment_request: invoice.payment_request,
         invoice_uuid: invoice.uuid,
