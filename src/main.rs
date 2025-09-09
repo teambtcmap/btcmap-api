@@ -142,9 +142,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::places::get)
                             .service(rest::v4::places::get_boosted)
                             .service(rest::v4::places::get_by_id)
-                            .service(rest::v4::places::get_by_id_comments)
-                            .service(rest::v4::places::get_boost_quote)
-                            .service(rest::v4::places::boost_by_id),
+                            .service(rest::v4::places::get_by_id_comments),
                     )
                     .service(scope("invoices").service(rest::v4::invoices::get_by_uuid))
                     .service(
@@ -160,7 +158,14 @@ async fn main() -> Result<()> {
                     .service(
                         scope("place-comments")
                             .service(rest::v4::place_comments::get)
-                            .service(rest::v4::place_comments::get_by_id),
+                            .service(rest::v4::place_comments::get_quote)
+                            .service(rest::v4::place_comments::get_by_id)
+                            .service(rest::v4::place_comments::post),
+                    )
+                    .service(
+                        scope("place-boosts")
+                            .service(rest::v4::place_boosts::get_quote)
+                            .service(rest::v4::place_boosts::post),
                     )
                     .service(scope("search").service(rest::v4::search::get)),
             )
