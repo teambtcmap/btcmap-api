@@ -122,8 +122,8 @@ pub struct PostArgs {
 
 #[derive(Serialize)]
 pub struct PostResponse {
-    pub payment_request: String,
-    pub invoice_uuid: String,
+    pub invoice_id: String,
+    pub invoice: String,
 }
 
 #[post("")]
@@ -156,7 +156,7 @@ pub async fn post(
     .await
     .map_err(|_| RestApiError::database())?;
     Ok(Json(PostResponse {
-        payment_request: invoice.payment_request,
-        invoice_uuid: invoice.uuid,
+        invoice_id: invoice.uuid,
+        invoice: invoice.payment_request,
     }))
 }
