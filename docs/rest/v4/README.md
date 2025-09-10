@@ -6,7 +6,8 @@ The latest and recommended version of the BTCMap API, offering improved performa
 
 ### Implemented  
 - **[Places](places.md)** - Fetch places. 
-- **[Place Boosts](place-boosts.md)** - Fetch place boost quotes and submit boost intents. 
+- **[Place Boosts](place-boosts.md)** - Fetch place boost quotes and submit boost intents.
+- **[Place Comments](place-comments.md)** - Fetch place comment quotes and submit comment intents.
 - **[Events](events.md)** - Fetch events.
 - **[Invoices](invoices.md)** - Check invoice status for boosts, comments and other paywalled features.  
 ### Planned
