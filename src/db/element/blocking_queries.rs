@@ -34,7 +34,7 @@ pub fn select_updated_since(
             r#"
                 SELECT {projection}
                 FROM {table}
-                WHERE {updated_at} > :updated_since
+                WHERE julianday({updated_at}) > julianday(:updated_since)
                 ORDER BY {updated_at}, {id}
                 LIMIT :limit
             "#,
@@ -48,7 +48,7 @@ pub fn select_updated_since(
             r#"
                 SELECT {projection}
                 FROM {table}
-                WHERE {deleted_at} IS NULL AND {updated_at} > :updated_since
+                WHERE {deleted_at} IS NULL AND julianday({updated_at}) > julianday(:updated_since)
                 ORDER BY {updated_at}, {id}
                 LIMIT :limit
             "#,
