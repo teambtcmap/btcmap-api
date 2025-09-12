@@ -225,6 +225,10 @@ impl OverpassElement {
             icon_id = "warehouse";
         }
 
+        if building == "houseboat" {
+            icon_id = "directions_boat"
+        }
+
         if office == "yes" {
             icon_id = "business"
         }
@@ -1177,6 +1181,14 @@ impl OverpassElement {
             icon_id = "wc"
         }
 
+        if amenity == "love_hotel" {
+            icon_id = "favorite"
+        }
+
+        if amenity == "research_institute" {
+            icon_id = "science"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -1299,6 +1311,10 @@ impl OverpassElement {
 
         if leisure == "nature_reserve" {
             icon_id = "park"
+        }
+
+        if leisure == "trampoline_park" {
+            icon_id = "sports_handball"
         }
 
         if healthcare == "dentist" {
