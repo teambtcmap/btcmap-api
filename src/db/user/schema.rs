@@ -44,6 +44,7 @@ pub enum Role {
     User,
     Admin,
     Root,
+    PlacesSource,
 }
 
 impl User {
@@ -94,6 +95,7 @@ impl FromStr for Role {
             "user" => Ok(Role::User),
             "admin" => Ok(Role::Admin),
             "root" => Ok(Role::Root),
+            "places_source" => Ok(Role::PlacesSource),
             _ => Err(format!("'{}' is not a valid Role", s)),
         }
     }
@@ -105,6 +107,7 @@ impl ToString for Role {
             Role::User => "user".to_string(),
             Role::Admin => "admin".to_string(),
             Role::Root => "root".to_string(),
+            Role::PlacesSource => "places_source".to_string(),
         }
     }
 }

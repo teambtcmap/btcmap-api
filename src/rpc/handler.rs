@@ -156,11 +156,18 @@ impl Role {
         RpcMethod::GetSubmittedPlace,
     ];
 
+    const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
+        RpcMethod::SubmitPlace,
+        RpcMethod::RevokeSubmittedPlace,
+        RpcMethod::GetSubmittedPlace,
+    ];
+
     const fn allowed_methods(&self) -> &[RpcMethod] {
         match self {
             Role::User => Self::USER_METHODS,
             Role::Admin => Self::ADMIN_METHODS,
             Role::Root => RpcMethod::VARIANTS,
+            Role::PlacesSource => Self::PLACES_SOURCE_METHODS,
         }
     }
 }
