@@ -2,7 +2,7 @@
 
 ## Description
 
-You can use this methoud to look up the previously submitted data.
+You can use this method to look up the previously submitted data.
 
 ## Params
 
