@@ -89,6 +89,10 @@ pub enum RpcMethod {
     GetEvents,
     GetEvent,
     DeleteEvent,
+    // Import
+    SubmitPlace,
+    GetSubmittedPlace,
+    RevokeSubmittedPlace,
 }
 
 impl Role {
@@ -144,6 +148,12 @@ impl Role {
         RpcMethod::CreateEvent,
         // Admins can retreive events
         RpcMethod::GetEvent,
+        // Admins can import places
+        RpcMethod::SubmitPlace,
+        // Admins can revoke imported places
+        RpcMethod::RevokeSubmittedPlace,
+        // Admins can query place submissions by id
+        RpcMethod::GetSubmittedPlace,
     ];
 
     const fn allowed_methods(&self) -> &[RpcMethod] {
@@ -527,6 +537,18 @@ pub async fn handle(
         RpcMethod::DeleteEvent => RpcResponse::from(
             req.id.clone(),
             super::event::delete_event::run(params(req.params)?, &pool, &conf).await?,
+        ),
+        RpcMethod::SubmitPlace => RpcResponse::from(
+            req.id.clone(),
+            super::import::submit_place::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::RevokeSubmittedPlace => RpcResponse::from(
+            req.id.clone(),
+            super::import::revoke_submitted_place::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::GetSubmittedPlace => RpcResponse::from(
+            req.id.clone(),
+            super::import::get_submitted_place::run(params(req.params)?, &pool).await?,
         ),
     }?;
     Ok(Json(res))

@@ -1,8 +1,8 @@
-# import_merchant
+# submit_place
 
 ## Description
 
-Most BTC Map merchants are sourced from [OpenStreetMap](https://www.openstreetmap.org/about). However, mass-importing data into OSM is nearly impossible due to its [lengthy](https://wiki.openstreetmap.org/wiki/Import), uncertain approval process.
+Most BTC Map locations are sourced from [OpenStreetMap](https://www.openstreetmap.org/about). However, instant mass-importing data into OSM is impossible due to its [lengthy](https://wiki.openstreetmap.org/wiki/Import), uncertain approval process.
 
 This RPC offers trusted external sources (major franchises, PoS providers, etc.) the ability to get on BTC Map instantly, which benefits BTC Map users and API consumers, including popular Bitcoin wallets. All imported data will also be processed by BTC Map editors and merged into OSM eventually. The merger timeline is unpredictable, as it depends on many factors beyond our control. This method allows BTC Map users to skip the wait while also making it easy for various Bitcoin merchant data sources to open-source their data and promote their merchants.
 
@@ -39,7 +39,9 @@ Additionally, a `extra_fields` object is available:
 
 ```json
 {
-  "id": "acme:15"
+  "id": 1,
+  "origin": "acme",
+  "external_id": "15"
 }
 ```
 
@@ -47,18 +49,18 @@ Additionally, a `extra_fields` object is available:
 
 - root
 - admin
-- merchant_source
+- places_source
 
 ## Examples
 
 ### btcmap-cli
 
 ```bash
-btcmap-cli import-merchant --origin 'acme' \
+btcmap-cli submit-place --origin acme \
   --external-id 15 \
   --lat 18.2649 \
   --lon 98.5013 \
-  --category 'cafe' \
+  --category cafe \
   --name 'Satoshi Cafe'
 ```
 
@@ -68,6 +70,6 @@ btcmap-cli import-merchant --origin 'acme' \
 curl --header 'Content-Type: application/json' \
   --header "Authorization: Bearer $ACCESS_TOKEN" \
   --request POST \
-  --data '{"jsonrpc":"2.0","method":"import_merchant","params":{"origin":"acme","external_id":"15",lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe"},"id":1}' \
+  --data '{"jsonrpc":"2.0","method":"submit_place","params":{"origin":"acme","external_id":"15",lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe"},"id":1}' \
   https://api.btcmap.org/rpc
 ```
