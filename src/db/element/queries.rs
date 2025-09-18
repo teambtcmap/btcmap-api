@@ -38,6 +38,21 @@ pub async fn select_by_search_query(
         .await?
 }
 
+pub async fn select_by_bbox(
+    min_lat: f64,
+    max_lat: f64,
+    min_lon: f64,
+    max_lon: f64,
+    pool: &Pool,
+) -> Result<Vec<Element>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, conn)
+        })
+        .await?
+}
+
 pub async fn select_by_osm_type_and_id(
     osm_type: String,
     osm_id: i64,

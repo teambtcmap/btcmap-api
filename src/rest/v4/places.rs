@@ -16,6 +16,7 @@ use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use std::i64;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -133,6 +134,83 @@ pub async fn get_pending(pool: Data<Pool>) -> Res<Vec<PendingPlace>> {
         })
         .collect();
     Ok(Json(items))
+}
+
+#[derive(Deserialize)]
+pub struct SearchArgs {
+    lat: f64,
+    lon: f64,
+    radius_km: f64,
+    name: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct SearchedPlace {
+    pub id: i64,
+    pub lat: f64,
+    pub lon: f64,
+    pub icon: String,
+    pub name: String,
+}
+
+#[get("/search")]
+pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<SearchedPlace>> {
+    let lat_radius = args.radius_km / 111.0;
+    let lon_radius = args.radius_km / (111.0 * args.lat.to_radians().cos());
+
+    let mut min_lat = args.lat - lat_radius;
+    let mut max_lat = args.lat + lat_radius;
+    let mut min_lon = args.lon - lon_radius;
+    let mut max_lon = args.lon + lon_radius;
+
+    if min_lat < -90.0 {
+        min_lat = -90.0;
+    }
+
+    if max_lat > 90.0 {
+        max_lat = 90.0;
+    }
+
+    if min_lon < -180.0 {
+        min_lon = -180.0;
+    }
+
+    if max_lon > 180.0 {
+        max_lon = 180.0;
+    }
+
+    let elements = db::element::queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    let name = args.name.clone().unwrap_or("".to_string());
+
+    let elements: Vec<SearchedPlace> = elements
+        .into_iter()
+        .filter(|it| {
+            let mut passed = true;
+
+            if !name.is_empty() && !it.name().contains(&name) {
+                passed = false
+            }
+
+            passed
+        })
+        .map(|it| SearchedPlace {
+            id: it.id,
+            lat: it.lat.unwrap(),
+            lon: it.lon.unwrap(),
+            icon: it
+                .tags
+                .get("icon:android")
+                .unwrap_or(&Value::String("store".into()))
+                .as_str()
+                .unwrap_or("store")
+                .to_string(),
+            name: it.name(),
+        })
+        .collect();
+    Ok(Json(elements))
 }
 
 #[get("{id}")]

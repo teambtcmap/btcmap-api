@@ -94,6 +94,31 @@ pub fn select_by_search_query(
         .map_err(Into::into)
 }
 
+pub fn select_by_bbox(
+    min_lat: f64,
+    max_lat: f64,
+    min_lon: f64,
+    max_lon: f64,
+    conn: &Connection,
+) -> Result<Vec<Element>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {lat} BETWEEN :min_lat AND :max_lat AND {lon} BETWEEN :min_lon AND :max_lon AND {deleted_at} IS NULL
+        "#,
+        projection = Element::projection(),
+        table = schema::TABLE_NAME,
+        lat = Columns::Lat.as_str(),
+        lon = Columns::Lon.as_str(),
+        deleted_at = Columns::DeletedAt.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(named_params! { ":min_lat": min_lat, ":max_lat": max_lat, ":min_lon": min_lon, ":max_lon": max_lon }, Element::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id_or_osm_id(id: impl Into<String>, conn: &Connection) -> Result<Element> {
     let id: String = id.into();
     let id = id.as_str();
