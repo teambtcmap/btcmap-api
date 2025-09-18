@@ -106,6 +106,35 @@ pub async fn get_boosted(
     Ok(Json(items))
 }
 
+#[derive(Serialize)]
+pub struct PendingPlace {
+    pub id: i64,
+    pub source: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub icon: String,
+    pub name: String,
+}
+
+#[get("/pending")]
+pub async fn get_pending(pool: Data<Pool>) -> Res<Vec<PendingPlace>> {
+    let items = db::place_submission::queries::select_open_and_not_revoked(&pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    let items: Vec<PendingPlace> = items
+        .into_iter()
+        .map(|it| PendingPlace {
+            id: it.id,
+            source: it.origin,
+            lat: it.lat,
+            lon: it.lon,
+            icon: "store".into(),
+            name: it.name,
+        })
+        .collect();
+    Ok(Json(items))
+}
+
 #[get("{id}")]
 pub async fn get_by_id(
     id: Path<String>,

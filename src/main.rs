@@ -141,6 +141,7 @@ async fn main() -> Result<()> {
                         scope("places")
                             .service(rest::v4::places::get)
                             .service(rest::v4::places::get_boosted)
+                            .service(rest::v4::places::get_pending)
                             .service(rest::v4::places::get_by_id)
                             .service(rest::v4::places::get_by_id_comments),
                     )

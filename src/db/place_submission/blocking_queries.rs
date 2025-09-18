@@ -47,6 +47,27 @@ pub fn insert(
     .map_err(Into::into)
 }
 
+pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {closed_at} IS NULL AND {revoked} = 0
+            ORDER BY {updated_at} DESC, {id} DESC
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        closed_at = Columns::ClosedAt.as_str(),
+        revoked = Columns::Revoked.as_str(),
+        updated_at = Columns::UpdatedAt.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<PlaceSubmission> {
     let sql = format!(
         r#"

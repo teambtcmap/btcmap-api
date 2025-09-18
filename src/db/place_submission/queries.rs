@@ -32,6 +32,13 @@ pub async fn insert(
         .await?
 }
 
+pub async fn select_open_and_not_revoked(pool: &Pool) -> Result<Vec<PlaceSubmission>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_open_and_not_revoked(conn))
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<PlaceSubmission> {
     pool.get()
         .await?
