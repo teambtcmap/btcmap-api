@@ -34,6 +34,7 @@ async fn main() -> Result<()> {
     service::report::enforce_v2_compat(&pool).await?;
     service::element::remove_areas_tag(&pool).await?;
     service::area::generate_bbox(&pool).await?;
+    service::element::populate_lat_lon(&pool).await?;
     let conf = db::conf::queries::select(&pool).await?;
     HttpServer::new(move || {
         App::new()

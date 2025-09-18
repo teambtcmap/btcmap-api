@@ -249,12 +249,15 @@ pub async fn sync_updated_elements(
             let event = db::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
             res.push(event);
         }
-        let mut updated_element = db::element::queries::set_overpass_data(
+        let updated_element = db::element::queries::set_overpass_data(
             cached_element.id,
             fresh_overpass_element.clone(),
             pool,
         )
         .await?;
+        let mut updated_element =
+            db::element::queries::set_lat_lon(updated_element.id, updated_element.lat(), updated_element.lon(), pool)
+                .await?;
         let new_android_icon = updated_element.overpass_data.generate_android_icon();
         let old_android_icon = cached_element
             .tag("icon:android")
@@ -295,6 +298,13 @@ pub async fn sync_new_elements(
             None => {
                 service::user::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
                 let element = db::element::queries::insert(fresh_element.clone(), pool).await?;
+                let element = db::element::queries::set_lat_lon(
+                    element.id,
+                    element.lat(),
+                    element.lon(),
+                    pool,
+                )
+                .await?;
                 let mut event_tags: HashMap<String, Value> = HashMap::new();
                 event_tags.insert(
                     "element_osm_type".into(),

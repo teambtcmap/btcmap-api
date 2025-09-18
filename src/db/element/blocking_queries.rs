@@ -195,6 +195,22 @@ pub fn remove_tag(element_id: i64, tag_name: &str, conn: &Connection) -> Result<
     select_by_id(element_id, conn)
 }
 
+pub fn set_lat_lon(id: i64, lat: f64, lon: f64, conn: &Connection) -> Result<Element> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {lat} = ?2, {lon} = ?3
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        lat = Columns::Lat.as_str(),
+        lon = Columns::Lon.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.execute(&sql, params![id, lat, lon])?;
+    select_by_id(id, conn)
+}
+
 #[cfg(test)]
 pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) -> Result<Element> {
     let sql = format!(
@@ -467,6 +483,18 @@ mod test {
         let element = super::set_tag(element.id, tag_name, &"bar".into(), &conn)?;
         let element = super::remove_tag(element.id, tag_name, &conn)?;
         assert!(!element.tags.contains_key(tag_name));
+        Ok(())
+    }
+
+    #[test]
+    fn set_lat_lon() -> Result<()> {
+        let conn = conn();
+        let lat = 1.23;
+        let lon = 4.56;
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        let element = super::set_lat_lon(element.id, lat, lon, &conn)?;
+        assert_eq!(Some(lat), super::select_by_id(element.id, &conn)?.lat);
+        assert_eq!(Some(lon), super::select_by_id(element.id, &conn)?.lon);
         Ok(())
     }
 

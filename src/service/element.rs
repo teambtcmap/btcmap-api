@@ -33,6 +33,20 @@ pub async fn remove_areas_tag(pool: &Pool) -> Result<()> {
     Ok(())
 }
 
+pub async fn populate_lat_lon(pool: &Pool) -> Result<()> {
+    let elements =
+        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
+            .await?;
+    info!(elements = elements.len(), "preparing to generate lat lon");
+    for element in elements {
+        if element.lat.is_none() || element.lon.is_none() {
+            info!(element.id, "lat lon is missing, generating");
+            db::element::queries::set_lat_lon(element.id, element.lat(), element.lon(), pool).await?;
+        }
+    }
+    Ok(())
+}
+
 pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
     let geometries = area.geo_json_geometries()?;
     let mut area_elements: Vec<Element> = vec![];

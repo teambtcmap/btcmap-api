@@ -101,6 +101,13 @@ pub async fn remove_tag(
         .await?
 }
 
+pub async fn set_lat_lon(id: i64, lat: f64, lon: f64, pool: &Pool) -> Result<Element> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_lat_lon(id, lat, lon, conn))
+        .await?
+}
+
 #[cfg(test)]
 pub async fn set_updated_at(id: i64, updated_at: OffsetDateTime, pool: &Pool) -> Result<Element> {
     pool.get()
