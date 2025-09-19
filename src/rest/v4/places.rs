@@ -152,6 +152,8 @@ pub struct SearchedPlace {
     pub lon: f64,
     pub icon: String,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
 }
 
 #[get("/search")]
@@ -251,6 +253,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                     .unwrap_or("store")
                     .to_string(),
                 name: it.name(),
+                address: it.address(),
             })
             .collect(),
     ))

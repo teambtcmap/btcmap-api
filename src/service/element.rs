@@ -41,7 +41,8 @@ pub async fn populate_lat_lon(pool: &Pool) -> Result<()> {
     for element in elements {
         if element.lat.is_none() || element.lon.is_none() {
             info!(element.id, "lat lon is missing, generating");
-            db::element::queries::set_lat_lon(element.id, element.lat(), element.lon(), pool).await?;
+            db::element::queries::set_lat_lon(element.id, element.lat(), element.lon(), pool)
+                .await?;
         }
     }
     Ok(())
@@ -528,31 +529,12 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "address" => {
-                let mut addr = String::new();
-                let housenumber = element.overpass_data.tag("addr:housenumber");
-                if !housenumber.is_empty() {
-                    addr.push_str(housenumber);
-                    addr.push(' ');
-                }
-                let street = element.overpass_data.tag("addr:street");
-                if !street.is_empty() {
-                    addr.push_str(street);
-                    addr.push(' ');
-                }
-                let city = element.overpass_data.tag("addr:city");
-                if !city.is_empty() {
-                    addr.push_str(city);
-                    addr.push(' ');
-                }
-                let postcode = element.overpass_data.tag("addr:postcode");
-                if !postcode.is_empty() {
-                    addr.push_str(postcode);
-                    addr.push(' ');
-                }
-                let addr = addr.trim();
-                if !addr.is_empty() {
-                    res.insert("address".into(), addr.into());
-                }
+                match element.address() {
+                    Some(addr) => {
+                        res.insert("address".into(), addr.into());
+                    }
+                    None => {}
+                };
             }
             "osm_id" => {
                 res.insert("osm_id".into(), element.overpass_data.btcmap_id().into());

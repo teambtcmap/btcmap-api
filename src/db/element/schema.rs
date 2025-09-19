@@ -131,4 +131,34 @@ impl Element {
             None => false,
         }
     }
+
+    pub fn address(&self) -> Option<String> {
+        let mut addr = String::new();
+        let housenumber = self.overpass_data.tag("addr:housenumber");
+        if !housenumber.is_empty() {
+            addr.push_str(housenumber);
+            addr.push(' ');
+        }
+        let street = self.overpass_data.tag("addr:street");
+        if !street.is_empty() {
+            addr.push_str(street);
+            addr.push(' ');
+        }
+        let city = self.overpass_data.tag("addr:city");
+        if !city.is_empty() {
+            addr.push_str(city);
+            addr.push(' ');
+        }
+        let postcode = self.overpass_data.tag("addr:postcode");
+        if !postcode.is_empty() {
+            addr.push_str(postcode);
+            addr.push(' ');
+        }
+        let addr = addr.trim();
+        if addr.is_empty() {
+            None
+        } else {
+            Some(addr.to_string())
+        }
+    }
 }
