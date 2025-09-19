@@ -161,4 +161,14 @@ impl Element {
             Some(addr.to_string())
         }
     }
+
+    pub fn opening_hours(&self) -> Option<String> {
+        let res = self.overpass_data.tag("opening_hours");
+
+        if res.is_empty() {
+            None
+        } else {
+            Some(res.to_string())
+        }
+    }
 }

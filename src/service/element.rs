@@ -451,6 +451,12 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "opening_hours" => {
+                match element.opening_hours() {
+                    Some(opening_hours) => {
+                        res.insert("opening_hours".to_string(), opening_hours.into());
+                    }
+                    None => {}
+                }
                 if !element.overpass_data.tag("opening_hours").is_empty() {
                     res.insert(
                         "opening_hours".into(),
