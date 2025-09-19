@@ -171,4 +171,12 @@ impl Element {
             Some(res.to_string())
         }
     }
+
+    pub fn comment_count(&self) -> i64 {
+        if self.tags.contains_key("comments") {
+            self.tags["comments"].as_i64().unwrap_or(0)
+        } else {
+            0
+        }
+    }
 }

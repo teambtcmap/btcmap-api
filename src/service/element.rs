@@ -473,8 +473,9 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "comments" => {
-                if element.tags.contains_key("comments") {
-                    res.insert("comments".into(), element.tags["comments"].clone());
+                let comments = element.comment_count();
+                if comments > 0 {
+                    res.insert("comments".to_string(), comments.into());
                 }
             }
             "phone" => {

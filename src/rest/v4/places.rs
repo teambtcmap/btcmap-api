@@ -156,6 +156,8 @@ pub struct SearchedPlace {
     pub address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opening_hours: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comments: Option<i64>,
 }
 
 #[get("/search")]
@@ -243,20 +245,26 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
     Ok(Json(
         matches
             .into_iter()
-            .map(|it| SearchedPlace {
-                id: it.id,
-                lat: it.lat.unwrap(),
-                lon: it.lon.unwrap(),
-                icon: it
-                    .tags
-                    .get("icon:android")
-                    .unwrap_or(&Value::String("store".into()))
-                    .as_str()
-                    .unwrap_or("store")
-                    .to_string(),
-                name: it.name(),
-                address: it.address(),
-                opening_hours: it.opening_hours(),
+            .map(|it| {
+                let comments = it.comment_count();
+                let comments = if comments > 0 { Some(comments) } else { None };
+
+                SearchedPlace {
+                    id: it.id,
+                    lat: it.lat.unwrap(),
+                    lon: it.lon.unwrap(),
+                    icon: it
+                        .tags
+                        .get("icon:android")
+                        .unwrap_or(&Value::String("store".into()))
+                        .as_str()
+                        .unwrap_or("store")
+                        .to_string(),
+                    name: it.name(),
+                    address: it.address(),
+                    opening_hours: it.opening_hours(),
+                    comments,
+                }
             })
             .collect(),
     ))
