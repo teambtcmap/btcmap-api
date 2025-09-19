@@ -7,6 +7,7 @@ This document describes the endpoints for interacting with places in REST API v4
 - [Get Batch](#get-list)
 - [Get by ID](#get-by-id)
 - [Get Comments by Place ID](#get-comments)
+- [Search Places](#search-places)
 
 ### Get Bach
 
