@@ -166,7 +166,7 @@ This method has two main use cases:
 Let's fetch all the places using [Coinos](https://coinos.io/), a popular Canadian Bitcoin-only payment provider and our sponsor.
 
 ```bash
-curl https://api.btcmap.org/v4/places/search/?payment_provider=coinos | jq
+curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos' | jq
 ```
 
 ```json
@@ -206,7 +206,7 @@ curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos&name=loun
 You need to provide at least 3 letters.
 
 ```bash
-curl https://api.btcmap.org/v4/places/search/?name=thai | jq
+curl 'https://api.btcmap.org/v4/places/search/?name=thai' | jq
 ```
 
 ```json
