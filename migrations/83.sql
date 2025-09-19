@@ -1,0 +1,2 @@
+CREATE INDEX element_overpass_data_coinos ON element(json_extract(overpass_data, '$.tags.payment:coinos'));
+CREATE INDEX element_overpass_data_square ON element(json_extract(overpass_data, '$.tags.payment:square'));

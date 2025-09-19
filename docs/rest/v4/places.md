@@ -150,3 +150,92 @@ curl --request GET https://api.btcmap.org/v4/places/22923/comments | jq
   }
 ]
 ```
+
+### Search Places
+
+This method has two main use cases:
+
+1. Client apps without cache, which need to fetch the places on demand for a small region (usually user map viewport). This endpoint is fairly optimized and you can call it every time user moves the map.
+2. Client apps requiring server-side search. You can search places by area, name and also by payment provider.
+
+#### Examples
+
+##### Search Places by Payment Provider
+
+Let's fetch all the places using [Coinos](https://coinos.io/), a popular Canadian Bitcoin-only payment provider and our sponsor.
+
+```bash
+curl https://api.btcmap.org/v4/places/search/?payment_provider=coinos | jq
+```
+
+```json
+[
+  {
+    "id": 28779,
+    "lat": 49.1055648,
+    "lon": -121.9641064,
+    "icon": "menu_book",
+    "name": "The Owl and The Cat Bookery"
+  }
+]
+```
+
+##### Search Places by Payment Provider and Name
+
+Search filters can be mixed, so let's filter by both provider and merchant name:
+
+```bash
+curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos&name=lounge' | jq
+```
+
+```json
+[
+  {
+    "id": 19104,
+    "lat": 49.281207,
+    "lon": -123.0154316,
+    "icon": "smoking_rooms",
+    "name": "Bula Lounge"
+  }
+]
+```
+
+##### Search Places by Name
+
+You need to provide at least 3 letters.
+
+```bash
+curl https://api.btcmap.org/v4/places/search/?name=thai | jq
+```
+
+```json
+[
+  {
+    "id": 21555,
+    "lat": 16.6429003,
+    "lon": 103.9031675,
+    "icon": "restaurant",
+    "name": "ก๋วยเตี๋ยวยกล้อ Thai Noodle"
+  }
+]
+```
+
+##### Search Places by Area
+
+Let's fetch all the places in Manchester, UK.
+
+```bash
+curl 'https://api.btcmap.org/v4/places/search/?lat=53.48&lon=-2.24&radius_km=20' | jq
+```
+
+```json
+[
+  {
+    "id": 2977,
+    "lat": 53.448488,
+    "lon": -2.2502728,
+    "icon": "storefront",
+    "name": "Manchester Appliance Repairs"
+  }
+]
+```

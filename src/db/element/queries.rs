@@ -29,12 +29,15 @@ pub async fn select_updated_since(
 
 pub async fn select_by_search_query(
     search_query: impl Into<String>,
+    include_deleted: bool,
     pool: &Pool,
 ) -> Result<Vec<Element>> {
     let search_query = search_query.into();
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_search_query(search_query, conn))
+        .interact(move |conn| {
+            blocking_queries::select_by_search_query(search_query, include_deleted, conn)
+        })
         .await?
 }
 
@@ -50,6 +53,16 @@ pub async fn select_by_bbox(
         .interact(move |conn| {
             blocking_queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, conn)
         })
+        .await?
+}
+
+pub async fn select_by_payment_provider(
+    payment_provider: String,
+    pool: &Pool,
+) -> Result<Vec<Element>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_payment_provider(&payment_provider, conn))
         .await?
 }
 

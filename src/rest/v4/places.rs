@@ -138,10 +138,11 @@ pub async fn get_pending(pool: Data<Pool>) -> Res<Vec<PendingPlace>> {
 
 #[derive(Deserialize)]
 pub struct SearchArgs {
-    lat: f64,
-    lon: f64,
-    radius_km: f64,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    radius_km: Option<f64>,
     name: Option<String>,
+    payment_provider: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -155,13 +156,28 @@ pub struct SearchedPlace {
 
 #[get("/search")]
 pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<SearchedPlace>> {
-    let lat_radius = args.radius_km / 111.0;
-    let lon_radius = args.radius_km / (111.0 * args.lat.to_radians().cos());
+    let lat = args.lat.unwrap_or(0.0);
+    let lon = args.lon.unwrap_or(0.0);
+    let radius_km = args.radius_km.unwrap_or(100_000.0);
+    let name = args.name.clone().unwrap_or("".to_string());
+    let payment_provider = args.payment_provider.clone().unwrap_or("".to_string());
 
-    let mut min_lat = args.lat - lat_radius;
-    let mut max_lat = args.lat + lat_radius;
-    let mut min_lon = args.lon - lon_radius;
-    let mut max_lon = args.lon + lon_radius;
+    let payment_provider_whitelist = vec!["coinos".to_string(), "square".to_string()];
+
+    if !payment_provider.is_empty() && !payment_provider_whitelist.contains(&payment_provider) {
+        return Err(RestApiError {
+            code: crate::rest::error::RestApiErrorCode::InvalidInput,
+            message: "Unknown payment provider".to_string(),
+        });
+    }
+
+    let lat_radius = radius_km / 111.0;
+    let lon_radius = radius_km / (111.0 * lat.to_radians().cos());
+
+    let mut min_lat = lat - lat_radius;
+    let mut max_lat = lat + lat_radius;
+    let mut min_lon = lon - lon_radius;
+    let mut max_lon = lon + lon_radius;
 
     if min_lat < -90.0 {
         min_lat = -90.0;
@@ -179,38 +195,65 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
         max_lon = 180.0;
     }
 
-    let elements = db::element::queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, &pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
+    let global = min_lat == -90.0 && max_lat == 90.0 && min_lon == -180.0 && max_lon == 180.0;
 
-    let name = args.name.clone().unwrap_or("".to_string());
+    let mut filters_applied = 0;
+    let mut matches = vec![];
 
-    let elements: Vec<SearchedPlace> = elements
-        .into_iter()
-        .filter(|it| {
-            let mut passed = true;
+    if !global {
+        matches = db::element::queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+        filters_applied += 1;
+    }
 
-            if !name.is_empty() && !it.name().contains(&name) {
-                passed = false
-            }
+    if !name.is_empty() {
+        if filters_applied == 0 {
+            matches = db::element::queries::select_by_search_query(name, false, &pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
+            filters_applied += 1;
+        } else {
+            matches = matches
+                .into_iter()
+                .filter(|it| it.name().to_lowercase().contains(&name))
+                .collect();
+        }
 
-            passed
-        })
-        .map(|it| SearchedPlace {
-            id: it.id,
-            lat: it.lat.unwrap(),
-            lon: it.lon.unwrap(),
-            icon: it
-                .tags
-                .get("icon:android")
-                .unwrap_or(&Value::String("store".into()))
-                .as_str()
-                .unwrap_or("store")
-                .to_string(),
-            name: it.name(),
-        })
-        .collect();
-    Ok(Json(elements))
+        filters_applied += 1;
+    }
+
+    if !payment_provider.is_empty() {
+        if filters_applied == 0 {
+            matches = db::element::queries::select_by_payment_provider(payment_provider, &pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
+        } else {
+            matches = matches
+                .into_iter()
+                .filter(|it| it.supports_payment_provider(&payment_provider))
+                .collect();
+        }
+    }
+
+    Ok(Json(
+        matches
+            .into_iter()
+            .map(|it| SearchedPlace {
+                id: it.id,
+                lat: it.lat.unwrap(),
+                lon: it.lon.unwrap(),
+                icon: it
+                    .tags
+                    .get("icon:android")
+                    .unwrap_or(&Value::String("store".into()))
+                    .as_str()
+                    .unwrap_or("store")
+                    .to_string(),
+                name: it.name(),
+            })
+            .collect(),
+    ))
 }
 
 #[get("{id}")]

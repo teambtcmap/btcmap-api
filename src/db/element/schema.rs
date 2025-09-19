@@ -121,4 +121,14 @@ impl Element {
     pub fn lon(&self) -> f64 {
         self.overpass_data.coord().x
     }
+
+    pub fn supports_payment_provider(&self, provider: &str) -> bool {
+        match &self.overpass_data.tags {
+            Some(tags) => match tags.get(&format!("payment:{}", provider)) {
+                Some(tag) => tag.is_string() && tag.as_str() == Some("yes"),
+                None => false,
+            },
+            None => false,
+        }
+    }
 }

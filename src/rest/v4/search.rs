@@ -92,7 +92,7 @@ pub async fn get(
     if args.type_filter.is_none()
         || args.type_filter.as_ref().map(|s| s.as_str()) == Some("element")
     {
-        let elements = db::element::queries::select_by_search_query(query, &pool)
+        let elements = db::element::queries::select_by_search_query(query, false, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
 

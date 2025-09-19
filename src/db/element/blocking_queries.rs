@@ -73,13 +73,19 @@ pub fn select_updated_since(
 
 pub fn select_by_search_query(
     search_query: impl Into<String>,
+    include_deleted: bool,
     conn: &Connection,
 ) -> Result<Vec<Element>> {
+    let include_deleted = if include_deleted {
+        ""
+    } else {
+        "AND deleted_at IS NULL"
+    };
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE LOWER(json_extract({overpass_data}, '$.tags.name')) LIKE '%' || UPPER(?1) || '%'
+            WHERE LOWER(json_extract({overpass_data}, '$.tags.name')) LIKE '%' || UPPER(?1) || '%' {include_deleted}
             ORDER BY {updated_at}, {id}
         "#,
         projection = Element::projection(),
@@ -115,6 +121,26 @@ pub fn select_by_bbox(
     );
     conn.prepare(&sql)?
         .query_map(named_params! { ":min_lat": min_lat, ":max_lat": max_lat, ":min_lon": min_lon, ":max_lon": max_lon }, Element::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_by_payment_provider(
+    payment_provider: &str,
+    conn: &Connection,
+) -> Result<Vec<Element>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE json_extract({overpass_data}, '$.tags.payment:{payment_provider}') = 'yes' AND deleted_at IS NULL
+        "#,
+        projection = Element::projection(),
+        table = schema::TABLE_NAME,
+        overpass_data = Columns::OverpassData.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![], Element::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
@@ -353,23 +379,23 @@ mod test {
         // Test case-insensitive matching
         assert_eq!(
             vec![element1.clone(), element3.clone()],
-            super::select_by_search_query("downtown", &conn)?
+            super::select_by_search_query("downtown", false, &conn)?
         );
 
         // Test partial matching
         assert_eq!(
             vec![element2.clone()],
-            super::select_by_search_query("park", &conn)?
+            super::select_by_search_query("park", false, &conn)?
         );
 
         // Test no matches
         assert_eq!(
             0,
-            super::select_by_search_query("nonexistent", &conn)?.len()
+            super::select_by_search_query("nonexistent", false, &conn)?.len()
         );
 
         // Test empty query (should match all named elements)
-        let results = super::select_by_search_query("", &conn)?;
+        let results = super::select_by_search_query("", false, &conn)?;
         assert_eq!(3, results.len());
         assert!(results.contains(&element1));
         assert!(results.contains(&element2));
@@ -390,18 +416,18 @@ mod test {
         // Test with special characters
         assert_eq!(
             vec![element.clone()],
-            super::select_by_search_query("café", &conn)?
+            super::select_by_search_query("café", false, &conn)?
         );
 
         assert_eq!(
             vec![element.clone()],
-            super::select_by_search_query("paris", &conn)?
+            super::select_by_search_query("paris", false, &conn)?
         );
 
         // Test with single quote
         assert_eq!(
             vec![element],
-            super::select_by_search_query("le paris", &conn)?
+            super::select_by_search_query("le paris", false, &conn)?
         );
 
         Ok(())
