@@ -209,4 +209,20 @@ impl Element {
             None => None,
         }
     }
+
+    pub fn phone(&self) -> Option<String> {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return None;
+        };
+
+        let variants = vec!["phone", "contact:phone"];
+
+        for variant in variants {
+            if osm_tags.contains_key(variant) && osm_tags[variant].is_string() {
+                return Some(osm_tags[variant].as_str().unwrap_or("").to_string());
+            }
+        }
+
+        return None;
+    }
 }

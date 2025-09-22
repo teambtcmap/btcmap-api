@@ -165,6 +165,8 @@ pub struct SearchedPlace {
     pub verified_at: Option<OffsetDateTime>,
     pub osm_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "time::serde::rfc3339::option")]
     pub boosted_until: Option<OffsetDateTime>,
 }
@@ -271,6 +273,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                     updated_at: it.updated_at,
                     verified_at: it.verified_at(),
                     osm_id: it.osm_id(),
+                    phone: it.phone(),
                     boosted_until: it.boosted_until(),
                 }
             })

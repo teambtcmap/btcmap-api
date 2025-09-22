@@ -470,13 +470,8 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "phone" => {
-                if !element.overpass_data.tag("phone").is_empty() {
-                    res.insert("phone".into(), element.overpass_data.tag("phone").into());
-                } else if !element.overpass_data.tag("contact:phone").is_empty() {
-                    res.insert(
-                        "phone".into(),
-                        element.overpass_data.tag("contact:phone").into(),
-                    );
+                if let Some(phone) = element.phone() {
+                    res.insert("phone".to_string(), phone.into());
                 }
             }
             "website" => {
