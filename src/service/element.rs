@@ -422,18 +422,9 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
     let osm_tags = element.overpass_data.tags.as_ref().unwrap_or(&empty_map);
     for tag in &include_tags {
         match *tag {
-            "icon" => match element.tags.get("icon:android") {
-                Some(icon) => {
-                    if icon.is_string() {
-                        res.insert("icon".into(), icon.clone());
-                    } else {
-                        res.insert("icon".into(), "question_mark".into());
-                    }
-                }
-                None => {
-                    res.insert("icon".into(), "question_mark".into());
-                }
-            },
+            "icon" => {
+                res.insert("icon".to_string(), element.icon("question_mark").into());
+            }
             "boosted_until" => {
                 if element.tags.contains_key("boost:expires") {
                     res.insert(
