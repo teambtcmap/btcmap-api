@@ -157,6 +157,10 @@ pub struct SearchedPlace {
     pub opening_hours: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comments: Option<i64>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
 }
 
 #[get("/search")]
@@ -257,6 +261,8 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                     address: it.address(),
                     opening_hours: it.opening_hours(),
                     comments,
+                    created_at: it.created_at,
+                    updated_at: it.updated_at,
                 }
             })
             .collect(),
