@@ -1,7 +1,7 @@
 use rusqlite::Row;
 use serde_json::{Map, Value};
 use std::sync::OnceLock;
-use time::OffsetDateTime;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::service::overpass::OverpassElement;
 
@@ -191,5 +191,22 @@ impl Element {
 
     pub fn verified_at(&self) -> Option<OffsetDateTime> {
         self.overpass_data.verification_date()
+    }
+
+    pub fn osm_id(&self) -> String {
+        self.overpass_data.btcmap_id()
+    }
+
+    pub fn boosted_until(&self) -> Option<OffsetDateTime> {
+        match self.tags.get("boost:expires") {
+            Some(boost_expires) => match boost_expires.as_str() {
+                Some(boost_expires) => match OffsetDateTime::parse(boost_expires, &Rfc3339) {
+                    Ok(boost_expires) => Some(boost_expires),
+                    Err(_) => None,
+                },
+                None => None,
+            },
+            None => None,
+        }
     }
 }

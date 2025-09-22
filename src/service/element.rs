@@ -426,12 +426,12 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 res.insert("icon".to_string(), element.icon("question_mark").into());
             }
             "boosted_until" => {
-                if element.tags.contains_key("boost:expires") {
+                if let Some(boosted_until) = element.boosted_until() {
                     res.insert(
-                        "boosted_until".into(),
-                        element.tags["boost:expires"].clone(),
+                        "boosted_until".to_string(),
+                        boosted_until.format(&Rfc3339).unwrap().into(),
                     );
-                }
+                };
             }
             "name" => {
                 let name = element.overpass_data.tag("name");
@@ -532,7 +532,7 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 };
             }
             "osm_id" => {
-                res.insert("osm_id".into(), element.overpass_data.btcmap_id().into());
+                res.insert("osm_id".to_string(), element.osm_id().into());
             }
             "osm_url" => {
                 res.insert("osm_url".into(), element.osm_url().into());
