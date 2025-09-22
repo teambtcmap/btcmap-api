@@ -480,9 +480,8 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "twitter" => {
-                let twitter = element.overpass_data.tag("contact:twitter");
-                if is_valid_url(twitter) {
-                    res.insert("twitter".into(), twitter.into());
+                if let Some(twitter) = element.twitter() {
+                    res.insert("twitter".to_string(), twitter.into());
                 }
             }
             "facebook" => {

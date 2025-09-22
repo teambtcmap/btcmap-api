@@ -2,6 +2,7 @@ use rusqlite::Row;
 use serde_json::{Map, Value};
 use std::sync::OnceLock;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use url::Url;
 
 use crate::service::overpass::OverpassElement;
 
@@ -240,5 +241,32 @@ impl Element {
         }
 
         return None;
+    }
+
+    pub fn twitter(&self) -> Option<String> {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return None;
+        };
+
+        let key = "contact:twitter";
+
+        if osm_tags.contains_key(key) && osm_tags[key].is_string() {
+            let result = osm_tags[key].as_str().unwrap_or("");
+
+            return if is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+}
+
+fn is_valid_url(url: &str) -> bool {
+    match Url::parse(url) {
+        Ok(url) => url.scheme() == "http" || url.scheme() == "https",
+        Err(_) => false,
     }
 }
