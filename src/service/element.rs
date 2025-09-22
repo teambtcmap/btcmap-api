@@ -475,16 +475,8 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "website" => {
-                if !element.overpass_data.tag("website").is_empty() {
-                    let website = element.overpass_data.tag("website");
-                    if is_valid_url(website) {
-                        res.insert("website".into(), website.into());
-                    }
-                } else {
-                    let website = element.overpass_data.tag("contact:website");
-                    if is_valid_url(website) {
-                        res.insert("website".into(), website.into());
-                    }
+                if let Some(website) = element.website() {
+                    res.insert("website".to_string(), website.into());
                 }
             }
             "twitter" => {
