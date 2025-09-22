@@ -161,6 +161,8 @@ pub struct SearchedPlace {
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub verified_at: Option<OffsetDateTime>,
 }
 
 #[get("/search")]
@@ -263,6 +265,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                     comments,
                     created_at: it.created_at,
                     updated_at: it.updated_at,
+                    verified_at: it.verified_at(),
                 }
             })
             .collect(),

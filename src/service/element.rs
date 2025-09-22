@@ -527,11 +527,8 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "address" => {
-                match element.address() {
-                    Some(addr) => {
-                        res.insert("address".into(), addr.into());
-                    }
-                    None => {}
+                if let Some(addr) = element.address() {
+                    res.insert("address".to_string(), addr.into());
                 };
             }
             "osm_id" => {
@@ -567,7 +564,7 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 res.insert("lon".into(), json! {element.lon()});
             }
             "verified_at" => {
-                if let Some(date) = element.overpass_data.verification_date() {
+                if let Some(date) = element.verified_at() {
                     res.insert("verified_at".into(), json! {date.date().to_string()});
                 }
             }

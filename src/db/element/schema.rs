@@ -188,4 +188,8 @@ impl Element {
             .unwrap_or(default)
             .to_string()
     }
+
+    pub fn verified_at(&self) -> Option<OffsetDateTime> {
+        self.overpass_data.verification_date()
+    }
 }
