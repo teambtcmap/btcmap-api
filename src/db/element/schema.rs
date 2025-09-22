@@ -179,4 +179,13 @@ impl Element {
             0
         }
     }
+
+    pub fn icon(&self, default: &str) -> String {
+        self.tags
+            .get("icon:android")
+            .unwrap_or(&Value::String(default.into()))
+            .as_str()
+            .unwrap_or(default)
+            .to_string()
+    }
 }

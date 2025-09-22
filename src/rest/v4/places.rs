@@ -16,7 +16,6 @@ use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
 use std::i64;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -253,13 +252,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                     id: it.id,
                     lat: it.lat.unwrap(),
                     lon: it.lon.unwrap(),
-                    icon: it
-                        .tags
-                        .get("icon:android")
-                        .unwrap_or(&Value::String("store".into()))
-                        .as_str()
-                        .unwrap_or("store")
-                        .to_string(),
+                    icon: it.icon("store"),
                     name: it.name(),
                     address: it.address(),
                     opening_hours: it.opening_hours(),
