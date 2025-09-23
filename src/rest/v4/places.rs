@@ -171,8 +171,18 @@ pub struct SearchedPlace {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub twitter: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub facebook: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instagram: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "time::serde::rfc3339::option")]
     pub boosted_until: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_app_url: Option<String>,
 }
 
 #[get("/search")]
@@ -280,7 +290,12 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                     phone: it.phone(),
                     website: it.website(),
                     twitter: it.twitter(),
+                    facebook: it.facebook(),
+                    instagram: it.instagram(),
+                    line: it.line(),
+                    email: it.email(),
                     boosted_until: it.boosted_until(),
+                    required_app_url: it.required_app_url(),
                 }
             })
             .collect(),

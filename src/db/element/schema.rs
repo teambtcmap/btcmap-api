@@ -227,6 +227,22 @@ impl Element {
         return None;
     }
 
+    pub fn email(&self) -> Option<String> {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return None;
+        };
+
+        let variants = vec!["email", "contact:email"];
+
+        for variant in variants {
+            if osm_tags.contains_key(variant) && osm_tags[variant].is_string() {
+                return Some(osm_tags[variant].as_str().unwrap_or("").to_string());
+            }
+        }
+
+        return None;
+    }
+
     pub fn website(&self) -> Option<String> {
         let Some(osm_tags) = &self.overpass_data.tags else {
             return None;
@@ -261,6 +277,80 @@ impl Element {
         }
 
         None
+    }
+
+    pub fn facebook(&self) -> Option<String> {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return None;
+        };
+
+        let key = "contact:facebook";
+
+        if osm_tags.contains_key(key) && osm_tags[key].is_string() {
+            let result = osm_tags[key].as_str().unwrap_or("");
+
+            return if is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn instagram(&self) -> Option<String> {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return None;
+        };
+
+        let key = "contact:instagram";
+
+        if osm_tags.contains_key(key) && osm_tags[key].is_string() {
+            let result = osm_tags[key].as_str().unwrap_or("");
+
+            return if is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn line(&self) -> Option<String> {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return None;
+        };
+
+        let key = "contact:line";
+
+        if osm_tags.contains_key(key) && osm_tags[key].is_string() {
+            let result = osm_tags[key].as_str().unwrap_or("");
+
+            return if is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn required_app_url(&self) -> Option<String> {
+        match &self.overpass_data.tags {
+            Some(osm_tags) => {
+                match osm_tags.get("payment:lightning:companion_app_url") {
+                    Some(url) => {
+                        url.as_str().map(Into::into)
+                    }
+                    None => None
+                }
+            }
+            None => None
+        }
     }
 }
 

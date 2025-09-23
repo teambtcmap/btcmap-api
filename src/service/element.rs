@@ -17,7 +17,6 @@ use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
 use tracing::info;
-use url::Url;
 
 pub async fn remove_areas_tag(pool: &Pool) -> Result<()> {
     let elements =
@@ -456,11 +455,8 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "required_app_url" => {
-                let required_app_url = element
-                    .overpass_data
-                    .tag("payment:lightning:companion_app_url");
-                if is_valid_url(required_app_url) {
-                    res.insert("required_app_url".into(), required_app_url.into());
+                if let Some(url) = element.required_app_url() {
+                    res.insert("required_app_url".to_string(), url.into());
                 }
             }
             "comments" => {
@@ -485,31 +481,23 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 }
             }
             "facebook" => {
-                let facebook = element.overpass_data.tag("contact:facebook");
-                if is_valid_url(facebook) {
-                    res.insert("facebook".into(), facebook.into());
+                if let Some(facebook) = element.facebook() {
+                    res.insert("facebook".to_string(), facebook.into());
                 }
             }
             "instagram" => {
-                let instagram = element.overpass_data.tag("contact:instagram");
-                if is_valid_url(instagram) {
-                    res.insert("instagram".into(), instagram.into());
+                if let Some(instagram) = element.instagram() {
+                    res.insert("instagram".to_string(), instagram.into());
                 }
             }
             "line" => {
-                let line = element.overpass_data.tag("contact:line");
-                if is_valid_url(line) {
-                    res.insert("line".into(), line.into());
+                if let Some(line) = element.line() {
+                    res.insert("line".to_string(), line.into());
                 }
             }
             "email" => {
-                if !element.overpass_data.tag("email").is_empty() {
-                    res.insert("email".into(), element.overpass_data.tag("email").into());
-                } else if !element.overpass_data.tag("contact:email").is_empty() {
-                    res.insert(
-                        "email".into(),
-                        element.overpass_data.tag("contact:email").into(),
-                    );
+                if let Some(email) = element.email() {
+                    res.insert("email".to_string(), email.into());
                 }
             }
             "address" => {
@@ -565,11 +553,4 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
         }
     }
     res
-}
-
-fn is_valid_url(url: &str) -> bool {
-    match Url::parse(url) {
-        Ok(url) => url.scheme() == "http" || url.scheme() == "https",
-        Err(_) => false,
-    }
 }
