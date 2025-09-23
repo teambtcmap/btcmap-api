@@ -100,6 +100,16 @@ This method has two main use cases:
 1. Client apps without cache, which need to fetch the places on demand for a small region (usually user map viewport). This endpoint is fairly optimized and you can call it every time user moves the map.
 2. Client apps requiring server-side search. You can search places by area, name and also by payment provider.
 
+#### Parameters
+
+| Parameter          | Type   | Example          | Comments                                                         |
+|--------------------|--------|------------------|------------------------------------------------------------------|
+| `lat`              | Number | `1.23`           | You also need to set `radius_km` in order to use this parameter. |
+| `lon`              | Number | `4.56`           | You also need to set `radius_km` in order to use this parameter. |
+| `radius_km`        | Number | `15`             | Search radius, in kilometers.                                    |
+| `name`             | String | `Bitcoin Coffee` | At least three letters are required.                             |
+| `payment_provider` | String | `coinos`         | Based on OSM `payment:{provider}` tags.                          |
+
 #### Examples
 
 ##### Search Places by Payment Provider
