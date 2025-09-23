@@ -28,6 +28,8 @@ curl https://api.btcmap.org/v4/places
 | `include_deleted` | Boolean | `true` | `false` | Whether to include deleted places. |
 | `limit` | Integer | `5` | - | Limit the number of places returned. |
 
+The `include_deleted` parameter is not needed for an initial cold sync but is essential afterward to evict places from your cache when they are deleted.
+
 ##### Field Selection
 
 The `fields` parameter allows you to request specific fields to be included in the response, which can improve performance for large requests.
