@@ -13,6 +13,8 @@ This document describes the endpoints for interacting with places in REST API v4
 
 Caching clients are advised to use this endpoint to sync all places and then request lightweight patches containing only the latest changes. By using the `updated_since` and `limit` parameters, a client can incrementally process the entire history until it reaches the tip, a process similar to Bitcoin's Initial Block Download (IBD) and progressive sync.
 
+Bundling a recent snapshot with your app provides resilience against BTC Map server outages and offline functionality for users with poor or censored internet access.
+
 ```bash
 curl https://api.btcmap.org/v4/places
 ```
