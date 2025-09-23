@@ -62,10 +62,10 @@ Available fields include:
 
 #### Examples:
 
-##### Fetch All Active Places With Location and Name
+##### Fetch All Places With Location and Name
 
 ```bash
-curl --request GET https://api.btcmap.org/v4/places?fields=id,lat,lon,name | jq
+curl 'https://api.btcmap.org/v4/places?fields=id,lat,lon,name'
 ```
 
 ```json
@@ -105,7 +105,7 @@ This method has two main use cases:
 Let's fetch all the places using [Coinos](https://coinos.io/), a popular Canadian Bitcoin-only payment provider and our sponsor.
 
 ```bash
-curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos' | jq
+curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos'
 ```
 
 ```json
@@ -115,7 +115,16 @@ curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos' | jq
     "lat": 49.1055648,
     "lon": -121.9641064,
     "icon": "menu_book",
-    "name": "The Owl and The Cat Bookery"
+    "name": "The Owl and The Cat Bookery",
+    "address": "45655 Tamihi Way Chilliwack V2R 2M3",
+    "opening_hours": "Mo-Fr 11:00-17:30 Sa 11:00-17:00 Su 12:00-16:00",
+    "created_at": "2025-09-17T08:22:03.855Z",
+    "updated_at": "2025-09-18T13:12:31.723Z",
+    "verified_at": "2025-09-18T00:00:00Z",
+    "osm_id": "node:13149030952",
+    "phone": "+1-604-846-6332",
+    "website": "https://owlandcat.ca",
+    "email": "owlcatbookery@gmail.com"
   }
 ]
 ```
@@ -125,7 +134,7 @@ curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos' | jq
 Search filters can be mixed, so let's filter by both provider and merchant name:
 
 ```bash
-curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos&name=lounge' | jq
+curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos&name=lounge'
 ```
 
 ```json
@@ -135,7 +144,15 @@ curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos&name=loun
     "lat": 49.281207,
     "lon": -123.0154316,
     "icon": "smoking_rooms",
-    "name": "Bula Lounge"
+    "name": "Bula Lounge",
+    "address": "4027 Hastings Street",
+    "created_at": "2024-04-29T20:50:59.787Z",
+    "updated_at": "2025-09-18T05:36:32.377Z",
+    "verified_at": "2025-02-05T00:00:00Z",
+    "osm_id": "node:8818808941",
+    "phone": "+1-604-340-4944",
+    "website": "https://bulalounge.com/",
+    "email": "info@bulalounge.ca"
   }
 ]
 ```
@@ -145,7 +162,7 @@ curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos&name=loun
 You need to provide at least 3 letters.
 
 ```bash
-curl 'https://api.btcmap.org/v4/places/search/?name=thai' | jq
+curl 'https://api.btcmap.org/v4/places/search/?name=thai'
 ```
 
 ```json
@@ -155,7 +172,13 @@ curl 'https://api.btcmap.org/v4/places/search/?name=thai' | jq
     "lat": 16.6429003,
     "lon": 103.9031675,
     "icon": "restaurant",
-    "name": "ก๋วยเตี๋ยวยกล้อ Thai Noodle"
+    "name": "ก๋วยเตี๋ยวยกล้อ Thai Noodle",
+    "address": "46240",
+    "created_at": "2024-11-08T04:32:56.063Z",
+    "updated_at": "2025-09-18T05:36:34.793Z",
+    "verified_at": "2024-10-31T00:00:00Z",
+    "osm_id": "node:12322867077",
+    "phone": "+66 643200065"
   }
 ]
 ```
@@ -165,17 +188,23 @@ curl 'https://api.btcmap.org/v4/places/search/?name=thai' | jq
 Let's fetch all the places in Manchester, UK.
 
 ```bash
-curl 'https://api.btcmap.org/v4/places/search/?lat=53.48&lon=-2.24&radius_km=20' | jq
+curl 'https://api.btcmap.org/v4/places/search/?lat=53.48&lon=-2.24&radius_km=20'
 ```
 
 ```json
 [
   {
-    "id": 2977,
-    "lat": 53.448488,
-    "lon": -2.2502728,
-    "icon": "storefront",
-    "name": "Manchester Appliance Repairs"
+    "id": 16616,
+    "lat": 53.4866355,
+    "lon": -2.2416388,
+    "icon": "lunch_dining",
+    "name": "Hipster Burgers",
+    "created_at": "2023-12-01T11:30:49.577Z",
+    "updated_at": "2025-09-18T05:36:34.497Z",
+    "verified_at": "2025-07-18T00:00:00Z",
+    "osm_id": "node:5628820443",
+    "facebook": "https://www.facebook.com/billy.hipster",
+    "instagram": "https://www.instagram.com/hipsterburgersmcr"
   }
 ]
 ```
@@ -183,7 +212,7 @@ curl 'https://api.btcmap.org/v4/places/search/?lat=53.48&lon=-2.24&radius_km=20'
 ### Fetch Place
 
 ```
-curl --request GET https://api.btcmap.org/v4/places/{id}
+curl https://api.btcmap.org/v4/places/{id}
 ```
 
 Retrieves a specific place by its ID. It supports both BTC Map numerical IDs and OSM IDs (`element_type:id`).
@@ -200,7 +229,7 @@ Retrieves a specific place by its ID. It supports both BTC Map numerical IDs and
 ##### Get Place Contact Details
 
 ```
-curl --request GET https://api.btcmap.org/v4/places/5005?fields=id,name,phone,website | jq
+curl 'https://api.btcmap.org/v4/places/5005?fields=id,name,phone,website'
 ```
 
 ```json
@@ -221,7 +250,7 @@ This is equivalent of filtering the `/place-comments` endpoint by `place_id`.
 ##### Get Comments for a Local Bar
 
 ```bash
-curl --request GET https://api.btcmap.org/v4/places/22923/comments | jq
+curl GET https://api.btcmap.org/v4/places/22923/comments
 ```
 
 ```json
