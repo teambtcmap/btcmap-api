@@ -5,9 +5,9 @@ This document describes the endpoints for interacting with places in REST API v4
 ## Available Endpoints
 
 - [Chronological Sync](#chronological-sync)
-- [Get by ID](#get-by-id)
-- [Get Comments by Place ID](#get-comments)
-- [Search Places](#search-places)
+- [Search](#search)
+- [Fetch Place](#fetch-place)
+- [Fetch Place Comments](#fetch-place-comments)
 
 ### Chronological Sync
 
@@ -91,71 +91,7 @@ curl --request GET https://api.btcmap.org/v4/places?fields=id,lat,lon,name | jq
 ]
 ```
 
-### Get by ID
-
-```
-curl --request GET https://api.btcmap.org/v4/places/{id}
-```
-
-Retrieves a specific place by its ID. It supports both BTC Map numerical IDs and OSM IDs (`element_type:id`).
-
-#### Path Parameters
-
-| Parameter | Type | Example | Default | Description |
-|-----------|------|---------|---------|-------------|
-| `id` | String | `5` or `node:28` | - | **Required**. |
-| `fields` | String | `id,name,icon` | `id` | A comma-separated list of requested fields. See [Field Selection](#field-selection) for a full list of available fields. |
-
-#### Examples
-
-##### Get Place Contact Details
-
-```
-curl --request GET https://api.btcmap.org/v4/places/5005?fields=id,name,phone,website | jq
-```
-
-```json
-{
-  "id": 5005,
-  "name": "Casanova",
-  "phone": "+41 562100084",
-  "website": "https://www.casanovabaden.ch"
-}
-```
-
-### Get Comments by Place ID
-
-This is equivalent of filtering the `/place-comments` endpoint by `place_id`.
-
-#### Examples
-
-##### Get Comments for a Local Bar
-
-```bash
-curl --request GET https://api.btcmap.org/v4/places/22923/comments | jq
-```
-
-```json
-[
-  {
-    "id": 1044,
-    "text": "Best burgers in Phuket! Paid in sats",
-    "created_at": "2025-01-06T15:14:03.8Z"
-  },
-  {
-    "id": 1084,
-    "text": "Visited and paid in sats",
-    "created_at": "2025-01-12T11:03:50.83Z"
-  },
-  {
-    "id": 1184,
-    "text": "They have a nice neon Bitcoin sign",
-    "created_at": "2025-02-21T05:07:06.379Z"
-  }
-]
-```
-
-### Search Places
+### Search
 
 This method has two main use cases:
 
@@ -240,6 +176,70 @@ curl 'https://api.btcmap.org/v4/places/search/?lat=53.48&lon=-2.24&radius_km=20'
     "lon": -2.2502728,
     "icon": "storefront",
     "name": "Manchester Appliance Repairs"
+  }
+]
+```
+
+### Fetch Place
+
+```
+curl --request GET https://api.btcmap.org/v4/places/{id}
+```
+
+Retrieves a specific place by its ID. It supports both BTC Map numerical IDs and OSM IDs (`element_type:id`).
+
+#### Path Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `id` | String | `5` or `node:28` | - | **Required**. |
+| `fields` | String | `id,name,icon` | `id` | A comma-separated list of requested fields. See [Field Selection](#field-selection) for a full list of available fields. |
+
+#### Examples
+
+##### Get Place Contact Details
+
+```
+curl --request GET https://api.btcmap.org/v4/places/5005?fields=id,name,phone,website | jq
+```
+
+```json
+{
+  "id": 5005,
+  "name": "Casanova",
+  "phone": "+41 562100084",
+  "website": "https://www.casanovabaden.ch"
+}
+```
+
+### Fetch Place Comments
+
+This is equivalent of filtering the `/place-comments` endpoint by `place_id`.
+
+#### Examples
+
+##### Get Comments for a Local Bar
+
+```bash
+curl --request GET https://api.btcmap.org/v4/places/22923/comments | jq
+```
+
+```json
+[
+  {
+    "id": 1044,
+    "text": "Best burgers in Phuket! Paid in sats",
+    "created_at": "2025-01-06T15:14:03.8Z"
+  },
+  {
+    "id": 1084,
+    "text": "Visited and paid in sats",
+    "created_at": "2025-01-12T11:03:50.83Z"
+  },
+  {
+    "id": 1184,
+    "text": "They have a nice neon Bitcoin sign",
+    "created_at": "2025-02-21T05:07:06.379Z"
   }
 ]
 ```
