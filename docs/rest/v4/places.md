@@ -49,13 +49,14 @@ Available fields include:
 | osm_id | String | node:1234 | OSM identifier, when available. |
 | osm_url | URL | https://www.openstreetmap.org/node/12098197068 | OSM URL, when available. |
 | phone | String | +60652249252 | Phone number associated with this POI. |
-| website | URL | https://www.openstreetmap.org | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key%3Awebsite) for more details on expected format. |
-| twitter | URL **OR** username | Satoshi | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:contact:twitter) for more details on expected format. |
-| facebook | URL **OR** username | Satoshi | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:contact:facebook) for more details on expected format. |
-| instagram | URL **OR** username | Satoshi | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:contact:instagram) for more details on expected format. |
-| line | URL **OR** username | Satoshi | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:contact:line) for more details on expected format. |
+| website | URL | https://www.openstreetmap.org | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key%3Awebsite) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| twitter | URL | https://x.com/barberosdelopez | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:twitter) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| facebook | URL | https://www.facebook.com/Gr33nPapaya | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:facebook) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| instagram | URL | https://www.instagram.com/vempromix23/ | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:instagram) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| line | URL | https://page.line.me/gcs8865c | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:line) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
 | email | email | foo@bar.com | Email address that can be used to contact a place. |
 | boosted_until | ISO 8601 datetime | 2025-01-01T00:00:00Z | This property indicates that a place is currently boosted, which is a good quality signal and you can display such places differently. |
+| required_app_url | URL | https://www.qerko.com | An additional app may be necessary at some locations to convert non-standard QR codes into the standard formats supported by most Bitcoin wallets. |
 
 #### Examples:
 
