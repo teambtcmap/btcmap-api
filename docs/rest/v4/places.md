@@ -4,18 +4,18 @@ This document describes the endpoints for interacting with places in REST API v4
 
 ## Available Endpoints
 
-- [Get Batch](#get-list)
+- [Chronological Sync](#chronological-sync)
 - [Get by ID](#get-by-id)
 - [Get Comments by Place ID](#get-comments)
 - [Search Places](#search-places)
 
-### Get Bach
+### Chronological Sync
+
+Caching clients are advised to use this endpoint to sync all places and then request lightweight patches containing only the latest changes. By using the `updated_since` and `limit` parameters, a client can incrementally process the entire history until it reaches the tip, a process similar to Bitcoin's Initial Block Download (IBD) and progressive sync.
 
 ```bash
-curl --request GET https://api.btcmap.org/v4/places
+curl https://api.btcmap.org/v4/places
 ```
-
-Retrieves a list of places. You can limit the output and apply a few useful filters.
 
 #### Parameters
 
