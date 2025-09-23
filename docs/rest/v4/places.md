@@ -114,7 +114,7 @@ This method has two main use cases:
 
 ##### Search Places by Payment Provider
 
-Let's fetch all the places using [Coinos](https://coinos.io/), a popular Canadian Bitcoin-only payment provider and our sponsor.
+Let's fetch all the places using [Coinos](https://coinos.io/), a popular Canadian Bitcoin-only payment provider.
 
 ```bash
 curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos'
