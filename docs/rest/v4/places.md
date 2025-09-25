@@ -62,7 +62,8 @@ Available fields include:
 | boosted_until | ISO 8601 datetime | 2025-01-01T00:00:00Z | This property indicates that a place is currently boosted, which is a good quality signal and you can display such places differently. |
 | required_app_url | URL | https://www.qerko.com | An additional app may be necessary at some locations to convert non-standard QR codes into the standard formats supported by most Bitcoin wallets. |
 | description | String | Bitcoin ATM located inside of coffee shop. | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:description) for guidance and what to expect. |
-| image | String | https://raw.githubusercontent.com/UAIBIT/PBTC/refs/heads/main/dombiondini.webp | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:image) for guidance and what to expect. |
+| image | String | https://cryptomonkey.net/images/points/BT300675_01.jpg | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:image) for guidance and what to expect. |
+| payment_provider | String | square | In a rare case when there are multiple payment providers, they will be separated by commas. |
 
 #### Examples:
 

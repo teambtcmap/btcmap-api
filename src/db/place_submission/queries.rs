@@ -59,6 +59,45 @@ pub async fn select_by_origin_and_external_id(
         .await?
 }
 
+pub async fn select_by_bbox(
+    min_lat: f64,
+    max_lat: f64,
+    min_lon: f64,
+    max_lon: f64,
+    pool: &Pool,
+) -> Result<Vec<PlaceSubmission>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, conn)
+        })
+        .await?
+}
+
+pub async fn select_by_search_query(
+    search_query: impl Into<String>,
+    include_deleted_and_closed: bool,
+    pool: &Pool,
+) -> Result<Vec<PlaceSubmission>> {
+    let search_query = search_query.into();
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_by_search_query(search_query, include_deleted_and_closed, conn)
+        })
+        .await?
+}
+
+pub async fn select_by_origin(
+    origin: String,
+    pool: &Pool,
+) -> Result<Vec<PlaceSubmission>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_origin(&origin, conn))
+        .await?
+}
+
 pub async fn set_fields(
     id: i64,
     lat: f64,

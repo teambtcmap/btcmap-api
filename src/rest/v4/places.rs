@@ -1,5 +1,7 @@
 use crate::db;
+use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
+use crate::db::place_submission::schema::PlaceSubmission;
 use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
@@ -142,6 +144,7 @@ pub struct SearchArgs {
     radius_km: Option<f64>,
     name: Option<String>,
     payment_provider: Option<String>,
+    include_pending: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -163,7 +166,8 @@ pub struct SearchedPlace {
     pub updated_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     pub verified_at: Option<OffsetDateTime>,
-    pub osm_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub osm_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phone: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -189,6 +193,8 @@ pub struct SearchedPlace {
     pub image: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payment_provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending: Option<bool>,
 }
 
 #[get("/search")]
@@ -198,6 +204,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
     let radius_km = args.radius_km.unwrap_or(100_000.0);
     let name = args.name.clone().unwrap_or("".to_string());
     let payment_provider = args.payment_provider.clone().unwrap_or("".to_string());
+    let include_pending = args.include_pending.unwrap_or(false);
 
     let payment_provider_whitelist = vec!["coinos".to_string(), "square".to_string()];
 
@@ -236,25 +243,45 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
 
     let mut filters_applied = 0;
     let mut matches = vec![];
+    let mut pending_matches = vec![];
 
     if !global {
         matches = db::element::queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
+        if include_pending {
+            pending_matches = db::place_submission::queries::select_by_bbox(
+                min_lat, max_lat, min_lon, max_lon, &pool,
+            )
+            .await
+            .map_err(|_| RestApiError::database())?;
+        }
         filters_applied += 1;
     }
 
     if !name.is_empty() {
         if filters_applied == 0 {
-            matches = db::element::queries::select_by_search_query(name, false, &pool)
+            matches = db::element::queries::select_by_search_query(&name, false, &pool)
                 .await
                 .map_err(|_| RestApiError::database())?;
+            if include_pending {
+                pending_matches =
+                    db::place_submission::queries::select_by_search_query(name, false, &pool)
+                        .await
+                        .map_err(|_| RestApiError::database())?;
+            }
             filters_applied += 1;
         } else {
             matches = matches
                 .into_iter()
                 .filter(|it| it.name().to_lowercase().contains(&name))
                 .collect();
+            if include_pending {
+                pending_matches = pending_matches
+                    .into_iter()
+                    .filter(|it| it.name.to_lowercase().contains(&name))
+                    .collect();
+            }
         }
 
         filters_applied += 1;
@@ -262,53 +289,114 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
 
     if !payment_provider.is_empty() {
         if filters_applied == 0 {
-            matches = db::element::queries::select_by_payment_provider(payment_provider, &pool)
-                .await
-                .map_err(|_| RestApiError::database())?;
+            matches =
+                db::element::queries::select_by_payment_provider(payment_provider.clone(), &pool)
+                    .await
+                    .map_err(|_| RestApiError::database())?;
+            if include_pending {
+                pending_matches =
+                    db::place_submission::queries::select_by_origin(payment_provider, &pool)
+                        .await
+                        .map_err(|_| RestApiError::database())?;
+            }
         } else {
             matches = matches
                 .into_iter()
                 .filter(|it| it.supports_payment_provider(&payment_provider))
                 .collect();
+            if include_pending {
+                pending_matches = pending_matches
+                    .into_iter()
+                    .filter(|it| it.origin == payment_provider)
+                    .collect();
+            }
         }
     }
 
-    Ok(Json(
-        matches
-            .into_iter()
-            .map(|it| {
-                let comments = it.comment_count();
-                let comments = if comments > 0 { Some(comments) } else { None };
+    let mut matches: Vec<SearchedPlace> = matches.into_iter().map(Into::into).collect();
+    let mut pending_matches: Vec<SearchedPlace> =
+        pending_matches.into_iter().map(Into::into).collect();
 
-                SearchedPlace {
-                    id: it.id,
-                    lat: it.lat.unwrap(),
-                    lon: it.lon.unwrap(),
-                    icon: it.icon("store"),
-                    name: it.name(),
-                    address: it.address(),
-                    opening_hours: it.opening_hours(),
-                    comments,
-                    created_at: it.created_at,
-                    updated_at: it.updated_at,
-                    verified_at: it.verified_at(),
-                    osm_id: it.osm_id(),
-                    phone: it.phone(),
-                    website: it.website(),
-                    twitter: it.twitter(),
-                    facebook: it.facebook(),
-                    instagram: it.instagram(),
-                    line: it.line(),
-                    email: it.email(),
-                    boosted_until: it.boosted_until(),
-                    required_app_url: it.required_app_url(),
-                    description: it.description(),
-                    image: it.image(),
-                    payment_provider: it.payment_provider(),
-                }
-            })
-            .collect(),
-    ))
+    let mut res: Vec<SearchedPlace> = vec![];
+    res.append(&mut matches);
+    res.append(&mut pending_matches);
+
+    Ok(Json(res))
+}
+
+impl From<Element> for SearchedPlace {
+    fn from(it: Element) -> Self {
+        let comments = it.comment_count();
+        let comments = if comments > 0 { Some(comments) } else { None };
+
+        SearchedPlace {
+            id: it.id,
+            lat: it.lat.unwrap(),
+            lon: it.lon.unwrap(),
+            icon: it.icon("store"),
+            name: it.name(),
+            address: it.address(),
+            opening_hours: it.opening_hours(),
+            comments,
+            created_at: it.created_at,
+            updated_at: it.updated_at,
+            verified_at: it.verified_at(),
+            osm_id: Some(it.osm_id()),
+            phone: it.phone(),
+            website: it.website(),
+            twitter: it.twitter(),
+            facebook: it.facebook(),
+            instagram: it.instagram(),
+            line: it.line(),
+            email: it.email(),
+            boosted_until: it.boosted_until(),
+            required_app_url: it.required_app_url(),
+            description: it.description(),
+            image: it.image(),
+            payment_provider: it.payment_provider(),
+            pending: None,
+        }
+    }
+}
+
+impl From<PlaceSubmission> for SearchedPlace {
+    fn from(it: PlaceSubmission) -> Self {
+        SearchedPlace {
+            id: it.id,
+            lat: it.lat,
+            lon: it.lon,
+            icon: "store".to_string(),
+            name: it.name,
+            address: None,
+            opening_hours: None,
+            comments: None,
+            created_at: it.created_at,
+            updated_at: it.updated_at,
+            verified_at: Some(it.created_at),
+            osm_id: None,
+            phone: None,
+            website: None,
+            twitter: None,
+            facebook: None,
+            instagram: None,
+            line: None,
+            email: None,
+            boosted_until: None,
+            required_app_url: None,
+            description: it
+                .extra_fields
+                .get("description")
+                .map(|it| it.as_str().unwrap_or(""))
+                .map(Into::into),
+            image: it
+                .extra_fields
+                .get("icon_url")
+                .map(|it| it.as_str().unwrap_or(""))
+                .map(Into::into),
+            payment_provider: Some(it.origin),
+            pending: Some(true),
+        }
+    }
 }
 
 #[get("{id}")]

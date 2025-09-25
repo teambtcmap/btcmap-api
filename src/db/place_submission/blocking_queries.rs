@@ -68,6 +68,78 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         .map_err(Into::into)
 }
 
+pub fn select_by_bbox(
+    min_lat: f64,
+    max_lat: f64,
+    min_lon: f64,
+    max_lon: f64,
+    conn: &Connection,
+) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {lat} BETWEEN :min_lat AND :max_lat AND {lon} BETWEEN :min_lon AND :max_lon AND {deleted_at} IS NULL AND {closed_at} IS NULL
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        lat = Columns::Lat.as_str(),
+        lon = Columns::Lon.as_str(),
+        deleted_at = Columns::DeletedAt.as_str(),
+        closed_at = Columns::ClosedAt.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(named_params! { ":min_lat": min_lat, ":max_lat": max_lat, ":min_lon": min_lon, ":max_lon": max_lon }, PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_by_search_query(
+    search_query: impl Into<String>,
+    include_deleted_and_closed: bool,
+    conn: &Connection,
+) -> Result<Vec<PlaceSubmission>> {
+    let include_deleted_and_closed = if include_deleted_and_closed {
+        ""
+    } else {
+        "AND deleted_at IS NULL AND closed_at IS NULL"
+    };
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE LOWER({name}) LIKE '%' || UPPER(?1) || '%' {include_deleted_and_closed}
+            ORDER BY {updated_at}, {id}
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        name = Columns::Name.as_str(),
+        updated_at = Columns::UpdatedAt.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![search_query.into()], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_by_origin(origin: &str, conn: &Connection) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {origin} = ?1 AND deleted_at IS NULL AND closed_at IS NULL
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        origin = Columns::Origin.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![origin], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<PlaceSubmission> {
     let sql = format!(
         r#"
