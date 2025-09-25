@@ -358,6 +358,16 @@ impl Element {
             None => None,
         }
     }
+
+    pub fn image(&self) -> Option<String> {
+        match &self.overpass_data.tags {
+            Some(osm_tags) => match osm_tags.get("image") {
+                Some(url) => url.as_str().map(Into::into),
+                None => None,
+            },
+            None => None,
+        }
+    }
 }
 
 fn is_valid_url(url: &str) -> bool {
