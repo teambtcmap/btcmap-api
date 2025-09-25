@@ -11,6 +11,7 @@ pub enum Columns {
     LNbitsInvoiceKey,
     DiscordWebhookOsmChanges,
     DiscordWebhookApi,
+    GiteaApiKey,
 }
 
 impl Columns {
@@ -23,6 +24,7 @@ impl Columns {
             Columns::LNbitsInvoiceKey => "lnbits_invoice_key",
             Columns::DiscordWebhookOsmChanges => "discord_webhook_osm_changes",
             Columns::DiscordWebhookApi => "discord_webhook_api",
+            Columns::GiteaApiKey => "gitea_api_key",
         }
     }
 }
@@ -36,6 +38,7 @@ pub struct Conf {
     pub lnbits_invoice_key: String,
     pub discord_webhook_osm_changes: String,
     pub discord_webhook_api: String,
+    pub gitea_api_key: String,
 }
 
 impl Conf {
@@ -50,6 +53,7 @@ impl Conf {
                 Columns::LNbitsInvoiceKey,
                 Columns::DiscordWebhookOsmChanges,
                 Columns::DiscordWebhookApi,
+                Columns::GiteaApiKey,
             ]
             .iter()
             .map(Columns::as_str)
@@ -72,6 +76,7 @@ impl Conf {
                 lnbits_invoice_key: row.get(Columns::LNbitsInvoiceKey.as_str())?,
                 discord_webhook_osm_changes: row.get(Columns::DiscordWebhookOsmChanges.as_str())?,
                 discord_webhook_api: row.get(Columns::DiscordWebhookApi.as_str())?,
+                gitea_api_key: row.get(Columns::GiteaApiKey.as_str())?,
             })
         }
     }
@@ -83,9 +88,10 @@ impl Conf {
             paywall_boost_element_30d_price_sat: 0,
             paywall_boost_element_90d_price_sat: 0,
             paywall_boost_element_365d_price_sat: 0,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         }
     }
 }

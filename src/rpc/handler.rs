@@ -93,6 +93,7 @@ pub enum RpcMethod {
     SubmitPlace,
     GetSubmittedPlace,
     RevokeSubmittedPlace,
+    SyncSubmittedPlaces,
 }
 
 impl Role {
@@ -557,6 +558,10 @@ pub async fn handle(
             req.id.clone(),
             super::import::get_submitted_place::run(params(req.params)?, &pool).await?,
         ),
+        RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
+            req.id.clone(),
+            super::import::sync_submitted_places::run(&pool).await?,
+        ),
     }?;
     Ok(Json(res))
 }
@@ -621,9 +626,10 @@ mod test {
             paywall_boost_element_30d_price_sat: 2,
             paywall_boost_element_90d_price_sat: 3,
             paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         };
         let app = test::init_service(
             App::new()
@@ -653,9 +659,10 @@ mod test {
             paywall_boost_element_30d_price_sat: 2,
             paywall_boost_element_90d_price_sat: 3,
             paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         };
         let app = test::init_service(
             App::new()
@@ -686,9 +693,10 @@ mod test {
             paywall_boost_element_30d_price_sat: 2,
             paywall_boost_element_90d_price_sat: 3,
             paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         };
         let app = test::init_service(
             App::new()
@@ -721,9 +729,10 @@ mod test {
             paywall_boost_element_30d_price_sat: 2,
             paywall_boost_element_90d_price_sat: 3,
             paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         };
         let app = test::init_service(
             App::new()
@@ -756,9 +765,10 @@ mod test {
             paywall_boost_element_30d_price_sat: 2,
             paywall_boost_element_90d_price_sat: 3,
             paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         };
         let app = test::init_service(
             App::new()
@@ -799,9 +809,10 @@ mod test {
             paywall_boost_element_30d_price_sat: 2,
             paywall_boost_element_90d_price_sat: 3,
             paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         };
         let app = test::init_service(
             App::new()
@@ -834,9 +845,10 @@ mod test {
             paywall_boost_element_30d_price_sat: 2,
             paywall_boost_element_90d_price_sat: 3,
             paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".into(),
-            discord_webhook_osm_changes: "".into(),
-            discord_webhook_api: "".into(),
+            lnbits_invoice_key: "".to_string(),
+            discord_webhook_osm_changes: "".to_string(),
+            discord_webhook_api: "".to_string(),
+            gitea_api_key: "".to_string(),
         };
         let app = test::init_service(
             App::new()

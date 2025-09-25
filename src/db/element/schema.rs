@@ -341,15 +341,11 @@ impl Element {
 
     pub fn required_app_url(&self) -> Option<String> {
         match &self.overpass_data.tags {
-            Some(osm_tags) => {
-                match osm_tags.get("payment:lightning:companion_app_url") {
-                    Some(url) => {
-                        url.as_str().map(Into::into)
-                    }
-                    None => None
-                }
-            }
-            None => None
+            Some(osm_tags) => match osm_tags.get("payment:lightning:companion_app_url") {
+                Some(url) => url.as_str().map(Into::into),
+                None => None,
+            },
+            None => None,
         }
     }
 }

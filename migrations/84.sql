@@ -1,0 +1,1 @@
+ALTER TABLE conf ADD COLUMN gitea_api_key TEXT NOT NULL DEFAULT '';
