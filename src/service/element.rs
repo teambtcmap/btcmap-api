@@ -407,6 +407,7 @@ pub const TAGS: &[&str] = &[
     "deleted_at",
     "verified_at",
     "comments",
+    "description",
 ];
 
 pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Value> {
@@ -540,6 +541,11 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
             "verified_at" => {
                 if let Some(date) = element.verified_at() {
                     res.insert("verified_at".into(), json! {date.date().to_string()});
+                }
+            }
+            "description" => {
+                if let Some(description) = element.description() {
+                    res.insert("description".into(), json! { description });
                 }
             }
             unrecognized_tag => {
