@@ -368,6 +368,35 @@ impl Element {
             None => None,
         }
     }
+
+    pub fn payment_provider(&self) -> Option<String> {
+        let mut res = String::new();
+
+        if let Some(osm_tags) = &self.overpass_data.tags {
+            for (k, v) in osm_tags {
+                if k != "payment:coinos" && k != "payment:square" {
+                    continue;
+                }
+
+                if k.starts_with("payment:") {
+                    let provider = k.replace("payment:", "");
+
+                    if !provider.is_empty() && v.as_str() == Some("yes") {
+                        match res.len() {
+                            0 => res.push_str(&provider),
+                            _ => res.push_str(&format!(",{}", provider)),
+                        }
+                    }
+                }
+            }
+        }
+
+        if res.is_empty() {
+            None
+        } else {
+            Some(res)
+        }
+    }
 }
 
 fn is_valid_url(url: &str) -> bool {

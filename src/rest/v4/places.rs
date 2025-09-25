@@ -187,6 +187,8 @@ pub struct SearchedPlace {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_provider: Option<String>,
 }
 
 #[get("/search")]
@@ -302,6 +304,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                     required_app_url: it.required_app_url(),
                     description: it.description(),
                     image: it.image(),
+                    payment_provider: it.payment_provider(),
                 }
             })
             .collect(),
