@@ -119,7 +119,16 @@ impl PlaceSubmission {
     }
 
     pub fn icon(&self) -> String {
-        "store".to_string()
+        match self.origin.as_str() {
+            "square" => match self.category.as_str() {
+                "category_1" => "store",
+                "category_2" => "store",
+                "category_3" => "store",
+                _ => "store",
+            },
+            _ => "store",
+        }
+        .to_string()
     }
 
     pub fn description(&self) -> Option<String> {
