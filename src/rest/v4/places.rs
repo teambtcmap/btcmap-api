@@ -30,6 +30,8 @@ pub struct GetListArgs {
     updated_since: Option<OffsetDateTime>,
     limit: Option<i64>,
     include_deleted: Option<bool>,
+    include_pending: Option<bool>,
+    prevent_pending_id_clash: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -46,8 +48,10 @@ pub async fn get(
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     let updated_since = args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
     let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
+    let include_pending = args.include_pending.unwrap_or(false);
+    let prevent_pending_id_clash = args.prevent_pending_id_clash.unwrap_or(true);
 
-    let items = db::element::queries::select_updated_since(
+    let elements = db::element::queries::select_updated_since(
         updated_since,
         args.limit,
         include_deleted,
@@ -56,15 +60,81 @@ pub async fn get(
     .await
     .map_err(|_| RestApiError::database())?;
 
+    let mut submissions: Vec<PlaceSubmission> = vec![];
+
+    if include_pending {
+        submissions.append(
+            &mut db::place_submission::queries::select_updated_since(
+                updated_since,
+                args.limit,
+                include_deleted,
+                &pool,
+            )
+            .await
+            .map_err(|_| RestApiError::database())?,
+        );
+    }
+
     req.extensions_mut()
-        .insert(RequestExtension::new(items.len()));
+        .insert(RequestExtension::new(elements.len() + submissions.len()));
 
-    let items = items
-        .into_iter()
-        .map(|it| service::element::generate_tags(&it, &fields))
-        .collect();
+    if submissions.is_empty() {
+        let elements = elements
+            .into_iter()
+            .map(|it| service::element::generate_tags(&it, &fields))
+            .collect();
 
-    Ok(Json(items))
+        Ok(Json(elements))
+    } else {
+        let mut items: Vec<GetItem> = vec![];
+        let mut elements: Vec<GetItem> = elements
+            .into_iter()
+            .map(|it| GetItem::Element(it))
+            .collect();
+        let mut submissions: Vec<GetItem> = submissions
+            .into_iter()
+            .map(|it| GetItem::PlaceSubmission(it))
+            .collect();
+        items.append(&mut elements);
+        items.append(&mut submissions);
+
+        items.sort_by(|a, b| a.updated_at().cmp(&b.updated_at()));
+
+        Ok(Json(
+            items
+                .into_iter()
+                .map(|it| it.to_json(&fields, prevent_pending_id_clash))
+                .take(args.limit.unwrap_or(i64::MAX) as usize)
+                .collect(),
+        ))
+    }
+}
+
+pub enum GetItem {
+    Element(Element),
+    PlaceSubmission(PlaceSubmission),
+}
+
+impl GetItem {
+    fn updated_at(&self) -> OffsetDateTime {
+        match self {
+            GetItem::Element(element) => element.updated_at,
+            GetItem::PlaceSubmission(place_submission) => place_submission.updated_at,
+        }
+    }
+
+    fn to_json(&self, fields: &Vec<&str>, prevent_pending_id_clash: bool) -> JsonObject {
+        match self {
+            GetItem::Element(element) => service::element::generate_tags(element, fields),
+            GetItem::PlaceSubmission(place_submission) => {
+                service::element::generate_submission_tags(
+                    place_submission,
+                    fields,
+                    prevent_pending_id_clash,
+                )
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -366,7 +436,7 @@ impl From<PlaceSubmission> for SearchedPlace {
             lat: it.lat,
             lon: it.lon,
             icon: "store".to_string(),
-            name: it.name,
+            name: it.name.clone(),
             address: None,
             opening_hours: None,
             comments: None,
@@ -383,16 +453,8 @@ impl From<PlaceSubmission> for SearchedPlace {
             email: None,
             boosted_until: None,
             required_app_url: None,
-            description: it
-                .extra_fields
-                .get("description")
-                .map(|it| it.as_str().unwrap_or(""))
-                .map(Into::into),
-            image: it
-                .extra_fields
-                .get("icon_url")
-                .map(|it| it.as_str().unwrap_or(""))
-                .map(Into::into),
+            description: it.description(),
+            image: it.image(),
             payment_provider: Some(it.origin),
             pending: Some(true),
         }

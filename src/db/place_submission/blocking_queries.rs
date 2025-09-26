@@ -3,6 +3,7 @@ use crate::Result;
 use geojson::JsonObject;
 use rusqlite::{named_params, params, Connection, OptionalExtension};
 use serde_json::{Map, Value};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub fn insert(
     origin: &str,
@@ -138,6 +139,55 @@ pub fn select_by_origin(origin: &str, conn: &Connection) -> Result<Vec<PlaceSubm
         .query_map(params![origin], PlaceSubmission::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
+}
+
+pub fn select_updated_since(
+    updated_since: OffsetDateTime,
+    limit: Option<i64>,
+    include_deleted_and_closed: bool,
+    conn: &Connection,
+) -> Result<Vec<PlaceSubmission>> {
+    let sql = if include_deleted_and_closed {
+        format!(
+            r#"
+                SELECT {projection}
+                FROM {table}
+                WHERE julianday({updated_at}) > julianday(:updated_since)
+                ORDER BY {updated_at}, {id}
+                LIMIT :limit
+            "#,
+            projection = PlaceSubmission::projection(),
+            table = schema::TABLE_NAME,
+            updated_at = Columns::UpdatedAt.as_str(),
+            id = Columns::Id.as_str(),
+        )
+    } else {
+        format!(
+            r#"
+                SELECT {projection}
+                FROM {table}
+                WHERE {deleted_at} IS NULL AND {closed_at} IS NULL AND julianday({updated_at}) > julianday(:updated_since)
+                ORDER BY {updated_at}, {id}
+                LIMIT :limit
+            "#,
+            projection = PlaceSubmission::projection(),
+            table = schema::TABLE_NAME,
+            deleted_at = Columns::DeletedAt.as_str(),
+            closed_at = Columns::ClosedAt.as_str(),
+            updated_at = Columns::UpdatedAt.as_str(),
+            id = Columns::Id.as_str(),
+        )
+    };
+    Ok(conn
+        .prepare(&sql)?
+        .query_map(
+            named_params! {
+                ":updated_since": updated_since.format(&Rfc3339)?,
+                ":limit": limit.unwrap_or(i64::MAX)
+            },
+            PlaceSubmission::mapper(),
+        )?
+        .collect::<Result<Vec<_>, _>>()?)
 }
 
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<PlaceSubmission> {

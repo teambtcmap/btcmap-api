@@ -4,6 +4,7 @@ use crate::{
 };
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
+use time::OffsetDateTime;
 
 pub async fn insert(
     origin: String,
@@ -88,13 +89,29 @@ pub async fn select_by_search_query(
         .await?
 }
 
-pub async fn select_by_origin(
-    origin: String,
+pub async fn select_by_origin(origin: String, pool: &Pool) -> Result<Vec<PlaceSubmission>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_origin(&origin, conn))
+        .await?
+}
+
+pub async fn select_updated_since(
+    updated_since: OffsetDateTime,
+    limit: Option<i64>,
+    include_deleted_and_closed: bool,
     pool: &Pool,
 ) -> Result<Vec<PlaceSubmission>> {
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_origin(&origin, conn))
+        .interact(move |conn| {
+            blocking_queries::select_updated_since(
+                updated_since,
+                limit,
+                include_deleted_and_closed,
+                conn,
+            )
+        })
         .await?
 }
 

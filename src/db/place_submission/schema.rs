@@ -117,4 +117,28 @@ impl PlaceSubmission {
             })
         }
     }
+
+    pub fn icon(&self) -> String {
+        "store".to_string()
+    }
+
+    pub fn description(&self) -> Option<String> {
+        self.extra_fields
+            .get("description")
+            .map(|it| it.as_str().unwrap_or("").to_string())
+    }
+
+    pub fn image(&self) -> Option<String> {
+        self.extra_fields
+            .get("icon_url")
+            .map(|it| it.as_str().unwrap_or("").to_string())
+    }
+
+    pub fn payment_provider(&self) -> Option<String> {
+        if self.origin == "square" {
+            Some(self.origin.clone())
+        } else {
+            None
+        }
+    }
 }

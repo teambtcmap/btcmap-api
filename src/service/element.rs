@@ -1,6 +1,7 @@
 use crate::db;
 use crate::db::area::schema::Area;
 use crate::db::element::schema::Element;
+use crate::db::place_submission::schema::PlaceSubmission;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use geo::Contains;
@@ -567,6 +568,132 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                         res.insert(tag.to_string(), osm_tags[osm_tag].clone());
                     }
                 }
+            }
+        }
+    }
+    res
+}
+
+pub fn generate_submission_tags(
+    submission: &PlaceSubmission,
+    include_tags: &[&str],
+    prevent_pending_id_clash: bool,
+) -> Map<String, Value> {
+    let mut res = Map::new();
+
+    let id = if prevent_pending_id_clash {
+        100_000_000 + submission.id
+    } else {
+        submission.id
+    };
+
+    res.insert("id".to_string(), id.into());
+    res.insert("pending".to_string(), true.into());
+
+    let include_tags: Vec<&str> = include_tags
+        .iter()
+        .copied()
+        .filter(|it| TAGS.contains(it))
+        .collect();
+    for tag in &include_tags {
+        match *tag {
+            "icon" => {
+                res.insert("icon".to_string(), submission.icon().into());
+            }
+            "boosted_until" => {
+                // no op
+            }
+            "name" => {
+                res.insert("name".to_string(), submission.name.clone().into());
+            }
+            "opening_hours" => {
+                // no op
+            }
+            "required_app_url" => {
+                // no op
+            }
+            "comments" => {
+                // no op
+            }
+            "phone" => {
+                // no op
+            }
+            "website" => {
+                // no op
+            }
+            "twitter" => {
+                // no op
+            }
+            "facebook" => {
+                // no op
+            }
+            "instagram" => {
+                // no op
+            }
+            "line" => {
+                // no op
+            }
+            "email" => {
+                // no op
+            }
+            "address" => {
+                // no op
+            }
+            "osm_id" => {
+                // no op
+            }
+            "osm_url" => {
+                // no op
+            }
+            "created_at" => {
+                res.insert(
+                    "created_at".to_string(),
+                    Value::String(submission.created_at.format(&Rfc3339).unwrap_or_default()),
+                );
+            }
+            "updated_at" => {
+                res.insert(
+                    "updated_at".to_string(),
+                    Value::String(submission.updated_at.format(&Rfc3339).unwrap_or_default()),
+                );
+            }
+            "deleted_at" => {
+                if let Some(deleted_at) = submission.deleted_at {
+                    res.insert(
+                        "deleted_at".to_string(),
+                        Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
+                    );
+                }
+            }
+            "lat" => {
+                res.insert("lat".to_string(), json! { submission.lat });
+            }
+            "lon" => {
+                res.insert("lon".to_string(), json! { submission.lon });
+            }
+            "verified_at" => {
+                res.insert(
+                    "verified_at".to_string(),
+                    Value::String(submission.created_at.format(&Rfc3339).unwrap_or_default()),
+                );
+            }
+            "description" => {
+                if let Some(description) = submission.description() {
+                    res.insert("description".to_string(), json! { description });
+                }
+            }
+            "image" => {
+                if let Some(image) = submission.image() {
+                    res.insert("image".to_string(), json! { image });
+                }
+            }
+            "payment_provider" => {
+                if let Some(payment_provider) = submission.payment_provider() {
+                    res.insert("payment_provider".to_string(), json! { payment_provider });
+                }
+            }
+            _ => {
+                // no op
             }
         }
     }
