@@ -369,6 +369,7 @@ impl PlaceSubmission {
                 "apparel" => "apparel",
                 "garden_supply" => "yard",
                 "cigar_stands" => "smoking_rooms",
+                _ => "currency_bitcoin",
             },
             //Catch-all including "other"
             _ => "currency_bitcoin",
