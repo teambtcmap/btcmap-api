@@ -197,10 +197,10 @@ pub async fn get_pending(pool: Data<Pool>) -> Res<Vec<PendingPlace>> {
         .into_iter()
         .map(|it| PendingPlace {
             id: it.id,
-            source: it.origin,
+            source: it.origin.clone(),
             lat: it.lat,
             lon: it.lon,
-            icon: "store".into(),
+            icon: it.icon(),
             name: it.name,
         })
         .collect();
