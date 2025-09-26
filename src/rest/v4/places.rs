@@ -215,6 +215,7 @@ pub struct SearchArgs {
     name: Option<String>,
     payment_provider: Option<String>,
     include_pending: Option<bool>,
+    prevent_pending_id_clash: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -384,8 +385,43 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
     }
 
     let mut matches: Vec<SearchedPlace> = matches.into_iter().map(Into::into).collect();
-    let mut pending_matches: Vec<SearchedPlace> =
-        pending_matches.into_iter().map(Into::into).collect();
+    let mut pending_matches: Vec<SearchedPlace> = pending_matches
+        .into_iter()
+        .map(|it| {
+            let id = if args.prevent_pending_id_clash.unwrap_or(true) {
+                100_000_000 + it.id
+            } else {
+                it.id
+            };
+            SearchedPlace {
+                id,
+                lat: it.lat,
+                lon: it.lon,
+                icon: it.icon(),
+                name: it.name.clone(),
+                address: None,
+                opening_hours: None,
+                comments: None,
+                created_at: it.created_at,
+                updated_at: it.updated_at,
+                verified_at: Some(it.created_at),
+                osm_id: None,
+                phone: None,
+                website: None,
+                twitter: None,
+                facebook: None,
+                instagram: None,
+                line: None,
+                email: None,
+                boosted_until: None,
+                required_app_url: None,
+                description: it.description(),
+                image: it.image(),
+                payment_provider: it.payment_provider(),
+                pending: Some(true),
+            }
+        })
+        .collect();
 
     let mut res: Vec<SearchedPlace> = vec![];
     res.append(&mut matches);
@@ -425,38 +461,6 @@ impl From<Element> for SearchedPlace {
             image: it.image(),
             payment_provider: it.payment_provider(),
             pending: None,
-        }
-    }
-}
-
-impl From<PlaceSubmission> for SearchedPlace {
-    fn from(it: PlaceSubmission) -> Self {
-        SearchedPlace {
-            id: it.id,
-            lat: it.lat,
-            lon: it.lon,
-            icon: "store".to_string(),
-            name: it.name.clone(),
-            address: None,
-            opening_hours: None,
-            comments: None,
-            created_at: it.created_at,
-            updated_at: it.updated_at,
-            verified_at: Some(it.created_at),
-            osm_id: None,
-            phone: None,
-            website: None,
-            twitter: None,
-            facebook: None,
-            instagram: None,
-            line: None,
-            email: None,
-            boosted_until: None,
-            required_app_url: None,
-            description: it.description(),
-            image: it.image(),
-            payment_provider: Some(it.origin),
-            pending: Some(true),
         }
     }
 }
