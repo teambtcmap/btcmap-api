@@ -607,7 +607,9 @@ pub fn generate_submission_tags(
                 res.insert("name".to_string(), submission.name.clone().into());
             }
             "opening_hours" => {
-                // no op
+                if let Some(opening_hours) = submission.opening_hours() {
+                    res.insert("opening_hours".to_string(), opening_hours.into());
+                };
             }
             "required_app_url" => {
                 // no op
@@ -616,28 +618,44 @@ pub fn generate_submission_tags(
                 // no op
             }
             "phone" => {
-                // no op
+                if let Some(val) = submission.phone() {
+                    res.insert("phone".to_string(), val.into());
+                };
             }
             "website" => {
-                // no op
+                if let Some(val) = submission.website() {
+                    res.insert("website".to_string(), val.into());
+                };
             }
             "twitter" => {
-                // no op
+                if let Some(val) = submission.twitter() {
+                    res.insert("twitter".to_string(), val.into());
+                };
             }
             "facebook" => {
-                // no op
+                if let Some(val) = submission.facebook() {
+                    res.insert("facebook".to_string(), val.into());
+                };
             }
             "instagram" => {
-                // no op
+                if let Some(val) = submission.instagram() {
+                    res.insert("instagram".to_string(), val.into());
+                };
             }
             "line" => {
-                // no op
+                if let Some(val) = submission.line() {
+                    res.insert("line".to_string(), val.into());
+                };
             }
             "email" => {
-                // no op
+                if let Some(email) = submission.email() {
+                    res.insert("email".to_string(), email.into());
+                };
             }
             "address" => {
-                // no op
+                if let Some(addr) = submission.address() {
+                    res.insert("address".to_string(), addr.into());
+                };
             }
             "osm_id" => {
                 // no op

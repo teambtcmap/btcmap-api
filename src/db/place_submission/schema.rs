@@ -2,6 +2,7 @@ use rusqlite::Row;
 use serde_json::{Map, Value};
 use std::sync::OnceLock;
 use time::OffsetDateTime;
+use url::Url;
 
 pub const TABLE_NAME: &str = "place_submission";
 
@@ -382,6 +383,110 @@ impl PlaceSubmission {
             .map(|it| it.as_str().unwrap_or("").to_string())
     }
 
+    pub fn address(&self) -> Option<String> {
+        self.extra_fields
+            .get("address")
+            .map(|it| it.as_str().unwrap_or("").to_string())
+    }
+
+    pub fn opening_hours(&self) -> Option<String> {
+        self.extra_fields
+            .get("opening_hours")
+            .map(|it| it.as_str().unwrap_or("").to_string())
+    }
+
+    pub fn phone(&self) -> Option<String> {
+        self.extra_fields
+            .get("phone")
+            .map(|it| it.as_str().unwrap_or("").to_string())
+    }
+
+    pub fn website(&self) -> Option<String> {
+        let key = "website";
+
+        if self.extra_fields.contains_key(key) && self.extra_fields[key].is_string() {
+            let result = self.extra_fields[key].as_str().unwrap_or("");
+
+            return if !result.is_empty() && is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn twitter(&self) -> Option<String> {
+        let key = "twitter";
+
+        if self.extra_fields.contains_key(key) && self.extra_fields[key].is_string() {
+            let result = self.extra_fields[key].as_str().unwrap_or("");
+
+            return if !result.is_empty() && is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn facebook(&self) -> Option<String> {
+        let key = "facebook";
+
+        if self.extra_fields.contains_key(key) && self.extra_fields[key].is_string() {
+            let result = self.extra_fields[key].as_str().unwrap_or("");
+
+            return if !result.is_empty() && is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn instagram(&self) -> Option<String> {
+        let key = "instagram";
+
+        if self.extra_fields.contains_key(key) && self.extra_fields[key].is_string() {
+            let result = self.extra_fields[key].as_str().unwrap_or("");
+
+            return if !result.is_empty() && is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn line(&self) -> Option<String> {
+        let key = "line";
+
+        if self.extra_fields.contains_key(key) && self.extra_fields[key].is_string() {
+            let result = self.extra_fields[key].as_str().unwrap_or("");
+
+            return if !result.is_empty() && is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
+    pub fn email(&self) -> Option<String> {
+        self.extra_fields
+            .get("email")
+            .map(|it| it.as_str().unwrap_or("").to_string())
+    }
+
     pub fn image(&self) -> Option<String> {
         self.extra_fields
             .get("icon_url")
@@ -394,5 +499,12 @@ impl PlaceSubmission {
         } else {
             None
         }
+    }
+}
+
+fn is_valid_url(url: &str) -> bool {
+    match Url::parse(url) {
+        Ok(url) => url.scheme() == "http" || url.scheme() == "https",
+        Err(_) => false,
     }
 }

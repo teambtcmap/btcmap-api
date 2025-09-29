@@ -181,11 +181,51 @@ pub async fn get_boosted(
 #[derive(Serialize)]
 pub struct PendingPlace {
     pub id: i64,
-    pub source: String,
     pub lat: f64,
     pub lon: f64,
     pub icon: String,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opening_hours: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comments: Option<i64>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub verified_at: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub osm_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub twitter: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub facebook: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instagram: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub boosted_until: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_app_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending: Option<bool>,
 }
 
 #[get("/pending")]
@@ -197,11 +237,30 @@ pub async fn get_pending(pool: Data<Pool>) -> Res<Vec<PendingPlace>> {
         .into_iter()
         .map(|it| PendingPlace {
             id: it.id,
-            source: it.origin.clone(),
             lat: it.lat,
             lon: it.lon,
             icon: it.icon(),
-            name: it.name,
+            name: it.name.clone(),
+            address: it.address(),
+            opening_hours: it.opening_hours(),
+            comments: None,
+            created_at: it.created_at,
+            updated_at: it.updated_at,
+            verified_at: Some(it.created_at),
+            osm_id: None,
+            phone: it.phone(),
+            website: it.website(),
+            twitter: it.twitter(),
+            facebook: it.facebook(),
+            instagram: it.instagram(),
+            line: it.line(),
+            email: it.email(),
+            boosted_until: None,
+            required_app_url: None,
+            description: it.description(),
+            image: it.image(),
+            payment_provider: it.payment_provider(),
+            pending: Some(true),
         })
         .collect();
     Ok(Json(items))
@@ -399,20 +458,20 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                 lon: it.lon,
                 icon: it.icon(),
                 name: it.name.clone(),
-                address: None,
-                opening_hours: None,
+                address: it.address(),
+                opening_hours: it.opening_hours(),
                 comments: None,
                 created_at: it.created_at,
                 updated_at: it.updated_at,
                 verified_at: Some(it.created_at),
                 osm_id: None,
-                phone: None,
-                website: None,
-                twitter: None,
-                facebook: None,
-                instagram: None,
-                line: None,
-                email: None,
+                phone: it.phone(),
+                website: it.website(),
+                twitter: it.twitter(),
+                facebook: it.facebook(),
+                instagram: it.instagram(),
+                line: it.line(),
+                email: it.email(),
                 boosted_until: None,
                 required_app_url: None,
                 description: it.description(),
