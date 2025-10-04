@@ -38,34 +38,33 @@ Available fields include:
 
 | Name | Type | Example | Description |
 |------|------|---------|-------------|
-| id | Integer | 3213 | BTC Map Place ID. Returned by default. |
-| lat | Number | 53.2689435 | Place latitude. |
-| lon | Number | 9.8538715 | Place longitude. |
-| icon | String | cafe | [Material Icons](https://fonts.google.com/icons) identifier. |
-| name | String | Der Schafstall | Place Name. Defaults to English, if available. |
-| address | String | 5, Nowhere St. | Place address, if known. |
-| opening_hours | String | Mo-Fr 08:00-12:00 | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:opening_hours) for detailed format spec. |
-| comments | Number | 2 | Number of comments. The comments themselves can be fetched via [Get Comments by Place ID](#get-comments) |
-| created_at | ISO 8601 datetime | 2025-01-01T00:00:00Z | Returns a date when BTC Map started tracking that place. |
-| updated_at | ISO 8601 datetime | 2025-01-01T00:00:00Z | Last change timestamp. Can be used for incremental sync. |
-| deleted_at | ISO 8601 datetime | 2025-01-01T00:00:00Z | BTC Map API can return deleted places on request, to help client apps purge their caches. |
-| verified_at | ISO 8601 date | 2025-02-03 | Last verification date. Recently verified places are more reliable so you might express it somehow in your app. You can also filter out places which haven't been verified for quite some time. |
-| osm_id | String | node:1234 | OSM identifier, when available. |
-| osm_url | URL | https://www.openstreetmap.org/node/12098197068 | OSM URL, when available. |
-| phone | String | +60652249252 | Phone number associated with this POI. |
-| website | URL | https://www.openstreetmap.org | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key%3Awebsite) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
-| twitter | URL | https://x.com/barberosdelopez | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:twitter) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
-| facebook | URL | https://www.facebook.com/Gr33nPapaya | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:facebook) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
-| instagram | URL | https://www.instagram.com/vempromix23/ | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:instagram) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
-| line | URL | https://page.line.me/gcs8865c | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:line) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
-| email | email | foo@bar.com | Email address that can be used to contact a place. |
-| boosted_until | ISO 8601 datetime | 2025-01-01T00:00:00Z | This property indicates that a place is currently boosted, which is a good quality signal and you can display such places differently. |
-| required_app_url | URL | https://www.qerko.com | An additional app may be necessary at some locations to convert non-standard QR codes into the standard formats supported by most Bitcoin wallets. |
-| description | String | Bitcoin ATM located inside of coffee shop. | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:description) for guidance and what to expect. |
-| image | String | https://cryptomonkey.net/images/points/BT300675_01.jpg | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:image) for guidance and what to expect. |
-| payment_provider | String | square | In a rare case when there are multiple payment providers, they will be separated by commas. |
-
-Additional OSM fields can be included by using the following prefex: `osm:<tag_name>`. e.g. `osm:addr:city`.
+| `id` | Number | `3213` | BTC Map Place ID. Returned by default. |
+| `lat` | Number | `53.2689435` | Place latitude. |
+| `lon` | Number | `9.8538715` | Place longitude. |
+| `icon` | String | `cafe` | [Material Icons](https://fonts.google.com/icons) identifier. |
+| `name `| String | `Der Schafstall` | Place Name. Defaults to English, if available. |
+| `address` | String | `5, Nowhere St.` | Place address, if known. |
+| `opening_hours` | String | `Mo-Fr 08:00-12:00` | Check [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:opening_hours) for detailed format spec. |
+| `comments` | Number | `2` | Number of comments. The comments themselves can be fetched via [Get Comments by Place ID](#get-comments) |
+| `created_at` | ISO 8601 datetime | `2025-01-01T00:00:00Z `| Returns a date when BTC Map started tracking that place. |
+| `updated_at` | ISO 8601 datetime | `2025-01-01T00:00:00Z` | Last change timestamp. Can be used for incremental sync. |
+| `deleted_at` | ISO 8601 datetime | `2025-01-01T00:00:00Z `| BTC Map API can return deleted places on request, to help client apps purge their caches. |
+| `verified_at` | ISO 8601 date | `2025-02-03` | Last verification date. Recently verified places are more reliable so you might express it somehow in your app. You can also filter out places which haven't been verified for quite some time. |
+| `osm_id` | String | `node:1234` | OSM identifier, when available. |
+| `osm_url` | URL | `https://www.openstreetmap.org/node/12098197068` | OSM URL, when available. |
+| `phone` | String | `+60652249252` | Phone number associated with this POI. |
+| `website` | URL | `https://www.openstreetmap.org` | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key%3Awebsite) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| `twitter` | URL | `https://x.com/barberosdelopez` | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:twitter) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| `facebook` | URL |` https://www.facebook.com/Gr33nPapaya` | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:facebook) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| `instagram` | URL | `https://www.instagram.com/vempromix23` | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:instagram) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| `line` | URL | `https://page.line.me/gcs8865c `| Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:line) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| `email` | email | `foo@bar.com` | Email address that can be used to contact a place. |
+| `boosted_until` | ISO 8601 datetime | `2025-01-01T00:00:00Z` | This property indicates that a place is currently boosted, which is a good quality signal and you can display such places differently. |
+| `required_app_url` | URL | `https://www.qerko.com` | An additional app may be necessary at some locations to convert non-standard QR codes into the standard formats supported by most Bitcoin wallets. |
+| `description` | String | `Bitcoin ATM located inside of coffee shop.` | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:description) for guidance and what to expect. |
+| `image` | String | `https://cryptomonkey.net/images/points/BT300675_01.jpg` | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:image) for guidance and what to expect. |
+| `payment_provider` | String | `square` | In a rare case when there are multiple payment providers, they will be separated by commas. |
+| `osm:<tag_name>` | String | `osm:addr:city` | Additional [OSM tags](https://wiki.openstreetmap.org/wiki/Tags) can be included by using this  prefex. |
 
 #### Examples:
 
