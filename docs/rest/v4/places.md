@@ -36,9 +36,9 @@ The `fields` parameter allows you to request specific fields to be included in t
 
 Available fields include:
 
-
 | Name | Type | Example | Description |
 |------|------|---------|-------------|
+| id | Integer | 3213 | BTC Map Place ID. Returned by default. |
 | lat | Number | 53.2689435 | Place latitude. |
 | lon | Number | 9.8538715 | Place longitude. |
 | icon | String | cafe | [Material Icons](https://fonts.google.com/icons) identifier. |
@@ -64,6 +64,8 @@ Available fields include:
 | description | String | Bitcoin ATM located inside of coffee shop. | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:description) for guidance and what to expect. |
 | image | String | https://cryptomonkey.net/images/points/BT300675_01.jpg | See [OSM Wiki](https://wiki.openstreetmap.org/wiki/Key:image) for guidance and what to expect. |
 | payment_provider | String | square | In a rare case when there are multiple payment providers, they will be separated by commas. |
+
+Additional OSM fields can be included by using the following prefex: `osm:<tag_name>`. e.g. `osm:addr:city`.
 
 #### Examples:
 
