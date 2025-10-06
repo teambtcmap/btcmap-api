@@ -380,7 +380,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
             .await
             .map_err(|_| RestApiError::database())?;
         if include_pending {
-            pending_matches = db::place_submission::queries::select_by_bbox(
+            pending_matches = db::place_submission::queries::select_pending_by_bbox(
                 min_lat, max_lat, min_lon, max_lon, &pool,
             )
             .await

@@ -60,7 +60,7 @@ pub async fn select_by_origin_and_external_id(
         .await?
 }
 
-pub async fn select_by_bbox(
+pub async fn select_pending_by_bbox(
     min_lat: f64,
     max_lat: f64,
     min_lon: f64,
@@ -70,7 +70,7 @@ pub async fn select_by_bbox(
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, conn)
+            blocking_queries::select_pending_by_bbox(min_lat, max_lat, min_lon, max_lon, conn)
         })
         .await?
 }

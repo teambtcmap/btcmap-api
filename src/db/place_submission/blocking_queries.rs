@@ -69,7 +69,7 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         .map_err(Into::into)
 }
 
-pub fn select_by_bbox(
+pub fn select_pending_by_bbox(
     min_lat: f64,
     max_lat: f64,
     min_lon: f64,
@@ -80,7 +80,7 @@ pub fn select_by_bbox(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {lat} BETWEEN :min_lat AND :max_lat AND {lon} BETWEEN :min_lon AND :max_lon AND {deleted_at} IS NULL AND {closed_at} IS NULL
+            WHERE {lat} BETWEEN :min_lat AND :max_lat AND {lon} BETWEEN :min_lon AND :max_lon AND {deleted_at} IS NULL AND {closed_at} IS NULL AND {revoked} = 0
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
@@ -88,6 +88,7 @@ pub fn select_by_bbox(
         lon = Columns::Lon.as_str(),
         deleted_at = Columns::DeletedAt.as_str(),
         closed_at = Columns::ClosedAt.as_str(),
+        revoked = Columns::Revoked.as_str(),
     );
     conn.prepare(&sql)?
         .query_map(named_params! { ":min_lat": min_lat, ":max_lat": max_lat, ":min_lon": min_lon, ":max_lon": max_lon }, PlaceSubmission::mapper())?
@@ -466,6 +467,41 @@ mod test {
             None,
             super::select_by_origin_and_external_id(external_id.into(), origin.into(), &conn)?
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_pending_by_bbox() -> Result<()> {
+        let conn = conn();
+
+        let origin = "acme";
+        let external_id = "15";
+        let lat = 0.0;
+        let lon = 0.0;
+        let category = "cafe";
+        let name = "Satoshi Cafe";
+        let extra_fields = Map::new();
+
+        let submission = super::insert(
+            origin,
+            external_id,
+            lat,
+            lon,
+            category,
+            name,
+            &extra_fields,
+            &conn,
+        )?;
+
+        assert_eq!(
+            vec![submission.clone()],
+            super::select_pending_by_bbox(-1.0, 1.0, -1.0, 1.0, &conn)?
+        );
+
+        super::set_revoked(submission.id, true, &conn)?;
+
+        assert!(super::select_pending_by_bbox(-1.0, 1.0, -1.0, 1.0, &conn)?.is_empty());
 
         Ok(())
     }
