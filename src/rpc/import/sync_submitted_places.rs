@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use crate::{
     db::{self},
     service, Result,
@@ -31,14 +33,50 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 "IGNORE IT [import][{}] {}",
                 submission.origin, submission.name
             );
-            let body = json!({
-                "origin": submission.origin,
-                "name": submission.name
-            });
-            let issue =
-                service::gitea::create_issue(title, serde_json::to_string_pretty(&body)?, pool)
-                    .await?;
-            db::place_submission::queries::set_ticket_url(submission.id, issue.url, pool).await?;
+
+            let body = format!(
+                r#"
+                Id: {id}
+                Origin: {origin}
+                Name: {name}
+                Category: {category}
+
+                Extra fields:
+
+                {extra_fields}
+
+                OpenStreetMap viewer link: https://www.openstreetmap.org/#map=21/{lat}/{lon}
+
+                OpenStreetMap editor link: https://www.openstreetmap.org/edit#map=21/{lat}/{lon}
+
+                To verify this imported place:
+
+                1. Check if the place already exists in OSM.
+                2. If it exists: Confirm it has a currency:XBT tag, then close this ticket.
+                3. If it does not exist: Contact the merchant or verify its existence using at least one other source.
+
+                Check this page for more instructions if you're just starting as an OSM contributor:
+
+                https://gitea.btcmap.org/teambtcmap/btcmap-general/wiki/Tagging-Merchants
+            "#,
+                id = submission.id,
+                origin = submission.origin,
+                name = submission.name,
+                category = submission.category,
+                extra_fields = serde_json::to_string_pretty(&submission.extra_fields)?,
+                lat = submission.lat,
+                lon = submission.lon,
+            );
+            let body = body
+                .lines()
+                .map(|line| line.trim())
+                .collect::<Vec<&str>>()
+                .join("\n");
+            println!("{}", body);
+            // let issue =
+            //     service::gitea::create_issue(title, serde_json::to_string_pretty(&body)?, pool)
+            //         .await?;
+            // db::place_submission::queries::set_ticket_url(submission.id, issue.url, pool).await?;
             issues_created += 1;
         } else {
             let issue =
