@@ -140,13 +140,20 @@ pub async fn set_revoked(id: i64, revoked: bool, pool: &Pool) -> Result<PlaceSub
         .await?
 }
 
-// pub async fn set_closed_at(
-//     id: i64,
-//     closed_at: Option<OffsetDateTime>,
-//     pool: &Pool,
-// ) -> Result<PlaceSubmission> {
-//     pool.get()
-//         .await?
-//         .interact(move |conn| blocking_queries::set_closed_at(id, closed_at, conn))
-//         .await?
-// }
+pub async fn set_ticket_url(id: i64, ticket_url: String, pool: &Pool) -> Result<PlaceSubmission> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_ticket_url(id, ticket_url, conn))
+        .await?
+}
+
+pub async fn set_closed_at(
+    id: i64,
+    closed_at: Option<OffsetDateTime>,
+    pool: &Pool,
+) -> Result<PlaceSubmission> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_closed_at(id, closed_at, conn))
+        .await?
+}

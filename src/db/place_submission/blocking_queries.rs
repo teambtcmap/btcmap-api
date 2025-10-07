@@ -283,6 +283,21 @@ pub fn set_revoked(id: i64, revoked: bool, conn: &Connection) -> Result<PlaceSub
     select_by_id(id, conn)
 }
 
+pub fn set_ticket_url(id: i64, ticket_url: String, conn: &Connection) -> Result<PlaceSubmission> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {ticket_url} = ?2
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        ticket_url = Columns::TicketUrl.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.execute(&sql, params![id, ticket_url])?;
+    select_by_id(id, conn)
+}
+
 #[cfg(test)]
 pub fn set_updated_at(
     id: i64,
@@ -311,41 +326,41 @@ pub fn set_updated_at(
     select_by_id(id, conn)
 }
 
-// pub fn set_closed_at(
-//     id: i64,
-//     closed_at: Option<OffsetDateTime>,
-//     conn: &Connection,
-// ) -> Result<PlaceSubmission> {
-//     match closed_at {
-//         Some(closed_at) => {
-//             let sql = format!(
-//                 r#"
-//                     UPDATE {table}
-//                     SET {closed_at} = ?2
-//                     WHERE {id} = ?1
-//                 "#,
-//                 table = schema::TABLE_NAME,
-//                 closed_at = Columns::ClosedAt.as_str(),
-//                 id = Columns::Id.as_str(),
-//             );
-//             conn.execute(&sql, params![id, closed_at.format(&Rfc3339)?,])?;
-//         }
-//         None => {
-//             let sql = format!(
-//                 r#"
-//                     UPDATE {table}
-//                     SET {closed_at} = NULL
-//                     WHERE {id} = ?1
-//                 "#,
-//                 table = schema::TABLE_NAME,
-//                 closed_at = Columns::ClosedAt.as_str(),
-//                 id = Columns::Id.as_str(),
-//             );
-//             conn.execute(&sql, params![id])?;
-//         }
-//     };
-//     select_by_id(id, conn)
-// }
+pub fn set_closed_at(
+    id: i64,
+    closed_at: Option<OffsetDateTime>,
+    conn: &Connection,
+) -> Result<PlaceSubmission> {
+    match closed_at {
+        Some(closed_at) => {
+            let sql = format!(
+                r#"
+                    UPDATE {table}
+                    SET {closed_at} = ?2
+                    WHERE {id} = ?1
+                "#,
+                table = schema::TABLE_NAME,
+                closed_at = Columns::ClosedAt.as_str(),
+                id = Columns::Id.as_str(),
+            );
+            conn.execute(&sql, params![id, closed_at.format(&Rfc3339)?,])?;
+        }
+        None => {
+            let sql = format!(
+                r#"
+                    UPDATE {table}
+                    SET {closed_at} = NULL
+                    WHERE {id} = ?1
+                "#,
+                table = schema::TABLE_NAME,
+                closed_at = Columns::ClosedAt.as_str(),
+                id = Columns::Id.as_str(),
+            );
+            conn.execute(&sql, params![id])?;
+        }
+    };
+    select_by_id(id, conn)
+}
 
 #[cfg(test)]
 mod test {

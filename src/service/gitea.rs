@@ -35,20 +35,20 @@ pub struct GetIssueResponse {
     pub state: String,
 }
 
-pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<CreateIssueResponse> {
+pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<GetIssueResponse> {
     let conf = db::conf::queries::select(pool).await?;
     if conf.gitea_api_key.is_empty() {
         Err("gitea api key is not set")?
     }
     let client = reqwest::Client::new();
     let gitea_response = client
-        .post(issue_url)
+        .get(issue_url)
         .header("Authorization", format!("token {}", conf.gitea_api_key))
         .send()
         .await?;
     if !gitea_response.status().is_success() {
         return Err("failed to fetch gitea issue".into());
     }
-    let gitea_response: CreateIssueResponse = gitea_response.json().await?;
+    let gitea_response: GetIssueResponse = gitea_response.json().await?;
     Ok(gitea_response)
 }
