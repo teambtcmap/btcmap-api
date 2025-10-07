@@ -3,6 +3,7 @@ use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde_json::json;
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct CreateIssueResponse {
     pub id: i64,
@@ -29,6 +30,7 @@ pub async fn create_issue(title: String, body: String, pool: &Pool) -> Result<Cr
     Ok(gitea_response)
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct GetIssueResponse {
     pub id: i64,

@@ -1,12 +1,9 @@
-use std::fmt::format;
-
 use crate::{
     db::{self},
     service, Result,
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
-use serde_json::json;
 use time::OffsetDateTime;
 use tracing::info;
 
@@ -72,11 +69,8 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 .map(|line| line.trim())
                 .collect::<Vec<&str>>()
                 .join("\n");
-            println!("{}", body);
-            // let issue =
-            //     service::gitea::create_issue(title, serde_json::to_string_pretty(&body)?, pool)
-            //         .await?;
-            // db::place_submission::queries::set_ticket_url(submission.id, issue.url, pool).await?;
+            let issue = service::gitea::create_issue(title, body, pool).await?;
+            db::place_submission::queries::set_ticket_url(submission.id, issue.url, pool).await?;
             issues_created += 1;
         } else {
             let issue =
