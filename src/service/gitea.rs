@@ -37,7 +37,7 @@ pub struct GetIssueResponse {
     pub state: String,
 }
 
-pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<GetIssueResponse> {
+pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<Option<GetIssueResponse>> {
     let conf = db::conf::queries::select(pool).await?;
     if conf.gitea_api_key.is_empty() {
         Err("gitea api key is not set")?
@@ -48,9 +48,12 @@ pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<GetIssueRespons
         .header("Authorization", format!("token {}", conf.gitea_api_key))
         .send()
         .await?;
+    if gitea_response.status().as_u16() == 404 {
+        return Ok(None);
+    }
     if !gitea_response.status().is_success() {
         return Err("failed to fetch gitea issue".into());
     }
     let gitea_response: GetIssueResponse = gitea_response.json().await?;
-    Ok(gitea_response)
+    Ok(Some(gitea_response))
 }

@@ -76,6 +76,10 @@ pub async fn run(pool: &Pool) -> Result<Res> {
             let issue =
                 service::gitea::get_issue(submission.ticket_url.clone().unwrap(), pool).await?;
 
+            let Some(issue) = issue else {
+                continue;
+            };
+
             if issue.state == "closed" {
                 db::place_submission::queries::set_closed_at(
                     submission.id,
