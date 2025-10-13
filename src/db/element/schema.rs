@@ -299,6 +299,26 @@ impl Element {
         None
     }
 
+    pub fn telegram(&self) -> Option<String> {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return None;
+        };
+
+        let key = "contact:telegram";
+
+        if osm_tags.contains_key(key) && osm_tags[key].is_string() {
+            let result = osm_tags[key].as_str().unwrap_or("");
+
+            return if is_valid_url(result) {
+                Some(result.to_string())
+            } else {
+                None
+            };
+        }
+
+        None
+    }
+
     pub fn instagram(&self) -> Option<String> {
         let Some(osm_tags) = &self.overpass_data.tags else {
             return None;

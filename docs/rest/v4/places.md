@@ -57,7 +57,8 @@ Available fields include:
 | `twitter` | URL | `https://x.com/barberosdelopez` | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:twitter) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
 | `facebook` | URL |` https://www.facebook.com/Gr33nPapaya` | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:facebook) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
 | `instagram` | URL | `https://www.instagram.com/vempromix23` | Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:instagram) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
-| `line` | URL | `https://page.line.me/gcs8865c `| Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:line) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| `line` | URL | `https://page.line.me/gcs8865c`| Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:line) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
+| `telegram` | URL | `https://t.me/AmsterdamCS`| Raw [OSM tags](https://wiki.openstreetmap.org/wiki/Key:contact:telegram) are not guaranteed to be URLs. We force-convert them and filter out invalid URLs to simplify client code. |
 | `email` | email | `foo@bar.com` | Email address that can be used to contact a place. |
 | `boosted_until` | ISO 8601 datetime | `2025-01-01T00:00:00Z` | This property indicates that a place is currently boosted, which is a good quality signal and you can display such places differently. |
 | `required_app_url` | URL | `https://www.qerko.com` | An additional app may be necessary at some locations to convert non-standard QR codes into the standard formats supported by most Bitcoin wallets. |
