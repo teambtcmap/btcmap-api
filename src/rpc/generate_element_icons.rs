@@ -594,7 +594,7 @@ impl OverpassElement {
         }
 
         if shop == "tatoo" {
-            icon_id = "storefront";
+            icon_id = "colorize";
         }
 
         if shop == "pawnbroker" {
