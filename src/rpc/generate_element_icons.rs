@@ -593,7 +593,7 @@ impl OverpassElement {
             icon_id = "directions_car";
         }
 
-        if shop == "tatoo" {
+        if shop == "tattoo" {
             icon_id = "colorize";
         }
 
