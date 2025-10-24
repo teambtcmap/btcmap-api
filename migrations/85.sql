@@ -1,0 +1,1 @@
+ALTER TABLE conf ADD COLUMN matrix_bot_password TEXT NOT NULL DEFAULT '';

@@ -78,6 +78,8 @@ staticmap = { version = "0.4.2", default-features = false }
 # https://github.com/rust-lang/regex/blob/master/CHANGELOG.md
 regex = { version = "1.11.1", default-features = false }
 
+matrix-sdk = { version = "0.14.0", default-features = false, features = ["rustls-tls"] }
+
 url = { version = "2.5.4", default-features = false }
 
 argon2 = { version = "0.5.3", default-features = false, features = ["password-hash", "alloc"] }

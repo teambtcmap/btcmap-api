@@ -18,6 +18,7 @@ use actix_web::{
     HttpRequest, HttpResponseBuilder,
 };
 use deadpool_sqlite::Pool;
+use matrix_sdk::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -266,6 +267,7 @@ pub async fn handle(
     req_body: String,
     pool: Data<Pool>,
     conf: Data<Conf>,
+    matrix_client: Data<Option<Client>>,
 ) -> Result<Json<RpcResponse>> {
     let headers = req.headers();
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
@@ -512,7 +514,7 @@ pub async fn handle(
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
-            super::invoice::get_invoice::run(params(req.params)?, &pool).await?,
+            super::invoice::get_invoice::run(params(req.params)?, &pool, matrix_client).await?,
         ),
         RpcMethod::CreateInvoice => RpcResponse::from(
             req.id.clone(),
@@ -521,7 +523,7 @@ pub async fn handle(
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),
-            super::sync_unpaid_invoices::run(&pool).await?,
+            super::sync_unpaid_invoices::run(&pool, matrix_client).await?,
         ),
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),
@@ -621,20 +623,13 @@ mod test {
     #[test]
     async fn invalid_json() {
         let pool = pool();
-        let conf = Conf {
-            paywall_add_element_comment_price_sat: 1,
-            paywall_boost_element_30d_price_sat: 2,
-            paywall_boost_element_90d_price_sat: 3,
-            paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
-            gitea_api_key: "".to_string(),
-        };
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
+                .app_data(Data::new(client))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -654,20 +649,13 @@ mod test {
     #[test]
     async fn missing_method() {
         let pool = pool();
-        let conf = Conf {
-            paywall_add_element_comment_price_sat: 1,
-            paywall_boost_element_30d_price_sat: 2,
-            paywall_boost_element_90d_price_sat: 3,
-            paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
-            gitea_api_key: "".to_string(),
-        };
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
+                .app_data(Data::new(client))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -688,20 +676,13 @@ mod test {
     async fn anonymous_method_allowed() -> Result<()> {
         let pool = pool();
         db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let conf = Conf {
-            paywall_add_element_comment_price_sat: 1,
-            paywall_boost_element_30d_price_sat: 2,
-            paywall_boost_element_90d_price_sat: 3,
-            paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
-            gitea_api_key: "".to_string(),
-        };
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
+                .app_data(Data::new(client))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -724,20 +705,13 @@ mod test {
     #[test]
     async fn protected_method_without_auth() -> Result<()> {
         let pool = pool();
-        let conf = Conf {
-            paywall_add_element_comment_price_sat: 1,
-            paywall_boost_element_30d_price_sat: 2,
-            paywall_boost_element_90d_price_sat: 3,
-            paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
-            gitea_api_key: "".to_string(),
-        };
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
+                .app_data(Data::new(client))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -760,20 +734,13 @@ mod test {
     #[test]
     async fn invalid_jsonrpc_version() {
         let pool = pool();
-        let conf = Conf {
-            paywall_add_element_comment_price_sat: 1,
-            paywall_boost_element_30d_price_sat: 2,
-            paywall_boost_element_90d_price_sat: 3,
-            paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
-            gitea_api_key: "".to_string(),
-        };
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
+                .app_data(Data::new(client))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -804,20 +771,13 @@ mod test {
             &pool,
         )
         .await?;
-        let conf = Conf {
-            paywall_add_element_comment_price_sat: 1,
-            paywall_boost_element_30d_price_sat: 2,
-            paywall_boost_element_90d_price_sat: 3,
-            paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
-            gitea_api_key: "".to_string(),
-        };
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
+                .app_data(Data::new(client))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -840,20 +800,13 @@ mod test {
     #[test]
     async fn unauthorized_method() {
         let pool = pool();
-        let conf = Conf {
-            paywall_add_element_comment_price_sat: 1,
-            paywall_boost_element_30d_price_sat: 2,
-            paywall_boost_element_90d_price_sat: 3,
-            paywall_boost_element_365d_price_sat: 4,
-            lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
-            gitea_api_key: "".to_string(),
-        };
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
+                .app_data(Data::new(client))
                 .service(scope("/").service(super::handle)),
         )
         .await;

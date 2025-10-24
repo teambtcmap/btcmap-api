@@ -12,6 +12,7 @@ pub enum Columns {
     DiscordWebhookOsmChanges,
     DiscordWebhookApi,
     GiteaApiKey,
+    MatrixBotPassword,
 }
 
 impl Columns {
@@ -25,6 +26,7 @@ impl Columns {
             Columns::DiscordWebhookOsmChanges => "discord_webhook_osm_changes",
             Columns::DiscordWebhookApi => "discord_webhook_api",
             Columns::GiteaApiKey => "gitea_api_key",
+            Columns::MatrixBotPassword => "matrix_bot_password",
         }
     }
 }
@@ -39,6 +41,7 @@ pub struct Conf {
     pub discord_webhook_osm_changes: String,
     pub discord_webhook_api: String,
     pub gitea_api_key: String,
+    pub matrix_bot_password: String,
 }
 
 impl Conf {
@@ -54,6 +57,7 @@ impl Conf {
                 Columns::DiscordWebhookOsmChanges,
                 Columns::DiscordWebhookApi,
                 Columns::GiteaApiKey,
+                Columns::MatrixBotPassword,
             ]
             .iter()
             .map(Columns::as_str)
@@ -77,6 +81,7 @@ impl Conf {
                 discord_webhook_osm_changes: row.get(Columns::DiscordWebhookOsmChanges.as_str())?,
                 discord_webhook_api: row.get(Columns::DiscordWebhookApi.as_str())?,
                 gitea_api_key: row.get(Columns::GiteaApiKey.as_str())?,
+                matrix_bot_password: row.get(Columns::MatrixBotPassword.as_str())?,
             })
         }
     }
@@ -92,6 +97,7 @@ impl Conf {
             discord_webhook_osm_changes: "".to_string(),
             discord_webhook_api: "".to_string(),
             gitea_api_key: "".to_string(),
+            matrix_bot_password: "".to_string(),
         }
     }
 }

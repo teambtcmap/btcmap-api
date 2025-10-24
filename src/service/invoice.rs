@@ -6,10 +6,12 @@ use crate::{
     service::{
         self,
         discord::{self, Channel},
+        matrix::ROOM_DEV,
     },
     Result,
 };
 use deadpool_sqlite::Pool;
+use matrix_sdk::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
@@ -62,7 +64,7 @@ pub struct CheckInvoiceResponse {
     pub paid: bool,
 }
 
-pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<i64> {
+pub async fn sync_unpaid_invoices(pool: &Pool, matrix_client: &Option<Client>) -> Result<i64> {
     let conf = db::conf::queries::select(pool).await?;
     if conf.lnbits_invoice_key.is_empty() {
         Err("lnbits invoice key is not set")?
@@ -93,7 +95,7 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<i64> {
         let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
         if lnbits_response.paid {
             db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
-            on_invoice_paid(&invoice, pool).await?;
+            on_invoice_paid(&invoice, pool, matrix_client).await?;
             affected_invoices.push(invoice);
         }
     }
@@ -101,7 +103,11 @@ pub async fn sync_unpaid_invoices(pool: &Pool) -> Result<i64> {
 }
 
 // Returns true if invoice was unpaid and became paid
-pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool> {
+pub async fn sync_unpaid_invoice(
+    invoice: &Invoice,
+    pool: &Pool,
+    matrix_client: &Option<Client>,
+) -> Result<bool> {
     if invoice.status != InvoiceStatus::Unpaid {
         return Ok(false);
     }
@@ -122,14 +128,18 @@ pub async fn sync_unpaid_invoice(invoice: &Invoice, pool: &Pool) -> Result<bool>
     let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
     if lnbits_response.paid {
         db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
-        on_invoice_paid(&invoice, pool).await?;
+        on_invoice_paid(&invoice, pool, matrix_client).await?;
         return Ok(true);
     } else {
         Ok(false)
     }
 }
 
-pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
+pub async fn on_invoice_paid(
+    invoice: &Invoice,
+    pool: &Pool,
+    matrix_client: &Option<Client>,
+) -> Result<()> {
     let conf = db::conf::queries::select(pool).await?;
     discord::send(
         format!(
@@ -152,14 +162,13 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
             let element = db::element::queries::select_by_id(comment.element_id, pool).await?;
             db::element_comment::queries::set_deleted_at(id, None, pool).await?;
             service::comment::refresh_comment_count_tag(&element, pool).await?;
-            discord::send(
-                format!(
-                    "Published comment since invoice has been paid: {}",
-                    comment.comment,
-                ),
-                Channel::Api,
-                &conf,
+            let message = format!(
+                "{} -> {} https://btcmap.org/merchant/{}",
+                element.name(),
+                comment.comment,
+                element.id,
             );
+            service::matrix::send_message(matrix_client, ROOM_DEV, &message).await;
         }
     }
 
@@ -218,8 +227,8 @@ pub async fn on_invoice_paid(invoice: &Invoice, pool: &Pool) -> Result<()> {
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, test::pool},
-        service::overpass::OverpassElement,
+        db::{self, conf::schema::Conf, test::pool},
+        service::{self, overpass::OverpassElement},
         Result,
     };
     use actix_web::test;
@@ -239,7 +248,12 @@ mod test {
             &pool,
         )
         .await?;
-        super::on_invoice_paid(&invoice, &pool).await?;
+        super::on_invoice_paid(
+            &invoice,
+            &pool,
+            &service::matrix::init_client(&Conf::mock()).await,
+        )
+        .await?;
         let element = db::element::queries::select_by_id(1, &pool).await?;
         assert!(element.tags.contains_key("boost:expires"));
         let boost_expires =
@@ -270,7 +284,12 @@ mod test {
             &pool,
         )
         .await?;
-        super::on_invoice_paid(&invoice, &pool).await?;
+        super::on_invoice_paid(
+            &invoice,
+            &pool,
+            &service::matrix::init_client(&Conf::mock()).await,
+        )
+        .await?;
         let element = db::element::queries::select_by_id(1, &pool).await?;
         assert!(element.tags.contains_key("boost:expires"));
         let boost_expires =

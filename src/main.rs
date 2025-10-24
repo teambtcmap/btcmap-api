@@ -36,6 +36,8 @@ async fn main() -> Result<()> {
     service::area::generate_bbox(&pool).await?;
     service::element::populate_lat_lon(&pool).await?;
     let conf = db::conf::queries::select(&pool).await?;
+    let matrix_client = service::matrix::init_client(&conf).await;
+
     HttpServer::new(move || {
         App::new()
             .wrap(Log)
@@ -44,6 +46,7 @@ async fn main() -> Result<()> {
             .wrap(from_fn(service::ban::check_if_banned))
             .app_data(Data::new(pool.clone()))
             .app_data(Data::new(conf.clone()))
+            .app_data(Data::new(matrix_client.clone()))
             .service(og::element::get_element)
             .service(
                 scope("rpc")
