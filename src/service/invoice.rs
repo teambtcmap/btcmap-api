@@ -6,7 +6,7 @@ use crate::{
     service::{
         self,
         discord::{self, Channel},
-        matrix::ROOM_DEV,
+        matrix::ROOM_PLACE_COMMENTS,
     },
     Result,
 };
@@ -168,7 +168,7 @@ pub async fn on_invoice_paid(
                 comment.comment,
                 element.id,
             );
-            service::matrix::send_message(matrix_client, ROOM_DEV, &message).await;
+            service::matrix::send_message(matrix_client, ROOM_PLACE_COMMENTS, &message).await;
         }
     }
 
