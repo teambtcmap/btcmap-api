@@ -163,8 +163,7 @@ pub async fn on_invoice_paid(
             db::element_comment::queries::set_deleted_at(id, None, pool).await?;
             service::comment::refresh_comment_count_tag(&element, pool).await?;
             let message = format!(
-                "{} -> {} https://btcmap.org/merchant/{}",
-                element.name(),
+                "{} https://btcmap.org/merchant/{}",
                 comment.comment,
                 element.id,
             );
