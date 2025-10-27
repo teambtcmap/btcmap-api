@@ -164,8 +164,7 @@ pub async fn on_invoice_paid(
             service::comment::refresh_comment_count_tag(&element, pool).await?;
             let message = format!(
                 "{} https://btcmap.org/merchant/{}",
-                comment.comment,
-                element.id,
+                comment.comment, element.id,
             );
             service::matrix::send_message(matrix_client, ROOM_PLACE_COMMENTS, &message).await;
         }

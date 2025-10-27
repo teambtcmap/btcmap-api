@@ -1,8 +1,10 @@
 use crate::{
     db::{self},
-    service, Result,
+    service::{self, matrix::ROOM_PLACE_IMPORT},
+    Result,
 };
 use deadpool_sqlite::Pool;
+use matrix_sdk::Client;
 use serde::Serialize;
 use time::OffsetDateTime;
 use tracing::{info, warn};
@@ -14,7 +16,7 @@ pub struct Res {
     issues_closed: i64,
 }
 
-pub async fn run(pool: &Pool) -> Result<Res> {
+pub async fn run(pool: &Pool, matrix_client: &Option<Client>) -> Result<Res> {
     let submissions = db::place_submission::queries::select_open_and_not_revoked(pool).await?;
     info!(
         len = submissions.len(),
@@ -32,10 +34,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         }
 
         if submission.ticket_url.is_none() {
-            let title = format!(
-                "[import][{}] {}",
-                submission.origin, submission.name
-            );
+            let title = format!("[import][{}] {}", submission.origin, submission.name);
 
             let body = format!(
                 r#"
@@ -76,8 +75,14 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 .collect::<Vec<&str>>()
                 .join("\n");
             let issue = service::gitea::create_issue(title, body, pool).await?;
-            db::place_submission::queries::set_ticket_url(submission.id, issue.url, pool).await?;
+            db::place_submission::queries::set_ticket_url(submission.id, issue.url.clone(), pool)
+                .await?;
             issues_created += 1;
+            let message = format!(
+                "Created Gitea issue for {} {}",
+                submission.name, issue.html_url
+            );
+            service::matrix::send_message(matrix_client, ROOM_PLACE_IMPORT, &message).await;
         } else {
             let issue =
                 service::gitea::get_issue(submission.ticket_url.clone().unwrap(), pool).await?;
@@ -94,6 +99,11 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 )
                 .await?;
                 issues_closed += 1;
+                let message = format!(
+                    "Closed Gitea issue and marked submission as closed for {} {}",
+                    submission.name, issue.html_url
+                );
+                service::matrix::send_message(matrix_client, ROOM_PLACE_IMPORT, &message).await;
             }
         }
     }

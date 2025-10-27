@@ -562,7 +562,7 @@ pub async fn handle(
         ),
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
             req.id.clone(),
-            super::import::sync_submitted_places::run(&pool).await?,
+            super::import::sync_submitted_places::run(&pool, &matrix_client).await?,
         ),
     }?;
     Ok(Json(res))

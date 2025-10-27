@@ -8,6 +8,7 @@ use serde_json::json;
 pub struct CreateIssueResponse {
     pub id: i64,
     pub url: String,
+    pub html_url: String,
 }
 
 pub async fn create_issue(title: String, body: String, pool: &Pool) -> Result<CreateIssueResponse> {
@@ -35,6 +36,7 @@ pub async fn create_issue(title: String, body: String, pool: &Pool) -> Result<Cr
 pub struct GetIssueResponse {
     pub id: i64,
     pub state: String,
+    pub html_url: String,
 }
 
 pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<Option<GetIssueResponse>> {
