@@ -5,7 +5,7 @@ use crate::{
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use time::OffsetDateTime;
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Serialize)]
 pub struct Res {
@@ -21,13 +21,19 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         "fetched open and non-revoked submissions",
     );
 
+    let enabled_origins = vec!["square".to_string()];
     let mut issues_created = 0;
     let mut issues_closed = 0;
 
     for submission in &submissions {
+        if !enabled_origins.contains(&submission.origin) {
+            warn!(submission.origin, "disabled origin");
+            continue;
+        }
+
         if submission.ticket_url.is_none() {
             let title = format!(
-                "IGNORE IT [import][{}] {}",
+                "[import][{}] {}",
                 submission.origin, submission.name
             );
 
