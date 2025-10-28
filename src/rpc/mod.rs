@@ -22,6 +22,7 @@ pub mod get_user_activity;
 pub mod handler;
 pub mod import;
 pub mod invoice;
+pub mod matrix;
 pub mod model;
 pub mod paywall_add_element_comment;
 pub mod paywall_boost_element;

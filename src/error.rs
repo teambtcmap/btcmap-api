@@ -17,6 +17,7 @@ pub enum Error {
     GeoJson(Box<geojson::Error>),
     Staticmap(staticmap::Error),
     Blocking(actix_web::error::BlockingError),
+    Matrix(String),
 }
 
 impl std::error::Error for Error {
@@ -37,6 +38,7 @@ impl std::error::Error for Error {
             Error::GeoJson(err) => Some(err),
             Error::Staticmap(err) => Some(err),
             Error::Blocking(err) => Some(err),
+            Error::Matrix(_) => None,
         }
     }
 }
@@ -59,6 +61,7 @@ impl Display for Error {
             Error::DeadpoolBuild(err) => err.fmt(f),
             Error::Staticmap(err) => err.fmt(f),
             Error::Blocking(err) => err.fmt(f),
+            Error::Matrix(err) => write!(f, "{}", err),
         }
     }
 }

@@ -82,7 +82,7 @@ pub async fn run(pool: &Pool, matrix_client: &Option<Client>) -> Result<Res> {
                 "Created Gitea issue for {} {}",
                 submission.name, issue.html_url
             );
-            service::matrix::send_message(matrix_client, ROOM_PLACE_IMPORT, &message).await;
+            service::matrix::send_message(matrix_client, ROOM_PLACE_IMPORT, &message);
         } else {
             let issue =
                 service::gitea::get_issue(submission.ticket_url.clone().unwrap(), pool).await?;
@@ -103,7 +103,7 @@ pub async fn run(pool: &Pool, matrix_client: &Option<Client>) -> Result<Res> {
                     "Closed Gitea issue and marked submission as closed for {} {}",
                     submission.name, issue.html_url
                 );
-                service::matrix::send_message(matrix_client, ROOM_PLACE_IMPORT, &message).await;
+                service::matrix::send_message(matrix_client, ROOM_PLACE_IMPORT, &message);
             }
         }
     }

@@ -95,6 +95,8 @@ pub enum RpcMethod {
     GetSubmittedPlace,
     RevokeSubmittedPlace,
     SyncSubmittedPlaces,
+    // Matrix
+    SendMatrixMessage,
 }
 
 impl Role {
@@ -563,6 +565,10 @@ pub async fn handle(
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
             req.id.clone(),
             super::import::sync_submitted_places::run(&pool, &matrix_client).await?,
+        ),
+        RpcMethod::SendMatrixMessage => RpcResponse::from(
+            req.id.clone(),
+            super::matrix::send_matrix_message::run(params(req.params)?, &matrix_client).await,
         ),
     }?;
     Ok(Json(res))

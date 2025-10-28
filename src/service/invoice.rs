@@ -166,7 +166,7 @@ pub async fn on_invoice_paid(
                 "{} https://btcmap.org/merchant/{}",
                 comment.comment, element.id,
             );
-            service::matrix::send_message(matrix_client, ROOM_PLACE_COMMENTS, &message).await;
+            service::matrix::send_message(matrix_client, ROOM_PLACE_COMMENTS, &message);
         }
     }
 

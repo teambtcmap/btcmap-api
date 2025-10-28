@@ -1,4 +1,4 @@
-use crate::db::conf::schema::Conf;
+use crate::{db::conf::schema::Conf, error::Error};
 use matrix_sdk::{
     config::SyncSettings, ruma::events::room::message::RoomMessageEventContent, Client,
 };
@@ -49,14 +49,32 @@ pub async fn init_client(conf: &Conf) -> Option<Client> {
     Some(client)
 }
 
-pub async fn send_message(client: &Option<Client>, room_id: &str, message: &str) {
-    let Some(client) = client else { return };
-    let rooms = client.joined_rooms();
-    let room = rooms.into_iter().find(|r| r.room_id() == room_id);
-    let Some(room) = room else {
-        warn!(room_id, "matrix room not found");
+pub fn send_message(client: &Option<Client>, room_id: &str, message: &str) {
+    let Some(client) = client else {
+        warn!("matrix client not configured");
         return;
     };
+
+    let client = client.clone();
+    let room_id = room_id.to_string();
+    let message = message.to_string();
+
+    actix_web::rt::spawn(async move {
+        if let Err(e) = _send_message(&client, &room_id, &message).await {
+            warn!(room_id, error = %e);
+        }
+    });
+}
+
+async fn _send_message(client: &Client, room_id: &str, message: &str) -> Result<(), Error> {
+    let rooms = client.joined_rooms();
+    let room = rooms
+        .into_iter()
+        .find(|r| r.room_id() == room_id)
+        .ok_or_else(|| Error::Matrix(format!("room not found")))?;
     let content = RoomMessageEventContent::text_plain(message);
-    room.send(content).await.unwrap();
+    room.send(content)
+        .await
+        .map_err(|_| Error::Matrix("failed to send message".to_string()))?;
+    Ok(())
 }
