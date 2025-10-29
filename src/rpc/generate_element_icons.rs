@@ -1605,6 +1605,10 @@ impl OverpassElement {
             icon_id = "castle"
         }
 
+        if historic == "manor" {
+            icon_id = "castle"
+        }
+
         if public_transport == "station" {
             icon_id = "commute"
         }
