@@ -34,7 +34,7 @@ pub async fn run(pool: &Pool, matrix_client: &Option<Client>) -> Result<Res> {
         }
 
         if submission.ticket_url.is_none() {
-            let title = format!("[import][{}] {}", submission.origin, submission.name);
+            let title = format!("{}", submission.name);
 
             let body = format!(
                 r#"
@@ -74,7 +74,7 @@ pub async fn run(pool: &Pool, matrix_client: &Option<Client>) -> Result<Res> {
                 .map(|line| line.trim())
                 .collect::<Vec<&str>>()
                 .join("\n");
-            let issue = service::gitea::create_issue(title, body, pool).await?;
+            let issue = service::gitea::create_issue(title, body, vec![901, 1307], pool).await?;
             db::place_submission::queries::set_ticket_url(submission.id, issue.url.clone(), pool)
                 .await?;
             issues_created += 1;

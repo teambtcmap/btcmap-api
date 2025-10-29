@@ -11,13 +11,18 @@ pub struct CreateIssueResponse {
     pub html_url: String,
 }
 
-pub async fn create_issue(title: String, body: String, pool: &Pool) -> Result<CreateIssueResponse> {
+pub async fn create_issue(
+    title: String,
+    body: String,
+    labels: Vec<i64>,
+    pool: &Pool,
+) -> Result<CreateIssueResponse> {
     let conf = db::conf::queries::select(pool).await?;
     if conf.gitea_api_key.is_empty() {
         Err("gitea api key is not set")?
     }
     let client = reqwest::Client::new();
-    let args = json!({ "title": title, "body": body });
+    let args = json!({ "title": title, "body": body, "labels": labels });
     let gitea_response = client
         .post("https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues")
         .header("Authorization", format!("token {}", conf.gitea_api_key))
