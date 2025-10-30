@@ -418,6 +418,12 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
     }
 
     if !payment_provider.is_empty() {
+        let payment_provider = if payment_provider == "square" {
+            "square:bitcoin".to_string()
+        } else {
+            payment_provider
+        };
+
         if filters_applied == 0 {
             matches =
                 db::element::queries::select_by_payment_provider(payment_provider.clone(), &pool)
