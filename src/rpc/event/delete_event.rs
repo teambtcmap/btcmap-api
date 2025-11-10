@@ -5,7 +5,7 @@ use crate::{
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -28,12 +28,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         db::event::queries::set_deleted_at(params.id, Some(OffsetDateTime::now_utc()), pool)
             .await?;
     discord::send(
-        format!(
-            "Deleted event (id: {}, name: {}, date: {})",
-            event.id,
-            event.name,
-            event.starts_at.format(&Rfc3339)?,
-        ),
+        format!("Deleted event (id: {}, name: {})", event.id, event.name,),
         discord::Channel::Api,
         conf,
     );

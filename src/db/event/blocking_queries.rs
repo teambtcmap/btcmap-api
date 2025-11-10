@@ -10,7 +10,7 @@ pub fn insert(
     lon: f64,
     name: &str,
     website: &str,
-    starts_at: OffsetDateTime,
+    starts_at: Option<OffsetDateTime>,
     ends_at: Option<OffsetDateTime>,
     conn: &Connection,
 ) -> Result<Event> {
@@ -129,7 +129,23 @@ mod test {
             4.56,
             "name",
             "website",
-            OffsetDateTime::now_utc(),
+            Some(OffsetDateTime::now_utc()),
+            None,
+            &conn,
+        )?;
+        assert_eq!(Some(&event), super::select_all(&conn)?.first());
+        Ok(())
+    }
+
+    #[test]
+    fn insert_null_started_at() -> Result<()> {
+        let conn = conn();
+        let event = super::insert(
+            1.23,
+            4.56,
+            "name",
+            "website",
+            None,
             None,
             &conn,
         )?;
@@ -145,7 +161,7 @@ mod test {
             4.56,
             "name",
             "website",
-            OffsetDateTime::now_utc(),
+            Some(OffsetDateTime::now_utc()),
             None,
             &conn,
         )?;
@@ -154,7 +170,7 @@ mod test {
             4.56,
             "name",
             "website",
-            OffsetDateTime::now_utc(),
+            Some(OffsetDateTime::now_utc()),
             None,
             &conn,
         )?;
@@ -163,7 +179,7 @@ mod test {
             4.56,
             "name",
             "website",
-            OffsetDateTime::now_utc(),
+            Some(OffsetDateTime::now_utc()),
             None,
             &conn,
         )?;
@@ -179,7 +195,7 @@ mod test {
             4.56,
             "name",
             "website",
-            OffsetDateTime::now_utc(),
+            Some(OffsetDateTime::now_utc()),
             None,
             &conn,
         )?;

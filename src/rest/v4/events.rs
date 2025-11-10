@@ -35,7 +35,7 @@ impl From<Event> for Item {
             lon: val.lon,
             name: val.name,
             website: val.website,
-            starts_at: val.starts_at,
+            starts_at: val.starts_at.unwrap_or(OffsetDateTime::UNIX_EPOCH),
             ends_at: val.ends_at,
         }
     }
@@ -48,7 +48,10 @@ pub async fn get(req: HttpRequest, pool: Data<Pool>) -> RestResult<Vec<Item>> {
         .map_err(|_| RestApiError::database())?;
     let items: Vec<Event> = items
         .into_iter()
-        .filter(|it| it.deleted_at.is_none() && it.starts_at > OffsetDateTime::now_utc())
+        .filter(|it| {
+            it.deleted_at.is_none()
+                && (it.starts_at.is_none() || it.starts_at > Some(OffsetDateTime::now_utc()))
+        })
         .collect();
     req.extensions_mut()
         .insert(RequestExtension::new(items.len()));

@@ -19,7 +19,9 @@ You can add Bitcoin-related events on BTC Map via this method. Most events are e
 
 We don't keep a lot of data about events due to our lack of maintaining capacity. That's why every eligeble event should have it's own website where users can look up all the details.
 
-Most meetups start in the evening and have no fixed end time, so `ends_at` is optional in that case.
+Most events are recurring and held at a fixed location. In these cases, `starts_at` and `ends_at` can be omitted. The `website` link should direct users to a page with the up-to-date schedule, such as a dedicated event series website or a Meetup.com profile.
+
+For a one-off event without a fixed end time, you may provide only the `starts_at` parameter.
 
 ## Result Format
 

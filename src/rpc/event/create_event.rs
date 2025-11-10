@@ -5,7 +5,7 @@ use crate::{
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -13,8 +13,8 @@ pub struct Params {
     lon: f64,
     name: String,
     website: String,
-    #[serde(with = "time::serde::rfc3339")]
-    starts_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    starts_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
 }
@@ -42,12 +42,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     )
     .await?;
     discord::send(
-        format!(
-            "New event (id: {}, name: {}, date: {})",
-            event.id,
-            event.name,
-            event.starts_at.format(&Rfc3339)?,
-        ),
+        format!("New event (id: {}, name: {})", event.id, event.name,),
         discord::Channel::Api,
         conf,
     );

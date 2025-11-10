@@ -10,7 +10,7 @@ pub async fn insert(
     lon: f64,
     name: String,
     website: String,
-    starts_at: OffsetDateTime,
+    starts_at: Option<OffsetDateTime>,
     ends_at: Option<OffsetDateTime>,
     pool: &Pool,
 ) -> Result<Event> {

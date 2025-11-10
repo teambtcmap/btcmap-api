@@ -18,8 +18,8 @@ pub struct Res {
     lon: f64,
     name: String,
     website: String,
-    #[serde(with = "time::serde::rfc3339")]
-    starts_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    starts_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
 }
