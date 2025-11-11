@@ -56,13 +56,14 @@ pub async fn select_by_bbox(
         .await?
 }
 
-pub async fn select_by_payment_provider(
-    payment_provider: String,
+pub async fn select_by_osm_tag_value(
+    tag_name: String,
+    tag_value: String,
     pool: &Pool,
 ) -> Result<Vec<Element>> {
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_payment_provider(&payment_provider, conn))
+        .interact(move |conn| blocking_queries::select_by_osm_tag_value(&tag_name, &tag_value, conn))
         .await?
 }
 

@@ -1,5 +1,5 @@
 use rusqlite::Row;
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use std::sync::OnceLock;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use url::Url;
@@ -390,32 +390,17 @@ impl Element {
     }
 
     pub fn payment_provider(&self) -> Option<String> {
-        let mut res = String::new();
-
         if let Some(osm_tags) = &self.overpass_data.tags {
-            for (k, v) in osm_tags {
-                if k != "payment:coinos" && k != "payment:square" {
-                    continue;
-                }
+            if osm_tags.get("payment:coinos") == Some(&json!("yes")) {
+                return Some("coinos".to_string());
+            }
 
-                if k.starts_with("payment:") {
-                    let provider = k.replace("payment:", "");
-
-                    if !provider.is_empty() && v.as_str() == Some("yes") {
-                        match res.len() {
-                            0 => res.push_str(&provider),
-                            _ => res.push_str(&format!(",{}", provider)),
-                        }
-                    }
-                }
+            if osm_tags.get("payment:lightning:operator") == Some(&json!("square")) {
+                return Some("square".to_string());
             }
         }
 
-        if res.is_empty() {
-            None
-        } else {
-            Some(res)
-        }
+        None
     }
 }
 

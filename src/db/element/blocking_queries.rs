@@ -125,22 +125,29 @@ pub fn select_by_bbox(
         .map_err(Into::into)
 }
 
-pub fn select_by_payment_provider(
-    payment_provider: &str,
+pub fn select_by_osm_tag_value(
+    tag_name: &str,
+    tag_value: &str,
     conn: &Connection,
 ) -> Result<Vec<Element>> {
+    // sanitizing is a MUST!
+    let tag_name: String = tag_name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == ':')
+        .collect();
+
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE json_extract({overpass_data}, '$.tags.payment:{payment_provider}') = 'yes' AND deleted_at IS NULL
+            WHERE json_extract({overpass_data}, '$.tags.{tag_name}') = ? AND deleted_at IS NULL
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
         overpass_data = Columns::OverpassData.as_str(),
     );
     conn.prepare(&sql)?
-        .query_map(params![], Element::mapper())?
+        .query_map(params![tag_value], Element::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }

@@ -113,7 +113,8 @@ This method has two main use cases:
 | `lon`              | Number | `4.56`           | You also need to set `radius_km` in order to use this parameter. |
 | `radius_km`        | Number | `15`             | Search radius, in kilometers.                                    |
 | `name`             | String | `Bitcoin Coffee` | At least three letters are required.                             |
-| `payment_provider` | String | `coinos`         | Based on OSM `payment:{provider}` tags.                          |
+| `tag_name`         | String | `payment:coinos` | OSM tag.                                                         |
+| `tag_value`        | String | `yes`            | OSM tag.                                                         |
 
 #### Examples
 
@@ -122,7 +123,7 @@ This method has two main use cases:
 Let's fetch all the places using [Coinos](https://coinos.io/), a popular Canadian Bitcoin-only payment provider.
 
 ```bash
-curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos'
+curl 'https://api.btcmap.org/v4/places/search/?tag_name=payment:coinos&tag_value=yes'
 ```
 
 ```json
@@ -151,7 +152,7 @@ curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos'
 Search filters can be mixed, so let's filter by both provider and merchant name:
 
 ```bash
-curl 'https://api.btcmap.org/v4/places/search/?payment_provider=coinos&name=lounge'
+curl 'https://api.btcmap.org/v4/places/search/?tag_name=payment:coinos&tag_value=yes&name=lounge'
 ```
 
 ```json

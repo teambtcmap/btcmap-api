@@ -272,7 +272,8 @@ pub struct SearchArgs {
     lon: Option<f64>,
     radius_km: Option<f64>,
     name: Option<String>,
-    payment_provider: Option<String>,
+    tag_name: Option<String>,
+    tag_value: Option<String>,
     include_pending: Option<bool>,
     prevent_pending_id_clash: Option<bool>,
 }
@@ -333,17 +334,9 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
     let lon = args.lon.unwrap_or(0.0);
     let radius_km = args.radius_km.unwrap_or(100_000.0);
     let name = args.name.clone().unwrap_or("".to_string());
-    let payment_provider = args.payment_provider.clone().unwrap_or("".to_string());
+    let tag_name = args.tag_name.clone().unwrap_or("".to_string());
+    let tag_value = args.tag_value.clone().unwrap_or("".to_string());
     let include_pending = args.include_pending.unwrap_or(false);
-
-    let payment_provider_whitelist = vec!["coinos".to_string(), "square".to_string()];
-
-    if !payment_provider.is_empty() && !payment_provider_whitelist.contains(&payment_provider) {
-        return Err(RestApiError {
-            code: crate::rest::error::RestApiErrorCode::InvalidInput,
-            message: "Unknown payment provider".to_string(),
-        });
-    }
 
     let lat_radius = radius_km / 111.0;
     let lon_radius = radius_km / (111.0 * lat.to_radians().cos());
@@ -417,34 +410,53 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
         filters_applied += 1;
     }
 
-    if !payment_provider.is_empty() {
-        let  payment_provider = if payment_provider == "square" {
-            "square:bitcoin".to_string()
-        } else {
-            payment_provider
-        };
-
+    if !tag_name.is_empty() && !tag_value.is_empty() {
         if filters_applied == 0 {
-            matches =
-                db::element::queries::select_by_payment_provider(payment_provider.clone(), &pool)
-                    .await
-                    .map_err(|_| RestApiError::database())?;
+            matches = db::element::queries::select_by_osm_tag_value(
+                tag_name.clone(),
+                tag_value.clone(),
+                &pool,
+            )
+            .await
+            .map_err(|_| RestApiError::database())?;
             if include_pending {
-                pending_matches =
-                    db::place_submission::queries::select_by_origin(payment_provider, &pool)
-                        .await
-                        .map_err(|_| RestApiError::database())?;
+                let origin = if tag_name == "payment:lightning:operator" && tag_value == "square" {
+                    "square"
+                } else {
+                    ""
+                };
+
+                if !origin.is_empty() {
+                    pending_matches =
+                        db::place_submission::queries::select_by_origin(origin.to_string(), &pool)
+                            .await
+                            .map_err(|_| RestApiError::database())?;
+                }
             }
         } else {
             matches = matches
                 .into_iter()
-                .filter(|it| it.supports_payment_provider(&payment_provider))
+                .filter(|it| match &it.overpass_data.tags {
+                    Some(tags) => match tags.get(&tag_name) {
+                        Some(tag) => tag.as_str() == Some(&tag_value),
+                        None => false,
+                    },
+                    None => false,
+                })
                 .collect();
             if include_pending {
-                pending_matches = pending_matches
-                    .into_iter()
-                    .filter(|it| it.origin == payment_provider)
-                    .collect();
+                let origin = if tag_name == "payment:lightning:operator" && tag_value == "square" {
+                    "square"
+                } else {
+                    ""
+                };
+
+                if !origin.is_empty() {
+                    pending_matches = pending_matches
+                        .into_iter()
+                        .filter(|it| it.origin == origin)
+                        .collect();
+                }
             }
         }
     }
