@@ -173,7 +173,8 @@ async fn main() -> Result<()> {
                             .service(rest::v4::place_boosts::get_quote)
                             .service(rest::v4::place_boosts::post),
                     )
-                    .service(scope("search").service(rest::v4::search::get)),
+                    .service(scope("search").service(rest::v4::search::get))
+                    .service(scope("dashboard").service(rest::v4::dashboard::get)),
             )
     })
     .bind(("127.0.0.1", 8000))?

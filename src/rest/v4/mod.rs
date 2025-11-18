@@ -1,3 +1,4 @@
+pub mod dashboard;
 pub mod element_issues;
 pub mod events;
 pub mod invoices;

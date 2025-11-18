@@ -89,6 +89,13 @@ impl Report {
             .unwrap_or_default()
     }
 
+    pub fn total_atms(&self) -> i64 {
+        self.tags
+            .get("total_atms")
+            .map(|it| it.as_i64().unwrap_or_default())
+            .unwrap_or_default()
+    }
+
     pub fn up_to_date_elements(&self) -> i64 {
         self.tags
             .get("up_to_date_elements")

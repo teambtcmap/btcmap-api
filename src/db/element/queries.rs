@@ -4,7 +4,7 @@ use crate::service::overpass::OverpassElement;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
-use time::OffsetDateTime;
+use time::{Date, OffsetDateTime};
 
 pub async fn insert(overpass_data: OverpassElement, pool: &Pool) -> Result<Element> {
     pool.get()
@@ -63,7 +63,9 @@ pub async fn select_by_osm_tag_value(
 ) -> Result<Vec<Element>> {
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_osm_tag_value(&tag_name, &tag_value, conn))
+        .interact(move |conn| {
+            blocking_queries::select_by_osm_tag_value(&tag_name, &tag_value, conn)
+        })
         .await?
 }
 
@@ -90,6 +92,20 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Element> {
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::select_by_id(id, conn))
+        .await?
+}
+
+pub async fn select_merchants_count(pool: &Pool, verified_since: Option<Date>) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_merchants_count(conn, verified_since))
+        .await?
+}
+
+pub async fn select_exchanges_count(pool: &Pool, verified_since: Option<Date>) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_exchanges_count(conn, verified_since))
         .await?
 }
 

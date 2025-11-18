@@ -2,7 +2,7 @@ use super::schema::{self, Columns, Element};
 use crate::{service::overpass::OverpassElement, Result};
 use rusqlite::{named_params, params, Connection};
 use serde_json::{Map, Value};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::{format_description::well_known::Rfc3339, Date, OffsetDateTime};
 
 pub fn insert(overpass_data: &OverpassElement, conn: &Connection) -> Result<Element> {
     let sql = format!(
@@ -198,6 +198,42 @@ pub fn select_by_osm_type_and_id(
         overpass_data = Columns::OverpassData.as_str(),
     );
     Ok(conn.query_row(&sql, params![osm_type, osm_id], Element::mapper())?)
+}
+
+pub fn select_merchants_count(conn: &Connection, verified_since: Option<Date>) -> Result<i64> {
+    let mut sql = format!(
+        r#"
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE {deleted_at} IS NULL AND json_extract({tags}, '$.icon:android') != 'local_atm' AND json_extract({tags}, '$.icon:android') != 'currency_exchange'
+        "#,
+        table = schema::TABLE_NAME,
+        deleted_at = Columns::DeletedAt.as_str(),
+        tags = Columns::Tags.as_str(),
+    );
+    if let Some(verified_since) = verified_since {
+        let verified_since = verified_since.to_string();
+        sql.push_str(&format!(" AND (json_extract({overpass_data}, '$.tags.survey:date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date:currency:XBT') > '{verified_since}')", overpass_data = Columns::OverpassData.as_str()));
+    }
+    Ok(conn.query_row(&sql, [], |row| row.get(0))?)
+}
+
+pub fn select_exchanges_count(conn: &Connection, verified_since: Option<Date>) -> Result<i64> {
+    let mut sql = format!(
+        r#"
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE {deleted_at} IS NULL AND (json_extract({tags}, '$.icon:android') = 'local_atm' OR json_extract({tags}, '$.icon:android') = 'currency_exchange')
+        "#,
+        table = schema::TABLE_NAME,
+        deleted_at = Columns::DeletedAt.as_str(),
+        tags = Columns::Tags.as_str(),
+    );
+        if let Some(verified_since) = verified_since {
+        let verified_since = verified_since.to_string();
+        sql.push_str(&format!(" AND (json_extract({overpass_data}, '$.tags.survey:date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date:currency:XBT') > '{verified_since}')", overpass_data = Columns::OverpassData.as_str()));
+    }
+    Ok(conn.query_row(&sql, [], |row| row.get(0))?)
 }
 
 pub fn set_overpass_data(
