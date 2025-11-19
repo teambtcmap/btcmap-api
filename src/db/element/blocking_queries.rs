@@ -229,7 +229,7 @@ pub fn select_exchanges_count(conn: &Connection, verified_since: Option<Date>) -
         deleted_at = Columns::DeletedAt.as_str(),
         tags = Columns::Tags.as_str(),
     );
-        if let Some(verified_since) = verified_since {
+    if let Some(verified_since) = verified_since {
         let verified_since = verified_since.to_string();
         sql.push_str(&format!(" AND (json_extract({overpass_data}, '$.tags.survey:date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date:currency:XBT') > '{verified_since}')", overpass_data = Columns::OverpassData.as_str()));
     }

@@ -19,6 +19,7 @@ pub struct Dashboard {
     pub verified_merchants_1y_chart: Vec<ChartEntry>,
     pub total_exchanges: i64,
     pub total_exchanges_chart: Vec<ChartEntry>,
+    pub verified_exchanges_1y: i64,
 }
 
 #[derive(Serialize)]
@@ -36,6 +37,9 @@ pub async fn get(pool: Data<Pool>) -> RestResult<Dashboard> {
     let now = OffsetDateTime::now_utc();
     let year_ago = now.date().saturating_sub(Duration::days(365));
     let verified_merchants_1y = db::element::queries::select_merchants_count(&pool, Some(year_ago))
+        .await
+        .map_err(|_| RestApiError::database())?;
+    let verified_exchanges_1y = db::element::queries::select_exchanges_count(&pool, Some(year_ago))
         .await
         .map_err(|_| RestApiError::database())?;
 
@@ -78,5 +82,6 @@ pub async fn get(pool: Data<Pool>) -> RestResult<Dashboard> {
         verified_merchants_1y_chart,
         total_exchanges,
         total_exchanges_chart,
+        verified_exchanges_1y,
     }))
 }

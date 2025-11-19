@@ -140,15 +140,7 @@ mod test {
     #[test]
     fn insert_null_started_at() -> Result<()> {
         let conn = conn();
-        let event = super::insert(
-            1.23,
-            4.56,
-            "name",
-            "website",
-            None,
-            None,
-            &conn,
-        )?;
+        let event = super::insert(1.23, 4.56, "name", "website", None, None, &conn)?;
         assert_eq!(Some(&event), super::select_all(&conn)?.first());
         Ok(())
     }

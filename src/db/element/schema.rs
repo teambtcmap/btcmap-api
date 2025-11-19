@@ -1,5 +1,5 @@
 use rusqlite::Row;
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use std::sync::OnceLock;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use url::Url;
