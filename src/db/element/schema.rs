@@ -402,6 +402,28 @@ impl Element {
 
         None
     }
+
+    pub fn is_merchant(&self) -> bool {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return true;
+        };
+
+        !matches!(
+            osm_tags.get("amenity").and_then(|v| v.as_str()),
+            Some("atm") | Some("bureau_de_change"),
+        )
+    }
+
+    pub fn is_exchange(&self) -> bool {
+        let Some(osm_tags) = &self.overpass_data.tags else {
+            return false;
+        };
+
+        matches!(
+            osm_tags.get("amenity").and_then(|v| v.as_str()),
+            Some("atm") | Some("bureau_de_change"),
+        )
+    }
 }
 
 fn is_valid_url(url: &str) -> bool {

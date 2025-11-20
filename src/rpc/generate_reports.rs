@@ -126,6 +126,10 @@ fn generate_report_tags(elements: &[Element], area_url_alias: &str) -> Result<Ma
         .filter(|it| !it.overpass_data.up_to_date())
         .collect();
 
+    let total_merchants: Vec<_> = elements.iter().filter(|it| it.is_merchant()).collect();
+
+    let total_exchanges: Vec<_> = elements.iter().filter(|it| it.is_exchange()).collect();
+
     let up_to_date_percent: f64 = up_to_date_elements.len() as f64 / elements.len() as f64 * 100.0;
     let up_to_date_percent: i64 = up_to_date_percent as i64;
 
@@ -133,6 +137,8 @@ fn generate_report_tags(elements: &[Element], area_url_alias: &str) -> Result<Ma
     tags.insert("area_url_alias".into(), area_url_alias.into());
     tags.insert("total_elements".into(), elements.len().into());
     tags.insert("total_atms".into(), atms.len().into());
+    tags.insert("total_merchants".into(), total_merchants.len().into());
+    tags.insert("total_exchanges".into(), total_exchanges.len().into());
     tags.insert(
         "total_elements_onchain".into(),
         onchain_elements.len().into(),
