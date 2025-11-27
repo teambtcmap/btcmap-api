@@ -55,7 +55,7 @@ pub async fn get(pool: Data<Pool>) -> RestResult<Dashboard> {
         .iter()
         .map(|report| ChartEntry {
             date: report.date.to_string(),
-            value: report.total_elements() - report.total_atms(),
+            value: report.total_merchants(),
         })
         .collect();
 
@@ -71,7 +71,7 @@ pub async fn get(pool: Data<Pool>) -> RestResult<Dashboard> {
         .iter()
         .map(|report| ChartEntry {
             date: report.date.to_string(),
-            value: report.total_atms(),
+            value: report.total_exchanges(),
         })
         .collect();
 

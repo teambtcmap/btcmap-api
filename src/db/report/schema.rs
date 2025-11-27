@@ -82,11 +82,33 @@ impl Report {
         }
     }
 
+    pub fn total_merchants(&self) -> i64 {
+        if self.tags.contains_key("total_merchants") {
+            self.tags
+                .get("total_merchants")
+                .map(|it| it.as_i64().unwrap_or_default())
+                .unwrap_or_default()
+        } else {
+            self.total_elements() - self.total_atms()
+        }
+    }
+
     pub fn total_elements(&self) -> i64 {
         self.tags
             .get("total_elements")
             .map(|it| it.as_i64().unwrap_or_default())
             .unwrap_or_default()
+    }
+
+    pub fn total_exchanges(&self) -> i64 {
+        if self.tags.contains_key("total_exchanges") {
+            self.tags
+                .get("total_exchanges")
+                .map(|it| it.as_i64().unwrap_or_default())
+                .unwrap_or_default()
+        } else {
+            self.total_atms()
+        }
     }
 
     pub fn total_atms(&self) -> i64 {
