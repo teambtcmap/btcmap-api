@@ -2,7 +2,7 @@ use crate::{
     db::{
         self, area::schema::Area, conf::schema::Conf, element::schema::Element, user::schema::User,
     },
-    service::{self, discord},
+    service::discord,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -53,13 +53,37 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
         return Ok(0);
     }
     let all_areas = db::area::queries::select(None, false, None, pool).await?;
-    let all_elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, false, pool)
-            .await?;
     let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
     for area in all_areas {
-        let area_elements = service::element::filter_by_area(&all_elements, &area)?;
-        if let Some(report) = generate_new_report_if_necessary(&area, area_elements, pool).await? {
+        let elements = match area.alias().as_str() {
+            "earth" => {
+                let elements = db::element::queries::select_updated_since(
+                    OffsetDateTime::UNIX_EPOCH,
+                    None,
+                    false,
+                    pool,
+                )
+                .await?;
+                info!(elements = elements.len(), "earth elements");
+                elements
+            }
+            _ => {
+                let area_elements =
+                    db::area_element::queries::select_by_area_id(area.id, pool).await?;
+                let mut elements: Vec<Element> = vec![];
+                for area_element in area_elements {
+                    let element =
+                        db::element::queries::select_by_id(area_element.element_id, pool).await?;
+
+                    if element.deleted_at.is_none() {
+                        elements.push(element);
+                    }
+                }
+                elements
+            }
+        };
+
+        if let Some(report) = generate_new_report_if_necessary(&area, elements, pool).await? {
             reports.insert(area.id, report);
         }
     }

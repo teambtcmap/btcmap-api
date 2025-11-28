@@ -205,15 +205,15 @@ pub fn select_merchants_count(conn: &Connection, verified_since: Option<Date>) -
         r#"
             SELECT COUNT(*)
             FROM {table}
-            WHERE {deleted_at} IS NULL AND json_extract({tags}, '$.icon:android') != 'local_atm' AND json_extract({tags}, '$.icon:android') != 'currency_exchange'
+            WHERE {deleted_at} IS NULL AND coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') != 'atm' AND coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') != 'bureau_de_change'
         "#,
         table = schema::TABLE_NAME,
         deleted_at = Columns::DeletedAt.as_str(),
-        tags = Columns::Tags.as_str(),
+        overpass_data = Columns::OverpassData.as_str(),
     );
     if let Some(verified_since) = verified_since {
         let verified_since = verified_since.to_string();
-        sql.push_str(&format!(" AND (json_extract({overpass_data}, '$.tags.survey:date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date:currency:XBT') > '{verified_since}')", overpass_data = Columns::OverpassData.as_str()));
+        sql.push_str(&format!(" AND (coalesce(json_extract({overpass_data}, '$.tags.survey:date'), '2000-01-01') > '{verified_since}' OR coalesce(json_extract({overpass_data}, '$.tags.check_date'), '2000-01-01') > '{verified_since}' OR coalesce(json_extract({overpass_data}, '$.tags.check_date:currency:XBT'), '2000-01-01') > '{verified_since}')", overpass_data = Columns::OverpassData.as_str()));
     }
     Ok(conn.query_row(&sql, [], |row| row.get(0))?)
 }
@@ -223,11 +223,11 @@ pub fn select_exchanges_count(conn: &Connection, verified_since: Option<Date>) -
         r#"
             SELECT COUNT(*)
             FROM {table}
-            WHERE {deleted_at} IS NULL AND (json_extract({tags}, '$.icon:android') = 'local_atm' OR json_extract({tags}, '$.icon:android') = 'currency_exchange')
+            WHERE {deleted_at} IS NULL AND (coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') = 'atm' OR coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') = 'bureau_de_change')
         "#,
         table = schema::TABLE_NAME,
         deleted_at = Columns::DeletedAt.as_str(),
-        tags = Columns::Tags.as_str(),
+        overpass_data = Columns::OverpassData.as_str(),
     );
     if let Some(verified_since) = verified_since {
         let verified_since = verified_since.to_string();

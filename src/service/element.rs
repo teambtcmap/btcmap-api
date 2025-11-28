@@ -48,42 +48,6 @@ pub async fn populate_lat_lon(pool: &Pool) -> Result<()> {
     Ok(())
 }
 
-pub fn filter_by_area(all_elements: &Vec<Element>, area: &Area) -> Result<Vec<Element>> {
-    let geometries = area.geo_json_geometries()?;
-    let mut area_elements: Vec<Element> = vec![];
-
-    for element in all_elements {
-        for geometry in &geometries {
-            match &geometry.value {
-                geojson::Value::MultiPolygon(_) => {
-                    let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
-
-                    if multi_poly.contains(&element.overpass_data.coord()) {
-                        area_elements.push(element.clone());
-                    }
-                }
-                geojson::Value::Polygon(_) => {
-                    let poly: Polygon = (&geometry.value).try_into().unwrap();
-
-                    if poly.contains(&element.overpass_data.coord()) {
-                        area_elements.push(element.clone());
-                    }
-                }
-                geojson::Value::LineString(_) => {
-                    let line_string: LineString = (&geometry.value).try_into().unwrap();
-
-                    if line_string.contains(&element.overpass_data.coord()) {
-                        area_elements.push(element.clone());
-                    }
-                }
-                _ => continue,
-            }
-        }
-    }
-
-    Ok(area_elements)
-}
-
 pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a Area>> {
     let mut element_areas = vec![];
     let mut rough_matches = 0;
