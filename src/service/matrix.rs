@@ -6,6 +6,7 @@ use tracing::{info, warn};
 
 pub static ROOM_PLACE_COMMENTS: &str = "!yWWvFhceozjhXmtksv:matrix.org";
 pub static ROOM_PLACE_IMPORT: &str = "!EpPJoiZzeXiZkclPEg:matrix.org";
+pub static ROOM_INFRASTRUCTURE: &str = "!EszQsHUXXrNXOsNCQM:matrix.org";
 
 pub async fn init_client(conf: &Conf) -> Option<Client> {
     if conf.matrix_bot_password.is_empty() {
@@ -50,6 +51,13 @@ pub async fn init_client(conf: &Conf) -> Option<Client> {
 }
 
 pub fn send_message(client: &Option<Client>, room_id: &str, message: &str) {
+    let room_id = match room_id {
+        "place-comments" => ROOM_PLACE_COMMENTS,
+        "place-import" => ROOM_PLACE_IMPORT,
+        "infra" | "infrastructure" => ROOM_INFRASTRUCTURE,
+        _ => room_id,
+    };
+
     let Some(client) = client else {
         warn!("matrix client not configured");
         return;
