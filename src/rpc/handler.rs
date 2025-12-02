@@ -527,8 +527,7 @@ pub async fn handle(
         ),
         RpcMethod::CreateInvoice => RpcResponse::from(
             req.id.clone(),
-            super::invoice::create_invoice::run(params(req.params)?, &user.unwrap(), &pool, &conf)
-                .await?,
+            super::invoice::create_invoice::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),

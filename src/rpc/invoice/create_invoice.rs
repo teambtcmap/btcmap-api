@@ -1,6 +1,6 @@
 use crate::{
-    db::{conf::schema::Conf, invoice::schema::Invoice, user::schema::User},
-    service::{self, discord},
+    db::invoice::schema::Invoice,
+    service::{self},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -27,20 +27,12 @@ impl From<Invoice> for Res {
     }
 }
 
-pub async fn run(params: Params, author: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let invoice = service::invoice::create(
         params.description.unwrap_or_default(),
         params.amount_sats,
         pool,
     )
     .await?;
-    discord::send(
-        format!(
-            "{} created a new invoice (uuid: {}, sats: {}, description: {})",
-            author.name, invoice.uuid, params.amount_sats, invoice.description,
-        ),
-        discord::Channel::Api,
-        conf,
-    );
     Ok(invoice.into())
 }
