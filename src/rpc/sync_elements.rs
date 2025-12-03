@@ -4,6 +4,7 @@ use crate::service::sync::MergeResult;
 use crate::service::{self, discord};
 use crate::Result;
 use deadpool_sqlite::Pool;
+use matrix_sdk::Client;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -13,10 +14,16 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
-pub async fn run(user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(
+    user: &User,
+    pool: &Pool,
+    conf: &Conf,
+    matrix_client: Option<Client>,
+) -> Result<Res> {
     let overpass_res = service::overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
-    let merge_res = service::sync::merge_overpass_elements(overpass_res.elements, pool).await?;
+    let merge_res =
+        service::sync::merge_overpass_elements(overpass_res.elements, pool, &matrix_client).await?;
     if merge_res.elements_created.len()
         + merge_res.elements_updated.len()
         + merge_res.elements_deleted.len()

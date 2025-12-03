@@ -5,7 +5,6 @@ use crate::{
     },
     Result,
 };
-use actix_web::web::Data;
 use deadpool_sqlite::Pool;
 use matrix_sdk::Client;
 use serde::{Deserialize, Serialize};
@@ -30,7 +29,7 @@ impl From<Invoice> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool, matrix_client: Data<Option<Client>>) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool, matrix_client: Option<Client>) -> Result<Res> {
     let mut invoice = db::invoice::queries::select_by_uuid(params.uuid.clone(), pool).await?;
     if invoice.status == InvoiceStatus::Unpaid
         && crate::service::invoice::sync_unpaid_invoice(&invoice, &pool, &matrix_client).await?

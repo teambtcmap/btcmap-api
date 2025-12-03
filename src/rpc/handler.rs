@@ -278,6 +278,7 @@ pub async fn handle(
     conf: Data<Conf>,
     matrix_client: Data<Option<Client>>,
 ) -> Result<Json<RpcResponse>> {
+    let matrix_client = matrix_client.as_ref().clone();
     let headers = req.headers();
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
         let error_data = json!("Request body is not a valid JSON object");
@@ -403,7 +404,7 @@ pub async fn handle(
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
-            super::sync_elements::run(&user.unwrap(), &pool, &conf).await?,
+            super::sync_elements::run(&user.unwrap(), &pool, &conf, matrix_client).await?,
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),

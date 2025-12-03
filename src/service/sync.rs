@@ -1,12 +1,13 @@
-use crate::db::conf::schema::Conf;
 use crate::db::element::schema::Element;
 use crate::db::element_event::schema::ElementEvent;
 use crate::service::area_element::Diff;
+use crate::service::matrix::ROOM_OSM_CHANGES;
 use crate::service::osm::OsmElement;
 use crate::service::overpass::OverpassElement;
-use crate::service::{self, discord};
+use crate::service::{self, matrix};
 use crate::{db, Result};
 use deadpool_sqlite::Pool;
+use matrix_sdk::Client;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -47,10 +48,12 @@ impl From<Element> for MergeResultElement {
 pub async fn merge_overpass_elements(
     fresh_overpass_elements: Vec<OverpassElement>,
     pool: &Pool,
+    matrix_client: &Option<Client>,
 ) -> Result<MergeResult> {
     let started_at = OffsetDateTime::now_utc();
     // stage 1: find and process deleted elements
-    let deleted_element_events = sync_deleted_elements(&fresh_overpass_elements, pool).await?;
+    let deleted_element_events =
+        sync_deleted_elements(&fresh_overpass_elements, pool, matrix_client).await?;
     let mut deleted_elements: Vec<MergeResultElement> = vec![];
     for event in &deleted_element_events {
         let element = db::element::queries::select_by_id(event.element_id, pool).await?;
@@ -129,6 +132,7 @@ pub async fn merge_overpass_elements(
 pub async fn sync_deleted_elements(
     fresh_overpass_elements: &[OverpassElement],
     pool: &Pool,
+    matrix_client: &Option<Client>,
 ) -> Result<Vec<ElementEvent>> {
     info!(
         fresh_overpass_elements = fresh_overpass_elements.len(),
@@ -145,12 +149,11 @@ pub async fn sync_deleted_elements(
             .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
             .collect();
     let mut res = vec![];
-    let conf = db::conf::queries::select(pool).await?;
     for absent_element in absent_elements {
         let fresh_osm_element = confirm_deleted(
             &absent_element.overpass_data.r#type,
             absent_element.overpass_data.id,
-            &conf,
+            matrix_client,
         )
         .await?;
         service::user::insert_user_if_not_exists(fresh_osm_element.uid, pool).await?;
@@ -187,7 +190,11 @@ async fn mark_element_as_deleted(
     Ok(event)
 }
 
-async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<OsmElement> {
+async fn confirm_deleted(
+    osm_type: &str,
+    osm_id: i64,
+    client: &Option<Client>,
+) -> Result<OsmElement> {
     let osm_element = match service::osm::get_element(osm_type, osm_id).await? {
         Some(v) => v,
         None => Err(format!(
@@ -201,7 +208,8 @@ async fn confirm_deleted(osm_type: &str, osm_id: i64, conf: &Conf) -> Result<Osm
             osm_type, osm_id,
         );
         error!(message);
-        discord::send(&message, discord::Channel::OsmChanges, conf);
+        matrix::send_message(client, ROOM_OSM_CHANGES, &message);
+        //discord::send(&message, discord::Channel::OsmChanges, conf);
         Err(message)?
     }
     Ok(osm_element)
@@ -352,7 +360,7 @@ pub async fn sync_new_elements(
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, conf::schema::Conf, test::pool},
+        db::{self, test::pool},
         service::{self, osm::EditingApiUser, overpass::OverpassElement},
         Result,
     };
@@ -369,6 +377,7 @@ mod test {
         let res = super::sync_deleted_elements(
             &vec![element_1.overpass_data, element_2.overpass_data],
             &pool,
+            &None,
         )
         .await;
         assert!(res.is_ok());
@@ -382,10 +391,10 @@ mod test {
     #[test]
     #[ignore = "relies on external service"]
     async fn confirm_deleted() -> Result<()> {
-        assert!(super::confirm_deleted("node", 2702291726, &Conf::mock())
+        assert!(super::confirm_deleted("node", 2702291726, &None)
             .await
             .is_ok());
-        assert!(super::confirm_deleted("node", 12181429828, &Conf::mock())
+        assert!(super::confirm_deleted("node", 12181429828, &None)
             .await
             .is_err());
         Ok(())

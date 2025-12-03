@@ -7,6 +7,7 @@ use tracing::{info, warn};
 pub static ROOM_PLACE_COMMENTS: &str = "!yWWvFhceozjhXmtksv:matrix.org";
 pub static ROOM_PLACE_IMPORT: &str = "!EpPJoiZzeXiZkclPEg:matrix.org";
 pub static ROOM_INFRASTRUCTURE: &str = "!EszQsHUXXrNXOsNCQM:matrix.org";
+pub static ROOM_OSM_CHANGES: &str = "!swamvAOpEsGUAzjkeX:matrix.org";
 
 pub async fn init_client(conf: &Conf) -> Option<Client> {
     if conf.matrix_bot_password.is_empty() {
