@@ -19,7 +19,8 @@ This file is usually already cached by a few CDN nodes close to your physical lo
 **Included Fields:**
 - `id` – Use to look up more fields on demand
 - `lat`, `lon` – Location data  
-- `icon`, `comments` – UI metadata 
+- `icon`, `comments` – UI metadata
+- `boosted_until` – Boost expiry date, returned for currently boosted places only
 
 Which should be enough to display all the pins on your map, with proper icons and comment count badges.
 
