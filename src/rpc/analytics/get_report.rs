@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, boost::schema::Boost},
+    db::{self, invoice::schema::InvoicedService},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -56,12 +56,26 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let avg_verification_date_end = OffsetDateTime::parse(avg_verification_date_end, &Rfc3339)?;
     let days_since_verified_end =
         (global_report_end.created_at - avg_verification_date_end).whole_days();
-    let boosts = db::boost::queries::select_all(pool).await?;
-    let boosts: Vec<Boost> = boosts
-        .into_iter()
-        .filter(|it| it.created_at > params.start && it.created_at < params.end)
+    let invoices =
+        db::invoice::queries::select_by_status(db::invoice::schema::InvoiceStatus::Paid, pool)
+            .await?;
+    let start = params.start.format(&Rfc3339)?;
+    let end = params.end.format(&Rfc3339)?;
+    let boosts: Vec<_> = invoices
+        .iter()
+        .filter(|it| {
+            it.created_at > start
+                && it.created_at < end
+                && matches!(it.service(), InvoicedService::Boost { .. })
+        })
         .collect();
-    let boosts_total_days = boosts.iter().map(|it| it.duration_days).sum();
+    let boosts_total_days = boosts
+        .iter()
+        .map(|it| match it.service() {
+            InvoicedService::Boost { duration_days, .. } => duration_days,
+            _ => 0,
+        })
+        .sum();
     let comments =
         db::element_comment::queries::select_created_between(params.start, params.end, pool)
             .await?;
