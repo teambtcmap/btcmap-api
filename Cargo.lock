@@ -540,6 +540,7 @@ dependencies = [
  "staticmap",
  "strum",
  "time",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "url",

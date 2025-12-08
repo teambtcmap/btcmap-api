@@ -19,35 +19,6 @@ use time::Date;
 use time::OffsetDateTime;
 use tracing::info;
 
-pub async fn remove_areas_tag(pool: &Pool) -> Result<()> {
-    let elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
-            .await?;
-    info!(elements = elements.len(), "preparing to remove areas tag");
-    for element in elements {
-        if element.tags.contains_key("areas") {
-            info!(element.id, "found legacy areas tag");
-            db::element::queries::remove_tag(element.id, "areas", pool).await?;
-        }
-    }
-    Ok(())
-}
-
-pub async fn populate_lat_lon(pool: &Pool) -> Result<()> {
-    let elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
-            .await?;
-    info!(elements = elements.len(), "preparing to generate lat lon");
-    for element in elements {
-        if element.lat.is_none() || element.lon.is_none() {
-            info!(element.id, "lat lon is missing, generating");
-            db::element::queries::set_lat_lon(element.id, element.lat(), element.lon(), pool)
-                .await?;
-        }
-    }
-    Ok(())
-}
-
 pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a Area>> {
     let mut element_areas = vec![];
     let mut rough_matches = 0;

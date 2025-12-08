@@ -87,3 +87,5 @@ argon2 = { version = "0.5.3", default-features = false, features = ["password-ha
 uuid = { version = "1.16.0", default-features = false, features = ["v4"] }
 
 strum = { version = "0.27.1", features = ["derive"] }
+
+tokio = "1.48.0"

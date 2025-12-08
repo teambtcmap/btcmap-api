@@ -4,7 +4,7 @@ use crate::{
         conf::schema::Conf,
         user::schema::{Role, User},
     },
-    Result,
+    service, Result,
 };
 use actix_web::{
     dev::ServiceResponse,
@@ -18,7 +18,6 @@ use actix_web::{
     HttpRequest, HttpResponseBuilder,
 };
 use deadpool_sqlite::Pool;
-use matrix_sdk::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -276,9 +275,8 @@ pub async fn handle(
     req_body: String,
     pool: Data<Pool>,
     conf: Data<Conf>,
-    matrix_client: Data<Option<Client>>,
 ) -> Result<Json<RpcResponse>> {
-    let matrix_client = matrix_client.as_ref().clone();
+    let matrix_client = service::matrix::client(&pool).await;
     let headers = req.headers();
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
         let error_data = json!("Request body is not a valid JSON object");
@@ -631,6 +629,7 @@ mod test {
         web::scope,
         App,
     };
+    use matrix_sdk::Client;
     use serde_json::json;
 
     #[test]

@@ -1,7 +1,12 @@
-use crate::{db::conf::schema::Conf, error::Error};
+use crate::{
+    db::{self, conf::schema::Conf},
+    error::Error,
+};
+use deadpool_sqlite::Pool;
 use matrix_sdk::{
     config::SyncSettings, ruma::events::room::message::RoomMessageEventContent, Client,
 };
+use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
 pub static ROOM_PLACE_COMMENTS: &str = "!yWWvFhceozjhXmtksv:matrix.org";
@@ -9,7 +14,29 @@ pub static ROOM_PLACE_IMPORT: &str = "!EpPJoiZzeXiZkclPEg:matrix.org";
 pub static ROOM_INFRASTRUCTURE: &str = "!EszQsHUXXrNXOsNCQM:matrix.org";
 pub static ROOM_OSM_CHANGES: &str = "!swamvAOpEsGUAzjkeX:matrix.org";
 
-pub async fn init_client(conf: &Conf) -> Option<Client> {
+static MATRIX_CLIENT: OnceCell<Option<Client>> = OnceCell::const_new();
+
+pub async fn client(pool: &Pool) -> Option<Client> {
+    MATRIX_CLIENT
+        .get_or_init(|| async {
+            let conf = db::conf::queries::select(pool).await.unwrap();
+            info!("lazy initializing matrix client...");
+            match init_client(&conf).await {
+                Some(client) => {
+                    info!("matrix client initialized successfully");
+                    Some(client)
+                }
+                None => {
+                    warn!("failed to initialize matrix client");
+                    None
+                }
+            }
+        })
+        .await
+        .clone()
+}
+
+async fn init_client(conf: &Conf) -> Option<Client> {
     if conf.matrix_bot_password.is_empty() {
         warn!("matrix bot password is not set, disabling matrix integration");
         return None;

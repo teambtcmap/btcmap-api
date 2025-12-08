@@ -225,8 +225,8 @@ pub async fn on_invoice_paid(
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, conf::schema::Conf, test::pool},
-        service::{self, overpass::OverpassElement},
+        db::{self, test::pool},
+        service::overpass::OverpassElement,
         Result,
     };
     use actix_web::test;
@@ -246,12 +246,7 @@ mod test {
             &pool,
         )
         .await?;
-        super::on_invoice_paid(
-            &invoice,
-            &pool,
-            &service::matrix::init_client(&Conf::mock()).await,
-        )
-        .await?;
+        super::on_invoice_paid(&invoice, &pool, &None).await?;
         let element = db::element::queries::select_by_id(1, &pool).await?;
         assert!(element.tags.contains_key("boost:expires"));
         let boost_expires =
@@ -282,12 +277,7 @@ mod test {
             &pool,
         )
         .await?;
-        super::on_invoice_paid(
-            &invoice,
-            &pool,
-            &service::matrix::init_client(&Conf::mock()).await,
-        )
-        .await?;
+        super::on_invoice_paid(&invoice, &pool, &None).await?;
         let element = db::element::queries::select_by_id(1, &pool).await?;
         assert!(element.tags.contains_key("boost:expires"));
         let boost_expires =

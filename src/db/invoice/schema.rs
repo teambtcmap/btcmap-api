@@ -80,6 +80,7 @@ impl InvoicedService {
         }
     }
 
+    #[cfg(test)]
     pub fn to_description(&self) -> String {
         match self {
             InvoicedService::Boost {

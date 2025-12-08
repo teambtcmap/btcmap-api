@@ -2,13 +2,13 @@ use crate::db;
 use crate::db::invoice::schema::InvoiceStatus;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
+use crate::service;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use deadpool_sqlite::Pool;
-use matrix_sdk::Client;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -18,11 +18,8 @@ pub struct GetByIdRes {
 }
 
 #[get("{id}")]
-pub async fn get_by_id(
-    uuid: Path<String>,
-    pool: Data<Pool>,
-    matrix_client: Data<Option<Client>>,
-) -> Res<GetByIdRes> {
+pub async fn get_by_id(uuid: Path<String>, pool: Data<Pool>) -> Res<GetByIdRes> {
+    let matrix_client = service::matrix::client(&pool).await;
     let mut invoice = db::invoice::queries::select_by_uuid(uuid.as_str(), &pool)
         .await
         .map_err(|e| match e {

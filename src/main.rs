@@ -4,8 +4,10 @@ use actix_web::{web, App, HttpServer, ResponseError};
 use db::pool;
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
+use tracing::info;
 mod error;
 use std::env;
+use std::time::Instant;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -24,6 +26,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
+    let start_time = Instant::now();
     init_env();
     let pool = pool()?;
     pool.get()
@@ -32,11 +35,14 @@ async fn main() -> Result<()> {
         .await??;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
-    service::element::remove_areas_tag(&pool).await?;
     service::area::generate_bbox(&pool).await?;
-    service::element::populate_lat_lon(&pool).await?;
     let conf = db::conf::queries::select(&pool).await?;
-    let matrix_client = service::matrix::init_client(&conf).await;
+
+    let startup_duration = start_time.elapsed();
+    info!(
+        "Application startup completed in {:.3} seconds",
+        startup_duration.as_secs_f64()
+    );
 
     HttpServer::new(move || {
         App::new()
@@ -46,7 +52,6 @@ async fn main() -> Result<()> {
             .wrap(from_fn(service::ban::check_if_banned))
             .app_data(Data::new(pool.clone()))
             .app_data(Data::new(conf.clone()))
-            .app_data(Data::new(matrix_client.clone()))
             .service(og::element::get_element)
             .service(
                 scope("rpc")
@@ -186,7 +191,9 @@ async fn main() -> Result<()> {
 
 fn init_env() {
     if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "info");
+        unsafe {
+            env::set_var("RUST_LOG", "info");
+        }
     }
 
     tracing_subscriber::registry()

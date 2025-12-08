@@ -16,7 +16,12 @@ use tracing::info;
 
 pub async fn generate_bbox(pool: &Pool) -> Result<()> {
     let areas = db::area::queries::select(None, true, None, pool).await?;
+    let ingnored_areas = vec![357, 515, 558, 514, 25, 418, 632, 633];
     for area in areas {
+        if ingnored_areas.contains(&area.id) {
+            continue;
+        }
+
         if area.alias != "earth"
             && area.bbox_west == -180.0
             && area.bbox_south == -90.0
