@@ -1,6 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::User},
-    service::discord,
+    db::{self},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -17,19 +16,8 @@ pub struct Res {
     pub id: i64,
 }
 
-pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let element = db::element::queries::select_by_id(params.element_id, pool).await?;
     let comment = db::element_comment::queries::insert(element.id, &params.comment, pool).await?;
-    discord::send(
-        format!(
-            "{} added a comment to element {} ({}): {}",
-            requesting_user.name,
-            element.name(),
-            element.id,
-            params.comment,
-        ),
-        discord::Channel::Api,
-        conf,
-    );
     Ok(Res { id: comment.id })
 }

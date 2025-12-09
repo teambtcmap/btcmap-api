@@ -385,8 +385,7 @@ pub async fn handle(
         ),
         RpcMethod::AddElementComment => RpcResponse::from(
             req.id.clone(),
-            super::add_element_comment::run(params(req.params)?, &user.unwrap(), &pool, &conf)
-                .await?,
+            super::add_element_comment::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::PaywallGetAddElementCommentQuote => RpcResponse::from(
             req.id.clone(),
