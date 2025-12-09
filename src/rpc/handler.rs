@@ -46,7 +46,6 @@ pub enum RpcMethod {
     GetElement,
     SetElementTag,
     RemoveElementTag,
-    GetBoostedElements,
     BoostElement,
     PaywallGetBoostElementQuote,
     PaywallBoostElement,
@@ -367,13 +366,9 @@ pub async fn handle(
             super::remove_element_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf)
                 .await?,
         ),
-        RpcMethod::GetBoostedElements => RpcResponse::from(
-            req.id.clone(),
-            super::get_boosted_elements::run(&pool).await?,
-        ),
         RpcMethod::BoostElement => RpcResponse::from(
             req.id.clone(),
-            super::boost_element::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
+            super::boost_element::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::PaywallGetBoostElementQuote => RpcResponse::from(
             req.id.clone(),
@@ -798,7 +793,7 @@ mod test {
             .insert_header((header::AUTHORIZATION, "secret"))
             .set_json(&json!({
                 "jsonrpc": "2.0",
-                "method": "get_boosted_elements",
+                "method": "whoami",
                 "id": 1
             }))
             .to_request();

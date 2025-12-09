@@ -1,6 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, element::schema::Element, user::schema::User},
-    service::discord,
+    db::{self, element::schema::Element},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -21,27 +20,15 @@ pub struct Res {
     tags: JsonObject,
 }
 
-pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let requesting_user_id = requesting_user.id;
-    let element = boost(requesting_user_id, &params.id, params.days, pool).await?;
-    discord::send(
-        format!(
-            "{} boosted element {} ({}) for {} days",
-            requesting_user.name,
-            element.name(),
-            element.id,
-            params.days
-        ),
-        discord::Channel::Api,
-        conf,
-    );
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+    let element = boost(&params.id, params.days, pool).await?;
     Ok(Res {
         id: element.id,
         tags: element.tags,
     })
 }
 
-async fn boost(admin_id: i64, id_or_osm_id: &str, days: i64, pool: &Pool) -> Result<Element> {
+async fn boost(id_or_osm_id: &str, days: i64, pool: &Pool) -> Result<Element> {
     let element = db::element::queries::select_by_id_or_osm_id(id_or_osm_id, pool).await?;
     let boost_expires = element.tag("boost:expires");
     let boost_expires = match boost_expires {
@@ -63,6 +50,5 @@ async fn boost(admin_id: i64, id_or_osm_id: &str, days: i64, pool: &Pool) -> Res
         pool,
     )
     .await?;
-    db::boost::queries::insert(admin_id, element.id, days, pool).await?;
     Ok(element)
 }
