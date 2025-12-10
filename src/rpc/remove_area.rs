@@ -1,24 +1,43 @@
-use super::model::RpcArea;
-use crate::db::conf::schema::Conf;
-use crate::db::user::schema::User;
-use crate::service::discord;
+use crate::db::area::schema::Area;
 use crate::{service, Result};
 use deadpool_sqlite::Pool;
-use serde::Deserialize;
+use geojson::JsonObject;
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
     pub id: String,
 }
 
-pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<RpcArea> {
-    let area = service::area::soft_delete_async(params.id, pool).await?;
-    discord::send(
-        format!("{} removed area {} ({})", user.name, area.name(), area.id,),
-        discord::Channel::Api,
-        conf,
-    );
-    Ok(area.into())
+#[derive(Debug, Eq, PartialEq, Serialize)]
+pub struct Res {
+    pub id: i64,
+    pub tags: JsonObject,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub deleted_at: Option<OffsetDateTime>,
+}
+
+impl From<Area> for Res {
+    fn from(val: Area) -> Self {
+        Res {
+            id: val.id,
+            tags: val.tags,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            deleted_at: val.deleted_at,
+        }
+    }
+}
+
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+    service::area::soft_delete_async(params.id, pool)
+        .await
+        .map(Into::into)
 }
 
 #[cfg(test)]

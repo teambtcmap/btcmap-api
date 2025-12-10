@@ -444,7 +444,7 @@ pub async fn handle(
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
-            super::remove_area::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
+            super::remove_area::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
