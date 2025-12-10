@@ -432,7 +432,7 @@ pub async fn handle(
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::set_area_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
+            super::set_area_tag::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
