@@ -34,5 +34,7 @@ impl From<Area> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    Ok(service::area::insert(params.tags, pool).await?.into())
+    service::area::insert(params.tags, pool)
+        .await
+        .map(Into::into)
 }
