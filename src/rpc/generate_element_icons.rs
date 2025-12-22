@@ -1,6 +1,6 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::User},
-    service::{discord, overpass::OverpassElement},
+    db::{self},
+    service::overpass::OverpassElement,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -27,25 +27,13 @@ pub struct UpdatedElement {
     pub new_icon: String,
 }
 
-pub async fn run(params: Params, requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let updated_elements =
         generate_element_icons(params.from_element_id, params.to_element_id, pool).await?;
-    let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
-    discord::send(
-        format!(
-            "{} generated element icons (id range {}..{}, elements affected: {})",
-            requesting_user.name,
-            params.from_element_id,
-            params.to_element_id,
-            updated_elements.len(),
-        ),
-        discord::Channel::Api,
-        conf,
-    );
     Ok(Res {
         updated_elements,
-        time_s,
+        time_s: (OffsetDateTime::now_utc() - started_at).as_seconds_f64(),
     })
 }
 
