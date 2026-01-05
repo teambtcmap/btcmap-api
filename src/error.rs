@@ -20,29 +20,6 @@ pub enum Error {
     Matrix(String),
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Error::Other(_) => None,
-            Error::IO(err) => Some(err),
-            Error::Rusqlite(err) => Some(err),
-            Error::Reqwest(err) => Some(err),
-            Error::SerdeJson(err) => Some(err),
-            Error::TimeFormat(err) => Some(err),
-            Error::DeadpoolPool(err) => Some(err),
-            Error::DeadpoolInteract(err) => Some(err),
-            Error::DeadpoolConfig(err) => Some(err),
-            Error::DeadpoolBuild(err) => Some(err),
-            Error::Parse(err) => Some(err),
-            Error::Decode(err) => Some(err),
-            Error::GeoJson(err) => Some(err),
-            Error::Staticmap(err) => Some(err),
-            Error::Blocking(err) => Some(err),
-            Error::Matrix(_) => None,
-        }
-    }
-}
-
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
