@@ -412,13 +412,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_categories::run(
-                params(req.params)?,
-                &user.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::generate_element_categories::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetElementIssues => RpcResponse::from(
             req.id.clone(),
