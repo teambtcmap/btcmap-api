@@ -1,8 +1,5 @@
 use crate::{
-    db::{
-        self, area::schema::Area, conf::schema::Conf, element::schema::Element, user::schema::User,
-    },
-    service::discord,
+    db::{self, area::schema::Area, element::schema::Element},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -22,20 +19,9 @@ pub struct Res {
     pub new_reports: i64,
 }
 
-pub async fn run(caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(pool: &Pool) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let res = generate_reports(pool).await?;
-    let time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
-    if res > 0 {
-        discord::send(
-            format!(
-                "{} generated {} reports in {} seconds",
-                caller.name, res, time_s
-            ),
-            discord::Channel::Api,
-            conf,
-        );
-    }
     Ok(Res {
         started_at: OffsetDateTime::now_utc(),
         finished_at: OffsetDateTime::now_utc(),

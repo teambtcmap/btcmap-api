@@ -459,10 +459,9 @@ pub async fn handle(
             req.id.clone(),
             super::generate_areas_elements_mapping::run(&pool).await?,
         ),
-        RpcMethod::GenerateReports => RpcResponse::from(
-            req.id.clone(),
-            super::generate_reports::run(&user.unwrap(), &pool, &conf).await?,
-        ),
+        RpcMethod::GenerateReports => {
+            RpcResponse::from(req.id.clone(), super::generate_reports::run(&pool).await?)
+        }
         RpcMethod::GetAreaDashboard => RpcResponse::from(
             req.id.clone(),
             super::get_area_dashboard::run(params(req.params)?, &pool).await?,
