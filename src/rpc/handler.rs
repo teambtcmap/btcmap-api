@@ -371,8 +371,7 @@ pub async fn handle(
         ),
         RpcMethod::RemoveElementTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_element_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf)
-                .await?,
+            super::remove_element_tag::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::BoostElement => RpcResponse::from(
             req.id.clone(),
