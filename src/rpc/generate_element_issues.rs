@@ -1,6 +1,6 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::User},
-    service::{self, discord},
+    db::{self},
+    service::{self},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -17,7 +17,7 @@ pub struct Res {
     pub affected_elements: i64,
 }
 
-pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(pool: &Pool) -> Result<Res> {
     let elements =
         db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
             .await?;
@@ -38,14 +38,6 @@ pub async fn run(requesting_user: &User, pool: &Pool, conf: &Conf) -> Result<Res
         db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, false, pool)
             .await?;
     let res = service::element::generate_issues(elements.iter().collect(), pool).await?;
-    discord::send(
-        format!(
-            "{} generated element issues. Affected elements: {}",
-            requesting_user.name, res.affected_elements
-        ),
-        discord::Channel::Api,
-        conf,
-    );
     Ok(Res {
         started_at: res.started_at,
         finished_at: res.finished_at,

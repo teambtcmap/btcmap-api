@@ -400,7 +400,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_issues::run(&user.unwrap(), &pool, &conf).await?,
+            super::generate_element_issues::run(&pool).await?,
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
