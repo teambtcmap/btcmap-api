@@ -1,6 +1,4 @@
-use crate::db::user::schema::User;
-use crate::db::{self, conf::schema::Conf};
-use crate::service::discord;
+use crate::db::{self};
 use crate::Result;
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
@@ -20,23 +18,11 @@ pub struct Res {
     tags: JsonObject,
 }
 
-pub async fn run(params: Params, user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let element = db::element::queries::select_by_id(params.element_id, pool).await?;
     let element =
         db::element::queries::set_tag(element.id, &params.tag_name, &params.tag_value, pool)
             .await?;
-    discord::send(
-        format!(
-            "{} set tag {} = {} for element {} ({})",
-            user.name,
-            params.tag_name,
-            serde_json::to_string(&params.tag_value)?,
-            element.name(),
-            element.id
-        ),
-        discord::Channel::Api,
-        conf,
-    );
     Ok(Res {
         id: element.id,
         tags: element.tags,
