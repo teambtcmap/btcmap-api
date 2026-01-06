@@ -471,7 +471,7 @@ pub async fn handle(
         ),
         RpcMethod::SetUserTag => RpcResponse::from(
             req.id.clone(),
-            super::set_user_tag::run(params(req.params)?, &user.unwrap(), &pool, &conf).await?,
+            super::set_user_tag::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),

@@ -1,6 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::User},
-    service::discord,
+    db::{self},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -20,7 +19,7 @@ pub struct Res {
     pub tags: Map<String, Value>,
 }
 
-pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let user = db::osm_user::queries::select_by_name(params.user_name.clone(), pool).await?;
     let user = db::osm_user::queries::set_tag(
         user.id,
@@ -29,15 +28,6 @@ pub async fn run(params: Params, caller: &User, pool: &Pool, conf: &Conf) -> Res
         pool,
     )
     .await?;
-    let discord_message = format!(
-        "{} set tag {} = {} for user {} https://api.btcmap.org/v3/users/{}",
-        caller.name,
-        params.tag_name,
-        serde_json::to_string(&params.tag_value)?,
-        params.user_name,
-        user.id,
-    );
-    discord::send(discord_message, discord::Channel::Api, conf);
     Ok(Res {
         id: user.id,
         tags: user.tags,
