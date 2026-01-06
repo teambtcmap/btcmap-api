@@ -403,7 +403,7 @@ pub async fn handle(
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
-            super::sync_elements::run(&user.unwrap(), &pool, &conf, matrix_client).await?,
+            super::sync_elements::run(&pool, matrix_client).await?,
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),

@@ -1,7 +1,5 @@
-use crate::db::conf::schema::Conf;
-use crate::db::user::schema::User;
 use crate::service::sync::MergeResult;
-use crate::service::{self, discord};
+use crate::service::{self};
 use crate::Result;
 use deadpool_sqlite::Pool;
 use matrix_sdk::Client;
@@ -14,33 +12,11 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
-pub async fn run(
-    user: &User,
-    pool: &Pool,
-    conf: &Conf,
-    matrix_client: Option<Client>,
-) -> Result<Res> {
+pub async fn run(pool: &Pool, matrix_client: Option<Client>) -> Result<Res> {
     let overpass_res = service::overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
     let merge_res =
         service::sync::merge_overpass_elements(overpass_res.elements, pool, &matrix_client).await?;
-    if merge_res.elements_created.len()
-        + merge_res.elements_updated.len()
-        + merge_res.elements_deleted.len()
-        > 5
-    {
-        discord::send(
-            format!(
-                "{} ran a sync with a high number of changes (created: {}, updated: {}, deleted: {})",
-                user.name,
-                merge_res.elements_created.len(),
-                merge_res.elements_updated.len(),
-                merge_res.elements_deleted.len()
-            ),
-            discord::Channel::Api,
-            conf,
-        );
-    }
     Ok(Res {
         overpass_query_time_s: overpass_res.time_s,
         overpass_elements: overpass_elements_len,
