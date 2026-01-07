@@ -500,8 +500,7 @@ pub async fn handle(
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::admin::add_admin_action::run(params(req.params)?, &user.unwrap(), &pool, &conf)
-                .await?,
+            super::admin::add_admin_action::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::RemoveAdminAction => RpcResponse::from(
             req.id.clone(),

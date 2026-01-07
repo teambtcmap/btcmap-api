@@ -1,10 +1,5 @@
 use crate::{
-    db::{
-        self,
-        conf::schema::Conf,
-        user::schema::{Role, User},
-    },
-    service::discord,
+    db::{self, user::schema::Role},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -23,7 +18,7 @@ pub struct Res {
     pub allowed_actions: Vec<String>,
 }
 
-pub async fn run(params: Params, source_user: &User, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let new_role = Role::from_str(&params.action)?;
     let target_user = db::user::queries::select_by_name(&params.admin, pool).await?;
     let mut roles = target_user.roles;
@@ -31,14 +26,6 @@ pub async fn run(params: Params, source_user: &User, pool: &Pool, conf: &Conf) -
         roles.push(new_role);
     }
     db::user::queries::set_roles(target_user.id, &roles, pool).await?;
-    discord::send(
-        format!(
-            "{} added role {} for user {}",
-            source_user.name, params.action, target_user.name
-        ),
-        discord::Channel::Api,
-        conf,
-    );
     Ok(Res {
         name: target_user.name,
         allowed_actions: roles.into_iter().map(|it| it.to_string()).collect(),
