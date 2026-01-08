@@ -89,7 +89,7 @@ pub async fn merge_overpass_elements(
     all_events.extend(updated_element_events);
     all_events.extend(deleted_element_events);
     for event in all_events {
-        service::event::on_new_event(&event, pool).await?;
+        service::event::on_new_event(&event, pool, matrix_client).await?;
     }
     let events_processing_time_s =
         (OffsetDateTime::now_utc() - events_processing_started_at).as_seconds_f64();

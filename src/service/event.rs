@@ -2,8 +2,11 @@ use crate::db;
 use crate::db::element_event::schema::ElementEvent;
 use crate::service;
 use crate::service::discord;
+use crate::service::matrix;
+use crate::service::matrix::ROOM_OSM_CHANGES;
 use crate::Result;
 use deadpool_sqlite::Pool;
+use matrix_sdk::Client;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Add;
@@ -32,7 +35,11 @@ pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
     Ok(())
 }
 
-pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
+pub async fn on_new_event(
+    event: &ElementEvent,
+    pool: &Pool,
+    matrix_client: &Option<Client>,
+) -> Result<()> {
     service::user::insert_user_if_not_exists(event.user_id, pool).await?;
     let user = db::osm_user::queries::select_by_id(event.user_id, pool).await?;
     let element = db::element::queries::select_by_id(event.element_id, pool).await?;
@@ -54,7 +61,9 @@ pub async fn on_new_event(event: &ElementEvent, pool: &Pool) -> Result<()> {
     };
     info!(message);
     let conf = db::conf::queries::select(pool).await?;
-    discord::send(message, discord::Channel::OsmChanges, &conf);
+    // TODO remove
+    discord::send(&message, discord::Channel::OsmChanges, &conf);
+    matrix::send_message(matrix_client, ROOM_OSM_CHANGES, &message);
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {
         info!(user.osm_data.id, "This user is missing from OSM, skipping");
