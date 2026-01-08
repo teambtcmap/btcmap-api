@@ -1,6 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::Role},
-    service::discord,
+    db::{self, user::schema::Role},
     Result,
 };
 use argon2::PasswordHasher;
@@ -23,7 +22,7 @@ pub struct Res {
     pub roles: Vec<String>,
 }
 
-pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
         .hash_password(params.password.as_bytes(), &salt)
@@ -31,11 +30,6 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         .to_string();
     let user = crate::db::user::queries::insert(params.name, password_hash, pool).await?;
     let user = db::user::queries::set_roles(user.id, &[Role::User], pool).await?;
-    discord::send(
-        format!("New user: {}", user.name),
-        discord::Channel::Api,
-        conf,
-    );
     Ok(Res {
         name: user.name,
         roles: user.roles.into_iter().map(|it| it.to_string()).collect(),

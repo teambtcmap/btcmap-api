@@ -488,7 +488,7 @@ pub async fn handle(
         ),
         RpcMethod::AddUser => RpcResponse::from(
             req.id.clone(),
-            super::auth::add_user::run(params(req.params)?, &pool, &conf).await?,
+            super::auth::add_user::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetAdmin => RpcResponse::from(
             req.id.clone(),
