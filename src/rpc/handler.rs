@@ -504,13 +504,7 @@ pub async fn handle(
         ),
         RpcMethod::RemoveAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::admin::remove_admin_action::run(
-                params(req.params)?,
-                &user.unwrap(),
-                &pool,
-                &conf,
-            )
-            .await?,
+            super::admin::remove_admin_action::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
