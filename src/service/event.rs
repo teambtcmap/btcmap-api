@@ -46,16 +46,16 @@ pub async fn on_new_event(
 
     let message = match event.r#type.as_str() {
         "create" => format!(
-            "{} added https://www.openstreetmap.org/{}/{}",
-            user.osm_data.display_name, element.overpass_data.r#type, element.overpass_data.id,
+            "{} added https://btcmap.org/merchant/{}",
+            user.osm_data.display_name, element.id,
         ),
         "update" => format!(
-            "{} updated https://www.openstreetmap.org/{}/{}",
-            user.osm_data.display_name, element.overpass_data.r#type, element.overpass_data.id,
+            "{} updated https://btcmap.org/merchant/{}",
+            user.osm_data.display_name, element.id,
         ),
         "delete" => format!(
-            "{} removed https://www.openstreetmap.org/{}/{}",
-            user.osm_data.display_name, element.overpass_data.r#type, element.overpass_data.id,
+            "{} removed https://btcmap.org/merchant/{}",
+            user.osm_data.display_name, element.id,
         ),
         _ => "".into(),
     };
