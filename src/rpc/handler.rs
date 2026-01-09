@@ -539,7 +539,7 @@ pub async fn handle(
         ),
         RpcMethod::DeleteEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::delete_event::run(params(req.params)?, &pool, &conf).await?,
+            super::event::delete_event::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::SubmitPlace => RpcResponse::from(
             req.id.clone(),
