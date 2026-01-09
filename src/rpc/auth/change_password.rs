@@ -1,6 +1,4 @@
 use crate::db;
-use crate::db::conf::schema::Conf;
-use crate::service::discord;
 use crate::Result;
 use argon2::PasswordHasher;
 use argon2::PasswordVerifier;
@@ -24,7 +22,7 @@ pub struct Res {
     pub time_ms: i128,
 }
 
-pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let error_cause_mask = "Something went wrong, please contact administrator";
     let start_time = OffsetDateTime::now_utc();
     let user = db::user::queries::select_by_name(params.username, pool)
@@ -41,11 +39,6 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         .to_string();
     db::user::queries::set_password(user.id, password_hash, pool).await?;
     let time_passed_ms = (OffsetDateTime::now_utc() - start_time).whole_milliseconds();
-    let discord_message = format!(
-        "User {} changed their password ({time_passed_ms} ms)",
-        user.name,
-    );
-    discord::send(discord_message, discord::Channel::Api, conf);
     Ok(Res {
         time_ms: time_passed_ms,
     })

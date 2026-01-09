@@ -496,7 +496,7 @@ pub async fn handle(
         ),
         RpcMethod::ChangePassword => RpcResponse::from(
             req.id.clone(),
-            super::auth::change_password::run(params(req.params)?, &pool, &conf).await?,
+            super::auth::change_password::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
