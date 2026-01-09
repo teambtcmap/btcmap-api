@@ -484,7 +484,7 @@ pub async fn handle(
         // auth
         RpcMethod::CreateApiKey => RpcResponse::from(
             req.id.clone(),
-            super::auth::create_api_key::run(params(req.params)?, &pool, &conf).await?,
+            super::auth::create_api_key::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::AddUser => RpcResponse::from(
             req.id.clone(),

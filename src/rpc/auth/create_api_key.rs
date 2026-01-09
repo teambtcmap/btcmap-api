@@ -1,6 +1,4 @@
 use crate::db;
-use crate::db::conf::schema::Conf;
-use crate::service::discord;
 use crate::Result;
 use argon2::PasswordVerifier;
 use argon2::{Argon2, PasswordHash};
@@ -22,7 +20,7 @@ pub struct Res {
     pub time_ms: i128,
 }
 
-pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let error_cause_mask = "Invalid credentials";
     let start_time = OffsetDateTime::now_utc();
     let user = db::user::queries::select_by_name(params.username, &pool)
@@ -36,11 +34,6 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     db::access_token::queries::insert(user.id, params.label.clone(), token.clone(), vec![], &pool)
         .await?;
     let time_passed_ms = (OffsetDateTime::now_utc() - start_time).whole_milliseconds();
-    let discord_message = format!(
-        "User {} created a new API token labled {} ({time_passed_ms} ms)",
-        user.name, params.label,
-    );
-    discord::send(discord_message, discord::Channel::Api, conf);
     Ok(Res {
         token,
         time_ms: time_passed_ms,
