@@ -528,7 +528,7 @@ pub async fn handle(
         ),
         RpcMethod::CreateEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::create_event::run(params(req.params)?, &pool, &conf).await?,
+            super::event::create_event::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetEvents => {
             RpcResponse::from(req.id.clone(), super::event::get_events::run(&pool).await?)

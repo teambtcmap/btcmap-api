@@ -1,6 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, event::schema::Event},
-    service::discord,
+    db::{self, event::schema::Event},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -30,8 +29,8 @@ impl From<Event> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
-    let event = db::event::queries::insert(
+pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+    db::event::queries::insert(
         params.lat,
         params.lon,
         params.name,
@@ -40,11 +39,6 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         params.ends_at,
         pool,
     )
-    .await?;
-    discord::send(
-        format!("New event (id: {}, name: {})", event.id, event.name,),
-        discord::Channel::Api,
-        conf,
-    );
-    Ok(event.into())
+    .await
+    .map(Into::into)
 }
