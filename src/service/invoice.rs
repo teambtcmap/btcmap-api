@@ -5,8 +5,7 @@ use crate::{
     },
     service::{
         self,
-        discord::{self, Channel},
-        matrix::ROOM_PLACE_COMMENTS,
+        matrix::{self, ROOM_PLACE_BOOSTS, ROOM_PLACE_COMMENTS},
     },
     Result,
 };
@@ -48,14 +47,6 @@ pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Resul
         pool,
     )
     .await?;
-    discord::send(
-        format!(
-            "Created invoice (id = {}, sat = {}, description = {})",
-            invoice.id, invoice.amount_sats, invoice.description,
-        ),
-        Channel::Api,
-        &conf,
-    );
     Ok(invoice)
 }
 
@@ -140,15 +131,6 @@ pub async fn on_invoice_paid(
     pool: &Pool,
     matrix_client: &Option<Client>,
 ) -> Result<()> {
-    let conf = db::conf::queries::select(pool).await?;
-    discord::send(
-        format!(
-            "Invoice has been paid (id = {}, sat = {}, description = {})",
-            invoice.id, invoice.amount_sats, invoice.description,
-        ),
-        Channel::Api,
-        &conf,
-    );
     if invoice.description.starts_with("element_comment") {
         let parts: Vec<&str> = invoice.description.split(":").collect();
         let id = parts.get(1).unwrap_or(&"");
@@ -207,16 +189,13 @@ pub async fn on_invoice_paid(
             pool,
         )
         .await?;
-        discord::send(
-            format!(
-                "Boosted element since invoice has been paid (id = {}, name = {}, days = {})",
-                element_id,
-                element.name(),
-                days,
-            ),
-            Channel::Api,
-            &conf,
+        let message = format!(
+            "Boosted element since invoice has been paid (id = {}, name = {}, days = {})",
+            element_id,
+            element.name(),
+            days,
         );
+        matrix::send_message(matrix_client, ROOM_PLACE_BOOSTS, &message);
     }
 
     Ok(())

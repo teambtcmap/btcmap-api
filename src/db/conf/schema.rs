@@ -9,8 +9,6 @@ pub enum Columns {
     PaywallBoostElement90DaysPriceSat,
     PaywallBoostElement365DaysPriceSat,
     LNbitsInvoiceKey,
-    DiscordWebhookOsmChanges,
-    DiscordWebhookApi,
     GiteaApiKey,
     MatrixBotPassword,
 }
@@ -23,8 +21,6 @@ impl Columns {
             Columns::PaywallBoostElement90DaysPriceSat => "paywall_boost_element_90d_price_sat",
             Columns::PaywallBoostElement365DaysPriceSat => "paywall_boost_element_365d_price_sat",
             Columns::LNbitsInvoiceKey => "lnbits_invoice_key",
-            Columns::DiscordWebhookOsmChanges => "discord_webhook_osm_changes",
-            Columns::DiscordWebhookApi => "discord_webhook_api",
             Columns::GiteaApiKey => "gitea_api_key",
             Columns::MatrixBotPassword => "matrix_bot_password",
         }
@@ -39,8 +35,6 @@ pub struct Conf {
     pub paywall_boost_element_90d_price_sat: i64,
     pub paywall_boost_element_365d_price_sat: i64,
     pub lnbits_invoice_key: String,
-    pub discord_webhook_osm_changes: String,
-    pub discord_webhook_api: String,
     pub gitea_api_key: String,
     pub matrix_bot_password: String,
 }
@@ -55,8 +49,6 @@ impl Conf {
                 Columns::PaywallBoostElement90DaysPriceSat,
                 Columns::PaywallBoostElement365DaysPriceSat,
                 Columns::LNbitsInvoiceKey,
-                Columns::DiscordWebhookOsmChanges,
-                Columns::DiscordWebhookApi,
                 Columns::GiteaApiKey,
                 Columns::MatrixBotPassword,
             ]
@@ -79,8 +71,6 @@ impl Conf {
                 paywall_boost_element_365d_price_sat: row
                     .get(Columns::PaywallBoostElement365DaysPriceSat.as_str())?,
                 lnbits_invoice_key: row.get(Columns::LNbitsInvoiceKey.as_str())?,
-                discord_webhook_osm_changes: row.get(Columns::DiscordWebhookOsmChanges.as_str())?,
-                discord_webhook_api: row.get(Columns::DiscordWebhookApi.as_str())?,
                 gitea_api_key: row.get(Columns::GiteaApiKey.as_str())?,
                 matrix_bot_password: row.get(Columns::MatrixBotPassword.as_str())?,
             })
@@ -95,8 +85,6 @@ impl Conf {
             paywall_boost_element_90d_price_sat: 0,
             paywall_boost_element_365d_price_sat: 0,
             lnbits_invoice_key: "".to_string(),
-            discord_webhook_osm_changes: "".to_string(),
-            discord_webhook_api: "".to_string(),
             gitea_api_key: "".to_string(),
             matrix_bot_password: "".to_string(),
         }

@@ -209,7 +209,6 @@ async fn confirm_deleted(
         );
         error!(message);
         matrix::send_message(client, ROOM_OSM_CHANGES, &message);
-        //discord::send(&message, discord::Channel::OsmChanges, conf);
         Err(message)?
     }
     Ok(osm_element)
