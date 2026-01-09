@@ -1,7 +1,6 @@
 use crate::db;
 use crate::db::element_event::schema::ElementEvent;
 use crate::service;
-use crate::service::discord;
 use crate::service::matrix;
 use crate::service::matrix::ROOM_OSM_CHANGES;
 use crate::Result;
@@ -60,9 +59,6 @@ pub async fn on_new_event(
         _ => "".into(),
     };
     info!(message);
-    let conf = db::conf::queries::select(pool).await?;
-    // TODO remove
-    discord::send(&message, discord::Channel::OsmChanges, &conf);
     matrix::send_message(matrix_client, ROOM_OSM_CHANGES, &message);
 
     if user.tags.get("osm:missing") == Some(&Value::Bool(true)) {

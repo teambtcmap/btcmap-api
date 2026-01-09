@@ -31,6 +31,7 @@ impl Columns {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Conf {
     pub paywall_add_element_comment_price_sat: i64,

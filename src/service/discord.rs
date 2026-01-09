@@ -8,7 +8,6 @@ const BOT_USERNAME: &str = "btcmap.org";
 #[derive(Debug, Display)]
 pub enum Channel {
     Api,
-    OsmChanges,
 }
 
 pub fn send(message: impl Into<String>, channel: Channel, conf: &Conf) {
@@ -20,7 +19,6 @@ pub fn send(message: impl Into<String>, channel: Channel, conf: &Conf) {
 
     let webhook_url = match channel {
         Channel::Api => conf.discord_webhook_api.clone(),
-        Channel::OsmChanges => conf.discord_webhook_osm_changes.clone(),
     };
 
     if webhook_url.is_empty() {
