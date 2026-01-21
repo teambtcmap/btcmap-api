@@ -11,7 +11,7 @@ use uuid::Uuid;
 pub struct Params {
     pub username: String,
     pub password: String,
-    pub label: String,
+    pub label: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -31,8 +31,14 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         .verify_password(params.password.as_bytes(), &password_hash)
         .map_err(|_| error_cause_mask)?;
     let token = Uuid::new_v4().to_string();
-    db::access_token::queries::insert(user.id, params.label.clone(), token.clone(), vec![], &pool)
-        .await?;
+    db::access_token::queries::insert(
+        user.id,
+        params.label.unwrap_or_default(),
+        token.clone(),
+        vec![],
+        &pool,
+    )
+    .await?;
     let time_passed_ms = (OffsetDateTime::now_utc() - start_time).whole_milliseconds();
     Ok(Res {
         token,
