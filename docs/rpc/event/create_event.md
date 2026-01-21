@@ -10,8 +10,8 @@ You can add Bitcoin-related events on BTC Map via this method. Most events are e
 {
   "lat": 18.7822,
   "lon": 98.9942,
-  "name": "Chiang Mai Weekly Meetup"
-  "website": "https://www.meetup.com/bitcoinsinchiangmai/"
+  "name": "Chiang Mai Weekly Meetup",
+  "website": "https://www.meetup.com/bitcoinsinchiangmai/",
   "starts_at": "2025-08-28T19:00:00+07:00",
   "ends_at": null
 }
@@ -35,6 +35,7 @@ For a one-off event without a fixed end time, you may provide only the `starts_a
 
 - Root
 - Admin
+- Event Manager
 
 ## Examples
 

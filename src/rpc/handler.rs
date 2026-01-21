@@ -168,6 +168,7 @@ impl Role {
     const EVENT_MANAGER_METHODS: &[RpcMethod] = &[
         RpcMethod::CreateEvent,
         RpcMethod::GetEvent,
+        RpcMethod::DeleteEvent,
         RpcMethod::Search,
     ];
 

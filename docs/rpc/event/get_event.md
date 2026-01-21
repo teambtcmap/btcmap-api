@@ -31,6 +31,7 @@ Retreives an event by id
 - Root
 - Admin
 - User
+- Event Manager
 
 ## Examples
 

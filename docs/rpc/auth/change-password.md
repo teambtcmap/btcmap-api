@@ -10,7 +10,7 @@ Just so you know, BTC Map never stores your actual password. We only keep a hash
 
 That doesn't mean you can safely reuse passwords from other services though. If the backend is compromised and you're logging in, third parties could still intercept your password. We recommend generating a unique, strong password for your BTC Map account.
 
-## Input
+## Params
 
 ```json
 {
@@ -20,7 +20,7 @@ That doesn't mean you can safely reuse passwords from other services though. If 
 }
 ```
 
-## Output
+## Result
 
 ```json
 {

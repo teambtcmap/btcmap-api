@@ -4,7 +4,16 @@
 
 BTC Map doesn’t make you sign up, but if you do, you’ll get some extra perks. Right now, most users are admins, but anyone can join if they want!
 
-## Output
+## Params
+
+```json
+{
+  "name": "Satoshi",
+  "password": "SuperSecurePassword"
+}
+```
+
+## Result
 
 ```json
 {
