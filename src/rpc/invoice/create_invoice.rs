@@ -29,6 +29,7 @@ impl From<Invoice> for Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let invoice = service::invoice::create(
+        "lnd",
         params.description.unwrap_or_default(),
         params.amount_sats,
         pool,

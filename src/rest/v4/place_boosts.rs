@@ -63,6 +63,7 @@ pub async fn post(
         ))?,
     };
     let invoice = service::invoice::create(
+        "lnbits",
         format!("element_boost:{}:{}", element.id, args.days),
         sats,
         &pool,

@@ -9,6 +9,7 @@ use crate::{
     },
     Result,
 };
+use base64::Engine;
 use deadpool_sqlite::Pool;
 use matrix_sdk::Client;
 use serde::Deserialize;
@@ -21,38 +22,93 @@ pub struct CreateLNbitsInvoiceResponse {
     pub bolt11: String,
 }
 
-pub async fn create(description: String, amount_sats: i64, pool: &Pool) -> Result<Invoice> {
+#[derive(Deserialize)]
+pub struct CreateLndInvoiceResponse {
+    pub r_hash: String,
+    pub payment_request: String,
+}
+
+pub async fn create(
+    source: &str,
+    description: String,
+    amount_sats: i64,
+    pool: &Pool,
+) -> Result<Invoice> {
     let conf = db::conf::queries::select(pool).await?;
-    if conf.lnbits_invoice_key.is_empty() {
-        Err("lnbits invoice key is not set")?
-    }
     let client = reqwest::Client::new();
-    let args = json!({"out": false, "amount": amount_sats, "memo": description});
-    let lnbits_response = client
-        .post("https://core.btcmap.org/api/v1/payments")
-        .header("X-Api-Key", &conf.lnbits_invoice_key)
-        .json(&args)
-        .send()
+
+    if source == "lnbits" {
+        if conf.lnbits_invoice_key.is_empty() {
+            Err("lnbits invoice key is not set")?
+        }
+        let args = json!({"out": false, "amount": amount_sats, "memo": description});
+        let lnbits_response = client
+            .post("https://core.btcmap.org/api/v1/payments")
+            .header("X-Api-Key", &conf.lnbits_invoice_key)
+            .json(&args)
+            .send()
+            .await?;
+        if !lnbits_response.status().is_success() {
+            return Err("Failed to generate LNBITS invoice".into());
+        }
+        let lnbits_response: CreateLNbitsInvoiceResponse = lnbits_response.json().await?;
+        let invoice = db::invoice::queries::insert(
+            source,
+            description,
+            amount_sats,
+            lnbits_response.payment_hash,
+            lnbits_response.bolt11,
+            InvoiceStatus::Unpaid,
+            pool,
+        )
         .await?;
-    if !lnbits_response.status().is_success() {
-        return Err("Failed to generate LNBITS invoice".into());
+        Ok(invoice)
+    } else if source == "lnd" {
+        if conf.lnd_invoices_macaroon.is_empty() {
+            Err("lnd invoices macaroon is not set")?
+        }
+        let args = json!({"value": amount_sats, "memo": description, "expiry": 3600});
+        let lnd_response = client
+            .post("https://lnd.btcmap.org/v1/invoices")
+            .header("Grpc-Metadata-macaroon", &conf.lnd_invoices_macaroon)
+            .json(&args)
+            .send()
+            .await?;
+        if !lnd_response.status().is_success() {
+            return Err("Failed to generate lnd invoice".into());
+        }
+        let lnd_response: CreateLndInvoiceResponse = lnd_response.json().await?;
+        let payment_hash_bytes = base64::engine::general_purpose::STANDARD
+            .decode(lnd_response.r_hash)
+            .unwrap();
+        let payment_hash_hex: String = payment_hash_bytes
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect();
+        let invoice = db::invoice::queries::insert(
+            source,
+            description,
+            amount_sats,
+            payment_hash_hex,
+            lnd_response.payment_request,
+            InvoiceStatus::Unpaid,
+            pool,
+        )
+        .await?;
+        Ok(invoice)
+    } else {
+        Err("unknown source")?
     }
-    let lnbits_response: CreateLNbitsInvoiceResponse = lnbits_response.json().await?;
-    let invoice = db::invoice::queries::insert(
-        description,
-        amount_sats,
-        lnbits_response.payment_hash,
-        lnbits_response.bolt11,
-        InvoiceStatus::Unpaid,
-        pool,
-    )
-    .await?;
-    Ok(invoice)
 }
 
 #[derive(Deserialize)]
 pub struct CheckInvoiceResponse {
     pub paid: bool,
+}
+
+#[derive(Deserialize)]
+pub struct CheckLndInvoiceResponse {
+    pub state: String,
 }
 
 pub async fn sync_unpaid_invoices(pool: &Pool, matrix_client: &Option<Client>) -> Result<i64> {
@@ -71,23 +127,43 @@ pub async fn sync_unpaid_invoices(pool: &Pool, matrix_client: &Option<Client>) -
     let mut affected_invoices = vec![];
     let client = reqwest::Client::new();
     for invoice in unpaid_invoices {
-        let url = format!(
-            "https://core.btcmap.org/api/v1/payments/{}",
-            invoice.payment_hash,
-        );
-        let lnbits_response = client
-            .get(url)
-            .header("X-Api-Key", &conf.lnbits_invoice_key)
-            .send()
-            .await?;
-        if !lnbits_response.status().is_success() {
-            return Err("Failed to check LNBITS invoice".into());
-        }
-        let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
-        if lnbits_response.paid {
-            db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
-            on_invoice_paid(&invoice, pool, matrix_client).await?;
-            affected_invoices.push(invoice);
+        if invoice.source == "lnbits" {
+            let url = format!(
+                "https://core.btcmap.org/api/v1/payments/{}",
+                invoice.payment_hash,
+            );
+            let lnbits_response = client
+                .get(url)
+                .header("X-Api-Key", &conf.lnbits_invoice_key)
+                .send()
+                .await?;
+            if !lnbits_response.status().is_success() {
+                return Err("Failed to check LNBITS invoice".into());
+            }
+            let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
+            if lnbits_response.paid {
+                db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
+                on_invoice_paid(&invoice, pool, matrix_client).await?;
+                affected_invoices.push(invoice);
+            }
+        } else if invoice.source == "lnd" {
+            let url = format!("https://lnd.btcmap.org/v1/invoice/{}", invoice.payment_hash,);
+            let lnd_response = client
+                .get(url)
+                .header("Grpc-Metadata-macaroon", &conf.lnd_invoices_macaroon)
+                .send()
+                .await?;
+            if !lnd_response.status().is_success() {
+                return Err("Failed to check lnd invoice".into());
+            }
+            let lnd_response: CheckLndInvoiceResponse = lnd_response.json().await?;
+            if lnd_response.state == "SETTLED" {
+                db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
+                on_invoice_paid(&invoice, pool, matrix_client).await?;
+                affected_invoices.push(invoice);
+            }
+        } else {
+            return Err("unknown invoice source".into());
         }
     }
     Ok(affected_invoices.len() as i64)
@@ -217,6 +293,7 @@ mod test {
         let pool = pool();
         db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let invoice = db::invoice::queries::insert(
+            "src",
             "element_boost:1:10",
             0,
             "",
@@ -248,6 +325,7 @@ mod test {
         )
         .await?;
         let invoice = db::invoice::queries::insert(
+            "src",
             "element_boost:1:10",
             0,
             "",

@@ -6,6 +6,7 @@ use crate::Result;
 use deadpool_sqlite::Pool;
 
 pub async fn insert(
+    source: impl Into<String>,
     description: impl Into<String>,
     amount_sats: i64,
     payment_hash: impl Into<String>,
@@ -13,6 +14,7 @@ pub async fn insert(
     status: InvoiceStatus,
     pool: &Pool,
 ) -> Result<Invoice> {
+    let source = source.into();
     let description = description.into();
     let payment_hash = payment_hash.into();
     let payment_request = payment_request.into();
@@ -20,6 +22,7 @@ pub async fn insert(
         .await?
         .interact(move |conn| {
             blocking_queries::insert(
+                &source,
                 description,
                 amount_sats,
                 payment_hash,

@@ -1,0 +1,1 @@
+ALTER TABLE invoice ADD COLUMN source TEXT NOT NULL DEFAULT 'lnbits';

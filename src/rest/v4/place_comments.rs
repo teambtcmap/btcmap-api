@@ -149,6 +149,7 @@ pub async fn post(
     .await
     .map_err(|_| RestApiError::database())?;
     let invoice = service::invoice::create(
+        "lnbits",
         format!("element_comment:{}:publish", comment.id),
         conf.paywall_add_element_comment_price_sat,
         &pool,

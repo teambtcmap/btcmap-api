@@ -4,6 +4,7 @@ use rusqlite::{named_params, params, Connection};
 use uuid::Uuid;
 
 pub fn insert(
+    source: impl Into<String>,
     description: impl Into<String>,
     amount_sats: i64,
     payment_hash: impl Into<String>,
@@ -15,6 +16,7 @@ pub fn insert(
         r#"
             INSERT INTO {table} (
                 {uuid},
+                {source},
                 {description},
                 {amount_sats},
                 {payment_hash},
@@ -22,6 +24,7 @@ pub fn insert(
                 {status}
             ) VALUES (
                 :uuid,
+                :source,
                 :description,
                 :amount_sats,
                 :payment_hash,
@@ -32,6 +35,7 @@ pub fn insert(
         "#,
         table = schema::TABLE_NAME,
         uuid = Columns::Uuid.as_str(),
+        source = Columns::Source.as_str(),
         description = Columns::Description.as_str(),
         amount_sats = Columns::AmountSats.as_str(),
         payment_hash = Columns::PaymentHash.as_str(),
@@ -41,6 +45,7 @@ pub fn insert(
     );
     let params = named_params! {
         ":uuid": Uuid::new_v4().to_string(),
+        ":source": source.into(),
         ":amount_sats": amount_sats,
         ":description": description.into(),
         ":payment_hash": payment_hash.into(),
@@ -124,6 +129,7 @@ mod test {
     fn insert() -> Result<()> {
         let conn = conn();
         let invoice = super::insert(
+            "src",
             "desc",
             1,
             "hash",

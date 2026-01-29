@@ -9,6 +9,7 @@ pub const TABLE_NAME: &str = "invoice";
 pub enum Columns {
     Id,
     Uuid,
+    Source,
     Description,
     AmountSats,
     PaymentHash,
@@ -24,6 +25,7 @@ impl Columns {
         match self {
             Columns::Id => "id",
             Columns::Uuid => "uuid",
+            Columns::Source => "source",
             Columns::Description => "description",
             Columns::AmountSats => "amount_sats",
             Columns::PaymentHash => "payment_hash",
@@ -41,6 +43,7 @@ impl Columns {
 pub struct Invoice {
     pub id: i64,
     pub uuid: String,
+    pub source: String,
     pub description: String,
     pub amount_sats: i64,
     pub payment_hash: String,
@@ -104,6 +107,7 @@ impl Invoice {
             [
                 Columns::Id,
                 Columns::Uuid,
+                Columns::Source,
                 Columns::Description,
                 Columns::AmountSats,
                 Columns::PaymentHash,
@@ -125,6 +129,7 @@ impl Invoice {
             Ok(Invoice {
                 id: row.get(Columns::Id.as_str())?,
                 uuid: row.get(Columns::Uuid.as_str())?,
+                source: row.get(Columns::Source.as_str())?,
                 description: row.get(Columns::Description.as_str())?,
                 amount_sats: row.get(Columns::AmountSats.as_str())?,
                 payment_hash: row.get(Columns::PaymentHash.as_str())?,

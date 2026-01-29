@@ -26,6 +26,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
         _ => Err("Invalid duration")?,
     };
     let invoice = service::invoice::create(
+        "lnbits",
         format!("element_boost:{}:{}", params.element_id, params.days),
         sats,
         pool,
