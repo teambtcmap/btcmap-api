@@ -1,0 +1,1 @@
+ALTER TABLE conf ADD COLUMN lnd_invoices_macaroon TEXT NOT NULL DEFAULT '';
