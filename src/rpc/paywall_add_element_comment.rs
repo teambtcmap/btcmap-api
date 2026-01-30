@@ -24,7 +24,7 @@ pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     db::element_comment::queries::set_deleted_at(comment.id, Some(OffsetDateTime::now_utc()), pool)
         .await?;
     let invoice = service::invoice::create(
-        "lnbits",
+        "lnd",
         format!("element_comment:{}:publish", comment.id),
         conf.paywall_add_element_comment_price_sat,
         pool,
