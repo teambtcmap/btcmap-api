@@ -161,7 +161,7 @@ pub async fn sync_unpaid_invoice(
         if lnbits_response.paid {
             db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
             on_invoice_paid(&invoice, pool, matrix_client).await?;
-            return Ok(true)
+            return Ok(true);
         } else {
         }
     } else if invoice.source == "lnd" {
@@ -178,7 +178,7 @@ pub async fn sync_unpaid_invoice(
         if lnd_response.state == "SETTLED" {
             db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
             on_invoice_paid(&invoice, pool, matrix_client).await?;
-            return Ok(true)
+            return Ok(true);
         }
     } else {
         return Err("unknown invoice source".into());

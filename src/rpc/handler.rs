@@ -1,15 +1,11 @@
 use crate::{
-    db::{
-        self,
-        conf::schema::Conf,
-        user::schema::{Role, User},
-    },
+    db::{self, conf::schema::Conf, user::schema::Role},
     service, Result,
 };
 use actix_web::{
     dev::ServiceResponse,
     http::{
-        header::{self, HeaderMap},
+        header::{self},
         StatusCode,
     },
     middleware::ErrorHandlerResponse,
@@ -310,44 +306,48 @@ pub async fn handle(
         }
     };
 
-    let mut access_token = extract_access_token(headers, &req.params);
-    // TODO remove
-    if req.method == RpcMethod::AddUser || req.method == RpcMethod::CreateApiKey {
-        access_token.clear();
-    }
+    let bearer_token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .map(String::from);
 
-    if access_token.is_empty() && !Role::ANON_METHODS.contains(&req.method) {
+    if bearer_token.is_none() && !Role::ANON_METHODS.contains(&req.method) {
         return Ok(Json(RpcResponse::error(RpcError {
             code: 1,
-            message: "Auth header is missing".into(),
+            message: "Auth header is missing".to_string(),
             data: None,
         })));
     }
 
-    let user: Option<User> = if access_token.is_empty() {
-        None
-    } else {
-        let access_token = db::access_token::queries::select_by_secret(access_token, &pool).await?;
-        let user = db::user::queries::select_by_id(access_token.user_id, &pool).await?;
-        if access_token.roles.is_empty() {
-            if !allowed_methods(&user.roles).contains(&req.method) {
-                return Ok(Json(RpcResponse::error(RpcError {
-                    code: 1,
-                    message: "You don't have permissions to call this method".into(),
-                    data: None,
-                })));
+    let user = match bearer_token {
+        Some(bearer_token) => {
+            let bearer_token =
+                db::access_token::queries::select_by_secret(bearer_token, &pool).await?;
+            let user = db::user::queries::select_by_id(bearer_token.user_id, &pool).await?;
+            if bearer_token.roles.is_empty() {
+                if !allowed_methods(&user.roles).contains(&req.method) {
+                    return Ok(Json(RpcResponse::error(RpcError {
+                        code: 1,
+                        message: "You don't have permissions to call this method".to_string(),
+                        data: None,
+                    })));
+                }
+            } else {
+                if !allowed_methods(&bearer_token.roles).contains(&req.method) {
+                    return Ok(Json(RpcResponse::error(RpcError {
+                        code: 1,
+                        message: "You don't have permissions to call this method".to_string(),
+                        data: None,
+                    })));
+                }
             }
-        } else {
-            if !allowed_methods(&access_token.roles).contains(&req.method) {
-                return Ok(Json(RpcResponse::error(RpcError {
-                    code: 1,
-                    message: "You don't have permissions to call this method".into(),
-                    data: None,
-                })));
-            }
+            Some(user)
         }
-        Some(user)
+
+        None => None,
     };
+
     let user_id = user.as_ref().map(|it| it.id);
 
     if req.jsonrpc != "2.0" {
@@ -599,27 +599,6 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
     Ok(ErrorHandlerResponse::Response(res))
 }
 
-fn extract_access_token(headers: &HeaderMap, params: &Option<Value>) -> String {
-    if headers.contains_key(header::AUTHORIZATION) {
-        let header = headers
-            .get(header::AUTHORIZATION)
-            .unwrap()
-            .to_str()
-            .unwrap_or_default();
-        return header.replace("Bearer ", "");
-    }
-    let Some(params) = params else {
-        return "".into();
-    };
-    let Some(password) = params.get("password") else {
-        return "".into();
-    };
-    let Some(password) = password.as_str() else {
-        return "".into();
-    };
-    password.into()
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -797,7 +776,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/")
-            .insert_header((header::AUTHORIZATION, "secret"))
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
             .set_json(&json!({
                 "jsonrpc": "2.0",
                 "method": "whoami",
@@ -836,28 +815,5 @@ mod test {
 
         let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
         assert!(res.error.is_some());
-    }
-
-    #[test]
-    async fn test_extract_access_token_from_header() {
-        let headers = header::HeaderMap::new();
-        let mut headers_with_auth = header::HeaderMap::new();
-        headers_with_auth.insert(
-            header::AUTHORIZATION,
-            header::HeaderValue::from_static("Bearer test_token"),
-        );
-
-        // Test with no headers
-        assert_eq!(extract_access_token(&headers, &None), "");
-
-        // Test with auth header
-        assert_eq!(
-            extract_access_token(&headers_with_auth, &None),
-            "test_token"
-        );
-
-        // Test with params fallback
-        let params = Some(json!({"password": "param_token"}));
-        assert_eq!(extract_access_token(&headers, &params), "param_token");
     }
 }

@@ -1,7 +1,7 @@
-pub mod area;
 pub mod add_element_comment;
 pub mod admin;
 pub mod analytics;
+pub mod area;
 pub mod auth;
 pub mod boost_element;
 pub mod element;
