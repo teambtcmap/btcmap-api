@@ -425,7 +425,7 @@ pub async fn handle(
         // area
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
-            super::add_area::run(params(req.params)?, &pool).await?,
+            super::area::add_area::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetArea => RpcResponse::from(
             req.id.clone(),
