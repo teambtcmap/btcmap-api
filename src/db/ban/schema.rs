@@ -25,6 +25,7 @@ impl Columns {
 }
 
 #[allow(dead_code)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Ban {
     pub id: i64,
     pub ip: String,
