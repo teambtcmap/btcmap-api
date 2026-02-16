@@ -23,6 +23,7 @@ const TABLE_NAME: &str = "request";
 const COL_ID: &str = "id";
 const COL_DATE: &str = "date";
 const COL_IP: &str = "ip";
+const COL_USER_AGENT: &str = "user_agent";
 const COL_PATH: &str = "path";
 const COL_QUERY: &str = "query";
 const COL_CODE: &str = "code";
@@ -35,7 +36,8 @@ fn migrate(conn: &Connection) -> Result<()> {
             CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
                 {COL_ID} INTEGER PRIMARY KEY NOT NULL,
                 {COL_DATE} TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
-                {COL_IP} TEXT NOT NULL, 
+                {COL_IP} TEXT NOT NULL,
+                {COL_USER_AGENT} TEXT,
                 {COL_PATH} TEXT NOT NULL, 
                 {COL_QUERY} TEXT NOT NULL, 
                 {COL_CODE} INTEGER NOT NULL,
@@ -50,6 +52,7 @@ fn migrate(conn: &Connection) -> Result<()> {
 
 pub fn insert(
     ip: &str,
+    user_agent: Option<&str>,
     path: &str,
     query: &str,
     code: i64,
@@ -59,14 +62,16 @@ pub fn insert(
     let sql = format!(
         r#"
             INSERT INTO {TABLE_NAME} (
-                {COL_IP}, 
+                {COL_IP},
+                {COL_USER_AGENT},
                 {COL_PATH}, 
                 {COL_QUERY},
                 {COL_CODE},
                 {COL_ENTITIES}, 
                 {COL_TIME_NS}
             ) VALUES (
-                :{COL_IP}, 
+                :{COL_IP},
+                :{COL_USER_AGENT},
                 :{COL_PATH}, 
                 :{COL_QUERY}, 
                 :{COL_CODE},
@@ -80,6 +85,7 @@ pub fn insert(
             &sql,
             named_params! {
                 ":ip": ip,
+                ":user_agent": user_agent,
                 ":path": path,
                 ":query": query,
                 ":code": code,

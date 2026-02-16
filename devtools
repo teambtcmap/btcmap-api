@@ -19,8 +19,12 @@ case "$1" in
         fi
         ;;
 
-    fetch-prod-db)
+    fetch-db)
         rsync -v --progress --stats btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
+        ;;
+
+    fetch-log)
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/log.db ~/.local/share/btcmap/log.db
         ;;
 
     deploy)

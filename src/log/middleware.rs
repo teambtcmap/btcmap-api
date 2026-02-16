@@ -68,6 +68,7 @@ where
             };
             db::insert(
                 addr,
+                res.request().headers().get("User-Agent").and_then(|h| h.to_str().ok()),
                 res.request().path(),
                 res.request().query_string(),
                 res.status().as_u16() as i64,
