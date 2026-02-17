@@ -1,6 +1,5 @@
 use crate::db;
 use crate::db::element::schema::Element;
-use crate::log::RequestExtension;
 use crate::service::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -8,10 +7,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::web::Redirect;
-use actix_web::Either;
-use actix_web::HttpMessage;
-use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
@@ -63,16 +58,7 @@ impl From<Element> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(
-    req: HttpRequest,
-    args: Query<GetArgs>,
-    pool: Data<Pool>,
-) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
-    if args.limit.is_none() && args.updated_since.is_none() {
-        return Ok(Either::Right(
-            Redirect::to("https://static.btcmap.org/api/v2/elements.json").permanent(),
-        ));
-    }
+pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
     let elements = match &args.updated_since {
         Some(updated_since) => {
             db::element::queries::select_updated_since(*updated_since, args.limit, true, &pool)
@@ -88,11 +74,7 @@ pub async fn get(
             .await?
         }
     };
-    let elements_len = elements.len();
-    let res = Either::Left(Json(elements.into_iter().map(|it| it.into()).collect()));
-    req.extensions_mut()
-        .insert(RequestExtension::new(elements_len));
-    Ok(res)
+    Ok(Json(elements.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]

@@ -1,6 +1,5 @@
 use crate::db;
 use crate::db::event::schema::Event;
-use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
 use crate::Error;
@@ -8,8 +7,6 @@ use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
-use actix_web::HttpMessage;
-use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Serialize;
 use time::OffsetDateTime;
@@ -42,7 +39,7 @@ impl From<Event> for Item {
 }
 
 #[get("")]
-pub async fn get(req: HttpRequest, pool: Data<Pool>) -> RestResult<Vec<Item>> {
+pub async fn get(pool: Data<Pool>) -> RestResult<Vec<Item>> {
     let items = db::event::queries::select_all(&pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -53,8 +50,6 @@ pub async fn get(req: HttpRequest, pool: Data<Pool>) -> RestResult<Vec<Item>> {
                 && (it.starts_at.is_none() || it.starts_at > Some(OffsetDateTime::now_utc()))
         })
         .collect();
-    req.extensions_mut()
-        .insert(RequestExtension::new(items.len()));
     Ok(Json(items.into_iter().map(|it| it.into()).collect()))
 }
 

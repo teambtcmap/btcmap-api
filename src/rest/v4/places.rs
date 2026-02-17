@@ -2,7 +2,6 @@ use crate::db;
 use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
 use crate::db::place_submission::schema::PlaceSubmission;
-use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
@@ -12,8 +11,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::HttpMessage;
-use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::Deserialize;
@@ -40,11 +37,7 @@ pub struct GetSingleArgs {
 }
 
 #[get("")]
-pub async fn get(
-    req: HttpRequest,
-    args: Query<GetListArgs>,
-    pool: Data<Pool>,
-) -> Res<Vec<JsonObject>> {
+pub async fn get(args: Query<GetListArgs>, pool: Data<Pool>) -> Res<Vec<JsonObject>> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     let updated_since = args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
     let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
@@ -74,9 +67,6 @@ pub async fn get(
             .map_err(|_| RestApiError::database())?,
         );
     }
-
-    req.extensions_mut()
-        .insert(RequestExtension::new(elements.len() + submissions.len()));
 
     if submissions.is_empty() {
         let elements = elements
@@ -143,11 +133,7 @@ pub struct GetBoostedArgs {
 }
 
 #[get("/boosted")]
-pub async fn get_boosted(
-    req: HttpRequest,
-    args: Query<GetBoostedArgs>,
-    pool: Data<Pool>,
-) -> Res<Vec<JsonObject>> {
+pub async fn get_boosted(args: Query<GetBoostedArgs>, pool: Data<Pool>) -> Res<Vec<JsonObject>> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     let updated_since = OffsetDateTime::UNIX_EPOCH;
     let include_deleted = false;
@@ -156,9 +142,6 @@ pub async fn get_boosted(
         db::element::queries::select_updated_since(updated_since, None, include_deleted, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
-
-    req.extensions_mut()
-        .insert(RequestExtension::new(items.len()));
 
     let items = items
         .into_iter()

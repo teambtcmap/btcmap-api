@@ -1,14 +1,11 @@
 use crate::db;
 use crate::db::report::schema::Report;
-use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::HttpMessage;
-use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
@@ -75,16 +72,10 @@ impl From<Report> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(
-    req: HttpRequest,
-    args: Query<GetArgs>,
-    pool: Data<Pool>,
-) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
     let reports =
         db::report::queries::select_updated_since(args.updated_since, Some(args.limit), &pool)
             .await?;
-    req.extensions_mut()
-        .insert(RequestExtension::new(reports.len()));
     Ok(Json(reports.into_iter().map(|it| it.into()).collect()))
 }
 

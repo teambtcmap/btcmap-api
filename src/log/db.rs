@@ -27,7 +27,6 @@ const COL_USER_AGENT: &str = "user_agent";
 const COL_PATH: &str = "path";
 const COL_QUERY: &str = "query";
 const COL_CODE: &str = "code";
-const COL_ENTITIES: &str = "entities";
 const COL_TIME_NS: &str = "time_ns";
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -41,12 +40,19 @@ fn migrate(conn: &Connection) -> Result<()> {
                 {COL_PATH} TEXT NOT NULL, 
                 {COL_QUERY} TEXT NOT NULL, 
                 {COL_CODE} INTEGER NOT NULL,
-                {COL_ENTITIES} INTEGER,
                 {COL_TIME_NS} INTEGER NOT NULL
             ) STRICT;
         "#
     );
     conn.execute(&query, [])?;
+    conn.execute(
+        &format!("CREATE INDEX IF NOT EXISTS {TABLE_NAME}_{COL_DATE} ON {TABLE_NAME}({COL_DATE});"),
+        [],
+    )?;
+    conn.execute(
+        &format!("CREATE INDEX IF NOT EXISTS {TABLE_NAME}_{COL_CODE} ON {TABLE_NAME}({COL_CODE});"),
+        [],
+    )?;
     Ok(())
 }
 
@@ -56,7 +62,6 @@ pub fn insert(
     path: &str,
     query: &str,
     code: i64,
-    entities: Option<i64>,
     time_ns: i64,
 ) -> Result<()> {
     let sql = format!(
@@ -67,7 +72,6 @@ pub fn insert(
                 {COL_PATH}, 
                 {COL_QUERY},
                 {COL_CODE},
-                {COL_ENTITIES}, 
                 {COL_TIME_NS}
             ) VALUES (
                 :{COL_IP},
@@ -75,7 +79,6 @@ pub fn insert(
                 :{COL_PATH}, 
                 :{COL_QUERY}, 
                 :{COL_CODE},
-                :{COL_ENTITIES}, 
                 :{COL_TIME_NS}
              );
          "#
@@ -89,7 +92,6 @@ pub fn insert(
                 ":path": path,
                 ":query": query,
                 ":code": code,
-                ":entities": entities,
                 ":time_ns": time_ns,
             },
         )

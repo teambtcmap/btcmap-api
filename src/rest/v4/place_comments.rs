@@ -1,9 +1,6 @@
-use std::i64;
-
 use crate::db;
 use crate::db::conf::schema::Conf;
 use crate::db::element_comment::schema::ElementComment;
-use crate::log::RequestExtension;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
 use crate::service;
@@ -14,11 +11,10 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::HttpMessage;
-use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
+use std::i64;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -78,11 +74,7 @@ impl From<ElementComment> for Json<Item> {
 }
 
 #[get("")]
-pub async fn get(
-    req: HttpRequest,
-    args: Query<Args>,
-    pool: Data<Pool>,
-) -> Result<Json<Vec<Item>>, Error> {
+pub async fn get(args: Query<Args>, pool: Data<Pool>) -> Result<Json<Vec<Item>>, Error> {
     let items = db::element_comment::queries::select_updated_since(
         args.updated_since,
         args.include_deleted,
@@ -90,8 +82,6 @@ pub async fn get(
         &pool,
     )
     .await?;
-    req.extensions_mut()
-        .insert(RequestExtension::new(items.len()));
     Ok(Json(items.into_iter().map(|it| it.into()).collect()))
 }
 

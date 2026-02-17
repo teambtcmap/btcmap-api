@@ -1,16 +1,11 @@
 use crate::db;
 use crate::db::area::schema::Area;
-use crate::log::RequestExtension;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::web::Redirect;
-use actix_web::Either;
-use actix_web::HttpMessage;
-use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
@@ -62,22 +57,9 @@ impl From<Area> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(
-    req: HttpRequest,
-    args: Query<GetArgs>,
-    pool: Data<Pool>,
-) -> Result<Either<Json<Vec<GetItem>>, Redirect>, Error> {
-    if args.limit.is_none() && args.updated_since.is_none() {
-        return Ok(Either::Right(
-            Redirect::to("https://static.btcmap.org/api/v2/areas.json").permanent(),
-        ));
-    }
+pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
     let areas = db::area::queries::select(args.updated_since, true, args.limit, &pool).await?;
-    let areas_len = areas.len();
-    let res = Either::Left(Json(areas.into_iter().map(|it| it.into()).collect()));
-    req.extensions_mut()
-        .insert(RequestExtension::new(areas_len));
-    Ok(res)
+    Ok(Json(areas.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{url_alias}")]

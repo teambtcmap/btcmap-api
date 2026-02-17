@@ -1,6 +1,5 @@
 use crate::db;
 use crate::db::element::schema::Element;
-use crate::log::RequestExtension;
 use crate::service::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -8,8 +7,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use actix_web::HttpMessage;
-use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
@@ -68,11 +65,7 @@ impl From<Element> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(
-    req: HttpRequest,
-    args: Query<GetArgs>,
-    pool: Data<Pool>,
-) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
     let elements = db::element::queries::select_updated_since(
         args.updated_since,
         Some(args.limit),
@@ -80,8 +73,6 @@ pub async fn get(
         &pool,
     )
     .await?;
-    req.extensions_mut()
-        .insert(RequestExtension::new(elements.len()));
     Ok(Json(elements.into_iter().map(|it| it.into()).collect()))
 }
 
