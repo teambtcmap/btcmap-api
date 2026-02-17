@@ -14,7 +14,7 @@ edition = "2021"
 
 # This is the main dependency, providing a webserver and core infra
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
-actix-web = { version = "4.9.0", default-features = false, features = ["macros", "compress-brotli"] }
+actix-web = { version = "4.12.1", default-features = false, features = ["macros", "compress-brotli"] }
 
 # Actix middleware needs that
 # https://github.com/rust-lang/futures-rs/releases
