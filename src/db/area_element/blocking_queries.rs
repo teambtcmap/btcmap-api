@@ -170,14 +170,20 @@ mod tests {
     #[test]
     fn insert() -> Result<()> {
         let conn = conn();
-        let test_area_id = 42;
-        let test_element_id = 123;
-        let item = super::insert(test_area_id, test_element_id, &conn)?;
-        assert_eq!(item.area_id, test_area_id);
-        assert_eq!(item.element_id, test_element_id);
+        let area = crate::db::area::blocking_queries::insert(
+            crate::db::area::schema::Area::mock_tags(),
+            &conn,
+        )?;
+        let element = crate::db::element::blocking_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(1),
+            &conn,
+        )?;
+        let item = super::insert(area.id, element.id, &conn)?;
+        assert_eq!(item.area_id, area.id);
+        assert_eq!(item.element_id, element.id);
         let db_item = super::select_by_id(item.id, &conn)?;
-        assert_eq!(db_item.area_id, test_area_id);
-        assert_eq!(db_item.element_id, test_element_id);
+        assert_eq!(db_item.area_id, area.id);
+        assert_eq!(db_item.element_id, element.id);
         Ok(())
     }
 

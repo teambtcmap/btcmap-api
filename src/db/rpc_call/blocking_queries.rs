@@ -68,8 +68,9 @@ mod tests {
     #[test]
     fn insert() {
         let conn = conn();
+        let user =
+            crate::db::user::blocking_queries::insert("test_user", "password", &conn).unwrap();
 
-        let user_id = 123;
         let ip = "192.168.1.100".to_string();
         let method = "get_element".to_string();
         let params = Some(
@@ -83,7 +84,7 @@ mod tests {
         let processed_at = created_at + Duration::from_millis(150);
 
         let result = super::insert(
-            user_id,
+            user.id,
             ip.clone(),
             method.clone(),
             params.clone(),
@@ -96,7 +97,7 @@ mod tests {
 
         let rpc_call = result.unwrap();
 
-        assert_eq!(rpc_call.user_id, Some(user_id));
+        assert_eq!(rpc_call.user_id, Some(user.id));
         assert_eq!(rpc_call.ip, ip);
         assert_eq!(rpc_call.method, method);
         assert!(rpc_call.params_json.is_some());

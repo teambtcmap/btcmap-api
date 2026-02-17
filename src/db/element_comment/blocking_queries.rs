@@ -251,14 +251,18 @@ mod test {
     #[test]
     fn insert_and_select_by_id() -> Result<()> {
         let conn = conn();
+        let element = crate::db::element::blocking_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(1),
+            &conn,
+        )?;
 
         // Test insert
-        let inserted = super::insert(1, "Test comment", &conn)?;
+        let inserted = super::insert(element.id, "Test comment", &conn)?;
 
         // Verify select_by_id
         let selected = super::select_by_id(inserted.id, &conn)?;
         assert_eq!(inserted.id, selected.id);
-        assert_eq!(inserted.element_id, 1);
+        assert_eq!(inserted.element_id, element.id);
         assert_eq!(inserted.comment, "Test comment");
         assert_eq!(selected.deleted_at, None);
 
