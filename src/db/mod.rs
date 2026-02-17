@@ -19,8 +19,12 @@ use crate::{service::filesystem::data_dir_file_path, Result};
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
 
 pub fn pool() -> Result<Pool> {
+    let pool_size = std::thread::available_parallelism()
+        .map(|n| n.get() * 2)
+        .unwrap_or(8);
     Config::new(data_dir_file_path("btcmap.db")?)
         .builder(Runtime::Tokio1)?
+        .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let conn = conn.lock().unwrap();
             // WAL + NORMAL combination provides good concurrency, good crash safety, decent performance and simple maintenance
@@ -44,10 +48,13 @@ pub mod test {
     use rusqlite::Connection;
 
     pub fn pool() -> Pool {
+        let pool_size = std::thread::available_parallelism()
+            .map(|n| n.get() * 2)
+            .unwrap_or(8);
         Config::new(":memory:")
             .builder(Runtime::Tokio1)
             .unwrap()
-            .max_size(1)
+            .max_size(pool_size)
             .post_create(Hook::Fn(Box::new(|conn, _| {
                 let mut conn = conn.lock().unwrap();
                 migration::run(&mut conn).unwrap();
