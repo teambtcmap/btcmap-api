@@ -140,4 +140,77 @@ mod test {
         assert_eq!(invoice, super::select_by_id(invoice.id, &conn)?);
         Ok(())
     }
+
+    #[test]
+    fn select_by_status() -> Result<()> {
+        let conn = conn();
+        let invoice1 = super::insert(
+            "src",
+            "desc",
+            1,
+            "hash1",
+            "req1",
+            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            &conn,
+        )?;
+        let _invoice2 = super::insert(
+            "src",
+            "desc",
+            1,
+            "hash2",
+            "req2",
+            crate::db::invoice::schema::InvoiceStatus::Paid,
+            &conn,
+        )?;
+        let unpaid =
+            super::select_by_status(crate::db::invoice::schema::InvoiceStatus::Unpaid, &conn)?;
+        assert_eq!(unpaid.len(), 1);
+        assert_eq!(unpaid[0].id, invoice1.id);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_uuid() -> Result<()> {
+        let conn = conn();
+        let invoice = super::insert(
+            "src",
+            "desc",
+            1,
+            "hash",
+            "req",
+            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            &conn,
+        )?;
+        let found = super::select_by_uuid(&invoice.uuid, &conn)?;
+        assert_eq!(found.id, invoice.id);
+        Ok(())
+    }
+
+    #[test]
+    fn set_status() -> Result<()> {
+        let conn = conn();
+        let invoice = super::insert(
+            "src",
+            "desc",
+            1,
+            "hash",
+            "req",
+            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            &conn,
+        )?;
+        assert_eq!(
+            invoice.status,
+            crate::db::invoice::schema::InvoiceStatus::Unpaid
+        );
+        let updated = super::set_status(
+            invoice.id,
+            crate::db::invoice::schema::InvoiceStatus::Paid,
+            &conn,
+        )?;
+        assert_eq!(
+            updated.status,
+            crate::db::invoice::schema::InvoiceStatus::Paid
+        );
+        Ok(())
+    }
 }

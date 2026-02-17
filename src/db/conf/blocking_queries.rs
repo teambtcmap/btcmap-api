@@ -15,3 +15,16 @@ pub fn select(conn: &Connection) -> Result<Conf> {
         .query_row((), Conf::mapper())
         .map_err(Into::into)
 }
+
+#[cfg(test)]
+mod test {
+    use crate::db::test::conn;
+
+    #[test]
+    fn select() -> crate::Result<()> {
+        let conn = conn();
+        let conf = super::select(&conn)?;
+        assert_eq!(conf.paywall_add_element_comment_price_sat, 500);
+        Ok(())
+    }
+}
