@@ -85,10 +85,10 @@ impl SelectOrderedBySeverityRow {
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<SelectOrderedBySeverityRow> {
         |row| {
             Ok(SelectOrderedBySeverityRow {
-                element_osm_type: row.get(0)?,
-                element_osm_id: row.get(1)?,
-                element_name: row.get(2)?,
-                issue_code: row.get(3)?,
+                element_osm_type: row.get("element_osm_type")?,
+                element_osm_id: row.get("element_osm_id")?,
+                element_name: row.get("element_name")?,
+                issue_code: row.get("issue_code")?,
             })
         }
     }

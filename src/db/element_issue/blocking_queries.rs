@@ -93,7 +93,11 @@ pub fn select_ordered_by_severity(
         };
     let sql = format!(
         r#"
-                SELECT json_extract(e.overpass_data, '$.type'), json_extract(e.overpass_data, '$.id'), json_extract(e.overpass_data, '$.tags.name'), ei.{code}
+                SELECT 
+                    json_extract(e.overpass_data, '$.type') AS element_osm_type,
+                    json_extract(e.overpass_data, '$.id') AS element_osm_id,
+                    json_extract(e.overpass_data, '$.tags.name') AS element_name,
+                    ei.{code} AS issue_code
                 FROM {table} ei join {element_table} e ON e.id = ei.{element_id} {area_join}
                 WHERE ei.{deleted_at} IS NULL {include_outdated}
                 ORDER BY ei.{severity} DESC
@@ -241,6 +245,9 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
+    use crate::db::area_element::blocking_queries as area_element_queries;
+    use crate::db::element::blocking_queries as element_queries;
+    use crate::db::element_issue::blocking_queries;
     use crate::{db::test::conn, Result};
     use time::{Duration, OffsetDateTime};
 
@@ -370,6 +377,38 @@ mod test {
         // Clear deleted_at
         let updated = super::set_deleted_at(issue.id, None, &conn).unwrap();
         assert!(updated.deleted_at.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn select_ordered_by_severity() -> Result<()> {
+        let conn = conn();
+        conn.pragma_update(None, "foreign_keys", &false)?;
+
+        let element1_id = 100;
+        let element2_id = 200;
+        let area_id = 1;
+
+        let e1 = element_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(element1_id),
+            &conn,
+        )?;
+        let e2 = element_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(element2_id),
+            &conn,
+        )?;
+
+        area_element_queries::insert(area_id, e1.id, &conn)?;
+        area_element_queries::insert(area_id, e2.id, &conn)?;
+
+        blocking_queries::insert(e1.id, "outdated", 1, &conn)?;
+        blocking_queries::insert(e2.id, "wrong_location", 3, &conn)?;
+
+        let issues = blocking_queries::select_ordered_by_severity(area_id, 10, 0, false, &conn)?;
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].issue_code, "wrong_location");
+        assert_eq!(issues[0].element_osm_id, element2_id);
+
         Ok(())
     }
 }
