@@ -32,7 +32,7 @@ impl From<Invoice> for Res {
 pub async fn run(params: Params, pool: &Pool, matrix_client: Option<Client>) -> Result<Res> {
     let mut invoice = db::invoice::queries::select_by_uuid(params.uuid.clone(), pool).await?;
     if invoice.status == InvoiceStatus::Unpaid
-        && crate::service::invoice::sync_unpaid_invoice(&invoice, &pool, &matrix_client).await?
+        && crate::service::invoice::sync_unpaid_invoice(&invoice, pool, &matrix_client).await?
     {
         invoice = db::invoice::queries::select_by_uuid(params.uuid, pool).await?;
     }
