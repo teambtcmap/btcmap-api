@@ -216,7 +216,7 @@ impl Element {
             }
         }
 
-        return None;
+        None
     }
 
     pub fn email(&self) -> Option<String> {
@@ -232,7 +232,7 @@ impl Element {
             }
         }
 
-        return None;
+        None
     }
 
     pub fn website(&self) -> Option<String> {
