@@ -40,6 +40,8 @@ pub struct User {
     pub deleted_at: Option<String>,
 }
 
+use std::fmt;
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub enum Role {
     User,
@@ -47,6 +49,18 @@ pub enum Role {
     Root,
     PlacesSource,
     EventManager,
+}
+
+impl fmt::Display for Role {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Role::User => write!(f, "user"),
+            Role::Admin => write!(f, "admin"),
+            Role::Root => write!(f, "root"),
+            Role::PlacesSource => write!(f, "places_source"),
+            Role::EventManager => write!(f, "event_manager"),
+        }
+    }
 }
 
 impl User {
@@ -103,18 +117,6 @@ impl FromStr for Role {
             "places_source" => Ok(Role::PlacesSource),
             "event_manager" => Ok(Role::EventManager),
             _ => Err(format!("'{}' is not a valid Role", s)),
-        }
-    }
-}
-
-impl ToString for Role {
-    fn to_string(&self) -> String {
-        match self {
-            Role::User => "user".to_string(),
-            Role::Admin => "admin".to_string(),
-            Role::Root => "root".to_string(),
-            Role::PlacesSource => "places_source".to_string(),
-            Role::EventManager => "event_manager".to_string(),
         }
     }
 }
