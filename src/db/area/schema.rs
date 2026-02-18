@@ -70,9 +70,16 @@ impl Area {
         .join(", ")
     }
 
-    pub fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
+    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
         |row: &Row| -> rusqlite::Result<Area> {
             let tags: String = row.get(Columns::Tags.as_str())?;
+            let tags = serde_json::from_str(&tags).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    6,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
             Ok(Area {
                 id: row.get(Columns::Id.as_str())?,
                 alias: row.get(Columns::Alias.as_str())?,
@@ -80,7 +87,7 @@ impl Area {
                 bbox_south: row.get(Columns::BboxSouth.as_str())?,
                 bbox_east: row.get(Columns::BboxEast.as_str())?,
                 bbox_north: row.get(Columns::BboxNorth.as_str())?,
-                tags: serde_json::from_str(&tags).unwrap(),
+                tags,
                 created_at: row.get(Columns::CreatedAt.as_str())?,
                 updated_at: row.get(Columns::UpdatedAt.as_str())?,
                 deleted_at: row.get(Columns::DeletedAt.as_str())?,

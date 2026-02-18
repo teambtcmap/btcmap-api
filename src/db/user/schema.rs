@@ -65,16 +65,16 @@ impl User {
         .join(", ")
     }
 
-    pub fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
+    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row: &Row| -> rusqlite::Result<Self> {
             Ok(User {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                password: row.get(2)?,
+                id: row.get(Columns::Id.as_str())?,
+                name: row.get(Columns::Name.as_str())?,
+                password: row.get(Columns::Password.as_str())?,
                 roles: Self::parse_roles(row.get(Columns::Roles.as_str())?),
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-                deleted_at: row.get(6)?,
+                created_at: row.get(Columns::CreatedAt.as_str())?,
+                updated_at: row.get(Columns::UpdatedAt.as_str())?,
+                deleted_at: row.get(Columns::DeletedAt.as_str())?,
             })
         }
     }
