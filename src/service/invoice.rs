@@ -160,7 +160,7 @@ pub async fn sync_unpaid_invoice(
         let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
         if lnbits_response.paid {
             db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
-            on_invoice_paid(&invoice, pool, matrix_client).await?;
+            on_invoice_paid(invoice, pool, matrix_client).await?;
             return Ok(true);
         } else {
         }
@@ -177,7 +177,7 @@ pub async fn sync_unpaid_invoice(
         let lnd_response: CheckLndInvoiceResponse = lnd_response.json().await?;
         if lnd_response.state == "SETTLED" {
             db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
-            on_invoice_paid(&invoice, pool, matrix_client).await?;
+            on_invoice_paid(invoice, pool, matrix_client).await?;
             return Ok(true);
         }
     } else {

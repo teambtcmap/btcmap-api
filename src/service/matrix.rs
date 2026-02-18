@@ -108,7 +108,7 @@ async fn _send_message(client: &Client, room_id: &str, message: &str) -> Result<
     let room = rooms
         .into_iter()
         .find(|r| r.room_id() == room_id)
-        .ok_or_else(|| Error::Matrix(format!("room not found")))?;
+        .ok_or_else(|| Error::Matrix("room not found".to_string()))?;
     let content = RoomMessageEventContent::text_plain(message);
     room.send(content)
         .await

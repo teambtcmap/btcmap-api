@@ -69,7 +69,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<SearchRespons
     let mut results = Vec::new();
 
     // search areas by default or if specified
-    if args.type_filter.is_none() || args.type_filter.as_ref().map(|s| s.as_str()) == Some("area") {
+    if args.type_filter.is_none() || args.type_filter.as_deref() == Some("area") {
         let areas = db::area::queries::select_by_search_query(query, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
@@ -84,9 +84,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<SearchRespons
     }
 
     // search elements by default or if specified
-    if args.type_filter.is_none()
-        || args.type_filter.as_ref().map(|s| s.as_str()) == Some("element")
-    {
+    if args.type_filter.is_none() || args.type_filter.as_deref() == Some("element") {
         let elements = db::element::queries::select_by_search_query(query, false, &pool)
             .await
             .map_err(|_| RestApiError::database())?;

@@ -34,14 +34,14 @@ pub async fn generate_element_areas_mapping(
     let mut added_areas: Vec<i64> = vec![];
     let mut removed_areas: Vec<i64> = vec![];
     let old_mappings = db::area_element::queries::select_by_element_id(element.id, pool).await?;
-    let new_mappings = service::element::find_areas(&element, &areas)?;
+    let new_mappings = service::element::find_areas(element, areas)?;
     // mark no longer active mappings as deleted
     for old_mapping in &old_mappings {
         if old_mapping.deleted_at.is_none() {
             let still_valid = new_mappings
                 .iter()
-                .find(|area| area.id == old_mapping.area_id)
-                .is_some();
+                .any(|area| area.id == old_mapping.area_id);
+
             if !still_valid {
                 db::area_element::queries::set_deleted_at(
                     old_mapping.id,

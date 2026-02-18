@@ -16,7 +16,7 @@ use tracing::info;
 
 pub async fn generate_bbox(pool: &Pool) -> Result<()> {
     let areas = db::area::queries::select(None, true, None, pool).await?;
-    let ingnored_areas = vec![357, 515, 558, 514, 25, 418, 632, 633];
+    let ingnored_areas = [357, 515, 558, 514, 25, 418, 632, 633];
     for area in areas {
         if ingnored_areas.contains(&area.id) {
             continue;
@@ -94,7 +94,7 @@ pub async fn patch_tags(
         }
         let mut affected_elements: Vec<Element> = vec![];
         for id in affected_element_ids {
-            affected_elements.push(db::element::queries::select_by_id(id, &pool).await?);
+            affected_elements.push(db::element::queries::select_by_id(id, pool).await?);
         }
         service::area_element::generate_mapping(&affected_elements, pool).await?;
         Ok(area)
@@ -258,7 +258,7 @@ pub async fn get_comments(
             area_element.element_id,
             include_deleted,
             i64::MAX,
-            &pool,
+            pool,
         )
         .await?
         {

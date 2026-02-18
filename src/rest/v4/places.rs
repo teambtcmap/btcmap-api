@@ -378,15 +378,9 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
             }
             filters_applied += 1;
         } else {
-            matches = matches
-                .into_iter()
-                .filter(|it| it.name().to_lowercase().contains(&name))
-                .collect();
+            matches.retain(|it| it.name().to_lowercase().contains(&name));
             if include_pending {
-                pending_matches = pending_matches
-                    .into_iter()
-                    .filter(|it| it.name.to_lowercase().contains(&name))
-                    .collect();
+                pending_matches.retain(|it| it.name.to_lowercase().contains(&name));
             }
         }
 
@@ -417,16 +411,13 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                 }
             }
         } else {
-            matches = matches
-                .into_iter()
-                .filter(|it| match &it.overpass_data.tags {
-                    Some(tags) => match tags.get(&tag_name) {
-                        Some(tag) => tag.as_str() == Some(&tag_value),
-                        None => false,
-                    },
+            matches.retain(|it| match &it.overpass_data.tags {
+                Some(tags) => match tags.get(&tag_name) {
+                    Some(tag) => tag.as_str() == Some(&tag_value),
                     None => false,
-                })
-                .collect();
+                },
+                None => false,
+            });
             if include_pending {
                 let origin = if tag_name == "payment:lightning:operator" && tag_value == "square" {
                     "square"
@@ -435,10 +426,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<Search
                 };
 
                 if !origin.is_empty() {
-                    pending_matches = pending_matches
-                        .into_iter()
-                        .filter(|it| it.origin == origin)
-                        .collect();
+                    pending_matches.retain(|it| it.origin == origin);
                 }
             }
         }

@@ -23,7 +23,7 @@ pub async fn run(pool: &Pool, matrix_client: &Option<Client>) -> Result<Res> {
         "fetched open and non-revoked submissions",
     );
 
-    let enabled_origins = vec!["square".to_string()];
+    let enabled_origins = ["square".to_string()];
     let mut issues_created = 0;
     let mut issues_closed = 0;
 

@@ -29,10 +29,7 @@ async fn main() -> Result<()> {
     let start_time = Instant::now();
     init_env();
     let pool = pool()?;
-    pool.get()
-        .await?
-        .interact(|conn| db::migration::run(conn))
-        .await??;
+    pool.get().await?.interact(db::migration::run).await??;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
     service::area::generate_bbox(&pool).await?;
