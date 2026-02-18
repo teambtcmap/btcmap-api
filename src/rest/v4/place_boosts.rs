@@ -49,8 +49,12 @@ pub async fn post(
     pool: Data<Pool>,
 ) -> RestResult<PostResponse> {
     if args.place_id == "23143" {
-        if let Some(ip) = req.connection_info().realip_remote_addr() {
-            db::ban::queries::insert(ip.to_string(), "spam".to_string(), 3650, &pool)
+        let ip = req
+            .connection_info()
+            .realip_remote_addr()
+            .map(|s| s.to_owned());
+        if let Some(ip) = ip {
+            db::ban::queries::insert(ip, "spam".to_string(), 3650, &pool)
                 .await
                 .map_err(|_| RestApiError::database())?;
             return Err(RestApiError::new(
