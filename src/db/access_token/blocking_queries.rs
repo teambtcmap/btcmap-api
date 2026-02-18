@@ -11,7 +11,7 @@ pub fn insert(
     roles: &[Role],
     conn: &Connection,
 ) -> Result<AccessToken> {
-    let roles: Vec<String> = roles.into_iter().map(|it| it.to_string()).collect();
+    let roles: Vec<String> = roles.iter().map(|it| it.to_string()).collect();
     let sql = format!(
         r#"
             INSERT INTO {table} ({user_id}, {name}, {secret}, {roles})
