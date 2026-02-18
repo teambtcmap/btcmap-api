@@ -162,7 +162,6 @@ pub async fn sync_unpaid_invoice(
             db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
             on_invoice_paid(invoice, pool, matrix_client).await?;
             return Ok(true);
-        } else {
         }
     } else if invoice.source == "lnd" {
         let url = format!("https://lnd.btcmap.org/v1/invoice/{}", invoice.payment_hash,);
