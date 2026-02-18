@@ -5,6 +5,16 @@ use rusqlite::{named_params, params, Connection, OptionalExtension};
 use serde_json::{Map, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
+pub struct InsertArgs {
+    pub origin: String,
+    pub external_id: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub category: String,
+    pub name: String,
+    pub extra_fields: Map<String, Value>,
+}
+
 pub fn insert(
     origin: &str,
     external_id: &str,

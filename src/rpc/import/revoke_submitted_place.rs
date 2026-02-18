@@ -51,6 +51,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
 mod test {
     use crate::{
         db::{self, test::pool},
+        db::place_submission::blocking_queries::InsertArgs,
         Result,
     };
     use actix_web::test;
@@ -68,17 +69,16 @@ mod test {
 
         let pool = pool();
 
-        let submission = db::place_submission::queries::insert(
-            origin.into(),
-            external_id.into(),
+        let args = InsertArgs {
+            origin: origin.into(),
+            external_id: external_id.into(),
             lat,
             lon,
-            category.into(),
-            name.into(),
+            category: category.into(),
+            name: name.into(),
             extra_fields,
-            &pool,
-        )
-        .await?;
+        };
+        let submission = db::place_submission::queries::insert(args, &pool).await?;
 
         assert_eq!(false, submission.revoked);
 

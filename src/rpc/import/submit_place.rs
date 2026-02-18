@@ -1,5 +1,6 @@
 use crate::{
     db::{self},
+    db::place_submission::blocking_queries::InsertArgs,
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -84,17 +85,16 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
             })
         }
         None => {
-            let new_submission = db::place_submission::queries::insert(
-                params.origin,
-                params.external_id,
-                params.lat,
-                params.lon,
-                params.category,
-                params.name,
+            let args = InsertArgs {
+                origin: params.origin,
+                external_id: params.external_id,
+                lat: params.lat,
+                lon: params.lon,
+                category: params.category,
+                name: params.name,
                 extra_fields,
-                pool,
-            )
-            .await?;
+            };
+            let new_submission = db::place_submission::queries::insert(args, pool).await?;
             Ok(Res {
                 id: new_submission.id,
                 origin: new_submission.origin,
