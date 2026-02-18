@@ -49,7 +49,7 @@ pub fn insert(
         ":user_id" : user_id,
         ":ip" : ip,
         ":method" : method,
-        ":params_json" : params.map(|it| serde_json::to_string(&it).unwrap()),
+        ":params_json" : params.and_then(|it| serde_json::to_string(&it).ok()),
         ":created_at" : created_at.format(&Rfc3339)?,
         ":processed_at" : processed_at.format(&Rfc3339)?,
         ":duration_ns" : (processed_at - created_at).whole_nanoseconds() as i64,
@@ -108,5 +108,29 @@ mod tests {
 
         let expected_ns = Duration::from_millis(150).as_nanos() as i64;
         assert_eq!(rpc_call.duration_ns, expected_ns);
+    }
+
+    #[test]
+    fn insert_with_null_params() {
+        let conn = conn();
+        let user =
+            crate::db::user::blocking_queries::insert("test_user_2", "password", &conn).unwrap();
+
+        let created_at = OffsetDateTime::now_utc();
+        let processed_at = created_at + Duration::from_millis(50);
+
+        let result = super::insert(
+            user.id,
+            "10.0.0.1".to_string(),
+            "test_method".to_string(),
+            None,
+            created_at,
+            processed_at,
+            &conn,
+        );
+
+        assert!(result.is_ok());
+        let rpc_call = result.unwrap();
+        assert_eq!(rpc_call.params_json, None);
     }
 }

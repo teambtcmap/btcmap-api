@@ -160,7 +160,12 @@ pub fn select_by_id_or_osm_id(id: impl Into<String>, conn: &Connection) -> Resul
         Err(_) => {
             let parts: Vec<_> = id.split(':').collect();
             let osm_type = parts[0];
-            let osm_id = parts[1].parse::<i64>().unwrap();
+            let osm_id = parts
+                .get(1)
+                .and_then(|s| s.parse::<i64>().ok())
+                .ok_or_else(|| {
+                    rusqlite::Error::InvalidParameterName(format!("Invalid id format: {}", id))
+                })?;
             select_by_osm_type_and_id(osm_type, osm_id, conn)
         }
     }
@@ -615,6 +620,39 @@ mod test {
             deleted_at,
             super::select_by_id(element.id, &conn)?.deleted_at.unwrap()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id_or_osm_id_by_id() -> Result<()> {
+        let conn = conn();
+        let element = super::insert(&OverpassElement::mock(42), &conn)?;
+
+        let found = super::select_by_id_or_osm_id(element.id.to_string(), &conn)?;
+        assert_eq!(found.id, element.id);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id_or_osm_id_by_osm_id() -> Result<()> {
+        let conn = conn();
+        let element = super::insert(&OverpassElement::mock(99), &conn)?;
+
+        let osm_id = format!("node:{}", element.overpass_data.id);
+        let found = super::select_by_id_or_osm_id(osm_id, &conn)?;
+        assert_eq!(found.id, element.id);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id_or_osm_id_invalid_format() -> Result<()> {
+        let conn = conn();
+
+        let result = super::select_by_id_or_osm_id("invalid_no_colon", &conn);
+        assert!(result.is_err());
+
         Ok(())
     }
 }
