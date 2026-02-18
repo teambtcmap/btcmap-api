@@ -126,6 +126,8 @@ pub fn select_by_id(id: i64, conn: &mut Connection) -> Result<User> {
 }
 ```
 
+Full database schema is always available in schema.sql, use it as reference and don't try to make up non-existing tables and fields.
+
 ### REST Handler Patterns
 Handlers return `RestResult<T>` which is `Result<Json<T>, RestApiError>`:
 

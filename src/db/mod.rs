@@ -43,7 +43,6 @@ pub fn pool() -> Result<Pool> {
 
 #[cfg(test)]
 pub mod test {
-    use super::migration;
     use deadpool_sqlite::{Config, Hook, Pool, Runtime};
     use rusqlite::Connection;
 
@@ -56,8 +55,8 @@ pub mod test {
             .unwrap()
             .max_size(pool_size)
             .post_create(Hook::Fn(Box::new(|conn, _| {
-                let mut conn = conn.lock().unwrap();
-                migration::run(&mut conn).unwrap();
+                let conn = conn.lock().unwrap();
+                conn.execute_batch(include_str!("../../schema.sql")).unwrap();
                 Ok(())
             })))
             .build()
@@ -65,8 +64,8 @@ pub mod test {
     }
 
     pub(super) fn conn() -> Connection {
-        let mut conn = Connection::open_in_memory().unwrap();
-        migration::run(&mut conn).unwrap();
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../../schema.sql")).unwrap();
         conn.pragma_update(None, "foreign_keys", "ON").unwrap();
         conn
     }
