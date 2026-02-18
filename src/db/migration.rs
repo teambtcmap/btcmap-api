@@ -37,10 +37,9 @@ fn get_migrations() -> Result<Vec<Migration>> {
         let file = MIGRATIONS_DIR.get_file(&file_name);
         match file {
             Some(file) => {
-                let sql = file.contents_utf8().ok_or(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Can't read {file_name} in UTF-8"),
-                ))?;
+                let sql = file.contents_utf8().ok_or_else(|| {
+                    std::io::Error::other(format!("Can't read {file_name} in UTF-8"))
+                })?;
 
                 res.push(Migration(index, sql.to_string()));
 
