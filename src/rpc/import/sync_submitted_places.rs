@@ -34,7 +34,7 @@ pub async fn run(pool: &Pool, matrix_client: &Option<Client>) -> Result<Res> {
         }
 
         if submission.ticket_url.is_none() {
-            let title = format!("{}", submission.name);
+            let title = submission.name.to_string();
 
             let body = format!(
                 r#"
