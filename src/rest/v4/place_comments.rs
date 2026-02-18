@@ -14,7 +14,6 @@ use actix_web::web::Query;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
-use std::i64;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]

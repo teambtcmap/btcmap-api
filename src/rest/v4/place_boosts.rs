@@ -12,7 +12,6 @@ use actix_web::HttpRequest;
 use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
-use std::i64;
 
 #[derive(Serialize)]
 pub struct Quote {

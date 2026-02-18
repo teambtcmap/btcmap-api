@@ -15,7 +15,6 @@ use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
-use std::i64;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
