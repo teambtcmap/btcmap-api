@@ -6,7 +6,6 @@ use geojson::GeoJson;
 use rusqlite::params;
 use rusqlite::Connection;
 use serde_json::{Map, Value};
-use std::i64;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
