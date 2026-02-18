@@ -78,11 +78,11 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<Pool>) -> Res<Vec<JsonObje
         let mut items: Vec<GetItem> = vec![];
         let mut elements: Vec<GetItem> = elements
             .into_iter()
-            .map(|it| GetItem::Element(it))
+            .map(GetItem::Element)
             .collect();
         let mut submissions: Vec<GetItem> = submissions
             .into_iter()
-            .map(|it| GetItem::PlaceSubmission(it))
+            .map(GetItem::PlaceSubmission)
             .collect();
         items.append(&mut elements);
         items.append(&mut submissions);
