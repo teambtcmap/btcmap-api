@@ -248,7 +248,7 @@ impl Element {
             }
         }
 
-        return None;
+        None
     }
 
     pub fn twitter(&self) -> Option<String> {
