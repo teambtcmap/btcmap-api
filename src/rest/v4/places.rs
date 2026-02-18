@@ -87,7 +87,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<Pool>) -> Res<Vec<JsonObje
         items.append(&mut elements);
         items.append(&mut submissions);
 
-        items.sort_by(|a, b| a.updated_at().cmp(&b.updated_at()));
+        items.sort_by_key(|a| a.updated_at());
 
         Ok(Json(
             items
