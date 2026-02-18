@@ -13,16 +13,7 @@ pub async fn insert(
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::insert(
-                &args.origin,
-                &args.external_id,
-                args.lat,
-                args.lon,
-                &args.category,
-                &args.name,
-                &args.extra_fields,
-                conn,
-            )
+            blocking_queries::insert(&args, conn)
         })
         .await?
 }

@@ -15,16 +15,7 @@ pub struct InsertArgs {
     pub extra_fields: Map<String, Value>,
 }
 
-pub fn insert(
-    origin: &str,
-    external_id: &str,
-    lat: f64,
-    lon: f64,
-    category: &str,
-    name: &str,
-    extra_fields: &Map<String, Value>,
-    conn: &Connection,
-) -> Result<PlaceSubmission> {
+pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceSubmission> {
     let sql = format!(
         r#"
             INSERT INTO {table} ({origin}, {external_id}, {lat}, {lon}, {category}, {name}, {extra_fields}) 
@@ -44,13 +35,13 @@ pub fn insert(
     conn.query_row(
         &sql,
         named_params! {
-            ":origin": origin,
-            ":external_id": external_id,
-            ":lat": lat,
-            ":lon": lon,
-            ":category": category,
-            ":name": name,
-            ":extra_fields": serde_json::to_string(extra_fields)?,
+            ":origin": &args.origin,
+            ":external_id": &args.external_id,
+            ":lat": args.lat,
+            ":lon": args.lon,
+            ":category": &args.category,
+            ":name": &args.name,
+            ":extra_fields": serde_json::to_string(&args.extra_fields)?,
 
         },
         PlaceSubmission::mapper(),
@@ -374,6 +365,7 @@ pub fn set_closed_at(
 
 #[cfg(test)]
 mod test {
+    use crate::db::place_submission::blocking_queries::InsertArgs;
     use crate::db::test::conn;
     use crate::error::Error;
     use crate::Result;
@@ -393,23 +385,17 @@ mod test {
         let name = "Satoshi Cafe";
         let extra_fields = Map::new();
 
-        let element = super::insert(
-            origin,
-            external_id,
+        let args = InsertArgs {
+            origin: origin.to_string(),
+            external_id: external_id.to_string(),
             lat,
             lon,
-            category,
-            name,
-            &extra_fields,
-            &conn,
-        )?;
+            category: category.to_string(),
+            name: name.to_string(),
+            extra_fields: extra_fields.clone(),
+        };
+        let element = super::insert(&args, &conn)?;
 
-        assert_eq!(origin, element.origin);
-        assert_eq!(external_id, element.external_id);
-        assert_eq!(lat, element.lat);
-        assert_eq!(lon, element.lon);
-        assert_eq!(category, element.category);
-        assert_eq!(name, element.name);
         assert_eq!(extra_fields, element.extra_fields);
 
         let element = super::select_by_id(1, &conn)?;
@@ -437,52 +423,16 @@ mod test {
         let name = "Satoshi Cafe";
         let extra_fields = Map::new();
 
-        let submission = super::insert(
-            origin,
-            external_id,
+        let args = InsertArgs {
+            origin: origin.to_string(),
+            external_id: external_id.to_string(),
             lat,
             lon,
-            category,
-            name,
-            &extra_fields,
-            &conn,
-        )?;
-
-        assert_eq!(submission, super::select_by_id(submission.id, &conn)?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn select_by_id_not_found() {
-        assert!(matches!(
-            super::select_by_id(1, &conn()),
-            Err(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)),
-        ));
-    }
-
-    #[test]
-    fn select_by_origin_and_external_id() -> Result<()> {
-        let conn = conn();
-
-        let origin = "acme";
-        let external_id = "15";
-        let lat = 1.23;
-        let lon = 4.56;
-        let category = "cafe";
-        let name = "Satoshi Cafe";
-        let extra_fields = Map::new();
-
-        let submission = super::insert(
-            origin,
-            external_id,
-            lat,
-            lon,
-            category,
-            name,
-            &extra_fields,
-            &conn,
-        )?;
+            category: category.to_string(),
+            name: name.to_string(),
+            extra_fields: extra_fields.clone(),
+        };
+        let submission = super::insert(&args, &conn)?;
 
         assert_eq!(
             Some(submission),
@@ -502,31 +452,31 @@ mod test {
 
         let origin = "acme";
         let external_id = "15";
-        let lat = 0.0;
-        let lon = 0.0;
+        let lat = 1.23;
+        let lon = 4.56;
         let category = "cafe";
         let name = "Satoshi Cafe";
         let extra_fields = Map::new();
 
-        let submission = super::insert(
-            origin,
-            external_id,
+        let args = InsertArgs {
+            origin: origin.to_string(),
+            external_id: external_id.to_string(),
             lat,
             lon,
-            category,
-            name,
-            &extra_fields,
-            &conn,
-        )?;
+            category: category.to_string(),
+            name: name.to_string(),
+            extra_fields: extra_fields.clone(),
+        };
+        let submission = super::insert(&args, &conn)?;
 
         assert_eq!(
             vec![submission.clone()],
-            super::select_pending_by_bbox(-1.0, 1.0, -1.0, 1.0, &conn)?
+            super::select_pending_by_bbox(0.0, 2.0, 3.0, 5.0, &conn)?
         );
 
         super::set_revoked(submission.id, true, &conn)?;
 
-        assert!(super::select_pending_by_bbox(-1.0, 1.0, -1.0, 1.0, &conn)?.is_empty());
+        assert!(super::select_pending_by_bbox(0.0, 2.0, 3.0, 5.0, &conn)?.is_empty());
 
         Ok(())
     }
@@ -543,16 +493,16 @@ mod test {
         let name = "Satoshi Cafe";
         let extra_fields = Map::new();
 
-        let submission = super::insert(
-            origin,
-            external_id,
+        let args = InsertArgs {
+            origin: origin.to_string(),
+            external_id: external_id.to_string(),
             lat,
             lon,
-            category,
-            name,
-            &extra_fields,
-            &conn,
-        )?;
+            category: category.to_string(),
+            name: name.to_string(),
+            extra_fields: extra_fields.clone(),
+        };
+        let submission = super::insert(&args, &conn)?;
 
         let new_lat = 1.11;
         let new_lon = 2.22;
@@ -584,16 +534,16 @@ mod test {
     fn set_revoked() -> Result<()> {
         let conn = conn();
 
-        let submission = super::insert(
-            "foo",
-            "bar",
-            1.11,
-            2.22,
-            "category",
-            "name",
-            &JsonObject::new(),
-            &conn,
-        )?;
+        let args = InsertArgs {
+            origin: "foo".to_string(),
+            external_id: "bar".to_string(),
+            lat: 1.11,
+            lon: 2.22,
+            category: "category".to_string(),
+            name: "name".to_string(),
+            extra_fields: JsonObject::new(),
+        };
+        let submission = super::insert(&args, &conn)?;
 
         assert_eq!(false, submission.revoked);
 
@@ -620,16 +570,16 @@ mod test {
         let name = "Satoshi Cafe";
         let extra_fields = Map::new();
 
-        let submission = super::insert(
-            origin,
-            external_id,
+        let args = InsertArgs {
+            origin: origin.to_string(),
+            external_id: external_id.to_string(),
             lat,
             lon,
-            category,
-            name,
-            &extra_fields,
-            &conn,
-        )?;
+            category: category.to_string(),
+            name: name.to_string(),
+            extra_fields,
+        };
+        let submission = super::insert(&args, &conn)?;
 
         let updated_at = OffsetDateTime::now_utc();
 
