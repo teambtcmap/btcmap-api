@@ -199,16 +199,8 @@ impl Element {
     }
 
     pub fn boosted_until(&self) -> Option<OffsetDateTime> {
-        match self.tags.get("boost:expires") {
-            Some(boost_expires) => match boost_expires.as_str() {
-                Some(boost_expires) => match OffsetDateTime::parse(boost_expires, &Rfc3339) {
-                    Ok(boost_expires) => Some(boost_expires),
-                    Err(_) => None,
-                },
-                None => None,
-            },
-            None => None,
-        }
+        let boost_expires = self.tags.get("boost:expires")?.as_str()?;
+        OffsetDateTime::parse(boost_expires, &Rfc3339).ok()
     }
 
     pub fn phone(&self) -> Option<String> {
@@ -430,5 +422,66 @@ fn is_valid_url(url: &str) -> bool {
     match Url::parse(url) {
         Ok(url) => url.scheme() == "http" || url.scheme() == "https",
         Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::overpass::OverpassElement;
+    use serde_json::json;
+
+    #[test]
+    fn test_boosted_until_no_tag() {
+        let element = Element {
+            id: 1,
+            overpass_data: OverpassElement::mock(1),
+            tags: Map::new(),
+            lat: None,
+            lon: None,
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+            deleted_at: None,
+        };
+        assert_eq!(element.boosted_until(), None);
+    }
+
+    #[test]
+    fn test_boosted_until_valid_tag() {
+        let mut tags = Map::new();
+        tags.insert("boost:expires".to_string(), json!("2025-12-31T23:59:59Z"));
+        let element = Element {
+            id: 1,
+            overpass_data: OverpassElement::mock(1),
+            tags,
+            lat: None,
+            lon: None,
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+            deleted_at: None,
+        };
+        let result = element.boosted_until();
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap(),
+            OffsetDateTime::parse("2025-12-31T23:59:59Z", &Rfc3339).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_boosted_until_malformed_tag() {
+        let mut tags = Map::new();
+        tags.insert("boost:expires".to_string(), json!("not-a-date"));
+        let element = Element {
+            id: 1,
+            overpass_data: OverpassElement::mock(1),
+            tags,
+            lat: None,
+            lon: None,
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+            deleted_at: None,
+        };
+        assert_eq!(element.boosted_until(), None);
     }
 }
