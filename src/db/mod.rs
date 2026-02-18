@@ -56,7 +56,8 @@ pub mod test {
             .max_size(pool_size)
             .post_create(Hook::Fn(Box::new(|conn, _| {
                 let conn = conn.lock().unwrap();
-                conn.execute_batch(include_str!("../../schema.sql")).unwrap();
+                conn.execute_batch(include_str!("../../schema.sql"))
+                    .unwrap();
                 Ok(())
             })))
             .build()
@@ -65,7 +66,8 @@ pub mod test {
 
     pub(super) fn conn() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(include_str!("../../schema.sql")).unwrap();
+        conn.execute_batch(include_str!("../../schema.sql"))
+            .unwrap();
         conn.pragma_update(None, "foreign_keys", "ON").unwrap();
         conn
     }

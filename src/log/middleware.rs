@@ -1,8 +1,8 @@
-use super::db::{self};
-use crate::Result;
+use super::db::{self, LogPool};
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error,
+    web::Data,
+    Error as ActixError,
 };
 use futures_util::future::LocalBoxFuture;
 use std::{
@@ -10,26 +10,19 @@ use std::{
     time::Instant,
 };
 
-// There are two steps in middleware processing.
-// 1. Middleware initialization, middleware factory gets called with
-//    next service in chain as parameter.
-// 2. Middleware's call method gets called with normal request.
 pub struct Log;
 
-// Middleware factory is `Transform` trait
-// `S` - type of the next service
-// `B` - type of response's body
 impl<S, B> Transform<S, ServiceRequest> for Log
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = ActixError>,
     S::Future: 'static,
     B: 'static,
 {
     type Response = ServiceResponse<B>;
-    type Error = Error;
+    type Error = ActixError;
     type InitError = ();
     type Transform = LogMiddleware<S>;
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+    type Future = Ready<std::result::Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(LogMiddleware { service }))
@@ -42,39 +35,53 @@ pub struct LogMiddleware<S> {
 
 impl<S, B> Service<ServiceRequest> for LogMiddleware<S>
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = ActixError>,
     S::Future: 'static,
     B: 'static,
 {
     type Response = ServiceResponse<B>;
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+    type Error = ActixError;
+    type Future = LocalBoxFuture<'static, std::result::Result<Self::Response, Self::Error>>;
 
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        let pool = req
+            .app_data::<Data<LogPool>>()
+            .map(|d| d.get_ref().clone())
+            .unwrap_or_else(|| panic!("Log pool not configured"));
         let fut = self.service.call(req);
         Box::pin(async move {
             let started_at = Instant::now();
             let res = fut.await?;
             let time_ns = Instant::now().duration_since(started_at).as_nanos();
-            let conn_info = res.request().connection_info();
-            let Some(addr) = conn_info.realip_remote_addr() else {
-                drop(conn_info);
+            let addr = res
+                .request()
+                .connection_info()
+                .realip_remote_addr()
+                .map(|s| s.to_owned());
+            let user_agent = res
+                .request()
+                .headers()
+                .get("User-Agent")
+                .and_then(|h| h.to_str().ok())
+                .map(|s| s.to_owned());
+            let path = res.request().path().to_owned();
+            let query = res.request().query_string().to_owned();
+            let code = res.status().as_u16() as i64;
+            let Some(addr) = addr else {
                 return Ok(res);
             };
             db::insert(
-                addr,
-                res.request()
-                    .headers()
-                    .get("User-Agent")
-                    .and_then(|h| h.to_str().ok()),
-                res.request().path(),
-                res.request().query_string(),
-                res.status().as_u16() as i64,
+                &addr,
+                user_agent.as_deref(),
+                &path,
+                &query,
+                code,
                 time_ns as i64,
-            )?;
-            drop(conn_info);
+                &pool,
+            )
+            .await?;
             Ok(res)
         })
     }

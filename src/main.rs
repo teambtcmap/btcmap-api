@@ -29,6 +29,7 @@ async fn main() -> Result<()> {
     let start_time = Instant::now();
     init_env();
     let pool = pool()?;
+    let log_pool = log::db::pool()?;
     pool.get().await?.interact(db::migration::run).await??;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
@@ -48,6 +49,7 @@ async fn main() -> Result<()> {
             .wrap(Compress::default())
             .wrap(from_fn(service::ban::check_if_banned))
             .app_data(Data::new(pool.clone()))
+            .app_data(Data::new(log_pool.clone()))
             .app_data(Data::new(conf.clone()))
             .service(og::element::get_element)
             .service(

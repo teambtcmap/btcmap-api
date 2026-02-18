@@ -1,100 +1,68 @@
-use crate::service::filesystem::data_dir_file_path;
+use super::blocking_queries;
 use crate::Result;
-use rusqlite::named_params;
-use rusqlite::Connection;
-use tracing::error;
+use deadpool_sqlite::{Config, Hook, Pool, Runtime};
+use std::sync::Arc;
 
-thread_local! {
-    pub static CONN: Connection = conn().unwrap_or_else(|e| {
-        error!("Failed to open log db connection {e}");
-        std::process::exit(1)
-    });
+#[derive(Clone)]
+pub struct LogPool(Arc<Pool>);
+
+impl LogPool {
+    pub fn new(pool: Pool) -> Self {
+        Self(Arc::new(pool))
+    }
 }
 
-fn conn() -> Result<Connection> {
-    let conn = Connection::open(data_dir_file_path("log.db")?)?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.pragma_update(None, "synchronous", "NORMAL")?;
-    migrate(&conn)?;
-    Ok(conn)
+impl std::ops::Deref for LogPool {
+    type Target = Pool;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-const TABLE_NAME: &str = "request";
-const COL_ID: &str = "id";
-const COL_DATE: &str = "date";
-const COL_IP: &str = "ip";
-const COL_USER_AGENT: &str = "user_agent";
-const COL_PATH: &str = "path";
-const COL_QUERY: &str = "query";
-const COL_CODE: &str = "code";
-const COL_TIME_NS: &str = "time_ns";
-
-fn migrate(conn: &Connection) -> Result<()> {
-    let query = format!(
-        r#"
-            CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-                {COL_ID} INTEGER PRIMARY KEY NOT NULL,
-                {COL_DATE} TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
-                {COL_IP} TEXT NOT NULL,
-                {COL_USER_AGENT} TEXT,
-                {COL_PATH} TEXT NOT NULL, 
-                {COL_QUERY} TEXT NOT NULL, 
-                {COL_CODE} INTEGER NOT NULL,
-                {COL_TIME_NS} INTEGER NOT NULL
-            ) STRICT;
-        "#
-    );
-    conn.execute(&query, [])?;
-    conn.execute(
-        &format!("CREATE INDEX IF NOT EXISTS {TABLE_NAME}_{COL_DATE} ON {TABLE_NAME}({COL_DATE});"),
-        [],
-    )?;
-    conn.execute(
-        &format!("CREATE INDEX IF NOT EXISTS {TABLE_NAME}_{COL_CODE} ON {TABLE_NAME}({COL_CODE});"),
-        [],
-    )?;
-    Ok(())
+pub fn pool() -> Result<LogPool> {
+    let pool_size = std::thread::available_parallelism()
+        .map(|n| n.get() * 2)
+        .unwrap_or(8);
+    let inner = Config::new(crate::service::filesystem::data_dir_file_path("log.db")?)
+        .builder(Runtime::Tokio1)?
+        .max_size(pool_size)
+        .post_create(Hook::Fn(Box::new(|conn, _| {
+            let conn = conn.lock().unwrap();
+            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+            conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+            blocking_queries::migrate(&conn).unwrap();
+            Ok(())
+        })))
+        .build()?;
+    Ok(LogPool::new(inner))
 }
 
-pub fn insert(
+pub async fn insert(
     ip: &str,
     user_agent: Option<&str>,
     path: &str,
     query: &str,
     code: i64,
     time_ns: i64,
+    pool: &Pool,
 ) -> Result<()> {
-    let sql = format!(
-        r#"
-            INSERT INTO {TABLE_NAME} (
-                {COL_IP},
-                {COL_USER_AGENT},
-                {COL_PATH}, 
-                {COL_QUERY},
-                {COL_CODE},
-                {COL_TIME_NS}
-            ) VALUES (
-                :{COL_IP},
-                :{COL_USER_AGENT},
-                :{COL_PATH}, 
-                :{COL_QUERY}, 
-                :{COL_CODE},
-                :{COL_TIME_NS}
-             );
-         "#
-    );
-    CONN.with(|conn| {
-        conn.execute(
-            &sql,
-            named_params! {
-                ":ip": ip,
-                ":user_agent": user_agent,
-                ":path": path,
-                ":query": query,
-                ":code": code,
-                ":time_ns": time_ns,
-            },
-        )
-    })?;
-    Ok(())
+    let ip = ip.to_owned();
+    let user_agent = user_agent.map(|s| s.to_owned());
+    let path = path.to_owned();
+    let query = query.to_owned();
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::insert(
+                &ip,
+                user_agent.as_deref(),
+                &path,
+                &query,
+                code,
+                time_ns,
+                conn,
+            )
+        })
+        .await?
 }
