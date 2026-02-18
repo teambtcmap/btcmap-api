@@ -559,10 +559,10 @@ pub async fn handle(
             req.id.clone(),
             super::import::sync_submitted_places::run(&pool, &matrix_client).await?,
         ),
-        RpcMethod::SendMatrixMessage => RpcResponse::from(
-            req.id.clone(),
-            super::matrix::send_matrix_message::run(params(req.params)?, &matrix_client).await,
-        ),
+        RpcMethod::SendMatrixMessage => {
+            super::matrix::send_matrix_message::run(params(req.params)?, &matrix_client).await;
+            Ok(RpcResponse::success(req.id.clone(), serde_json::Value::Null))
+        }
     }?;
 
     if let Some(user_id) = user_id {
