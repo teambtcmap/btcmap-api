@@ -178,7 +178,7 @@ impl FromSql for InvoiceStatus {
     fn column_result(value: ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         value
             .as_str()
-            .and_then(|s| InvoiceStatus::try_from(s).map_err(|e| FromSqlError::Other(e)))
+            .and_then(|s| InvoiceStatus::try_from(s).map_err(FromSqlError::Other))
     }
 }
 
