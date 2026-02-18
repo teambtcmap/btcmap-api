@@ -570,7 +570,7 @@ pub async fn handle(
             user_id,
             req_ip.to_string(),
             method.as_str().unwrap_or_default().to_string(),
-            req_params.map(|it| it.as_object().map(|it| it.clone()).unwrap()),
+            req_params.map(|it| it.as_object().cloned().unwrap()),
             started_at,
             OffsetDateTime::now_utc(),
             &pool,
