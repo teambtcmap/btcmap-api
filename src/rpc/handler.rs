@@ -336,14 +336,12 @@ pub async fn handle(
                         data: None,
                     })));
                 }
-            } else {
-                if !allowed_methods(&bearer_token.roles).contains(&req.method) {
-                    return Ok(Json(RpcResponse::error(RpcError {
-                        code: 1,
-                        message: "You don't have permissions to call this method".to_string(),
-                        data: None,
-                    })));
-                }
+            } else if !allowed_methods(&bearer_token.roles).contains(&req.method) {
+                return Ok(Json(RpcResponse::error(RpcError {
+                    code: 1,
+                    message: "You don't have permissions to call this method".to_string(),
+                    data: None,
+                })));
             }
             Some(user)
         }
