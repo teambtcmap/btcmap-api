@@ -59,7 +59,7 @@ impl From<ElementEvent> for GetItem {
         GetItem {
             id: val.id,
             user_id: val.user_id,
-            element_id: element_id,
+            element_id,
             r#type: val.r#type,
             tags: val.tags,
             created_at: val.created_at,

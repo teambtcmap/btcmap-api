@@ -16,7 +16,7 @@ pub struct RestApiError {
 impl RestApiError {
     pub fn new(code: RestApiErrorCode, message: impl Into<String>) -> Self {
         Self {
-            code: code,
+            code,
             message: message.into(),
         }
     }
