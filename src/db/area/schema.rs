@@ -2,6 +2,7 @@ use crate::Result;
 use geojson::{GeoJson, Geometry};
 use rusqlite::Row;
 use serde_json::{Map, Value};
+use std::sync::OnceLock;
 use time::OffsetDateTime;
 
 pub const TABLE_NAME: &str = "area";
@@ -51,23 +52,26 @@ pub struct Area {
 }
 
 impl Area {
-    pub fn projection() -> String {
-        [
-            Columns::Id,
-            Columns::Alias,
-            Columns::BboxWest,
-            Columns::BboxSouth,
-            Columns::BboxEast,
-            Columns::BboxNorth,
-            Columns::Tags,
-            Columns::CreatedAt,
-            Columns::UpdatedAt,
-            Columns::DeletedAt,
-        ]
-        .iter()
-        .map(Columns::as_str)
-        .collect::<Vec<_>>()
-        .join(", ")
+    pub fn projection() -> &'static str {
+        static PROJECTION: OnceLock<String> = OnceLock::new();
+        PROJECTION.get_or_init(|| {
+            [
+                Columns::Id,
+                Columns::Alias,
+                Columns::BboxWest,
+                Columns::BboxSouth,
+                Columns::BboxEast,
+                Columns::BboxNorth,
+                Columns::Tags,
+                Columns::CreatedAt,
+                Columns::UpdatedAt,
+                Columns::DeletedAt,
+            ]
+            .iter()
+            .map(Columns::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+        })
     }
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {

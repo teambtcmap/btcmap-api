@@ -1,6 +1,7 @@
 use crate::service::osm::EditingApiUser;
 use rusqlite::Row;
 use serde_json::{Map, Value};
+use std::sync::OnceLock;
 use time::OffsetDateTime;
 
 pub const NAME: &str = "osm_user";
@@ -38,33 +39,50 @@ pub struct OsmUser {
 }
 
 impl OsmUser {
-    pub fn projection() -> String {
-        [
-            Columns::Id,
-            Columns::OsmData,
-            Columns::Tags,
-            Columns::CreatedAt,
-            Columns::UpdatedAt,
-            Columns::DeletedAt,
-        ]
-        .iter()
-        .map(Columns::as_str)
-        .collect::<Vec<_>>()
-        .join(", ")
+    pub fn projection() -> &'static str {
+        static PROJECTION: OnceLock<String> = OnceLock::new();
+        PROJECTION.get_or_init(|| {
+            [
+                Columns::Id,
+                Columns::OsmData,
+                Columns::Tags,
+                Columns::CreatedAt,
+                Columns::UpdatedAt,
+                Columns::DeletedAt,
+            ]
+            .iter()
+            .map(Columns::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+        })
     }
 
-    pub fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
+    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row: &Row| -> rusqlite::Result<Self> {
-            let osm_data: String = row.get(1)?;
-            let tags: String = row.get(2)?;
+            let osm_data: String = row.get(Columns::OsmData.as_str())?;
+            let tags: String = row.get(Columns::Tags.as_str())?;
+            let osm_data = serde_json::from_str(&osm_data).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
+            let tags = serde_json::from_str(&tags).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    2,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
 
             Ok(Self {
-                id: row.get(0)?,
-                osm_data: serde_json::from_str(&osm_data).unwrap(),
-                tags: serde_json::from_str(&tags).unwrap(),
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
+                id: row.get(Columns::Id.as_str())?,
+                osm_data,
+                tags,
+                created_at: row.get(Columns::CreatedAt.as_str())?,
+                updated_at: row.get(Columns::UpdatedAt.as_str())?,
+                deleted_at: row.get(Columns::DeletedAt.as_str())?,
             })
         }
     }

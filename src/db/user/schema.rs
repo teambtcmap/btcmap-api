@@ -1,6 +1,7 @@
 use rusqlite::Row;
 use serde_json::Value;
 use std::str::FromStr;
+use std::sync::OnceLock;
 
 pub const TABLE_NAME: &str = "user";
 
@@ -49,20 +50,23 @@ pub enum Role {
 }
 
 impl User {
-    pub fn projection() -> String {
-        [
-            Columns::Id,
-            Columns::Name,
-            Columns::Password,
-            Columns::Roles,
-            Columns::CreatedAt,
-            Columns::UpdatedAt,
-            Columns::DeletedAt,
-        ]
-        .iter()
-        .map(Columns::as_str)
-        .collect::<Vec<_>>()
-        .join(", ")
+    pub fn projection() -> &'static str {
+        static PROJECTION: OnceLock<String> = OnceLock::new();
+        PROJECTION.get_or_init(|| {
+            [
+                Columns::Id,
+                Columns::Name,
+                Columns::Password,
+                Columns::Roles,
+                Columns::CreatedAt,
+                Columns::UpdatedAt,
+                Columns::DeletedAt,
+            ]
+            .iter()
+            .map(Columns::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+        })
     }
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {

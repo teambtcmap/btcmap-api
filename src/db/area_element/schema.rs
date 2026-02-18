@@ -1,4 +1,5 @@
 use rusqlite::Row;
+use std::sync::OnceLock;
 use time::OffsetDateTime;
 
 pub const TABLE_NAME: &str = "area_element";
@@ -36,30 +37,33 @@ pub struct AreaElement {
 }
 
 impl AreaElement {
-    pub fn projection() -> String {
-        [
-            Columns::Id,
-            Columns::AreaId,
-            Columns::ElementId,
-            Columns::CreatedAt,
-            Columns::UpdatedAt,
-            Columns::DeletedAt,
-        ]
-        .iter()
-        .map(Columns::as_str)
-        .collect::<Vec<_>>()
-        .join(", ")
+    pub fn projection() -> &'static str {
+        static PROJECTION: OnceLock<String> = OnceLock::new();
+        PROJECTION.get_or_init(|| {
+            [
+                Columns::Id,
+                Columns::AreaId,
+                Columns::ElementId,
+                Columns::CreatedAt,
+                Columns::UpdatedAt,
+                Columns::DeletedAt,
+            ]
+            .iter()
+            .map(Columns::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+        })
     }
 
-    pub fn mapper() -> fn(&Row) -> rusqlite::Result<AreaElement> {
+    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<AreaElement> {
         |row: &Row| -> rusqlite::Result<AreaElement> {
             Ok(AreaElement {
-                id: row.get(0)?,
-                area_id: row.get(1)?,
-                element_id: row.get(2)?,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
+                id: row.get(Columns::Id.as_str())?,
+                area_id: row.get(Columns::AreaId.as_str())?,
+                element_id: row.get(Columns::ElementId.as_str())?,
+                created_at: row.get(Columns::CreatedAt.as_str())?,
+                updated_at: row.get(Columns::UpdatedAt.as_str())?,
+                deleted_at: row.get(Columns::DeletedAt.as_str())?,
             })
         }
     }
