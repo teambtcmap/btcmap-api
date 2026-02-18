@@ -23,7 +23,7 @@ pub struct Res {
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let error_cause_mask = "Invalid credentials";
     let start_time = OffsetDateTime::now_utc();
-    let user = db::user::queries::select_by_name(params.username, &pool)
+    let user = db::user::queries::select_by_name(params.username, pool)
         .await
         .map_err(|_| error_cause_mask)?;
     let password_hash = PasswordHash::new(&user.password).map_err(|_| error_cause_mask)?;
@@ -36,7 +36,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         params.label.unwrap_or_default(),
         token.clone(),
         vec![],
-        &pool,
+        pool,
     )
     .await?;
     let time_passed_ms = (OffsetDateTime::now_utc() - start_time).whole_milliseconds();
