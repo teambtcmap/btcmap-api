@@ -273,8 +273,11 @@ pub async fn handle(
     pool: Data<Pool>,
     conf: Data<Conf>,
 ) -> Result<Json<RpcResponse>> {
-    let conn_info = req.connection_info();
-    let req_ip = conn_info.realip_remote_addr().unwrap_or("0.0.0.0");
+    let req_ip = req
+        .connection_info()
+        .realip_remote_addr()
+        .unwrap_or("0.0.0.0")
+        .to_owned();
 
     let started_at = OffsetDateTime::now_utc();
     let matrix_client = service::matrix::client(&pool).await;
