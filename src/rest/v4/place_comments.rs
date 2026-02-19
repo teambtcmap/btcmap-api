@@ -121,6 +121,10 @@ pub async fn post(
     conf: Data<Conf>,
     pool: Data<Pool>,
 ) -> RestResult<PostResponse> {
+    if args.comment.trim().is_empty() {
+        return Err(RestApiError::invalid_input("Comment cannot be empty"));
+    }
+
     let element = db::element::queries::select_by_id_or_osm_id(&args.place_id, &pool)
         .await
         .map_err(|e| match e {
@@ -149,4 +153,50 @@ pub async fn post(
         invoice_id: invoice.uuid,
         invoice: invoice.payment_request,
     }))
+}
+
+#[cfg(test)]
+mod test {
+    use crate::rest::error::RestApiError;
+    use crate::rest::error::RestResult;
+    use actix_web::post;
+    use actix_web::test::TestRequest;
+    use actix_web::web::scope;
+    use actix_web::web::Json;
+    use actix_web::{test, App};
+
+    #[derive(serde::Deserialize)]
+    pub struct PostArgs {
+        pub comment: String,
+    }
+
+    #[post("")]
+    async fn post(args: Json<PostArgs>) -> RestResult<String> {
+        if args.comment.trim().is_empty() {
+            return Err(RestApiError::invalid_input("Comment cannot be empty"));
+        }
+        Ok(Json("ok".to_string()))
+    }
+
+    #[test]
+    async fn empty_comment_returns_400() {
+        let app = test::init_service(App::new().service(scope("/comments").service(post))).await;
+        let req = TestRequest::post()
+            .uri("/comments")
+            .set_payload(r#"{"comment": ""}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 400);
+    }
+
+    #[test]
+    async fn whitespace_only_comment_returns_400() {
+        let app = test::init_service(App::new().service(scope("/comments").service(post))).await;
+        let req = TestRequest::post()
+            .uri("/comments")
+            .set_payload(r#"{"comment": "   "}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 400);
+    }
 }

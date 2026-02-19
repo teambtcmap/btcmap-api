@@ -34,6 +34,10 @@ impl RestApiError {
             "Database query failed. Contact BTC Map team to resolve.",
         )
     }
+
+    pub fn invalid_input(message: impl Into<String>) -> Self {
+        Self::new(RestApiErrorCode::InvalidInput, message.into())
+    }
 }
 
 #[derive(Debug)]
