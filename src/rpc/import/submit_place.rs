@@ -1,6 +1,6 @@
 use crate::{
-    db::{self},
     db::place_submission::blocking_queries::InsertArgs,
+    db::{self},
     Result,
 };
 use deadpool_sqlite::Pool;

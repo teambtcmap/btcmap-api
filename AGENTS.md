@@ -42,6 +42,9 @@ cargo test get_empty_array
 cargo test get_not_empty_array
 ```
 
+### Git commits
+Always run cargo fmt before commiting changes
+
 ## Code Structure
 
 ```

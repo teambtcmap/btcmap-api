@@ -1,20 +1,17 @@
 use crate::{
-    db::place_submission::{blocking_queries, blocking_queries::InsertArgs, schema::PlaceSubmission},
+    db::place_submission::{
+        blocking_queries, blocking_queries::InsertArgs, schema::PlaceSubmission,
+    },
     Result,
 };
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use time::OffsetDateTime;
 
-pub async fn insert(
-    args: InsertArgs,
-    pool: &Pool,
-) -> Result<PlaceSubmission> {
+pub async fn insert(args: InsertArgs, pool: &Pool) -> Result<PlaceSubmission> {
     pool.get()
         .await?
-        .interact(move |conn| {
-            blocking_queries::insert(&args, conn)
-        })
+        .interact(move |conn| blocking_queries::insert(&args, conn))
         .await?
 }
 

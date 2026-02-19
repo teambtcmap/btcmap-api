@@ -561,7 +561,10 @@ pub async fn handle(
         ),
         RpcMethod::SendMatrixMessage => {
             super::matrix::send_matrix_message::run(params(req.params)?, &matrix_client).await;
-            Ok(RpcResponse::success(req.id.clone(), serde_json::Value::Null))
+            Ok(RpcResponse::success(
+                req.id.clone(),
+                serde_json::Value::Null,
+            ))
         }
     }?;
 
