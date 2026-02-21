@@ -18,7 +18,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use strum::VariantArray;
-use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -273,13 +272,6 @@ pub async fn handle(
     pool: Data<Pool>,
     conf: Data<Conf>,
 ) -> Result<Json<RpcResponse>> {
-    let req_ip = req
-        .connection_info()
-        .realip_remote_addr()
-        .unwrap_or("0.0.0.0")
-        .to_owned();
-
-    let started_at = OffsetDateTime::now_utc();
     let matrix_client = service::matrix::client(&pool).await;
     let headers = req.headers();
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
@@ -349,13 +341,9 @@ pub async fn handle(
         None => None,
     };
 
-    let user_id = user.as_ref().map(|it| it.id);
-
     if req.jsonrpc != "2.0" {
         return Ok(Json(RpcResponse::invalid_request(Value::Null)));
     }
-
-    let req_params = req.params.clone();
 
     let res: RpcResponse = match req.method {
         RpcMethod::Whoami => RpcResponse::from(
@@ -567,19 +555,6 @@ pub async fn handle(
             ))
         }
     }?;
-
-    if let Some(user_id) = user_id {
-        db::rpc_call::queries::insert(
-            user_id,
-            req_ip.to_string(),
-            method.as_str().unwrap_or_default().to_string(),
-            req_params.map(|it| it.as_object().cloned().unwrap()),
-            started_at,
-            OffsetDateTime::now_utc(),
-            &pool,
-        )
-        .await?;
-    }
 
     Ok(Json(res))
 }

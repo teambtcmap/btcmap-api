@@ -13,10 +13,9 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod feed;
-mod log;
 mod rpc;
+use crate::service::log::Log;
 use actix_web::web::{scope, Data};
-use log::Log;
 mod db;
 mod og;
 mod rest;
@@ -29,7 +28,7 @@ async fn main() -> Result<()> {
     let start_time = Instant::now();
     init_env();
     let pool = pool()?;
-    let log_pool = log::db::pool()?;
+    let log_pool = db::request::log_pool()?;
     pool.get().await?.interact(db::migration::run).await??;
     service::event::enforce_v2_compat(&pool).await?;
     service::report::enforce_v2_compat(&pool).await?;
@@ -54,6 +53,7 @@ async fn main() -> Result<()> {
             .service(og::element::get_element)
             .service(
                 scope("rpc")
+                    .app_data(Data::new(log_pool.clone()))
                     .wrap(ErrorHandlers::new().default_handler(rpc::handler::handle_rpc_error))
                     .service(rpc::handler::handle),
             )

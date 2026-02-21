@@ -13,7 +13,7 @@ pub mod migration;
 pub mod osm_user;
 pub mod place_submission;
 pub mod report;
-pub mod rpc_call;
+pub mod request;
 pub mod user;
 use crate::{service::filesystem::data_dir_file_path, Result};
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};

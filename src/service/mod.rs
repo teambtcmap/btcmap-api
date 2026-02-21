@@ -7,6 +7,7 @@ pub mod event;
 pub mod filesystem;
 pub mod gitea;
 pub mod invoice;
+pub mod log;
 pub mod matrix;
 pub mod og;
 pub mod osm;
