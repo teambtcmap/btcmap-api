@@ -1,8 +1,7 @@
 use crate::service::sync::MergeResult;
-use crate::service::{self};
+use crate::service::{self, matrix};
 use crate::Result;
 use deadpool_sqlite::Pool;
-use matrix_sdk::Client;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -12,9 +11,10 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
-pub async fn run(pool: &Pool, matrix_client: Option<Client>) -> Result<Res> {
+pub async fn run(pool: &Pool) -> Result<Res> {
     let overpass_res = service::overpass::query_bitcoin_merchants().await?;
     let overpass_elements_len = overpass_res.elements.len();
+    let matrix_client = matrix::try_client(pool);
     let merge_res =
         service::sync::merge_overpass_elements(overpass_res.elements, pool, &matrix_client).await?;
     Ok(Res {

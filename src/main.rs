@@ -35,6 +35,8 @@ async fn main() -> Result<()> {
     service::area::generate_bbox(&pool).await?;
     let conf = db::conf::queries::select(&pool).await?;
 
+    service::matrix::init(&pool);
+
     let startup_duration = start_time.elapsed();
     info!(
         "Application startup completed in {:.3} seconds",

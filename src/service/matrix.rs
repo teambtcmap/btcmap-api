@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf},
+    db::{self},
     error::Error,
 };
 use deadpool_sqlite::Pool;
@@ -7,7 +7,7 @@ use matrix_sdk::{
     config::SyncSettings, ruma::events::room::message::RoomMessageEventContent, Client,
 };
 use tokio::sync::OnceCell;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 pub static ROOM_PLACE_COMMENTS: &str = "!yWWvFhceozjhXmtksv:matrix.org";
 pub static ROOM_PLACE_IMPORT: &str = "!EpPJoiZzeXiZkclPEg:matrix.org";
@@ -17,27 +17,33 @@ pub static ROOM_PLACE_BOOSTS: &str = "!udVXJdCMPiTMcczvgY:matrix.org";
 
 static MATRIX_CLIENT: OnceCell<Option<Client>> = OnceCell::const_new();
 
-pub async fn client(pool: &Pool) -> Option<Client> {
-    MATRIX_CLIENT
-        .get_or_init(|| async {
-            let conf = db::conf::queries::select(pool).await.unwrap();
-            info!("lazy initializing matrix client...");
-            match init_client(&conf).await {
-                Some(client) => {
-                    info!("matrix client initialized successfully");
-                    Some(client)
+pub fn init(pool: &Pool) {
+    let pool = pool.clone();
+    tokio::spawn(async move {
+        MATRIX_CLIENT
+            .get_or_init(|| async {
+                info!("initializing matrix...");
+                match _init(&pool).await {
+                    Some(client) => {
+                        info!("matrix client initialized successfully");
+                        Some(client)
+                    }
+                    None => {
+                        warn!("failed to initialize matrix client");
+                        None
+                    }
                 }
-                None => {
-                    warn!("failed to initialize matrix client");
-                    None
-                }
-            }
-        })
-        .await
-        .clone()
+            })
+            .await
+            .clone()
+    });
 }
 
-async fn init_client(conf: &Conf) -> Option<Client> {
+async fn _init(pool: &Pool) -> Option<Client> {
+    let Ok(conf) = db::conf::queries::select(&pool).await else {
+        error!("failed to load configuration");
+        return None;
+    };
     if conf.matrix_bot_password.is_empty() {
         warn!("matrix bot password is not set, disabling matrix integration");
         return None;
@@ -77,6 +83,10 @@ async fn init_client(conf: &Conf) -> Option<Client> {
         }
     };
     Some(client)
+}
+
+pub fn try_client(_pool: &Pool) -> Option<Client> {
+    MATRIX_CLIENT.get().and_then(|c| c.clone())
 }
 
 pub fn send_message(client: &Option<Client>, room_id: &str, message: &str) {

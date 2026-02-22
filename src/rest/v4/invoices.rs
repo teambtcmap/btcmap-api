@@ -19,7 +19,7 @@ pub struct GetByIdRes {
 
 #[get("{id}")]
 pub async fn get_by_id(uuid: Path<String>, pool: Data<Pool>) -> Res<GetByIdRes> {
-    let matrix_client = service::matrix::client(&pool).await;
+    let matrix_client = service::matrix::try_client(&pool);
     let mut invoice = db::invoice::queries::select_by_uuid(uuid.as_str(), &pool)
         .await
         .map_err(|e| match e {

@@ -1,6 +1,6 @@
 use crate::{
     db::{self, conf::schema::Conf, user::schema::Role},
-    service, Result,
+    Result,
 };
 use actix_web::{
     dev::ServiceResponse,
@@ -272,7 +272,6 @@ pub async fn handle(
     pool: Data<Pool>,
     conf: Data<Conf>,
 ) -> Result<Json<RpcResponse>> {
-    let matrix_client = service::matrix::client(&pool).await;
     let headers = req.headers();
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
         let error_data = json!("Request body is not a valid JSON object");
@@ -391,10 +390,9 @@ pub async fn handle(
             req.id.clone(),
             super::generate_element_issues::run(&pool).await?,
         ),
-        RpcMethod::SyncElements => RpcResponse::from(
-            req.id.clone(),
-            super::sync_elements::run(&pool, matrix_client).await?,
-        ),
+        RpcMethod::SyncElements => {
+            RpcResponse::from(req.id.clone(), super::sync_elements::run(&pool).await?)
+        }
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
             super::generate_element_icons::run(params(req.params)?, &pool).await?,
@@ -498,7 +496,7 @@ pub async fn handle(
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
-            super::invoice::get_invoice::run(params(req.params)?, &pool, matrix_client).await?,
+            super::invoice::get_invoice::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::CreateInvoice => RpcResponse::from(
             req.id.clone(),
@@ -506,7 +504,7 @@ pub async fn handle(
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),
-            super::sync_unpaid_invoices::run(&pool, matrix_client).await?,
+            super::sync_unpaid_invoices::run(&pool).await?,
         ),
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),
@@ -545,10 +543,10 @@ pub async fn handle(
         ),
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
             req.id.clone(),
-            super::import::sync_submitted_places::run(&pool, &matrix_client).await?,
+            super::import::sync_submitted_places::run(&pool).await?,
         ),
         RpcMethod::SendMatrixMessage => {
-            super::matrix::send_matrix_message::run(params(req.params)?, &matrix_client).await;
+            super::matrix::send_matrix_message::run(params(req.params)?, &pool).await;
             Ok(RpcResponse::success(
                 req.id.clone(),
                 serde_json::Value::Null,
