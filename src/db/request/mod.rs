@@ -33,8 +33,7 @@ pub fn log_pool() -> Result<LogPool> {
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let conn = conn.lock().unwrap();
-            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
-            conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+            crate::db::configure_connection(&conn);
             crate::db::request::migrations::v0_to_v1(&conn).unwrap();
             Ok(())
         })))
@@ -57,6 +56,7 @@ pub mod test {
             .max_size(pool_size)
             .post_create(Hook::Fn(Box::new(|conn, _| {
                 let conn = conn.lock().unwrap();
+                crate::db::configure_connection(&conn);
                 crate::db::request::migrations::v0_to_v1(&conn).unwrap();
                 Ok(())
             })))

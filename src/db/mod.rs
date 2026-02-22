@@ -17,6 +17,18 @@ pub mod request;
 pub mod user;
 use crate::{service::filesystem::data_dir_file_path, Result};
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
+use rusqlite::Connection;
+
+pub fn configure_connection(conn: &Connection) {
+    // WAL + NORMAL combination provides good concurrency, good crash safety, decent performance and simple maintenance
+    conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+    conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+    // Foreign keys force data integrity
+    conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+    // 5 seconds is a common default value in production systems
+    // SQLite will make make multiple retries during that time window
+    conn.pragma_update(None, "busy_timeout", 5000).unwrap();
+}
 
 pub fn pool() -> Result<Pool> {
     let pool_size = std::thread::available_parallelism()
@@ -27,14 +39,7 @@ pub fn pool() -> Result<Pool> {
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let conn = conn.lock().unwrap();
-            // WAL + NORMAL combination provides good concurrency, good crash safety, decent performance and simple maintenance
-            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
-            conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
-            // Foreign keys force data integrity
-            conn.pragma_update(None, "foreign_keys", "ON").unwrap();
-            // 5 seconds is a common default value in production systems
-            // SQLite will make make multiple retries during that time window
-            conn.pragma_update(None, "busy_timeout", 5000).unwrap();
+            configure_connection(&conn);
             Ok(())
         })))
         .build()
