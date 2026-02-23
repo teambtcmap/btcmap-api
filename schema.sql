@@ -139,16 +139,6 @@ CREATE TABLE place_submission(
     closed_at TEXT,
     deleted_at TEXT
 ) STRICT;
-CREATE TABLE rpc_call (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER REFERENCES user(id),
-    ip TEXT NOT NULL,
-    method TEXT NOT NULL,
-    params_json TEXT,
-    created_at TEXT NOT NULL,
-    processed_at TEXT NOT NULL,
-    duration_ns INTEGER NOT NULL
-) STRICT;
 CREATE TRIGGER user_updated_at UPDATE OF osm_data, tags, created_at, deleted_at ON "osm_user"
 BEGIN
     UPDATE "osm_user" SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
