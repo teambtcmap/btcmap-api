@@ -1,3 +1,4 @@
+use crate::db::log::request::blocking_queries::InsertArgs;
 use crate::db::{self, log::LogPool};
 use actix_http::h1;
 use actix_web::{
@@ -83,14 +84,16 @@ where
                 return Ok(res);
             };
             db::log::request::queries::insert(
-                &addr,
-                user_agent.as_deref(),
-                None,
-                &path,
-                query,
-                body_str,
-                response_code,
-                time_ns as i64,
+                InsertArgs {
+                    ip: addr,
+                    user_agent: user_agent,
+                    user_id: None,
+                    path: path,
+                    query: query.map(ToString::to_string),
+                    body: body_str.map(ToString::to_string),
+                    response_code,
+                    processing_time_ns: time_ns as i64,
+                },
                 &pool,
             )
             .await?;

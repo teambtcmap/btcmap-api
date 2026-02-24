@@ -2,17 +2,18 @@ use super::schema::{self, Columns};
 use crate::Result;
 use rusqlite::{named_params, Connection};
 
-pub fn insert(
-    ip: &str,
-    user_agent: Option<&str>,
-    user_id: Option<i64>,
-    path: &str,
-    query: Option<&str>,
-    body: Option<&str>,
-    response_code: i64,
-    processing_time_ns: i64,
-    conn: &Connection,
-) -> Result<()> {
+pub struct InsertArgs {
+    pub ip: String,
+    pub user_agent: Option<String>,
+    pub user_id: Option<i64>,
+    pub path: String,
+    pub query: Option<String>,
+    pub body: Option<String>,
+    pub response_code: i64,
+    pub processing_time_ns: i64,
+}
+
+pub fn insert(request: InsertArgs, conn: &Connection) -> Result<()> {
     let sql = format!(
         r#"
             INSERT INTO {table} (
@@ -34,7 +35,7 @@ pub fn insert(
                 :{col_response_code},
                 :{col_processing_time_ns}
              );
-         "#,
+          "#,
         table = schema::TABLE_NAME,
         col_ip = Columns::Ip.as_str(),
         col_user_agent = Columns::UserAgent.as_str(),
@@ -48,14 +49,14 @@ pub fn insert(
     conn.execute(
         &sql,
         named_params! {
-            ":ip": ip,
-            ":user_agent": user_agent,
-            ":user_id": user_id,
-            ":path": path,
-            ":query": query,
-            ":body": body,
-            ":response_code": response_code,
-            ":processing_time_ns": processing_time_ns,
+            ":ip": request.ip,
+            ":user_agent": request.user_agent,
+            ":user_id": request.user_id,
+            ":path": request.path,
+            ":query": request.query,
+            ":body": request.body,
+            ":response_code": request.response_code,
+            ":processing_time_ns": request.processing_time_ns,
         },
     )?;
     Ok(())
@@ -63,6 +64,7 @@ pub fn insert(
 
 #[cfg(test)]
 mod test {
+    use crate::db::log::request::blocking_queries::InsertArgs;
     use crate::db::log::request::schema::Request;
     use crate::db::log::test::conn;
 
@@ -71,14 +73,16 @@ mod test {
         let conn = conn();
 
         super::insert(
-            "192.168.1.1",
-            Some("Mozilla/5.0"),
-            Some(123),
-            "/api/v1/places",
-            Some("lat=40.7128&lon=-74.0060"),
-            Some(r#"{"key": "value"}"#),
-            200,
-            15000000,
+            InsertArgs {
+                ip: "192.168.1.1".to_string(),
+                user_agent: Some("Mozilla/5.0".to_string()),
+                user_id: Some(123),
+                path: "/api/v1/places".to_string(),
+                query: Some("lat=40.7128&lon=-74.0060".to_string()),
+                body: Some(r#"{"key": "value"}"#.to_string()),
+                response_code: 200,
+                processing_time_ns: 15000000,
+            },
             &conn,
         )?;
 
@@ -106,14 +110,16 @@ mod test {
         let conn = conn();
 
         super::insert(
-            "10.0.0.1",
-            None,
-            None,
-            "/api/v1/status",
-            None,
-            None,
-            404,
-            5000000,
+            InsertArgs {
+                ip: "10.0.0.1".to_string(),
+                user_agent: None,
+                user_id: None,
+                path: "/api/v1/status".to_string(),
+                query: None,
+                body: None,
+                response_code: 404,
+                processing_time_ns: 5000000,
+            },
             &conn,
         )?;
 
@@ -141,26 +147,30 @@ mod test {
         let conn = conn();
 
         super::insert(
-            "192.168.1.1",
-            Some("Mozilla/5.0"),
-            Some(1),
-            "/api/v1/places",
-            None,
-            None,
-            200,
-            1000000,
+            InsertArgs {
+                ip: "192.168.1.1".to_string(),
+                user_agent: Some("Mozilla/5.0".to_string()),
+                user_id: Some(1),
+                path: "/api/v1/places".to_string(),
+                query: None,
+                body: None,
+                response_code: 200,
+                processing_time_ns: 1000000,
+            },
             &conn,
         )?;
 
         super::insert(
-            "192.168.1.2",
-            Some("curl/7.68.0"),
-            None,
-            "/api/v1/users",
-            None,
-            None,
-            401,
-            2000000,
+            InsertArgs {
+                ip: "192.168.1.2".to_string(),
+                user_agent: Some("curl/7.68.0".to_string()),
+                user_id: None,
+                path: "/api/v1/users".to_string(),
+                query: None,
+                body: None,
+                response_code: 401,
+                processing_time_ns: 2000000,
+            },
             &conn,
         )?;
 

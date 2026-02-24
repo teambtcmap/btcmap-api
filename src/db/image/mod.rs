@@ -21,7 +21,7 @@ impl std::ops::Deref for ImagePool {
         &self.0
     }
 }
-    
+
 pub fn pool() -> Result<ImagePool> {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get() * 2)

@@ -1,5 +1,7 @@
 pub const TABLE_NAME: &str = "request";
 
+use std::sync::OnceLock;
+
 pub enum Columns {
     Id,
     Date,
@@ -47,7 +49,25 @@ pub struct Request {
 #[allow(dead_code)]
 impl Request {
     pub fn projection() -> &'static str {
-        "id, date, ip, user_agent, user_id, path, query, body, response_code, processing_time_ns"
+        static PROJECTION: OnceLock<String> = OnceLock::new();
+        PROJECTION.get_or_init(|| {
+            [
+                Columns::Id,
+                Columns::Date,
+                Columns::Ip,
+                Columns::UserAgent,
+                Columns::UserId,
+                Columns::Path,
+                Columns::Query,
+                Columns::Body,
+                Columns::ResponseCode,
+                Columns::ProcessingTimeNs,
+            ]
+            .iter()
+            .map(Columns::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+        })
     }
 
     pub const fn mapper() -> fn(&rusqlite::Row) -> rusqlite::Result<Self> {
