@@ -18,6 +18,7 @@ pub enum Error {
     Staticmap(staticmap::Error),
     Blocking(actix_web::error::BlockingError),
     Matrix(String),
+    Image(image::error::ImageError),
 }
 
 impl Display for Error {
@@ -39,6 +40,7 @@ impl Display for Error {
             Error::Staticmap(err) => err.fmt(f),
             Error::Blocking(err) => err.fmt(f),
             Error::Matrix(err) => write!(f, "{}", err),
+            Error::Image(err) => err.fmt(f),
         }
     }
 }
@@ -136,5 +138,11 @@ impl From<staticmap::Error> for Error {
 impl From<actix_web::error::BlockingError> for Error {
     fn from(error: actix_web::error::BlockingError) -> Self {
         Error::Blocking(error)
+    }
+}
+
+impl From<image::error::ImageError> for Error {
+    fn from(error: image::error::ImageError) -> Self {
+        Error::Image(error)
     }
 }

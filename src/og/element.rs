@@ -21,7 +21,7 @@ pub async fn get_element(
     {
         if cached.version >= current_version {
             return Ok(HttpResponse::Ok()
-                .content_type("image/png")
+                .content_type("image/jpeg")
                 .body(cached.image_data));
         }
         db::image::og::queries::delete(element.id, &image_pool).await?;
@@ -32,6 +32,6 @@ pub async fn get_element(
         .await?;
 
     Ok(HttpResponse::Ok()
-        .content_type("image/png")
+        .content_type("image/jpeg")
         .body(image_data))
 }

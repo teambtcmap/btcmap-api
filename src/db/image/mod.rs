@@ -33,6 +33,7 @@ pub fn pool() -> Result<ImagePool> {
             let conn = conn.lock().unwrap();
             crate::db::configure_connection(&conn);
             migrations::v0_to_v1(&conn).unwrap();
+            migrations::v1_to_v2(&conn).unwrap();
             Ok(())
         })));
     let pool = config.build()?;

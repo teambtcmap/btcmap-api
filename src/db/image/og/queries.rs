@@ -3,7 +3,12 @@ use super::schema::OgImage;
 use crate::Result;
 use deadpool_sqlite::Pool;
 
-pub async fn insert(element_id: i64, version: i64, image_data: Vec<u8>, pool: &Pool) -> Result<OgImage> {
+pub async fn insert(
+    element_id: i64,
+    version: i64,
+    image_data: Vec<u8>,
+    pool: &Pool,
+) -> Result<OgImage> {
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::insert(element_id, version, image_data, conn))
