@@ -41,32 +41,12 @@ pub fn pool() -> Result<LogPool> {
 
 #[cfg(test)]
 pub mod test {
-    use super::LogPool;
-    use crate::db::log::migrations;
-    use deadpool_sqlite::{Config, Hook, Pool, Runtime};
+    use super::super::log::migrations;
     use rusqlite::Connection;
-
-    pub fn pool() -> LogPool {
-        let pool_size = std::thread::available_parallelism()
-            .map(|n| n.get() * 2)
-            .unwrap_or(8);
-        let pool = Config::new(":memory:")
-            .builder(Runtime::Tokio1)
-            .unwrap()
-            .max_size(pool_size)
-            .post_create(Hook::Fn(Box::new(|conn, _| {
-                let conn = conn.lock().unwrap();
-                super::super::configure_connection(&conn);
-                migrations::v0_to_v1(&conn).unwrap();
-                Ok(())
-            })))
-            .build()
-            .unwrap();
-        LogPool::new(pool)
-    }
 
     pub fn conn() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
+        super::super::configure_connection(&conn);
         migrations::v0_to_v1(&conn).unwrap();
         conn
     }

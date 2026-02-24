@@ -21,6 +21,7 @@ impl Columns {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct OgImage {
     pub element_id: i64,
