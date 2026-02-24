@@ -86,9 +86,9 @@ where
             db::log::request::queries::insert(
                 InsertArgs {
                     ip: addr,
-                    user_agent: user_agent,
+                    user_agent,
                     user_id: None,
-                    path: path,
+                    path,
                     query: query.map(ToString::to_string),
                     body: body_str.map(ToString::to_string),
                     response_code,
