@@ -8,7 +8,7 @@ use tracing::warn;
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-struct Migration(i16, String);
+pub struct Migration(pub i16, pub String);
 
 impl fmt::Display for Migration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
