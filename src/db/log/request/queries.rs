@@ -1,5 +1,6 @@
+use super::super::LogPool;
 use super::blocking_queries;
-use crate::{db::request::LogPool, Result};
+use crate::Result;
 
 pub async fn insert(
     ip: &str,

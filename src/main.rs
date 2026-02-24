@@ -1,7 +1,6 @@
 use actix_web::error::InternalError;
 use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
 use actix_web::{web, App, HttpServer, ResponseError};
-use db::pool;
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 use tracing::info;
@@ -27,16 +26,21 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 async fn main() -> Result<()> {
     let start_time = Instant::now();
     init_env();
-    let pool = pool()?;
-    let image_pool = db::image::pool()?;
-    let log_pool = db::request::log_pool()?;
-    pool.get().await?.interact(db::migration::run).await??;
-    service::event::enforce_v2_compat(&pool).await?;
-    service::report::enforce_v2_compat(&pool).await?;
-    service::area::generate_bbox(&pool).await?;
-    let conf = db::conf::queries::select(&pool).await?;
 
-    service::matrix::init(&pool);
+    let main_pool = db::pool()?;
+    let image_pool = db::image::pool()?;
+    let log_pool = db::log::pool()?;
+    main_pool
+        .get()
+        .await?
+        .interact(db::migration::run)
+        .await??;
+
+    service::event::enforce_v2_compat(&main_pool).await?;
+    service::report::enforce_v2_compat(&main_pool).await?;
+    service::area::generate_bbox(&main_pool).await?;
+    let conf = db::conf::queries::select(&main_pool).await?;
+    service::matrix::init(&main_pool);
 
     let startup_duration = start_time.elapsed();
     info!(
@@ -50,7 +54,7 @@ async fn main() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .wrap(from_fn(service::ban::check_if_banned))
-            .app_data(Data::new(pool.clone()))
+            .app_data(Data::new(main_pool.clone()))
             .app_data(Data::new(image_pool.clone()))
             .app_data(Data::new(log_pool.clone()))
             .app_data(Data::new(conf.clone()))

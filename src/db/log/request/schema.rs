@@ -67,3 +67,37 @@ impl Request {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::Columns;
+
+    #[test]
+    fn columns_as_str() {
+        assert_eq!(Columns::Id.as_str(), "id");
+        assert_eq!(Columns::Date.as_str(), "date");
+        assert_eq!(Columns::Ip.as_str(), "ip");
+        assert_eq!(Columns::UserAgent.as_str(), "user_agent");
+        assert_eq!(Columns::UserId.as_str(), "user_id");
+        assert_eq!(Columns::Path.as_str(), "path");
+        assert_eq!(Columns::Query.as_str(), "query");
+        assert_eq!(Columns::Body.as_str(), "body");
+        assert_eq!(Columns::ResponseCode.as_str(), "response_code");
+        assert_eq!(Columns::ProcessingTimeNs.as_str(), "processing_time_ns");
+    }
+
+    #[test]
+    fn request_projection() {
+        let projection = super::Request::projection();
+        assert!(projection.contains("id"));
+        assert!(projection.contains("date"));
+        assert!(projection.contains("ip"));
+        assert!(projection.contains("user_agent"));
+        assert!(projection.contains("user_id"));
+        assert!(projection.contains("path"));
+        assert!(projection.contains("query"));
+        assert!(projection.contains("body"));
+        assert!(projection.contains("response_code"));
+        assert!(projection.contains("processing_time_ns"));
+    }
+}

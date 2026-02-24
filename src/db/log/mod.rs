@@ -1,7 +1,5 @@
-pub(super) mod blocking_queries;
-pub(super) mod migrations;
-pub mod queries;
-pub mod schema;
+mod migrations;
+pub mod request;
 
 use crate::{service::filesystem::data_dir_file_path, Result};
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
@@ -24,7 +22,7 @@ impl std::ops::Deref for LogPool {
     }
 }
 
-pub fn log_pool() -> Result<LogPool> {
+pub fn pool() -> Result<LogPool> {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get() * 2)
         .unwrap_or(8);
@@ -33,8 +31,8 @@ pub fn log_pool() -> Result<LogPool> {
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let conn = conn.lock().unwrap();
-            crate::db::configure_connection(&conn);
-            crate::db::request::migrations::v0_to_v1(&conn).unwrap();
+            super::configure_connection(&conn);
+            migrations::v0_to_v1(&conn).unwrap();
             Ok(())
         })))
         .build()?;
@@ -44,9 +42,11 @@ pub fn log_pool() -> Result<LogPool> {
 #[cfg(test)]
 pub mod test {
     use super::LogPool;
-    use deadpool_sqlite::{Config, Hook, Runtime};
+    use crate::db::log::migrations;
+    use deadpool_sqlite::{Config, Hook, Pool, Runtime};
+    use rusqlite::Connection;
 
-    pub fn log_pool() -> LogPool {
+    pub fn pool() -> LogPool {
         let pool_size = std::thread::available_parallelism()
             .map(|n| n.get() * 2)
             .unwrap_or(8);
@@ -56,12 +56,18 @@ pub mod test {
             .max_size(pool_size)
             .post_create(Hook::Fn(Box::new(|conn, _| {
                 let conn = conn.lock().unwrap();
-                crate::db::configure_connection(&conn);
-                crate::db::request::migrations::v0_to_v1(&conn).unwrap();
+                super::super::configure_connection(&conn);
+                migrations::v0_to_v1(&conn).unwrap();
                 Ok(())
             })))
             .build()
             .unwrap();
         LogPool::new(pool)
+    }
+
+    pub fn conn() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        migrations::v0_to_v1(&conn).unwrap();
+        conn
     }
 }

@@ -1,4 +1,4 @@
-use crate::db::request::{queries, LogPool};
+use crate::db::{self, log::LogPool};
 use actix_http::h1;
 use actix_web::{
     dev::{self, forward_ready, Payload, Service, ServiceRequest, ServiceResponse, Transform},
@@ -82,7 +82,7 @@ where
             let Some(addr) = addr else {
                 return Ok(res);
             };
-            queries::insert(
+            db::log::request::queries::insert(
                 &addr,
                 user_agent.as_deref(),
                 None,
