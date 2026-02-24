@@ -8,6 +8,7 @@ pub mod element_comment;
 pub mod element_event;
 pub mod element_issue;
 pub mod event;
+pub mod image;
 pub mod invoice;
 pub mod migration;
 pub mod osm_user;
