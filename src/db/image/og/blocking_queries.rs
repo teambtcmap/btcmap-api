@@ -61,3 +61,73 @@ pub fn delete(element_id: i64, conn: &Connection) -> Result<()> {
     conn.execute(&sql, params![element_id])?;
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use crate::db::image::test::conn;
+    use crate::Result;
+
+    #[test]
+    fn insert() -> Result<()> {
+        let conn = conn();
+        let element_id = 1i64;
+        let version = 1i64;
+        let image_data = vec![1, 2, 3, 4, 5];
+
+        let _inserted = super::insert(element_id, version, image_data.clone(), &conn)?;
+        let selected = super::select_by_element_id(element_id, &conn)?;
+
+        assert!(selected.is_some());
+        let selected = selected.unwrap();
+        assert_eq!(selected.element_id, element_id);
+        assert_eq!(selected.version, version);
+        assert_eq!(selected.image_data, image_data);
+        assert!(selected.created_at > time::OffsetDateTime::from_unix_timestamp(0).unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_exists() -> Result<()> {
+        let conn = conn();
+        let element_id = 1i64;
+        let version = 1i64;
+        let image_data = vec![1, 2, 3];
+
+        super::insert(element_id, version, image_data, &conn)?;
+        let result = super::select_by_element_id(element_id, &conn)?;
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().element_id, element_id);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_not_exists() -> Result<()> {
+        let conn = conn();
+        let result = super::select_by_element_id(9999i64, &conn)?;
+
+        assert!(result.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn delete() -> Result<()> {
+        let conn = conn();
+        let element_id = 1i64;
+        let version = 1i64;
+        let image_data = vec![1, 2, 3];
+
+        super::insert(element_id, version, image_data, &conn)?;
+        let before_delete = super::select_by_element_id(element_id, &conn)?;
+        assert!(before_delete.is_some());
+
+        super::delete(element_id, &conn)?;
+        let after_delete = super::select_by_element_id(element_id, &conn)?;
+        assert!(after_delete.is_none());
+
+        Ok(())
+    }
+}
