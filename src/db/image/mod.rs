@@ -88,9 +88,9 @@ fn get_migrations() -> Result<Vec<Migration>> {
         let file = MIGRATIONS_DIR.get_file(&file_name);
         match file {
             Some(file) => {
-                let sql = file.contents_utf8().ok_or_else(|| {
-                    std::io::Error::other(format!("failed to read {file_name}"))
-                })?;
+                let sql = file
+                    .contents_utf8()
+                    .ok_or_else(|| std::io::Error::other(format!("failed to read {file_name}")))?;
 
                 res.push(Migration(index, sql.to_string()));
 

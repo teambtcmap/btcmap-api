@@ -7,6 +7,7 @@ use matrix_sdk::{
     config::SyncSettings, ruma::events::room::message::RoomMessageEventContent, Client,
 };
 use tokio::sync::OnceCell;
+use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
 
 pub static ROOM_PLACE_COMMENTS: &str = "!yWWvFhceozjhXmtksv:matrix.org";
@@ -74,15 +75,30 @@ async fn _init(pool: &Pool) -> Option<Client> {
             return None;
         }
     };
-    let sync_res = client.sync_once(SyncSettings::default()).await;
-    match sync_res {
-        Ok(_) => info!("sync complete"),
-        Err(e) => {
-            warn!("matrix sync failure: {}", e);
-            return None;
-        }
-    };
-    Some(client)
+    let mut retry_delay = Duration::from_secs(30);
+    for attempt in 1..=10 {
+        let sync_res = client.sync_once(SyncSettings::default()).await;
+        match sync_res {
+            Ok(_) => {
+                info!("sync complete");
+                return Some(client);
+            }
+            Err(e) => {
+                if attempt < 10 {
+                    warn!(
+                        "matrix sync failure (attempt {}/10): {}, retrying in {:?}",
+                        attempt, e, retry_delay
+                    );
+                    sleep(retry_delay).await;
+                    retry_delay *= 2;
+                } else {
+                    warn!("matrix sync failure (attempt {}/10): {}", attempt, e);
+                    return None;
+                }
+            }
+        };
+    }
+    None
 }
 
 pub fn try_client(_pool: &Pool) -> Option<Client> {

@@ -86,7 +86,9 @@ image = { version = "0.25.9", default-features = false, features = ["png", "jpeg
 # https://github.com/rust-lang/regex/blob/master/CHANGELOG.md
 regex = { version = "1.11.1", default-features = false }
 
-matrix-sdk = { version = "0.14.0", default-features = false, features = ["rustls-tls"] }
+# BTC Map Matrix Space bot
+# https://github.com/matrix-org/matrix-rust-sdk/releases
+matrix-sdk = { version = "0.16.0", default-features = false, features = ["rustls-tls"] }
 
 url = { version = "2.5.4", default-features = false }
 
