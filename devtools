@@ -1,7 +1,7 @@
 #!/bin/bash
 
 case "$1" in
-    db)
+    main-db)
         if [ "$#" -eq 1 ]
         then
             sqlite3 ~/.local/share/btcmap/btcmap.db
@@ -10,7 +10,16 @@ case "$1" in
         fi
         ;;
 
-    log)
+    image-db)
+        if [ "$#" -eq 1 ]
+        then
+            sqlite3 ~/.local/share/btcmap/btcmap.db
+        else
+            sqlite3 ~/.local/share/btcmap/btcmap.db "$2"
+        fi
+        ;;
+
+    log-db)
         if [ "$#" -eq 1 ]
         then
             sqlite3 ~/.local/share/btcmap/log.db
@@ -20,10 +29,20 @@ case "$1" in
         ;;
 
     fetch-db)
-        rsync -v --progress --stats btcmap-api:.local/share/btcmap/btcmap.db* ~/.local/share/btcmap/
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/btcmap.db ~/.local/share/btcmap/btcmap.db
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/images.db ~/.local/share/btcmap/images.db
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/log.db ~/.local/share/btcmap/log.db
         ;;
 
-    fetch-log)
+    fetch-main-db)
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/btcmap.db ~/.local/share/btcmap/btcmap.db
+        ;;
+
+    fetch-image-db)
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/images.db ~/.local/share/btcmap/images.db
+        ;;
+
+    fetch-log-db)
         sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/log.db ~/.local/share/btcmap/log.db
         ;;
 
@@ -34,7 +53,7 @@ case "$1" in
             && ssh btcmap-api 'systemctl restart btcmap-api.service'
         ;;
 
-    gen-schema)
+    gen-main-schema)
         # Generate schema.sql from migrations using temporary SQLite database
         rm -f /tmp/schema_gen.db
         for f in $(ls -1 migrations/*.sql | sort -V); do
