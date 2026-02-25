@@ -115,6 +115,13 @@ impl Element {
         )
     }
 
+    pub fn osm_edit_url(&self) -> String {
+        format!(
+            "https://www.openstreetmap.org/edit?{}={}",
+            self.overpass_data.r#type, self.overpass_data.id,
+        )
+    }
+
     pub fn lat(&self) -> f64 {
         self.overpass_data.coord().y
     }

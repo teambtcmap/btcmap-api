@@ -323,6 +323,7 @@ fn get_soon_out_of_date_issue(element: &Element) -> Option<Issue> {
 pub const TAGS: &[&str] = &[
     "osm_id",
     "osm_url",
+    "osm_edit_url",
     "lat",
     "lon",
     "name",
@@ -448,6 +449,9 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
             }
             "osm_url" => {
                 res.insert("osm_url".into(), element.osm_url().into());
+            }
+            "osm_edit_url" => {
+                res.insert("osm_edit_url".into(), element.osm_edit_url().into());
             }
             "created_at" => {
                 res.insert(
