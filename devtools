@@ -62,4 +62,31 @@ case "$1" in
         sqlite3 /tmp/schema_gen.db ".dump" > schema.sql
         rm -f /tmp/schema_gen.db
         ;;
+
+    install-completions)
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        
+        if [ "$(id -u)" -ne 0 ]; then
+            echo "this command must be run as root (use sudo)" >&2
+            exit 1
+        fi
+        
+        user_home=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
+        
+        if [ ! -L /usr/local/bin/devtools ]; then
+            ln -s "$script_dir/devtools" /usr/local/bin/devtools
+            echo "created symlink: /usr/local/bin/devtools -> $script_dir/devtools"
+        else
+            echo "symlink already exists: /usr/local/bin/devtools"
+        fi
+        
+        completion_dir="$user_home/.bash_completion.d"
+        mkdir -p "$completion_dir"
+        cp "$script_dir/devtools_completion.bash" "$completion_dir/devtools"
+        echo "installed completions to: $completion_dir/devtools"
+        
+        echo ""
+        echo "add this to your ~/.bashrc to enable completions:"
+        echo "  source $completion_dir/devtools"
+        ;;
 esac
