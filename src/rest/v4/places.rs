@@ -15,6 +15,8 @@ use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
+use serde_json::Value;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -558,6 +560,67 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<C
         .await
         .map(|it| Json(it.into_iter().map(Comment::from).collect()))
         .map_err(|_| RestApiError::database())
+}
+
+#[derive(Serialize)]
+pub struct AreaResponse {
+    pub id: i64,
+    pub alias: String,
+    pub tags: Map<String, Value>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Deserialize)]
+pub struct GetAreasArgs {
+    #[serde(default)]
+    r#type: Option<String>,
+}
+
+#[get("{id}/areas")]
+pub async fn get_by_id_areas(
+    id: Path<String>,
+    args: Query<GetAreasArgs>,
+    pool: Data<Pool>,
+) -> Res<Vec<AreaResponse>> {
+    let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+
+    let area_elements = db::area_element::queries::select_by_element_id(element.id, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    let mut areas: Vec<AreaResponse> = vec![];
+
+    for area_element in area_elements {
+        if let Ok(area) = db::area::queries::select_by_id(area_element.area_id, &pool).await {
+            if let Some(ref type_filter) = args.r#type {
+                let area_type = area.tags.get("type").and_then(|v| v.as_str());
+
+                if area_type != Some(type_filter.as_str()) {
+                    continue;
+                }
+            }
+            
+            let mut tags = area.tags;
+            tags.remove("geo_json");
+            areas.push(AreaResponse {
+                id: area.id,
+                alias: area.alias,
+                tags,
+                created_at: area.created_at,
+                updated_at: area.updated_at,
+            });
+        }
+    }
+
+    Ok(Json(areas))
 }
 
 #[cfg(test)]

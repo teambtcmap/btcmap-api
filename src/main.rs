@@ -160,7 +160,8 @@ async fn main() -> Result<()> {
                             .service(rest::v4::places::get_pending)
                             .service(rest::v4::places::search)
                             .service(rest::v4::places::get_by_id)
-                            .service(rest::v4::places::get_by_id_comments),
+                            .service(rest::v4::places::get_by_id_comments)
+                            .service(rest::v4::places::get_by_id_areas),
                     )
                     .service(scope("invoices").service(rest::v4::invoices::get_by_id))
                     .service(
