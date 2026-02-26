@@ -577,6 +577,8 @@ pub struct AreaResponse {
 pub struct GetAreasArgs {
     #[serde(default)]
     r#type: Option<String>,
+    #[serde(default)]
+    include_deleted: Option<bool>,
 }
 
 #[get("{id}/areas")]
@@ -600,6 +602,10 @@ pub async fn get_by_id_areas(
 
     for area_element in area_elements {
         if let Ok(area) = db::area::queries::select_by_id(area_element.area_id, &pool).await {
+            if !args.include_deleted.unwrap_or(false) && area.deleted_at.is_some() {
+                continue;
+            }
+
             if let Some(ref type_filter) = args.r#type {
                 let area_type = area.tags.get("type").and_then(|v| v.as_str());
 
@@ -607,7 +613,7 @@ pub async fn get_by_id_areas(
                     continue;
                 }
             }
-            
+
             let mut tags = area.tags;
             tags.remove("geo_json");
             areas.push(AreaResponse {
@@ -625,6 +631,7 @@ pub async fn get_by_id_areas(
 
 #[cfg(test)]
 mod test {
+    use crate::db::area::schema::Area;
     use crate::db::test::pool;
     use crate::service::overpass::OverpassElement;
     use crate::{db, Result};
@@ -634,6 +641,7 @@ mod test {
     use geojson::JsonObject;
     use serde_json::{Map, Value};
     use time::macros::datetime;
+    use time::OffsetDateTime;
 
     #[test]
     async fn get_empty_array() -> Result<()> {
@@ -724,6 +732,49 @@ mod test {
         let req = TestRequest::get().uri("/1").to_request();
         let res: JsonObject = test::call_and_read_body_json(&app, req).await;
         assert_eq!(element.id, res["id"].as_i64().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_areas_excludes_deleted_by_default() -> Result<()> {
+        let pool = pool();
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::area_element::queries::insert(area.id, element.id, &pool).await?;
+        db::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_id_areas),
+        )
+        .await;
+        let req = TestRequest::get().uri("/1/areas").to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_areas_includes_deleted_when_requested() -> Result<()> {
+        let pool = pool();
+        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::area_element::queries::insert(area.id, element.id, &pool).await?;
+        db::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_id_areas),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/areas?include_deleted=true", element.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(area.id, res[0]["id"].as_i64().unwrap());
         Ok(())
     }
 }
