@@ -1,6 +1,7 @@
 use crate::db;
 use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
+use crate::db::element_event::queries::ElementEventWithUser;
 use crate::db::place_submission::schema::PlaceSubmission;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
@@ -559,6 +560,45 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<C
     db::element_comment::queries::select_by_element_id(element.id, false, i64::MAX, &pool)
         .await
         .map(|it| Json(it.into_iter().map(Comment::from).collect()))
+        .map_err(|_| RestApiError::database())
+}
+
+#[derive(Serialize)]
+pub struct Activity {
+    pub id: i64,
+    pub user_id: i64,
+    pub user_name: String,
+    pub r#type: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
+}
+
+impl From<ElementEventWithUser> for Activity {
+    fn from(val: ElementEventWithUser) -> Self {
+        Activity {
+            id: val.id,
+            user_id: val.user_id,
+            user_name: val.user_name,
+            r#type: val.r#type,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+        }
+    }
+}
+
+#[get("{id}/activity")]
+pub async fn get_by_id_activity(id: Path<String>, pool: Data<Pool>) -> Res<Vec<Activity>> {
+    let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+    db::element_event::queries::select_by_element_id(element.id, &pool)
+        .await
+        .map(|it| Json(it.into_iter().map(Activity::from).collect()))
         .map_err(|_| RestApiError::database())
 }
 

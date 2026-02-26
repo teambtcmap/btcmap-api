@@ -1,5 +1,6 @@
 use super::{blocking_queries, schema::ElementEvent};
 use crate::Result;
+pub use blocking_queries::ElementEventWithUser;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -99,5 +100,15 @@ pub async fn set_updated_at(
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::set_updated_at(id, updated_at, conn))
+        .await?
+}
+
+pub async fn select_by_element_id(
+    element_id: i64,
+    pool: &Pool,
+) -> Result<Vec<ElementEventWithUser>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_element_id(element_id, conn))
         .await?
 }

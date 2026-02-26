@@ -1,9 +1,20 @@
 use super::schema::{self, Columns, ElementEvent};
 use crate::Result;
 use rusqlite::{named_params, params, Connection};
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+
+#[derive(Serialize)]
+pub struct ElementEventWithUser {
+    pub id: i64,
+    pub user_id: i64,
+    pub user_name: String,
+    pub r#type: String,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
 
 pub fn insert(
     user_id: i64,
@@ -183,6 +194,49 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementEvent> {
         .map_err(Into::into)
 }
 
+pub fn select_by_element_id(
+    element_id: i64,
+    conn: &Connection,
+) -> Result<Vec<ElementEventWithUser>> {
+    let sql = format!(
+        r#"
+            SELECT 
+                e.{id},
+                e.{user_id},
+                u.osm_data->>'display_name' as user_name,
+                e.{type},
+                e.{created_at},
+                e.{updated_at}
+            FROM {event_table} e
+            JOIN {user_table} u ON e.{user_id} = u.{user_id_col}
+            WHERE e.{element_id} = ?1 AND e.{deleted_at} IS NULL
+            ORDER BY e.{created_at} DESC
+        "#,
+        event_table = schema::TABLE_NAME,
+        user_table = crate::db::osm_user::schema::NAME,
+        id = Columns::Id.as_str(),
+        user_id = Columns::UserId.as_str(),
+        user_id_col = crate::db::osm_user::schema::Columns::Id.as_str(),
+        type = Columns::Type.as_str(),
+        created_at = Columns::CreatedAt.as_str(),
+        updated_at = Columns::UpdatedAt.as_str(),
+        element_id = Columns::ElementId.as_str(),
+        deleted_at = Columns::DeletedAt.as_str(),
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![element_id], |row| {
+        Ok(ElementEventWithUser {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            user_name: row.get(2)?,
+            r#type: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 pub fn patch_tags(
     id: i64,
     tags: &HashMap<String, Value>,
@@ -229,6 +283,7 @@ mod test {
         service::{osm::EditingApiUser, overpass::OverpassElement},
         Result,
     };
+    use rusqlite::params;
     use serde_json::json;
     use std::collections::HashMap;
     use time::{macros::datetime, OffsetDateTime};
@@ -322,6 +377,76 @@ mod test {
         let event = super::insert(user.id, element.id, "", &conn)?;
         let event = super::set_updated_at(event.id, updated_at, &conn)?;
         assert_eq!(updated_at, super::select_by_id(event.id, &conn)?.updated_at);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_empty() -> Result<()> {
+        let conn = conn();
+        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let result = super::select_by_element_id(element.id, &conn)?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_returns_events() -> Result<()> {
+        let conn = conn();
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let event_1 = super::insert(user.id, element.id, "create", &conn)?;
+        let event_2 = super::insert(user.id, element.id, "update", &conn)?;
+        let result = super::select_by_element_id(element.id, &conn)?;
+        assert_eq!(2, result.len());
+        assert_eq!(event_1.id, result[0].id);
+        assert_eq!(event_2.id, result[1].id);
+        assert_eq!(user.id, result[0].user_id);
+        assert_eq!("create", result[0].r#type);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_excludes_deleted() -> Result<()> {
+        let conn = conn();
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let _event = super::insert(user.id, element.id, "create", &conn)?;
+        let deleted_event = super::insert(user.id, element.id, "delete", &conn)?;
+        let sql = format!("UPDATE element_event SET deleted_at = datetime('now') WHERE id = ?1");
+        conn.execute(&sql, params![deleted_event.id])?;
+        let result = super::select_by_element_id(element.id, &conn)?;
+        assert_eq!(1, result.len());
+        assert_eq!("create", result[0].r#type);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_includes_user_name() -> Result<()> {
+        let conn = conn();
+        let mut user = EditingApiUser::mock();
+        user.display_name = "TestUser".to_string();
+        let user = db::osm_user::blocking_queries::insert(1, &user, &conn)?;
+        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let _event = super::insert(user.id, element.id, "create", &conn)?;
+        let result = super::select_by_element_id(element.id, &conn)?;
+        assert_eq!("TestUser", result[0].user_name);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_different_elements() -> Result<()> {
+        let conn = conn();
+        let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let element_1 = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element_2 = db::element::blocking_queries::insert(&OverpassElement::mock(2), &conn)?;
+        let _event_1 = super::insert(user.id, element_1.id, "create", &conn)?;
+        let _event_2 = super::insert(user.id, element_2.id, "update", &conn)?;
+        let result_1 = super::select_by_element_id(element_1.id, &conn)?;
+        let result_2 = super::select_by_element_id(element_2.id, &conn)?;
+        assert_eq!(1, result_1.len());
+        assert_eq!(1, result_2.len());
+        assert_eq!("create", result_1[0].r#type);
+        assert_eq!("update", result_2[0].r#type);
         Ok(())
     }
 }
