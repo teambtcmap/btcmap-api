@@ -9,9 +9,10 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 #[derive(Serialize)]
 pub struct ElementEventWithUser {
     pub id: i64,
+    pub r#type: String,
     pub user_id: i64,
     pub user_name: String,
-    pub r#type: String,
+    pub user_description: String,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
 }
@@ -202,9 +203,10 @@ pub fn select_by_element_id(
         r#"
             SELECT 
                 e.{id},
+                e.{type},
                 e.{user_id},
                 u.osm_data->>'display_name' as user_name,
-                e.{type},
+                u.osm_data->>'description' as user_description,
                 e.{created_at},
                 e.{updated_at}
             FROM {event_table} e
@@ -227,11 +229,12 @@ pub fn select_by_element_id(
     let rows = stmt.query_map(params![element_id], |row| {
         Ok(ElementEventWithUser {
             id: row.get(0)?,
-            user_id: row.get(1)?,
-            user_name: row.get(2)?,
-            r#type: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
+            r#type: row.get(1)?,
+            user_id: row.get(2)?,
+            user_name: row.get(3)?,
+            user_description: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
         })
     })?;
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -396,12 +399,20 @@ mod test {
         let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event_1 = super::insert(user.id, element.id, "create", &conn)?;
         let event_2 = super::insert(user.id, element.id, "update", &conn)?;
+        conn.execute(
+            "UPDATE element_event SET created_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+            params![event_1.id],
+        )?;
+        conn.execute(
+            "UPDATE element_event SET created_at = '2020-01-02T00:00:00Z' WHERE id = ?1",
+            params![event_2.id],
+        )?;
         let result = super::select_by_element_id(element.id, &conn)?;
         assert_eq!(2, result.len());
-        assert_eq!(event_1.id, result[0].id);
-        assert_eq!(event_2.id, result[1].id);
+        assert_eq!(event_2.id, result[0].id);
+        assert_eq!(event_1.id, result[1].id);
         assert_eq!(user.id, result[0].user_id);
-        assert_eq!("create", result[0].r#type);
+        assert_eq!("update", result[0].r#type);
         Ok(())
     }
 

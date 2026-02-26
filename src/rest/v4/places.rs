@@ -566,9 +566,12 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<C
 #[derive(Serialize)]
 pub struct Activity {
     pub id: i64,
-    pub user_id: i64,
-    pub user_name: String,
     pub r#type: String,
+    pub user_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_tip: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -577,11 +580,15 @@ pub struct Activity {
 
 impl From<ElementEventWithUser> for Activity {
     fn from(val: ElementEventWithUser) -> Self {
+        let re = regex::Regex::new(r"(lightning:[^)]+)").unwrap();
+        let tip = re.captures(&val.user_description).map(|c| c[1].to_string());
+
         Activity {
             id: val.id,
-            user_id: val.user_id,
-            user_name: val.user_name,
             r#type: val.r#type,
+            user_id: Some(val.user_id),
+            user_name: Some(val.user_name),
+            user_tip: tip,
             created_at: val.created_at,
             updated_at: val.updated_at,
         }
