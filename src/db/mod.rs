@@ -20,12 +20,32 @@ pub mod user;
 
 use crate::Result;
 use rusqlite::Connection;
-use std::{fs::create_dir_all, path::PathBuf};
+use std::{
+    fmt::{Display, Formatter},
+    fs::create_dir_all,
+    path::PathBuf,
+};
+
+pub struct Migration(pub i16, pub String);
+
+impl Display for Migration {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}, {})",
+            self.0,
+            self.1
+                .replace("\n", "")
+                .replace("    ", "")
+                .replace(";", "; "),
+        )
+    }
+}
 
 pub fn db_file_path(db_name: &str) -> Result<PathBuf> {
     #[allow(deprecated)]
     let data_dir = std::env::home_dir()
-        .ok_or("Home directory does not exist")?
+        .ok_or("home directory does not exist")?
         .join(".local/share/btcmap");
     if !data_dir.exists() {
         create_dir_all(&data_dir)?;

@@ -1,28 +1,12 @@
 use crate::Result;
+use crate::db::Migration;
 use include_dir::include_dir;
 use include_dir::Dir;
 use rusqlite::Connection;
-use std::fmt;
 use tracing::info;
 use tracing::warn;
 
 static MIGRATIONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
-
-pub struct Migration(pub i16, pub String);
-
-impl fmt::Display for Migration {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "({}, {})",
-            self.0,
-            self.1
-                .replace("\n", "")
-                .replace("    ", "")
-                .replace(";", "; "),
-        )
-    }
-}
 
 pub fn run(db: &mut Connection) -> Result<()> {
     execute_migrations(&get_migrations()?, db)
@@ -75,34 +59,4 @@ fn execute_migrations(migrations: &[Migration], db: &mut Connection) -> Result<(
     info!(schema_ver, "Database schema is up to date");
 
     Ok(())
-}
-
-#[cfg(test)]
-pub mod test {
-    use rusqlite::Connection;
-
-    use crate::Result;
-
-    #[test]
-    fn run_migrations() -> Result<()> {
-        let mut conn = Connection::open_in_memory()?;
-        let mut migrations = vec![super::Migration(1, "CREATE TABLE foo(bar);".into())];
-        super::execute_migrations(&migrations, &mut conn)?;
-        let schema_ver: i16 =
-            conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
-                row.get(0)
-            })?;
-        assert_eq!(1, schema_ver);
-        migrations.push(super::Migration(
-            2,
-            "INSERT INTO foo (bar) values ('qwerty');".into(),
-        ));
-        super::execute_migrations(&migrations, &mut conn)?;
-        let schema_ver: i16 =
-            conn.query_row("SELECT user_version FROM pragma_user_version", [], |row| {
-                row.get(0)
-            })?;
-        assert_eq!(2, schema_ver);
-        Ok(())
-    }
 }

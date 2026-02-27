@@ -1,6 +1,6 @@
 pub mod request;
 
-use super::migration::Migration;
+use super::Migration;
 use crate::Result;
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
 use include_dir::include_dir;
