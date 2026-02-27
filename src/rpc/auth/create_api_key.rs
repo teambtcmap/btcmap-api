@@ -31,7 +31,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         .verify_password(params.password.as_bytes(), &password_hash)
         .map_err(|_| error_cause_mask)?;
     let token = Uuid::new_v4().to_string();
-    db::access_token::queries::insert(
+    db::main::access_token::queries::insert(
         user.id,
         params.label.unwrap_or_default(),
         token.clone(),

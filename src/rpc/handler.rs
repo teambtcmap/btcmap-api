@@ -316,7 +316,7 @@ pub async fn handle(
     let user = match bearer_token {
         Some(bearer_token) => {
             let bearer_token =
-                db::access_token::queries::select_by_secret(bearer_token, &pool).await?;
+                db::main::access_token::queries::select_by_secret(bearer_token, &pool).await?;
             let user = db::user::queries::select_by_id(bearer_token.user_id, &pool).await?;
             if bearer_token.roles.is_empty() {
                 if !allowed_methods(&user.roles).contains(&req.method) {
@@ -731,7 +731,7 @@ mod test {
     async fn valid_request_with_auth() -> Result<()> {
         let pool = pool();
         let user = db::user::queries::insert("root", "", &pool).await?;
-        let _token = db::access_token::queries::insert(
+        let _token = db::main::access_token::queries::insert(
             user.id,
             "".into(),
             "secret".into(),

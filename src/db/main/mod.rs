@@ -1,3 +1,5 @@
+pub mod access_token;
+
 use super::Migration;
 use crate::Result;
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
