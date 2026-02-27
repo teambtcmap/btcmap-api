@@ -1,8 +1,8 @@
 use crate::db;
+use crate::db::MainPool;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
 use actix_web::{get, web::Data, web::Json, web::Query};
-use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -44,7 +44,7 @@ pub struct PaginationInfo {
 
 // GET /search?q=query&limit=10&offset=0&type_filter=area
 #[get("")]
-pub async fn get(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<SearchResponse> {
+pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchResponse> {
     // query validation
     let query = args.q.trim();
     if query.is_empty() {

@@ -1,12 +1,12 @@
 use crate::db;
 use crate::db::element_issue::schema::ElementIssue;
+use crate::db::MainPool;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use time::macros::datetime;
@@ -57,7 +57,7 @@ impl From<ElementIssue> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
     let items = db::element_issue::queries::select_updated_since(
         args.updated_since
             .unwrap_or(datetime!(2000-01-01 00:00 UTC)),
@@ -69,7 +69,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetI
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
     db::element_issue::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())

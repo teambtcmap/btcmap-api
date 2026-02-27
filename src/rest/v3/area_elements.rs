@@ -1,12 +1,11 @@
 use crate::{
-    db::{self, area_element::schema::AreaElement},
+    db::{self, area_element::schema::AreaElement, MainPool},
     Result,
 };
 use actix_web::{
     get,
     web::{Data, Json, Path, Query},
 };
-use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -59,7 +58,7 @@ impl From<AreaElement> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>> {
+pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>> {
     let area_elements = db::area_element::queries::select_updated_since(
         args.updated_since,
         Some(args.limit),
@@ -72,7 +71,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetI
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetItem>> {
     db::area_element::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())

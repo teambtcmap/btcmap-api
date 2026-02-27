@@ -1,5 +1,6 @@
 use crate::db;
 use crate::db::conf::schema::Conf;
+use crate::db::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
 use crate::service;
@@ -9,7 +10,6 @@ use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::HttpRequest;
-use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -46,7 +46,7 @@ pub async fn post(
     req: HttpRequest,
     args: Json<PostArgs>,
     conf: Data<Conf>,
-    pool: Data<Pool>,
+    pool: Data<MainPool>,
 ) -> RestResult<PostResponse> {
     if args.place_id == "23143" {
         let ip = req

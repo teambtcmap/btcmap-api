@@ -1,6 +1,7 @@
 use crate::db;
 use crate::db::conf::schema::Conf;
 use crate::db::element_comment::schema::ElementComment;
+use crate::db::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
 use crate::service;
@@ -11,7 +12,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use time::OffsetDateTime;
@@ -73,7 +73,7 @@ impl From<ElementComment> for Json<Item> {
 }
 
 #[get("")]
-pub async fn get(args: Query<Args>, pool: Data<Pool>) -> Result<Json<Vec<Item>>, Error> {
+pub async fn get(args: Query<Args>, pool: Data<MainPool>) -> Result<Json<Vec<Item>>, Error> {
     let items = db::element_comment::queries::select_updated_since(
         args.updated_since,
         args.include_deleted,
@@ -85,7 +85,7 @@ pub async fn get(args: Query<Args>, pool: Data<Pool>) -> Result<Json<Vec<Item>>,
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<Item>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<Item>, Error> {
     db::element_comment::queries::select_by_id(*id, &pool)
         .await
         .map(Into::into)
@@ -119,7 +119,7 @@ pub struct PostResponse {
 pub async fn post(
     args: Json<PostArgs>,
     conf: Data<Conf>,
-    pool: Data<Pool>,
+    pool: Data<MainPool>,
 ) -> RestResult<PostResponse> {
     if args.comment.trim().is_empty() {
         return Err(RestApiError::invalid_input("Comment cannot be empty"));

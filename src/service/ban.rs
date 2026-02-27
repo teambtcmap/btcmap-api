@@ -1,4 +1,5 @@
 use crate::db;
+use crate::db::MainPool;
 use actix_web::web::Data;
 use actix_web::{
     body::MessageBody,
@@ -6,7 +7,6 @@ use actix_web::{
     middleware::Next,
     Error,
 };
-use deadpool_sqlite::Pool;
 
 #[allow(clippy::await_holding_refcell_ref)]
 pub async fn check_if_banned(
@@ -18,7 +18,7 @@ pub async fn check_if_banned(
         drop(conn_info);
         return next.call(req).await;
     };
-    let Some(pool) = req.app_data::<Data<Pool>>() else {
+    let Some(pool) = req.app_data::<Data<MainPool>>() else {
         drop(conn_info);
         return next.call(req).await;
     };

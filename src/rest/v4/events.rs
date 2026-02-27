@@ -1,5 +1,6 @@
 use crate::db;
 use crate::db::event::schema::Event;
+use crate::db::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
 use crate::Error;
@@ -7,7 +8,6 @@ use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
-use deadpool_sqlite::Pool;
 use serde::Serialize;
 use time::OffsetDateTime;
 
@@ -39,7 +39,7 @@ impl From<Event> for Item {
 }
 
 #[get("")]
-pub async fn get(pool: Data<Pool>) -> RestResult<Vec<Item>> {
+pub async fn get(pool: Data<MainPool>) -> RestResult<Vec<Item>> {
     let items = db::event::queries::select_all(&pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -54,7 +54,7 @@ pub async fn get(pool: Data<Pool>) -> RestResult<Vec<Item>> {
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> RestResult<Item> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> RestResult<Item> {
     db::event::queries::select_by_id(id.into_inner(), &pool)
         .await
         .map(|it| Json(it.into()))

@@ -19,6 +19,24 @@ pub mod user;
 use crate::{service::filesystem::data_dir_file_path, Result};
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
 use rusqlite::Connection;
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct MainPool(Arc<Pool>);
+
+impl MainPool {
+    pub fn new(pool: Pool) -> Self {
+        Self(Arc::new(pool))
+    }
+}
+
+impl std::ops::Deref for MainPool {
+    type Target = Pool;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 pub fn configure_connection(conn: &Connection) {
     // WAL + NORMAL combination provides good concurrency, good crash safety, decent performance and simple maintenance
@@ -31,7 +49,7 @@ pub fn configure_connection(conn: &Connection) {
     conn.pragma_update(None, "busy_timeout", 5000).unwrap();
 }
 
-pub fn pool() -> Result<Pool> {
+pub fn pool() -> Result<MainPool> {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get() * 2)
         .unwrap_or(8);
@@ -45,18 +63,20 @@ pub fn pool() -> Result<Pool> {
         })))
         .build()
         .map_err(Into::into)
+        .map(MainPool::new)
 }
 
 #[cfg(test)]
 pub mod test {
-    use deadpool_sqlite::{Config, Hook, Pool, Runtime};
+    use super::MainPool;
+    use deadpool_sqlite::{Config, Hook, Runtime};
     use rusqlite::Connection;
 
-    pub fn pool() -> Pool {
+    pub fn pool() -> MainPool {
         let pool_size = std::thread::available_parallelism()
             .map(|n| n.get() * 2)
             .unwrap_or(8);
-        Config::new(":memory:")
+        let inner = Config::new(":memory:")
             .builder(Runtime::Tokio1)
             .unwrap()
             .max_size(pool_size)
@@ -67,7 +87,8 @@ pub mod test {
                 Ok(())
             })))
             .build()
-            .unwrap()
+            .unwrap();
+        MainPool::new(inner)
     }
 
     pub(super) fn conn() -> Connection {

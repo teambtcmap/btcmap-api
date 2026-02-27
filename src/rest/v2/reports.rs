@@ -1,12 +1,12 @@
 use crate::db;
 use crate::db::report::schema::Report;
+use crate::db::MainPool;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
@@ -72,7 +72,7 @@ impl From<Report> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
     let reports = match args.updated_since {
         Some(updated_since) => {
             db::report::queries::select_updated_since(updated_since, args.limit, &pool).await?
@@ -92,7 +92,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetI
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<i64>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
     db::report::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())

@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::Role},
+    db::{self, conf::schema::Conf, user::schema::Role, MainPool},
     Result,
 };
 use actix_web::{
@@ -13,7 +13,6 @@ use actix_web::{
     web::{Data, Json},
     HttpRequest, HttpResponseBuilder,
 };
-use deadpool_sqlite::Pool;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -269,7 +268,7 @@ fn allowed_methods(roles: &[Role]) -> HashSet<RpcMethod> {
 pub async fn handle(
     req: HttpRequest,
     req_body: String,
-    pool: Data<Pool>,
+    pool: Data<MainPool>,
     conf: Data<Conf>,
 ) -> Result<Json<RpcResponse>> {
     let headers = req.headers();

@@ -136,7 +136,7 @@ Handlers return `RestResult<T>` which is `Result<Json<T>, RestApiError>`:
 
 ```rust
 #[get("")]
-pub async fn get(args: Query<GetListArgs>, pool: Data<Pool>) -> Res<Vec<JsonObject>> {
+pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<JsonObject>> {
     // ... implementation
     Ok(Json(items))
 }

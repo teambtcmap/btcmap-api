@@ -2,12 +2,12 @@ use actix_web::{
     get,
     web::{Data, Json},
 };
-use deadpool_sqlite::Pool;
 use serde::Serialize;
 use time::{Duration, OffsetDateTime};
 
 use crate::{
     db,
+    db::MainPool,
     rest::error::{RestApiError, RestResult},
 };
 
@@ -29,7 +29,7 @@ pub struct ChartEntry {
 }
 
 #[get("")]
-pub async fn get(pool: Data<Pool>) -> RestResult<Dashboard> {
+pub async fn get(pool: Data<MainPool>) -> RestResult<Dashboard> {
     let total_merchants = db::element::queries::select_merchants_count(&pool, None)
         .await
         .map_err(|_| RestApiError::database())?;

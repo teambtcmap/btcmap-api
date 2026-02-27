@@ -1,5 +1,6 @@
 use crate::db;
 use crate::db::element::schema::Element;
+use crate::db::MainPool;
 use crate::service::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -7,7 +8,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
@@ -58,7 +58,7 @@ impl From<Element> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
     let elements = match &args.updated_since {
         Some(updated_since) => {
             db::element::queries::select_updated_since(*updated_since, args.limit, true, &pool)
@@ -78,7 +78,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetI
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
     let id = id.into_inner();
     let id_parts: Vec<String> = id.split(":").map(|it| it.into()).collect();
     let r#type = id_parts[0].clone();

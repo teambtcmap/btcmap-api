@@ -3,6 +3,7 @@ use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
 use crate::db::element_event::queries::ElementEventWithUser;
 use crate::db::place_submission::schema::PlaceSubmission;
+use crate::db::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
@@ -12,7 +13,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use deadpool_sqlite::Pool;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
@@ -39,7 +39,7 @@ pub struct GetSingleArgs {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetListArgs>, pool: Data<Pool>) -> Res<Vec<JsonObject>> {
+pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<JsonObject>> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     let updated_since = args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
     let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
@@ -135,7 +135,10 @@ pub struct GetBoostedArgs {
 }
 
 #[get("/boosted")]
-pub async fn get_boosted(args: Query<GetBoostedArgs>, pool: Data<Pool>) -> Res<Vec<JsonObject>> {
+pub async fn get_boosted(
+    args: Query<GetBoostedArgs>,
+    pool: Data<MainPool>,
+) -> Res<Vec<JsonObject>> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     let updated_since = OffsetDateTime::UNIX_EPOCH;
     let include_deleted = false;
@@ -214,7 +217,7 @@ pub struct PendingPlace {
 }
 
 #[get("/pending")]
-pub async fn get_pending(pool: Data<Pool>) -> Res<Vec<PendingPlace>> {
+pub async fn get_pending(pool: Data<MainPool>) -> Res<Vec<PendingPlace>> {
     let items = db::place_submission::queries::select_open_and_not_revoked(&pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -314,7 +317,7 @@ pub struct SearchedPlace {
 }
 
 #[get("/search")]
-pub async fn search(args: Query<SearchArgs>, pool: Data<Pool>) -> Res<Vec<SearchedPlace>> {
+pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<SearchedPlace>> {
     let lat = args.lat.unwrap_or(0.0);
     let lon = args.lon.unwrap_or(0.0);
     let radius_km = args.radius_km.unwrap_or(100_000.0);
@@ -519,7 +522,7 @@ impl From<Element> for SearchedPlace {
 pub async fn get_by_id(
     id: Path<String>,
     args: Query<GetSingleArgs>,
-    pool: Data<Pool>,
+    pool: Data<MainPool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     db::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
@@ -550,7 +553,7 @@ impl From<ElementComment> for Comment {
 }
 
 #[get("{id}/comments")]
-pub async fn get_by_id_comments(id: Path<String>, pool: Data<Pool>) -> Res<Vec<Comment>> {
+pub async fn get_by_id_comments(id: Path<String>, pool: Data<MainPool>) -> Res<Vec<Comment>> {
     let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map_err(|e| match e {
@@ -596,7 +599,7 @@ impl From<ElementEventWithUser> for Activity {
 }
 
 #[get("{id}/activity")]
-pub async fn get_by_id_activity(id: Path<String>, pool: Data<Pool>) -> Res<Vec<Activity>> {
+pub async fn get_by_id_activity(id: Path<String>, pool: Data<MainPool>) -> Res<Vec<Activity>> {
     let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map_err(|e| match e {
@@ -632,7 +635,7 @@ pub struct GetAreasArgs {
 pub async fn get_by_id_areas(
     id: Path<String>,
     args: Query<GetAreasArgs>,
-    pool: Data<Pool>,
+    pool: Data<MainPool>,
 ) -> Res<Vec<AreaResponse>> {
     let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await

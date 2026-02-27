@@ -1,12 +1,12 @@
 use crate::db;
 use crate::db::area::schema::Area;
+use crate::db::MainPool;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use deadpool_sqlite::Pool;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
@@ -56,14 +56,14 @@ impl From<Area> for Json<GetItem> {
 }
 
 #[get("")]
-pub async fn get(args: Query<GetArgs>, pool: Data<Pool>) -> Result<Json<Vec<GetItem>>, Error> {
+pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
     let areas =
         db::area::queries::select(Some(args.updated_since), true, Some(args.limit), &pool).await?;
     Ok(Json(areas.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<String>, pool: Data<Pool>) -> Result<Json<GetItem>, Error> {
+pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
     db::area::queries::select_by_id_or_alias(id.to_string(), &pool)
         .await
         .map(Into::into)
