@@ -1,5 +1,5 @@
+use crate::db::configure_connection;
 use crate::Result;
-use crate::{db::configure_connection, service::filesystem::data_dir_file_path};
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
 use std::sync::Arc;
 
@@ -24,7 +24,7 @@ pub fn pool() -> Result<MainPool> {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get() * 2)
         .unwrap_or(8);
-    Config::new(data_dir_file_path("btcmap.db")?)
+    Config::new(super::db_file_path("btcmap.db")?)
         .builder(Runtime::Tokio1)?
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {

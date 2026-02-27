@@ -4,7 +4,6 @@ pub mod ban;
 pub mod comment;
 pub mod element;
 pub mod event;
-pub mod filesystem;
 pub mod gitea;
 pub mod invoice;
 pub mod log;

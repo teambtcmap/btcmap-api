@@ -17,7 +17,21 @@ pub mod osm_user;
 pub mod place_submission;
 pub mod report;
 pub mod user;
+
+use crate::Result;
 use rusqlite::Connection;
+use std::{fs::create_dir_all, path::PathBuf};
+
+pub fn db_file_path(db_name: &str) -> Result<PathBuf> {
+    #[allow(deprecated)]
+    let data_dir = std::env::home_dir()
+        .ok_or("Home directory does not exist")?
+        .join(".local/share/btcmap");
+    if !data_dir.exists() {
+        create_dir_all(&data_dir)?;
+    }
+    Ok(data_dir.join(db_name))
+}
 
 pub fn configure_connection(conn: &Connection) {
     // WAL + NORMAL combination provides good concurrency, good crash safety, decent performance and simple maintenance

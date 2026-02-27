@@ -1,7 +1,7 @@
 pub mod og;
 
 use super::migration::Migration;
-use crate::{service::filesystem::data_dir_file_path, Result};
+use crate::Result;
 use deadpool_sqlite::{Config, Hook, Pool, Runtime};
 use include_dir::include_dir;
 use include_dir::Dir;
@@ -31,7 +31,7 @@ pub fn pool() -> Result<ImagePool> {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get() * 2)
         .unwrap_or(8);
-    let config = Config::new(data_dir_file_path("images.db")?)
+    let config = Config::new(super::db_file_path("images.db")?)
         .builder(Runtime::Tokio1)?
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {
