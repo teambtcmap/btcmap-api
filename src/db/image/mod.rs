@@ -115,4 +115,10 @@ pub mod test {
         super::run_migrations(&mut conn).unwrap();
         conn
     }
+
+    #[test]
+    fn migrations() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        super::run_migrations(&mut conn).unwrap()
+    }
 }

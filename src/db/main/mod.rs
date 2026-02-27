@@ -59,12 +59,12 @@ fn run_migrations(conn: &mut Connection) -> Result<()> {
     if !pending_migrations.is_empty() {
         info!(
             pending_migrations = migrations.len(),
-            "found pending log db migrations"
+            "found pending main db migrations"
         );
     }
 
     for migration in pending_migrations {
-        warn!(%migration, "applying pending log db migration");
+        warn!(%migration, "applying pending main db migration");
         let tx = conn.transaction()?;
         tx.execute_batch(&migration.1)?;
         tx.execute_batch(&format!("PRAGMA user_version={}", migration.0))?;
@@ -72,7 +72,7 @@ fn run_migrations(conn: &mut Connection) -> Result<()> {
         schema_ver = migration.0;
     }
 
-    info!(schema_ver, "log db schema is up to date");
+    info!(schema_ver, "main db schema is up to date");
 
     Ok(())
 }
@@ -105,6 +105,8 @@ fn get_migrations() -> Result<Vec<Migration>> {
 
 #[cfg(test)]
 pub mod test {
+    use crate::db::main::run_migrations;
+
     use super::MainPool;
     use deadpool_sqlite::{Config, Hook, Runtime};
     use rusqlite::Connection;
@@ -132,5 +134,11 @@ pub mod test {
         conn.execute_batch(include_str!("schema.sql")).unwrap();
         conn.pragma_update(None, "foreign_keys", "ON").unwrap();
         conn
+    }
+
+    #[test]
+    fn migrations() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        run_migrations(&mut conn).unwrap()
     }
 }
