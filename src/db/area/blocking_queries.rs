@@ -257,7 +257,7 @@ pub fn set_deleted_at(
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::db::test::conn;
+    use crate::db::main::test::conn;
     use crate::Result;
     use serde_json::{json, Map};
     use time::ext::NumericalDuration;

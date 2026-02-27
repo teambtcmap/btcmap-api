@@ -18,7 +18,7 @@ pub fn select(conn: &Connection) -> Result<Conf> {
 
 #[cfg(test)]
 mod test {
-    use crate::db::test::conn;
+    use crate::db::main::test::conn;
 
     #[test]
     fn select() -> crate::Result<()> {

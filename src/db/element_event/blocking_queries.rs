@@ -282,7 +282,7 @@ pub fn set_updated_at(
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, test::conn},
+        db::{self, main::test::conn},
         service::{osm::EditingApiUser, overpass::OverpassElement},
         Result,
     };

@@ -256,7 +256,7 @@ pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) ->
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, test::conn},
+        db::{self, main::test::conn},
         service::{
             osm::{Blocks, BlocksReceived, Changesets, ContributorTerms, EditingApiUser, Traces},
             overpass::OverpassElement,

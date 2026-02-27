@@ -164,7 +164,7 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod tests {
-    use crate::{db::test::conn, error::Error, Result};
+    use crate::{db::main::test::conn, error::Error, Result};
     use time::{Duration, OffsetDateTime};
 
     #[test]

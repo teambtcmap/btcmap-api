@@ -99,7 +99,7 @@ pub fn set_roles(token_id: i64, roles: &[Role], conn: &Connection) -> Result<()>
 
 #[cfg(test)]
 mod test {
-    use crate::db::test::conn;
+    use crate::db::main::test::conn;
     use crate::db::user::schema::Role;
     use crate::Result;
 

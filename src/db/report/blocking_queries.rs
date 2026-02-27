@@ -221,7 +221,7 @@ pub fn set_deleted_at(id: i64, deleted_at: OffsetDateTime, conn: &Connection) ->
 mod test {
     use crate::db;
     use crate::db::area::schema::Area;
-    use crate::db::test::conn;
+    use crate::db::main::test::conn;
     use crate::Result;
     use serde_json::Map;
     use serde_json::Value;

@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use actix_web::web::Data;
 use actix_web::{
     body::MessageBody,

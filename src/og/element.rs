@@ -1,4 +1,4 @@
-use crate::{db, db::image::ImagePool, db::MainPool, service::og::element_og, Result};
+use crate::{db, db::image::ImagePool, db::main::MainPool, service::og::element_og, Result};
 use actix_web::{
     get,
     web::{Data, Path},

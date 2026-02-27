@@ -377,7 +377,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::service::overpass::OverpassElement;
     use crate::{db, Result};
     use actix_web::test;

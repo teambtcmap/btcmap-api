@@ -364,7 +364,7 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
-    use crate::db::test::conn;
+    use crate::db::main::test::conn;
     use crate::service::overpass::OverpassElement;
     use crate::Error;
     use crate::Result;

@@ -215,7 +215,7 @@ async fn insert_report(area_id: i64, tags: &Map<String, Value>, pool: &Pool) -> 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{db::test::pool, service::overpass::OverpassElement};
+    use crate::{db::main::test::pool, service::overpass::OverpassElement};
     use actix_web::test;
     use serde_json::{json, Map};
     use time::{macros::date, Duration};

@@ -2,8 +2,8 @@ use crate::db;
 use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
 use crate::db::element_event::queries::ElementEventWithUser;
+use crate::db::main::MainPool;
 use crate::db::place_submission::schema::PlaceSubmission;
-use crate::db::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
@@ -682,7 +682,7 @@ pub async fn get_by_id_areas(
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::service::overpass::OverpassElement;
     use crate::{db, Result};
     use actix_web::test::TestRequest;

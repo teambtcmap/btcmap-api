@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::element_event::schema::ElementEvent;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -108,7 +108,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetIt
 
 #[cfg(test)]
 mod test {
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::rest::v2::events::GetItem;
     use crate::service::osm::EditingApiUser;
     use crate::service::overpass::OverpassElement;

@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::element_issue::schema::ElementIssue;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;

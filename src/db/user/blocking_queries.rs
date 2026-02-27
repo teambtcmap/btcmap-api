@@ -105,7 +105,7 @@ pub fn set_roles(admin_id: i64, roles: &[Role], conn: &Connection) -> Result<Use
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{test::conn, user::schema::Role},
+        db::{main::test::conn, user::schema::Role},
         Result,
     };
 

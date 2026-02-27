@@ -7,7 +7,7 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     db,
-    db::MainPool,
+    db::main::MainPool,
     rest::error::{RestApiError, RestResult},
 };
 

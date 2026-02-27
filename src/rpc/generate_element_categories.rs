@@ -89,7 +89,7 @@ impl OverpassElement {
 #[cfg(test)]
 mod test {
     use crate::db;
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::service::overpass::OverpassElement;
     use crate::Result;
     use serde_json::Map;

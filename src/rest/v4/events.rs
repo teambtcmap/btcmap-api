@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::event::schema::Event;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
 use crate::Error;

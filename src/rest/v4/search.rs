@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
 use actix_web::{get, web::Data, web::Json, web::Query};
@@ -137,7 +137,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::service::overpass::OverpassElement;
     use crate::{db, Result};
     use actix_web::test::TestRequest;

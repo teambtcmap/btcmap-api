@@ -1,7 +1,7 @@
 use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
 use crate::db::element_event::schema::ElementEvent;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::{db, service, Result};
 use actix_web::{
     get,

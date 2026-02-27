@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::element::schema::Element;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::service::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
@@ -91,7 +91,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Result<Json<Ge
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::{db, Result};
     use actix_web::test::TestRequest;
     use actix_web::web::scope;

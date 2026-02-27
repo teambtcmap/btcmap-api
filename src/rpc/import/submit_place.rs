@@ -107,7 +107,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, test::pool},
+        db::{self, main::test::pool},
         Result,
     };
     use actix_web::test;

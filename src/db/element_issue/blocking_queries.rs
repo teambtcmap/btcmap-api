@@ -248,7 +248,7 @@ mod test {
     use crate::db::area_element::blocking_queries as area_element_queries;
     use crate::db::element::blocking_queries as element_queries;
     use crate::db::element_issue::blocking_queries;
-    use crate::{db::test::conn, Result};
+    use crate::{db::main::test::conn, Result};
     use time::{Duration, OffsetDateTime};
 
     #[test]

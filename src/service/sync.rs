@@ -359,7 +359,7 @@ pub async fn sync_new_elements(
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, test::pool},
+        db::{self, main::test::pool},
         service::{self, osm::EditingApiUser, overpass::OverpassElement},
         Result,
     };

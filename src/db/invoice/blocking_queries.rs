@@ -123,7 +123,7 @@ pub fn set_status(invoice_id: i64, status: InvoiceStatus, conn: &Connection) -> 
 
 #[cfg(test)]
 mod test {
-    use crate::{db::test::conn, Result};
+    use crate::{db::main::test::conn, Result};
 
     #[test]
     fn insert() -> Result<()> {

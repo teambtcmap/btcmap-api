@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, area_element::schema::AreaElement, MainPool},
+    db::{self, area_element::schema::AreaElement, main::MainPool},
     Result,
 };
 use actix_web::{

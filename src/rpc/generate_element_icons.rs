@@ -1668,7 +1668,7 @@ impl OverpassElement {
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, test::pool},
+        db::{self, main::test::pool},
         service::overpass::OverpassElement,
         Result,
     };

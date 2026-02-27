@@ -27,9 +27,10 @@ async fn main() -> Result<()> {
     let start_time = Instant::now();
     init_env();
 
-    let main_pool = db::pool()?;
+    let main_pool = db::main::pool()?;
     let image_pool = db::image::pool()?;
     let log_pool = db::log::pool()?;
+
     main_pool
         .get()
         .await?
@@ -39,6 +40,7 @@ async fn main() -> Result<()> {
     service::event::enforce_v2_compat(&main_pool).await?;
     service::report::enforce_v2_compat(&main_pool).await?;
     service::area::generate_bbox(&main_pool).await?;
+
     let conf = db::conf::queries::select(&main_pool).await?;
     service::matrix::init(&main_pool);
 

@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, user::schema::Role, MainPool},
+    db::{self, conf::schema::Conf, main::MainPool, user::schema::Role},
     Result,
 };
 use actix_web::{
@@ -578,7 +578,7 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{db::test::pool, service::overpass::OverpassElement};
+    use crate::{db::main::test::pool, service::overpass::OverpassElement};
     use actix_web::{
         http::{header, StatusCode},
         test,

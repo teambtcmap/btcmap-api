@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::area::schema::Area;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -75,7 +75,7 @@ pub async fn get_by_url_alias(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::scope;

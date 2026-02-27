@@ -60,7 +60,7 @@ pub fn select_by_ip(ip: &str, conn: &Connection) -> Result<Option<Ban>> {
 
 #[cfg(test)]
 mod test {
-    use crate::{db::test::conn, Result};
+    use crate::{db::main::test::conn, Result};
 
     #[test]
     fn insert() -> Result<()> {

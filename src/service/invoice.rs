@@ -263,7 +263,7 @@ pub async fn on_invoice_paid(
 #[cfg(test)]
 mod test {
     use crate::{
-        db::{self, test::pool},
+        db::{self, main::test::pool},
         service::overpass::OverpassElement,
         Result,
     };

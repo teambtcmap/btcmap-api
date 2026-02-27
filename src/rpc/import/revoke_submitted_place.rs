@@ -51,7 +51,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
 mod test {
     use crate::{
         db::place_submission::blocking_queries::InsertArgs,
-        db::{self, test::pool},
+        db::{self, main::test::pool},
         Result,
     };
     use actix_web::test;

@@ -1,6 +1,6 @@
 use crate::db;
+use crate::db::main::MainPool;
 use crate::db::report::schema::Report;
-use crate::db::MainPool;
 use crate::Error;
 use actix_web::get;
 use actix_web::web::Data;
@@ -89,7 +89,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetIt
 #[cfg(test)]
 mod test {
     use crate::db::area::schema::Area;
-    use crate::db::test::pool;
+    use crate::db::main::test::pool;
     use crate::{db, Result};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;

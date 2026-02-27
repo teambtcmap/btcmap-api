@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::invoice::schema::InvoiceStatus;
-use crate::db::MainPool;
+use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
