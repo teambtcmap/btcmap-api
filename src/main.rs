@@ -31,12 +31,6 @@ async fn main() -> Result<()> {
     let image_pool = db::image::pool()?;
     let log_pool = db::log::pool()?;
 
-    main_pool
-        .get()
-        .await?
-        .interact(db::migration::run)
-        .await??;
-
     service::event::enforce_v2_compat(&main_pool).await?;
     service::report::enforce_v2_compat(&main_pool).await?;
     service::area::generate_bbox(&main_pool).await?;

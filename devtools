@@ -56,10 +56,10 @@ case "$1" in
     gen-main-schema)
         # Generate schema.sql from migrations using temporary SQLite database
         rm -f /tmp/schema_gen.db
-        for f in $(ls -1 migrations/*.sql | sort -V); do
+        for f in $(ls -1 src/db/main/migrations/*.sql | sort -V); do
             sqlite3 /tmp/schema_gen.db < "$f" 2>/dev/null
         done
-        sqlite3 /tmp/schema_gen.db ".dump" > schema.sql
+        sqlite3 /tmp/schema_gen.db ".dump" > src/db/main/schema.sql
         rm -f /tmp/schema_gen.db
         ;;
 

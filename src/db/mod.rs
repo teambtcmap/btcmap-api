@@ -12,7 +12,6 @@ pub mod image;
 pub mod invoice;
 pub mod log;
 pub mod main;
-pub mod migration;
 pub mod osm_user;
 pub mod place_submission;
 pub mod report;
