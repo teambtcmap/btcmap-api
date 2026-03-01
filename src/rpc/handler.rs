@@ -643,7 +643,7 @@ mod test {
     #[test]
     async fn anonymous_method_allowed() -> Result<()> {
         let pool = pool();
-        db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let conf = Conf::mock();
         let client: Option<Client> = None;
         let app = test::init_service(

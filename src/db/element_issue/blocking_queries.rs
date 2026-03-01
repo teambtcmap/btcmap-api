@@ -109,7 +109,7 @@ pub fn select_ordered_by_severity(
         element_id = Columns::ElementId.as_str(),
         deleted_at = Columns::DeletedAt.as_str(),
         severity = Columns::Severity.as_str(),
-        element_table = db::element::schema::TABLE_NAME,
+        element_table = db::main::element::schema::TABLE_NAME,
         include_outdated = if include_outdated {
             ""
         } else {
@@ -245,9 +245,9 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
-    use crate::db::element::blocking_queries as element_queries;
     use crate::db::element_issue::blocking_queries;
     use crate::db::main::area_element::blocking_queries as area_element_queries;
+    use crate::db::main::element::blocking_queries as element_queries;
     use crate::{db::main::test::conn, Result};
     use time::{Duration, OffsetDateTime};
 

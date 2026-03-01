@@ -1,7 +1,7 @@
 use crate::db;
-use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
 use crate::db::element_event::queries::ElementEventWithUser;
+use crate::db::main::element::schema::Element;
 use crate::db::main::MainPool;
 use crate::db::place_submission::schema::PlaceSubmission;
 use crate::rest::error::RestApiError;
@@ -46,7 +46,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     let include_pending = args.include_pending.unwrap_or(false);
     let prevent_pending_id_clash = args.prevent_pending_id_clash.unwrap_or(true);
 
-    let elements = db::element::queries::select_updated_since(
+    let elements = db::main::element::queries::select_updated_since(
         updated_since,
         args.limit,
         include_deleted,
@@ -143,10 +143,14 @@ pub async fn get_boosted(
     let updated_since = OffsetDateTime::UNIX_EPOCH;
     let include_deleted = false;
 
-    let items =
-        db::element::queries::select_updated_since(updated_since, None, include_deleted, &pool)
-            .await
-            .map_err(|_| RestApiError::database())?;
+    let items = db::main::element::queries::select_updated_since(
+        updated_since,
+        None,
+        include_deleted,
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
 
     let items = items
         .into_iter()
@@ -357,9 +361,10 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
     let mut pending_matches = vec![];
 
     if !global {
-        matches = db::element::queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, &pool)
-            .await
-            .map_err(|_| RestApiError::database())?;
+        matches =
+            db::main::element::queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, &pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
         if include_pending {
             pending_matches = db::place_submission::queries::select_pending_by_bbox(
                 min_lat, max_lat, min_lon, max_lon, &pool,
@@ -372,7 +377,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
 
     if !name.is_empty() {
         if filters_applied == 0 {
-            matches = db::element::queries::select_by_search_query(&name, false, &pool)
+            matches = db::main::element::queries::select_by_search_query(&name, false, &pool)
                 .await
                 .map_err(|_| RestApiError::database())?;
             if include_pending {
@@ -394,7 +399,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
 
     if !tag_name.is_empty() && !tag_value.is_empty() {
         if filters_applied == 0 {
-            matches = db::element::queries::select_by_osm_tag_value(
+            matches = db::main::element::queries::select_by_osm_tag_value(
                 tag_name.clone(),
                 tag_value.clone(),
                 &pool,
@@ -525,7 +530,7 @@ pub async fn get_by_id(
     pool: Data<MainPool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
-    db::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
+    db::main::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
         .map(|it| Json(service::element::generate_tags(&it, &fields)))
         .map_err(|e| match e {
@@ -554,7 +559,7 @@ impl From<ElementComment> for Comment {
 
 #[get("{id}/comments")]
 pub async fn get_by_id_comments(id: Path<String>, pool: Data<MainPool>) -> Res<Vec<Comment>> {
-    let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
+    let element = db::main::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
@@ -600,7 +605,7 @@ impl From<ElementEventWithUser> for Activity {
 
 #[get("{id}/activity")]
 pub async fn get_by_id_activity(id: Path<String>, pool: Data<MainPool>) -> Res<Vec<Activity>> {
-    let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
+    let element = db::main::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
@@ -637,7 +642,7 @@ pub async fn get_by_id_areas(
     args: Query<GetAreasArgs>,
     pool: Data<MainPool>,
 ) -> Res<Vec<AreaResponse>> {
-    let element = db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
+    let element = db::main::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
@@ -710,7 +715,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -727,9 +732,12 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        let _element_1 = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let _element_2 = db::element::queries::insert(OverpassElement::mock(2), &pool).await?;
-        let _element_3 = db::element::queries::insert(OverpassElement::mock(3), &pool).await?;
+        let _element_1 =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let _element_2 =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let _element_3 =
+            db::main::element::queries::insert(OverpassElement::mock(3), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -745,11 +753,15 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
-        let element_1 = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        db::element::queries::set_updated_at(element_1.id, datetime!(2022-01-05 00:00 UTC), &pool)
-            .await?;
-        let element_2 = db::element::queries::insert(OverpassElement::mock(2), &pool).await?;
-        let _element_2 = db::element::queries::set_updated_at(
+        let element_1 = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        db::main::element::queries::set_updated_at(
+            element_1.id,
+            datetime!(2022-01-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
+        let element_2 = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let _element_2 = db::main::element::queries::set_updated_at(
             element_2.id,
             datetime!(2022-02-05 00:00 UTC),
             &pool,
@@ -772,7 +784,7 @@ mod test {
     #[test]
     async fn get_by_id() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -788,7 +800,7 @@ mod test {
     #[test]
     async fn get_by_id_areas_excludes_deleted_by_default() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         db::main::area_element::queries::insert(area.id, element.id, &pool).await?;
         db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool)
@@ -809,7 +821,7 @@ mod test {
     #[test]
     async fn get_by_id_areas_includes_deleted_when_requested() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         db::main::area_element::queries::insert(area.id, element.id, &pool).await?;
         db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool)

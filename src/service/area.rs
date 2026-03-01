@@ -2,8 +2,8 @@ use crate::db::element_event::schema::ElementEvent;
 use crate::service;
 use crate::{
     db::{
-        self, element::schema::Element, element_comment::schema::ElementComment,
-        main::area::schema::Area,
+        self, element_comment::schema::ElementComment, main::area::schema::Area,
+        main::element::schema::Element,
     },
     Result,
 };
@@ -85,7 +85,8 @@ pub async fn patch_tags(
         for area_element in
             db::main::area_element::queries::select_by_area_id(area.id, pool).await?
         {
-            let element = db::element::queries::select_by_id(area_element.element_id, pool).await?;
+            let element =
+                db::main::element::queries::select_by_id(area_element.element_id, pool).await?;
             affected_element_ids.insert(element.id);
         }
         let area = db::main::area::queries::patch_tags(area.id, tags, pool).await?;
@@ -101,7 +102,7 @@ pub async fn patch_tags(
         }
         let mut affected_elements: Vec<Element> = vec![];
         for id in affected_element_ids {
-            affected_elements.push(db::element::queries::select_by_id(id, pool).await?);
+            affected_elements.push(db::main::element::queries::select_by_id(id, pool).await?);
         }
         service::area_element::generate_mapping(&affected_elements, pool).await?;
         Ok(area)
@@ -168,7 +169,7 @@ pub async fn get_trending_areas(
         db::element_event::queries::select_created_between(period_start, period_end, pool).await?;
     let mut areas_to_events: HashMap<i64, Vec<&ElementEvent>> = HashMap::new();
     for event in &events {
-        let element = db::element::queries::select_by_id(event.element_id, pool).await?;
+        let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
             db::main::area_element::queries::select_by_element_id(element.id, pool)
                 .await?
@@ -190,7 +191,7 @@ pub async fn get_trending_areas(
         .collect();
     let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
     for comment in &comments {
-        let element = db::element::queries::select_by_id(comment.element_id, pool).await?;
+        let element = db::main::element::queries::select_by_id(comment.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
             db::main::area_element::queries::select_by_element_id(element.id, pool)
                 .await?
@@ -409,13 +410,13 @@ mod test {
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        db::element::queries::insert(element_1, &pool).await?;
+        db::main::element::queries::insert(element_1, &pool).await?;
         let element_2 = OverpassElement {
             lat: Some(50.0),
             lon: Some(1.0),
             ..OverpassElement::mock(2)
         };
-        db::element::queries::insert(element_2, &pool).await?;
+        db::main::element::queries::insert(element_2, &pool).await?;
         let mut tags = Area::mock_tags();
         // Phuket
         tags.insert(
@@ -477,13 +478,13 @@ mod test {
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        db::element::queries::insert(element_in_phuket.clone(), &pool).await?;
+        db::main::element::queries::insert(element_in_phuket.clone(), &pool).await?;
         let element_in_london = OverpassElement {
             lat: Some(50.0),
             lon: Some(1.0),
             ..OverpassElement::mock(2)
         };
-        db::element::queries::insert(element_in_london.clone(), &pool).await?;
+        db::main::element::queries::insert(element_in_london.clone(), &pool).await?;
         let mut tags = Area::mock_tags();
         // Earth
         tags.insert(
@@ -633,9 +634,14 @@ mod test {
             lon: Some(98.33448362485439),
             ..OverpassElement::mock(1)
         };
-        let area_element = db::element::queries::insert(area_element, &pool).await?;
-        db::element::queries::set_tag(area_element.id, "areas", &json!("[{id:1},{id:2}]"), &pool)
-            .await?;
+        let area_element = db::main::element::queries::insert(area_element, &pool).await?;
+        db::main::element::queries::set_tag(
+            area_element.id,
+            "areas",
+            &json!("[{id:1},{id:2}]"),
+            &pool,
+        )
+        .await?;
         let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         super::soft_delete_async(&area.id.to_string(), &pool).await?;
         let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
@@ -647,7 +653,7 @@ mod test {
     #[test]
     async fn get_comments() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let comment = db::element_comment::queries::insert(element.id, "test", &pool).await?;
         let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         let _area_element =

@@ -17,8 +17,9 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let element = db::element::queries::select_by_id(params.element_id, pool).await?;
-    let element = db::element::queries::remove_tag(element.id, &params.tag_name, pool).await?;
+    let element = db::main::element::queries::select_by_id(params.element_id, pool).await?;
+    let element =
+        db::main::element::queries::remove_tag(element.id, &params.tag_name, pool).await?;
     Ok(Res {
         id: element.id,
         tags: element.tags,

@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, element::schema::Element},
+    db::{self, main::element::schema::Element},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -34,12 +34,13 @@ pub async fn refresh_comment_count_tag(
     }
 
     if current_count > 0 {
-        db::element::queries::set_tag(element.id, "comments", &current_count.into(), pool).await?;
+        db::main::element::queries::set_tag(element.id, "comments", &current_count.into(), pool)
+            .await?;
     } else {
         // no need to store zero counts
         // but also avoid useless writes
         if element.tags.contains_key("comments") {
-            db::element::queries::remove_tag(element.id, "comments", pool).await?;
+            db::main::element::queries::remove_tag(element.id, "comments", pool).await?;
         }
     }
 
@@ -64,7 +65,7 @@ mod test {
     #[test]
     async fn refresh_comment_count_tag() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let count_res = super::refresh_comment_count_tag(&element, &pool).await?;
         assert_eq!(0, count_res.previous_count);
         assert_eq!(0, count_res.current_count);
@@ -74,7 +75,7 @@ mod test {
         assert_eq!(0, count_res.previous_count);
         assert_eq!(1, count_res.current_count);
         assert_eq!(true, count_res.count_changed);
-        let element = db::element::queries::select_by_id(element.id, &pool).await?;
+        let element = db::main::element::queries::select_by_id(element.id, &pool).await?;
         assert_eq!(Value::Number(1.into()), element.tags["comments"]);
         db::element_comment::queries::set_deleted_at(
             comment.id,
@@ -86,7 +87,7 @@ mod test {
         assert_eq!(1, count_res.previous_count);
         assert_eq!(0, count_res.current_count);
         assert_eq!(true, count_res.count_changed);
-        let element = db::element::queries::select_by_id(element.id, &pool).await?;
+        let element = db::main::element::queries::select_by_id(element.id, &pool).await?;
         assert_eq!(None, element.tags.get("comments"));
         Ok(())
     }

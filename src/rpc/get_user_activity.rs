@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, element::schema::Element, element_event::schema::ElementEvent},
+    db::{self, element_event::schema::ElementEvent, main::element::schema::Element},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -30,7 +30,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
         let element_id = event.element_id;
         user_events_to_elements.push((
             event,
-            db::element::queries::select_by_id(element_id, pool).await?,
+            db::main::element::queries::select_by_id(element_id, pool).await?,
         ));
     }
     let res = user_events_to_elements

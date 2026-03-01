@@ -12,7 +12,7 @@ pub async fn get_element(
     image_pool: Data<ImagePool>,
 ) -> Result<impl Responder> {
     let id = id.into_inner();
-    let element = db::element::queries::select_by_id_or_osm_id(&id, &pool).await?;
+    let element = db::main::element::queries::select_by_id_or_osm_id(&id, &pool).await?;
     let current_version = element.overpass_data.version.unwrap_or(0);
 
     if let Some(cached) =

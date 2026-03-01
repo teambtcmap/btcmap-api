@@ -64,7 +64,7 @@ pub async fn post(
         }
     }
 
-    let element = db::element::queries::select_by_id_or_osm_id(&args.place_id, &pool)
+    let element = db::main::element::queries::select_by_id_or_osm_id(&args.place_id, &pool)
         .await
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),

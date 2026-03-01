@@ -1,6 +1,6 @@
 use crate::db;
-use crate::db::element::schema::Element;
 use crate::db::main::area::schema::Area;
+use crate::db::main::element::schema::Element;
 use crate::db::place_submission::schema::PlaceSubmission;
 use crate::Result;
 use deadpool_sqlite::Pool;
@@ -165,14 +165,14 @@ pub async fn generate_issues(elements: Vec<&Element>, pool: &Pool) -> Result<Gen
         }
         // No current issues found but an element has some old issues which need to be deleted
         if issues.is_empty() && element.tags.contains_key("issues") {
-            db::element::queries::remove_tag(element.id, "issues", pool).await?;
+            db::main::element::queries::remove_tag(element.id, "issues", pool).await?;
             affected_elements += 1;
             continue;
         }
         let issues = serde_json::to_value(&issues)?;
         // We should avoid toucing the elements if the issues didn't change
         if element.tag("issues") != &issues {
-            db::element::queries::set_tag(element.id, "issues", &issues, pool).await?;
+            db::main::element::queries::set_tag(element.id, "issues", &issues, pool).await?;
             affected_elements += 1;
         }
     }

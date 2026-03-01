@@ -1,15 +1,14 @@
+use crate::{
+    db,
+    db::main::MainPool,
+    rest::error::{RestApiError, RestResult},
+};
 use actix_web::{
     get,
     web::{Data, Json},
 };
 use serde::Serialize;
 use time::{Duration, OffsetDateTime};
-
-use crate::{
-    db,
-    db::main::MainPool,
-    rest::error::{RestApiError, RestResult},
-};
 
 #[derive(Serialize)]
 pub struct Dashboard {
@@ -30,20 +29,22 @@ pub struct ChartEntry {
 
 #[get("")]
 pub async fn get(pool: Data<MainPool>) -> RestResult<Dashboard> {
-    let total_merchants = db::element::queries::select_merchants_count(&pool, None)
+    let total_merchants = db::main::element::queries::select_merchants_count(&pool, None)
         .await
         .map_err(|_| RestApiError::database())?;
 
     let now = OffsetDateTime::now_utc();
     let year_ago = now.date().saturating_sub(Duration::days(365));
-    let verified_merchants_1y = db::element::queries::select_merchants_count(&pool, Some(year_ago))
-        .await
-        .map_err(|_| RestApiError::database())?;
-    let verified_exchanges_1y = db::element::queries::select_exchanges_count(&pool, Some(year_ago))
-        .await
-        .map_err(|_| RestApiError::database())?;
+    let verified_merchants_1y =
+        db::main::element::queries::select_merchants_count(&pool, Some(year_ago))
+            .await
+            .map_err(|_| RestApiError::database())?;
+    let verified_exchanges_1y =
+        db::main::element::queries::select_exchanges_count(&pool, Some(year_ago))
+            .await
+            .map_err(|_| RestApiError::database())?;
 
-    let total_exchanges = db::element::queries::select_exchanges_count(&pool, None)
+    let total_exchanges = db::main::element::queries::select_exchanges_count(&pool, None)
         .await
         .map_err(|_| RestApiError::database())?;
 

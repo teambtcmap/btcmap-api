@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::element::schema::Element;
+use crate::db::main::element::schema::Element;
 use crate::db::main::MainPool;
 use crate::service::overpass::OverpassElement;
 use crate::Error;
@@ -66,7 +66,7 @@ impl From<Element> for Json<GetItem> {
 
 #[get("")]
 pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
-    let elements = db::element::queries::select_updated_since(
+    let elements = db::main::element::queries::select_updated_since(
         args.updated_since,
         Some(args.limit),
         true,
@@ -78,7 +78,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
-    db::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
+    db::main::element::queries::select_by_id_or_osm_id(id.as_str(), &pool)
         .await
         .map(Into::into)
 }
@@ -144,7 +144,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let pool = pool();
-        let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -162,9 +162,10 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        let element_1 = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let element_2 = db::element::queries::insert(OverpassElement::mock(2), &pool).await?;
-        let _element_3 = db::element::queries::insert(OverpassElement::mock(3), &pool).await?;
+        let element_1 = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_2 = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let _element_3 =
+            db::main::element::queries::insert(OverpassElement::mock(3), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -182,11 +183,15 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
-        let element_1 = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        db::element::queries::set_updated_at(element_1.id, datetime!(2022-01-05 00:00 UTC), &pool)
-            .await?;
-        let element_2 = db::element::queries::insert(OverpassElement::mock(2), &pool).await?;
-        let element_2 = db::element::queries::set_updated_at(
+        let element_1 = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        db::main::element::queries::set_updated_at(
+            element_1.id,
+            datetime!(2022-01-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
+        let element_2 = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let element_2 = db::main::element::queries::set_updated_at(
             element_2.id,
             datetime!(2022-02-05 00:00 UTC),
             &pool,

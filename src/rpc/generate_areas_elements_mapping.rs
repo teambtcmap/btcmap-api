@@ -13,9 +13,13 @@ pub struct Res {
 }
 
 pub async fn run(pool: &Pool) -> Result<Res> {
-    let elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
-            .await?;
+    let elements = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     let affected_elements = service::area_element::generate_mapping(&elements, pool).await?;
     Ok(Res { affected_elements })
 }

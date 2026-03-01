@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, element::schema::Element, main::area::schema::Area},
+    db::{self, main::area::schema::Area, main::element::schema::Element},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -43,7 +43,7 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
     for area in all_areas {
         let elements = match area.alias().as_str() {
             "earth" => {
-                let elements = db::element::queries::select_updated_since(
+                let elements = db::main::element::queries::select_updated_since(
                     OffsetDateTime::UNIX_EPOCH,
                     None,
                     false,
@@ -59,7 +59,8 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
                 let mut elements: Vec<Element> = vec![];
                 for area_element in area_elements {
                     let element =
-                        db::element::queries::select_by_id(area_element.element_id, pool).await?;
+                        db::main::element::queries::select_by_id(area_element.element_id, pool)
+                            .await?;
 
                     if element.deleted_at.is_none() {
                         elements.push(element);

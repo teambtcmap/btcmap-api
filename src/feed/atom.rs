@@ -1,6 +1,6 @@
-use crate::db::element::schema::Element;
 use crate::db::element_comment::schema::ElementComment;
 use crate::db::element_event::schema::ElementEvent;
+use crate::db::main::element::schema::Element;
 use crate::db::main::MainPool;
 use crate::{db, service, Result};
 use actix_web::{
@@ -26,7 +26,7 @@ pub async fn new_places(pool: Data<MainPool>) -> Result<impl Responder> {
         let element_id = event.element_id;
         events_to_elements.push((
             event,
-            db::element::queries::select_by_id(element_id, &pool).await?,
+            db::main::element::queries::select_by_id(element_id, &pool).await?,
         ));
     }
     Ok(HttpResponse::Ok()
@@ -64,7 +64,7 @@ pub async fn new_places_for_area(
         let element_id = event.element_id;
         events_to_elements.push((
             event,
-            db::element::queries::select_by_id(element_id, &pool).await?,
+            db::main::element::queries::select_by_id(element_id, &pool).await?,
         ));
     }
     events_to_elements.sort_by(|a, b| b.0.updated_at.cmp(&a.0.updated_at));
@@ -131,7 +131,7 @@ pub async fn new_comments(pool: Data<MainPool>) -> Result<impl Responder> {
         let element_id = comment.element_id;
         comments_to_elements.push((
             comment,
-            db::element::queries::select_by_id(element_id, &pool).await?,
+            db::main::element::queries::select_by_id(element_id, &pool).await?,
         ));
     }
     let comments_to_elements = comments_to_elements
@@ -158,7 +158,7 @@ pub async fn new_comments_for_area(
     let comments = service::area::get_comments(&area, false, &pool).await?;
     let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
     for comment in comments {
-        let element = db::element::queries::select_by_id(comment.element_id, &pool).await?;
+        let element = db::main::element::queries::select_by_id(comment.element_id, &pool).await?;
         if element.deleted_at.is_none() {
             comments_to_elements.push((comment, element));
         }

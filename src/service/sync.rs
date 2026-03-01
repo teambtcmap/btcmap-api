@@ -1,5 +1,5 @@
-use crate::db::element::schema::Element;
 use crate::db::element_event::schema::ElementEvent;
+use crate::db::main::element::schema::Element;
 use crate::service::area_element::Diff;
 use crate::service::matrix::ROOM_OSM_CHANGES;
 use crate::service::osm::OsmElement;
@@ -56,7 +56,7 @@ pub async fn merge_overpass_elements(
         sync_deleted_elements(&fresh_overpass_elements, pool, matrix_client).await?;
     let mut deleted_elements: Vec<MergeResultElement> = vec![];
     for event in &deleted_element_events {
-        let element = db::element::queries::select_by_id(event.element_id, pool).await?;
+        let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
         deleted_elements.push(element.into());
     }
     let deleted_sync_time_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
@@ -66,7 +66,7 @@ pub async fn merge_overpass_elements(
     let updated_element_events = sync_updated_elements(&fresh_overpass_elements, pool).await?;
     let mut updated_elements: Vec<Element> = vec![];
     for event in &updated_element_events {
-        let element = db::element::queries::select_by_id(event.element_id, pool).await?;
+        let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
         updated_elements.push(element);
     }
     let updated_sync_time_s =
@@ -77,7 +77,7 @@ pub async fn merge_overpass_elements(
     let created_element_events = sync_new_elements(&fresh_overpass_elements, pool).await?;
     let mut created_elements: Vec<Element> = vec![];
     for event in &created_element_events {
-        let element = db::element::queries::select_by_id(event.element_id, pool).await?;
+        let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
         created_elements.push(element);
     }
     let created_sync_time_s =
@@ -142,12 +142,16 @@ pub async fn sync_deleted_elements(
         .iter()
         .map(|it| it.btcmap_id())
         .collect();
-    let absent_elements: Vec<Element> =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, false, pool)
-            .await?
-            .into_iter()
-            .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
-            .collect();
+    let absent_elements: Vec<Element> = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        false,
+        pool,
+    )
+    .await?
+    .into_iter()
+    .filter(|it| !fresh_overpass_element_ids.contains(&it.overpass_data.btcmap_id()))
+    .collect();
     let mut res = vec![];
     for absent_element in absent_elements {
         let fresh_osm_element = confirm_deleted(
@@ -177,7 +181,8 @@ async fn mark_element_as_deleted(
     if element.tags.contains_key("areas") {
         event_tags.insert("areas".into(), element.tags["areas"].clone());
     }
-    db::element::queries::set_deleted_at(element.id, Some(OffsetDateTime::now_utc()), pool).await?;
+    db::main::element::queries::set_deleted_at(element.id, Some(OffsetDateTime::now_utc()), pool)
+        .await?;
     let element_issues = db::element_issue::queries::select_by_element_id(element.id, pool).await?;
     for issue in element_issues {
         db::element_issue::queries::set_deleted_at(issue.id, Some(OffsetDateTime::now_utc()), pool)
@@ -219,9 +224,13 @@ pub async fn sync_updated_elements(
     pool: &Pool,
 ) -> Result<Vec<ElementEvent>> {
     let mut res = vec![];
-    let cached_elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
-            .await?;
+    let cached_elements = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     for fresh_overpass_element in fresh_overpass_elements {
         let cached_element = cached_elements.iter().find(|cached_element| {
             cached_element.overpass_data.r#type == fresh_overpass_element.r#type
@@ -233,7 +242,7 @@ pub async fn sync_updated_elements(
         let mut cached_element = cached_element.unwrap().clone();
         if cached_element.deleted_at.is_some() {
             cached_element =
-                db::element::queries::set_deleted_at(cached_element.id, None, pool).await?;
+                db::main::element::queries::set_deleted_at(cached_element.id, None, pool).await?;
         }
         if *fresh_overpass_element == cached_element.overpass_data {
             continue;
@@ -256,13 +265,13 @@ pub async fn sync_updated_elements(
             let event = db::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
             res.push(event);
         }
-        let updated_element = db::element::queries::set_overpass_data(
+        let updated_element = db::main::element::queries::set_overpass_data(
             cached_element.id,
             fresh_overpass_element.clone(),
             pool,
         )
         .await?;
-        let mut updated_element = db::element::queries::set_lat_lon(
+        let mut updated_element = db::main::element::queries::set_lat_lon(
             updated_element.id,
             updated_element.lat(),
             updated_element.lon(),
@@ -275,7 +284,7 @@ pub async fn sync_updated_elements(
             .as_str()
             .unwrap_or_default();
         if new_android_icon != old_android_icon {
-            updated_element = db::element::queries::set_tag(
+            updated_element = db::main::element::queries::set_tag(
                 updated_element.id,
                 "icon:android",
                 &new_android_icon.clone().into(),
@@ -294,9 +303,13 @@ pub async fn sync_new_elements(
     pool: &Pool,
 ) -> Result<Vec<ElementEvent>> {
     let mut res = vec![];
-    let cached_elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
-            .await?;
+    let cached_elements = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     for fresh_element in fresh_overpass_elements {
         let btcmap_id = fresh_element.btcmap_id();
         let user_id = fresh_element.uid;
@@ -308,8 +321,9 @@ pub async fn sync_new_elements(
             Some(_) => {}
             None => {
                 service::user::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
-                let element = db::element::queries::insert(fresh_element.clone(), pool).await?;
-                let element = db::element::queries::set_lat_lon(
+                let element =
+                    db::main::element::queries::insert(fresh_element.clone(), pool).await?;
+                let element = db::main::element::queries::set_lat_lon(
                     element.id,
                     element.lat(),
                     element.lon(),
@@ -334,14 +348,14 @@ pub async fn sync_new_elements(
                 res.push(event);
                 let category = element.overpass_data.generate_category();
                 let android_icon = element.overpass_data.generate_android_icon();
-                let element = db::element::queries::set_tag(
+                let element = db::main::element::queries::set_tag(
                     element.id,
                     "category",
                     &category.clone().into(),
                     pool,
                 )
                 .await?;
-                let element = db::element::queries::set_tag(
+                let element = db::main::element::queries::set_tag(
                     element.id,
                     "icon:android",
                     &android_icon.clone().into(),
@@ -369,10 +383,10 @@ mod test {
     #[ignore = "relies on external service"]
     async fn sync_deleted_elements() -> Result<()> {
         let pool = pool();
-        let element_1 = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let element_2 = db::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let element_1 = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_2 = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
         let element_3 =
-            db::element::queries::insert(OverpassElement::mock(2702291726), &pool).await?;
+            db::main::element::queries::insert(OverpassElement::mock(2702291726), &pool).await?;
         let res = super::sync_deleted_elements(
             &vec![element_1.overpass_data, element_2.overpass_data],
             &pool,

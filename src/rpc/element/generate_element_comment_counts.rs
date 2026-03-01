@@ -16,9 +16,13 @@ pub struct Res {
 
 pub async fn run(pool: &Pool) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
-            .await?;
+    let elements = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     let mut elements_affected = 0;
     for element in elements {
         let refresh_tag_res = service::comment::refresh_comment_count_tag(&element, pool).await?;

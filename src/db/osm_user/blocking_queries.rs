@@ -313,7 +313,8 @@ mod test {
         )?;
         assert_eq!(0, res.len());
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let _event_1 =
             db::element_event::blocking_queries::insert(user.id, element.id, "update", &conn)?;
         let _event_2 =

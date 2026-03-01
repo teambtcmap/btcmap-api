@@ -295,7 +295,8 @@ mod test {
     fn insert() -> Result<()> {
         let conn = conn();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "create", &conn)?;
         assert_eq!(event, super::select_by_id(event.id, &conn)?);
         Ok(())
@@ -305,7 +306,8 @@ mod test {
     fn select_all() -> Result<()> {
         let conn = conn();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         assert_eq!(
             vec![
                 super::insert(user.id, element.id, "", &conn)?,
@@ -321,7 +323,8 @@ mod test {
     fn select_updated_since() -> Result<()> {
         let conn = conn();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event_1 = super::insert(user.id, element.id, "", &conn)?;
         let _event_1 = super::set_updated_at(event_1.id, datetime!(2020-01-01 00:00 UTC), &conn)?;
         let event_2 = super::insert(1, element.id, "", &conn)?;
@@ -339,7 +342,8 @@ mod test {
     fn select_by_id() -> Result<()> {
         let conn = conn();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
         assert_eq!(event, super::select_by_id(1, &conn)?);
         Ok(())
@@ -354,7 +358,8 @@ mod test {
         let tag_2_name = "tag_2_name";
         let tag_2_value = json!("tag_2_value");
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
         let mut tags = HashMap::new();
         tags.insert(tag_1_name.into(), tag_1_value_1.clone());
@@ -376,7 +381,8 @@ mod test {
         let conn = conn();
         let updated_at = OffsetDateTime::now_utc();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event = super::insert(user.id, element.id, "", &conn)?;
         let event = super::set_updated_at(event.id, updated_at, &conn)?;
         assert_eq!(updated_at, super::select_by_id(event.id, &conn)?.updated_at);
@@ -386,7 +392,8 @@ mod test {
     #[test]
     fn select_by_element_id_empty() -> Result<()> {
         let conn = conn();
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let result = super::select_by_element_id(element.id, &conn)?;
         assert!(result.is_empty());
         Ok(())
@@ -396,7 +403,8 @@ mod test {
     fn select_by_element_id_returns_events() -> Result<()> {
         let conn = conn();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let event_1 = super::insert(user.id, element.id, "create", &conn)?;
         let event_2 = super::insert(user.id, element.id, "update", &conn)?;
         conn.execute(
@@ -420,7 +428,8 @@ mod test {
     fn select_by_element_id_excludes_deleted() -> Result<()> {
         let conn = conn();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let _event = super::insert(user.id, element.id, "create", &conn)?;
         let deleted_event = super::insert(user.id, element.id, "delete", &conn)?;
         let sql = format!("UPDATE element_event SET deleted_at = datetime('now') WHERE id = ?1");
@@ -437,7 +446,8 @@ mod test {
         let mut user = EditingApiUser::mock();
         user.display_name = "TestUser".to_string();
         let user = db::osm_user::blocking_queries::insert(1, &user, &conn)?;
-        let element = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let _event = super::insert(user.id, element.id, "create", &conn)?;
         let result = super::select_by_element_id(element.id, &conn)?;
         assert_eq!("TestUser", result[0].user_name);
@@ -448,8 +458,10 @@ mod test {
     fn select_by_element_id_different_elements() -> Result<()> {
         let conn = conn();
         let user = db::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
-        let element_1 = db::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
-        let element_2 = db::element::blocking_queries::insert(&OverpassElement::mock(2), &conn)?;
+        let element_1 =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element_2 =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(2), &conn)?;
         let _event_1 = super::insert(user.id, element_1.id, "create", &conn)?;
         let _event_2 = super::insert(user.id, element_2.id, "update", &conn)?;
         let result_1 = super::select_by_element_id(element_1.id, &conn)?;

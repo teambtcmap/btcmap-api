@@ -18,9 +18,13 @@ pub struct Res {
 }
 
 pub async fn run(pool: &Pool) -> Result<Res> {
-    let elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, true, pool)
-            .await?;
+    let elements = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
     for element in elements {
         if element.deleted_at.is_some() {
             let issues = db::element_issue::queries::select_by_element_id(element.id, pool).await?;
@@ -34,9 +38,13 @@ pub async fn run(pool: &Pool) -> Result<Res> {
             }
         }
     }
-    let elements =
-        db::element::queries::select_updated_since(OffsetDateTime::UNIX_EPOCH, None, false, pool)
-            .await?;
+    let elements = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        false,
+        pool,
+    )
+    .await?;
     let res = service::element::generate_issues(elements.iter().collect(), pool).await?;
     Ok(Res {
         started_at: res.started_at,

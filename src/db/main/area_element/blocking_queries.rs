@@ -174,7 +174,7 @@ mod tests {
             crate::db::main::area::schema::Area::mock_tags(),
             &conn,
         )?;
-        let element = crate::db::element::blocking_queries::insert(
+        let element = crate::db::main::element::blocking_queries::insert(
             &crate::service::overpass::OverpassElement::mock(1),
             &conn,
         )?;

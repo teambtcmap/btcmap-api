@@ -251,7 +251,7 @@ mod test {
     #[test]
     fn insert_and_select_by_id() -> Result<()> {
         let conn = conn();
-        let element = crate::db::element::blocking_queries::insert(
+        let element = crate::db::main::element::blocking_queries::insert(
             &crate::service::overpass::OverpassElement::mock(1),
             &conn,
         )?;

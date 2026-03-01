@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, element::schema::Element},
+    db::{self, main::element::schema::Element},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -29,7 +29,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
 }
 
 async fn boost(id_or_osm_id: &str, days: i64, pool: &Pool) -> Result<Element> {
-    let element = db::element::queries::select_by_id_or_osm_id(id_or_osm_id, pool).await?;
+    let element = db::main::element::queries::select_by_id_or_osm_id(id_or_osm_id, pool).await?;
     let boost_expires = element.tag("boost:expires");
     let boost_expires = match boost_expires {
         Value::String(v) => {
@@ -43,7 +43,7 @@ async fn boost(id_or_osm_id: &str, days: i64, pool: &Pool) -> Result<Element> {
         boost_expires
     };
     let boost_expires = boost_expires.checked_add(Duration::days(days)).unwrap();
-    let element = db::element::queries::set_tag(
+    let element = db::main::element::queries::set_tag(
         element.id,
         "boost:expires",
         &Value::String(boost_expires.format(&Iso8601::DEFAULT)?),
