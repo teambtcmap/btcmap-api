@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf},
+    db::{self, main::conf::schema::Conf},
     service, Result,
 };
 use deadpool_sqlite::Pool;

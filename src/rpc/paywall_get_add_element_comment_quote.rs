@@ -1,4 +1,4 @@
-use crate::{db::conf::schema::Conf, Result};
+use crate::{db::main::conf::schema::Conf, Result};
 use serde::Serialize;
 
 #[derive(Serialize)]

@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, conf::schema::Conf, main::MainPool, user::schema::Role},
+    db::{self, main::conf::schema::Conf, main::MainPool, user::schema::Role},
     Result,
 };
 use actix_web::{

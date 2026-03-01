@@ -1,6 +1,6 @@
 use crate::db;
-use crate::db::conf::schema::Conf;
 use crate::db::element_comment::schema::ElementComment;
+use crate::db::main::conf::schema::Conf;
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;

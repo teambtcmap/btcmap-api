@@ -17,7 +17,7 @@ pub async fn create_issue(
     labels: Vec<i64>,
     pool: &Pool,
 ) -> Result<CreateIssueResponse> {
-    let conf = db::conf::queries::select(pool).await?;
+    let conf = db::main::conf::queries::select(pool).await?;
     if conf.gitea_api_key.is_empty() {
         Err("gitea api key is not set")?
     }
@@ -45,7 +45,7 @@ pub struct GetIssueResponse {
 }
 
 pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<Option<GetIssueResponse>> {
-    let conf = db::conf::queries::select(pool).await?;
+    let conf = db::main::conf::queries::select(pool).await?;
     if conf.gitea_api_key.is_empty() {
         Err("gitea api key is not set")?
     }

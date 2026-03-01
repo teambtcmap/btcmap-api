@@ -41,7 +41,7 @@ pub fn init(pool: &Pool) {
 }
 
 async fn _init(pool: &Pool) -> Option<Client> {
-    let Ok(conf) = db::conf::queries::select(pool).await else {
+    let Ok(conf) = db::main::conf::queries::select(pool).await else {
         error!("failed to load configuration");
         return None;
     };

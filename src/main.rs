@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
     service::report::enforce_v2_compat(&main_pool).await?;
     service::area::generate_bbox(&main_pool).await?;
 
-    let conf = db::conf::queries::select(&main_pool).await?;
+    let conf = db::main::conf::queries::select(&main_pool).await?;
     service::matrix::init(&main_pool);
 
     let startup_duration = start_time.elapsed();

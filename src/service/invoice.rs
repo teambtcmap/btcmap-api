@@ -34,7 +34,7 @@ pub async fn create(
     amount_sats: i64,
     pool: &Pool,
 ) -> Result<Invoice> {
-    let conf = db::conf::queries::select(pool).await?;
+    let conf = db::main::conf::queries::select(pool).await?;
     let client = reqwest::Client::new();
 
     if source == "lnbits" {
@@ -112,7 +112,7 @@ pub struct CheckLndInvoiceResponse {
 }
 
 pub async fn sync_unpaid_invoices(pool: &Pool, matrix_client: &Option<Client>) -> Result<i64> {
-    let conf = db::conf::queries::select(pool).await?;
+    let conf = db::main::conf::queries::select(pool).await?;
     if conf.lnbits_invoice_key.is_empty() {
         Err("lnbits invoice key is not set")?
     }
@@ -142,7 +142,7 @@ pub async fn sync_unpaid_invoice(
     if invoice.status != InvoiceStatus::Unpaid {
         return Ok(false);
     }
-    let conf = db::conf::queries::select(pool).await?;
+    let conf = db::main::conf::queries::select(pool).await?;
     let client = reqwest::Client::new();
     if invoice.source == "lnbits" {
         let url = format!(
