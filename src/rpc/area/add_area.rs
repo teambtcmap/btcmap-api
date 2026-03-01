@@ -1,4 +1,4 @@
-use crate::{db::area::schema::Area, service, Result};
+use crate::{db::main::area::schema::Area, service, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

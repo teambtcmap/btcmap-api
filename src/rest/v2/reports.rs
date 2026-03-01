@@ -100,7 +100,7 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetIt
 
 #[cfg(test)]
 mod test {
-    use crate::db::area::schema::Area;
+    use crate::db::main::area::schema::Area;
     use crate::db::main::test::pool;
     use crate::rest::v2::reports::GetItem;
     use crate::{db, Result};
@@ -129,7 +129,7 @@ mod test {
     #[test]
     async fn get_one_row() -> Result<()> {
         let pool = pool();
-        db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         db::report::queries::insert(1, OffsetDateTime::now_utc().date(), Map::new(), &pool).await?;
         let app = test::init_service(
             App::new()
@@ -146,7 +146,7 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         db::report::queries::insert(1, date!(2023 - 05 - 06), Map::new(), &pool).await?;
         db::report::queries::insert(1, date!(2023 - 05 - 07), Map::new(), &pool).await?;
         db::report::queries::insert(1, date!(2023 - 05 - 08), Map::new(), &pool).await?;
@@ -165,7 +165,7 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
-        db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         let report_1 =
             db::report::queries::insert(1, OffsetDateTime::now_utc().date(), Map::new(), &pool)
                 .await?;

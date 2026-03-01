@@ -651,7 +651,7 @@ pub async fn get_by_id_areas(
     let mut areas: Vec<AreaResponse> = vec![];
 
     for area_element in area_elements {
-        if let Ok(area) = db::area::queries::select_by_id(area_element.area_id, &pool).await {
+        if let Ok(area) = db::main::area::queries::select_by_id(area_element.area_id, &pool).await {
             if !args.include_deleted.unwrap_or(false) && area.deleted_at.is_some() {
                 continue;
             }
@@ -681,7 +681,7 @@ pub async fn get_by_id_areas(
 
 #[cfg(test)]
 mod test {
-    use crate::db::area::schema::Area;
+    use crate::db::main::area::schema::Area;
     use crate::db::main::test::pool;
     use crate::service::overpass::OverpassElement;
     use crate::{db, Result};
@@ -789,9 +789,10 @@ mod test {
     async fn get_by_id_areas_excludes_deleted_by_default() -> Result<()> {
         let pool = pool();
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         db::area_element::queries::insert(area.id, element.id, &pool).await?;
-        db::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool).await?;
+        db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
 
         let app = test::init_service(
             App::new()
@@ -809,9 +810,10 @@ mod test {
     async fn get_by_id_areas_includes_deleted_when_requested() -> Result<()> {
         let pool = pool();
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         db::area_element::queries::insert(area.id, element.id, &pool).await?;
-        db::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool).await?;
+        db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
 
         let app = test::init_service(
             App::new()

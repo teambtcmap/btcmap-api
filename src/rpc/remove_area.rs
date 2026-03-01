@@ -1,4 +1,4 @@
-use crate::db::area::schema::Area;
+use crate::db::main::area::schema::Area;
 use crate::{service, Result};
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;

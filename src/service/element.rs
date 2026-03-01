@@ -1,6 +1,6 @@
 use crate::db;
-use crate::db::area::schema::Area;
 use crate::db::element::schema::Element;
+use crate::db::main::area::schema::Area;
 use crate::db::place_submission::schema::PlaceSubmission;
 use crate::Result;
 use deadpool_sqlite::Pool;

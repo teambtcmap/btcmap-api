@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, area::schema::Area},
+    db::{self, main::area::schema::Area},
     Result,
 };
 use base64::prelude::*;
@@ -42,7 +42,7 @@ impl From<Area> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let area = db::area::queries::select_by_id_or_alias(&params.id, pool).await?;
+    let area = db::main::area::queries::select_by_id_or_alias(&params.id, pool).await?;
     let file_name = format!("{}.{}", area.id, params.icon_ext);
     let bytes = BASE64_STANDARD.decode(params.icon_base64)?;
     let mut file = OpenOptions::new()
@@ -56,6 +56,6 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     file.flush()?;
     let url = format!("https://static.btcmap.org/images/areas/{file_name}");
     let patch_set = Map::from_iter([("icon:square".into(), url.into())].into_iter());
-    let area = db::area::queries::patch_tags(area.id, patch_set, pool).await?;
+    let area = db::main::area::queries::patch_tags(area.id, patch_set, pool).await?;
     Ok(area.into())
 }

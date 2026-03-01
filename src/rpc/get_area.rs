@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, area::schema::Area},
+    db::{self, main::area::schema::Area},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -37,7 +37,7 @@ impl From<Area> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    db::area::queries::select_by_id_or_alias(params.id, pool)
+    db::main::area::queries::select_by_id_or_alias(params.id, pool)
         .await
         .map(Into::into)
 }

@@ -1,5 +1,5 @@
-use crate::db::area::schema::Area;
 use crate::db::element::schema::Element;
+use crate::db::main::area::schema::Area;
 use crate::{db, service, Result};
 use deadpool_sqlite::Pool;
 use geo::{Contains, LineString, MultiPolygon, Polygon};
@@ -17,7 +17,7 @@ pub struct Diff {
 
 pub async fn generate_mapping(elements: &[Element], pool: &Pool) -> Result<Vec<Diff>> {
     let mut diffs = vec![];
-    let all_areas = db::area::queries::select(None, true, None, pool).await?;
+    let all_areas = db::main::area::queries::select(None, true, None, pool).await?;
     for element in elements {
         if let Some(diff) = generate_element_areas_mapping(element, &all_areas, pool).await? {
             diffs.push(diff);

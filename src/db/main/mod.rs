@@ -1,4 +1,5 @@
 pub mod access_token;
+pub mod area;
 
 use super::Migration;
 use crate::Result;

@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, area::schema::Area, element::schema::Element},
+    db::{self, element::schema::Element, main::area::schema::Area},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -38,7 +38,7 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
         info!("Found existing reports for today, aborting");
         return Ok(0);
     }
-    let all_areas = db::area::queries::select(None, false, None, pool).await?;
+    let all_areas = db::main::area::queries::select(None, false, None, pool).await?;
     let mut reports: HashMap<i64, Map<String, Value>> = HashMap::new();
     for area in all_areas {
         let elements = match area.alias().as_str() {
@@ -225,7 +225,7 @@ mod test {
         let pool = pool();
         let mut area_tags = Map::new();
         area_tags.insert("url_alias".into(), json!("test"));
-        db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         for _ in 1..100 {
             db::report::queries::insert(1, date!(2023 - 11 - 12), Map::new(), &pool).await?;
         }

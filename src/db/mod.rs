@@ -1,4 +1,3 @@
-pub mod area;
 pub mod area_element;
 pub mod ban;
 pub mod conf;

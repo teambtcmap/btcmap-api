@@ -1,5 +1,5 @@
 use crate::{
-    db::area::schema::Area,
+    db::main::area::schema::Area,
     service::{self},
     Result,
 };

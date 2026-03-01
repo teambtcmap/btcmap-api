@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::area::schema::Area;
+use crate::db::main::area::schema::Area;
 use crate::db::main::MainPool;
 use crate::Error;
 use actix_web::get;
@@ -58,20 +58,21 @@ impl From<Area> for Json<GetItem> {
 #[get("")]
 pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
     let areas =
-        db::area::queries::select(Some(args.updated_since), true, Some(args.limit), &pool).await?;
+        db::main::area::queries::select(Some(args.updated_since), true, Some(args.limit), &pool)
+            .await?;
     Ok(Json(areas.into_iter().map(|it| it.into()).collect()))
 }
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
-    db::area::queries::select_by_id_or_alias(id.to_string(), &pool)
+    db::main::area::queries::select_by_id_or_alias(id.to_string(), &pool)
         .await
         .map(Into::into)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::db::area::schema::Area;
+    use crate::db::main::area::schema::Area;
     use crate::db::main::test::pool;
     use crate::{db, Result};
     use actix_web::http::StatusCode;
@@ -120,7 +121,7 @@ mod test {
     #[test]
     async fn get_not_empty_array() -> Result<()> {
         let pool = pool();
-        let area = db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -138,9 +139,9 @@ mod test {
     #[test]
     async fn get_with_limit() -> Result<()> {
         let pool = pool();
-        let area_1 = db::area::queries::insert(Area::mock_tags(), &pool).await?;
-        let area_2 = db::area::queries::insert(Area::mock_tags(), &pool).await?;
-        let _area_3 = db::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let area_1 = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let area_2 = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let _area_3 = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
@@ -158,13 +159,16 @@ mod test {
     #[test]
     async fn get_updated_since() -> Result<()> {
         let pool = pool();
-        let area_1 = db::area::queries::insert(Area::mock_tags(), &pool).await?;
-        db::area::queries::set_updated_at(area_1.id, datetime!(2022-01-05 00:00 UTC), &pool)
+        let area_1 = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        db::main::area::queries::set_updated_at(area_1.id, datetime!(2022-01-05 00:00 UTC), &pool)
             .await?;
-        let area_2 = db::area::queries::insert(Area::mock_tags(), &pool).await?;
-        let area_2 =
-            db::area::queries::set_updated_at(area_2.id, datetime!(2022-02-05 00:00 UTC), &pool)
-                .await?;
+        let area_2 = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let area_2 = db::main::area::queries::set_updated_at(
+            area_2.id,
+            datetime!(2022-02-05 00:00 UTC),
+            &pool,
+        )
+        .await?;
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))

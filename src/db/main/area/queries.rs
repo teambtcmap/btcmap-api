@@ -1,5 +1,6 @@
+use super::blocking_queries;
 use super::schema::Area;
-use crate::{db::area::blocking_queries, Result};
+use crate::Result;
 use deadpool_sqlite::Pool;
 use serde_json::{Map, Value};
 use time::OffsetDateTime;

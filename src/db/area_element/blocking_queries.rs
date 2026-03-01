@@ -170,8 +170,8 @@ mod tests {
     #[test]
     fn insert() -> Result<()> {
         let conn = conn();
-        let area = crate::db::area::blocking_queries::insert(
-            crate::db::area::schema::Area::mock_tags(),
+        let area = crate::db::main::area::blocking_queries::insert(
+            crate::db::main::area::schema::Area::mock_tags(),
             &conn,
         )?;
         let element = crate::db::element::blocking_queries::insert(
