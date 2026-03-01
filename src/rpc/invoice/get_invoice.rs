@@ -1,7 +1,7 @@
 use crate::{
     db::{
         self,
-        invoice::schema::{Invoice, InvoiceStatus},
+        main::invoice::schema::{Invoice, InvoiceStatus},
     },
     service::matrix,
     Result,
@@ -30,12 +30,12 @@ impl From<Invoice> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let mut invoice = db::invoice::queries::select_by_uuid(params.uuid.clone(), pool).await?;
+    let mut invoice = db::main::invoice::queries::select_by_uuid(params.uuid.clone(), pool).await?;
     let matrix_client = matrix::try_client(pool);
     if invoice.status == InvoiceStatus::Unpaid
         && crate::service::invoice::sync_unpaid_invoice(&invoice, pool, &matrix_client).await?
     {
-        invoice = db::invoice::queries::select_by_uuid(params.uuid, pool).await?;
+        invoice = db::main::invoice::queries::select_by_uuid(params.uuid, pool).await?;
     }
     Ok(invoice.into())
 }

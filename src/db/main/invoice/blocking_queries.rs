@@ -134,7 +134,7 @@ mod test {
             1,
             "hash",
             "req",
-            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            crate::db::main::invoice::schema::InvoiceStatus::Unpaid,
             &conn,
         )?;
         assert_eq!(invoice, super::select_by_id(invoice.id, &conn)?);
@@ -150,7 +150,7 @@ mod test {
             1,
             "hash1",
             "req1",
-            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            crate::db::main::invoice::schema::InvoiceStatus::Unpaid,
             &conn,
         )?;
         let _invoice2 = super::insert(
@@ -159,11 +159,13 @@ mod test {
             1,
             "hash2",
             "req2",
-            crate::db::invoice::schema::InvoiceStatus::Paid,
+            crate::db::main::invoice::schema::InvoiceStatus::Paid,
             &conn,
         )?;
-        let unpaid =
-            super::select_by_status(crate::db::invoice::schema::InvoiceStatus::Unpaid, &conn)?;
+        let unpaid = super::select_by_status(
+            crate::db::main::invoice::schema::InvoiceStatus::Unpaid,
+            &conn,
+        )?;
         assert_eq!(unpaid.len(), 1);
         assert_eq!(unpaid[0].id, invoice1.id);
         Ok(())
@@ -178,7 +180,7 @@ mod test {
             1,
             "hash",
             "req",
-            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            crate::db::main::invoice::schema::InvoiceStatus::Unpaid,
             &conn,
         )?;
         let found = super::select_by_uuid(&invoice.uuid, &conn)?;
@@ -195,21 +197,21 @@ mod test {
             1,
             "hash",
             "req",
-            crate::db::invoice::schema::InvoiceStatus::Unpaid,
+            crate::db::main::invoice::schema::InvoiceStatus::Unpaid,
             &conn,
         )?;
         assert_eq!(
             invoice.status,
-            crate::db::invoice::schema::InvoiceStatus::Unpaid
+            crate::db::main::invoice::schema::InvoiceStatus::Unpaid
         );
         let updated = super::set_status(
             invoice.id,
-            crate::db::invoice::schema::InvoiceStatus::Paid,
+            crate::db::main::invoice::schema::InvoiceStatus::Paid,
             &conn,
         )?;
         assert_eq!(
             updated.status,
-            crate::db::invoice::schema::InvoiceStatus::Paid
+            crate::db::main::invoice::schema::InvoiceStatus::Paid
         );
         Ok(())
     }

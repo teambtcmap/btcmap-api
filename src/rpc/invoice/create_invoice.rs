@@ -1,5 +1,5 @@
 use crate::{
-    db::invoice::schema::Invoice,
+    db::main::invoice::schema::Invoice,
     service::{self},
     Result,
 };

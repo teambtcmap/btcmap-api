@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, invoice::schema::InvoicedService},
+    db::{self, main::invoice::schema::InvoicedService},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -56,9 +56,11 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let avg_verification_date_end = OffsetDateTime::parse(avg_verification_date_end, &Rfc3339)?;
     let days_since_verified_end =
         (global_report_end.created_at - avg_verification_date_end).whole_days();
-    let invoices =
-        db::invoice::queries::select_by_status(db::invoice::schema::InvoiceStatus::Paid, pool)
-            .await?;
+    let invoices = db::main::invoice::queries::select_by_status(
+        db::main::invoice::schema::InvoiceStatus::Paid,
+        pool,
+    )
+    .await?;
     let start = params.start.format(&Rfc3339)?;
     let end = params.end.format(&Rfc3339)?;
     let boosts: Vec<_> = invoices

@@ -1,7 +1,7 @@
 use crate::{
     db::{
         self,
-        invoice::schema::{Invoice, InvoiceStatus},
+        main::invoice::schema::{Invoice, InvoiceStatus},
     },
     service::{
         self,
@@ -52,7 +52,7 @@ pub async fn create(
             return Err("Failed to generate LNBITS invoice".into());
         }
         let lnbits_response: CreateLNbitsInvoiceResponse = lnbits_response.json().await?;
-        let invoice = db::invoice::queries::insert(
+        let invoice = db::main::invoice::queries::insert(
             source,
             description,
             amount_sats,
@@ -85,7 +85,7 @@ pub async fn create(
             .iter()
             .map(|byte| format!("{:02x}", byte))
             .collect();
-        let invoice = db::invoice::queries::insert(
+        let invoice = db::main::invoice::queries::insert(
             source,
             description,
             amount_sats,
@@ -117,7 +117,7 @@ pub async fn sync_unpaid_invoices(pool: &Pool, matrix_client: &Option<Client>) -
         Err("lnbits invoice key is not set")?
     }
     let unpaid_invoices =
-        db::invoice::queries::select_by_status(InvoiceStatus::Unpaid, pool).await?;
+        db::main::invoice::queries::select_by_status(InvoiceStatus::Unpaid, pool).await?;
     let now = OffsetDateTime::now_utc();
     let hour_ago = now.saturating_sub(Duration::hours(1)).format(&Rfc3339)?;
     let unpaid_invoices: Vec<Invoice> = unpaid_invoices
@@ -159,7 +159,7 @@ pub async fn sync_unpaid_invoice(
         }
         let lnbits_response: CheckInvoiceResponse = lnbits_response.json().await?;
         if lnbits_response.paid {
-            db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
+            db::main::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
             on_invoice_paid(invoice, pool, matrix_client).await?;
             return Ok(true);
         }
@@ -175,7 +175,7 @@ pub async fn sync_unpaid_invoice(
         }
         let lnd_response: CheckLndInvoiceResponse = lnd_response.json().await?;
         if lnd_response.state == "SETTLED" {
-            db::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
+            db::main::invoice::queries::set_status(invoice.id, InvoiceStatus::Paid, pool).await?;
             on_invoice_paid(invoice, pool, matrix_client).await?;
             return Ok(true);
         }
@@ -276,13 +276,13 @@ mod test {
     async fn on_invoice_paid_on_unboosted_element() -> Result<()> {
         let pool = pool();
         db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let invoice = db::invoice::queries::insert(
+        let invoice = db::main::invoice::queries::insert(
             "src",
             "element_boost:1:10",
             0,
             "",
             "",
-            db::invoice::schema::InvoiceStatus::Unpaid,
+            db::main::invoice::schema::InvoiceStatus::Unpaid,
             &pool,
         )
         .await?;
@@ -308,13 +308,13 @@ mod test {
             &pool,
         )
         .await?;
-        let invoice = db::invoice::queries::insert(
+        let invoice = db::main::invoice::queries::insert(
             "src",
             "element_boost:1:10",
             0,
             "",
             "",
-            db::invoice::schema::InvoiceStatus::Unpaid,
+            db::main::invoice::schema::InvoiceStatus::Unpaid,
             &pool,
         )
         .await?;

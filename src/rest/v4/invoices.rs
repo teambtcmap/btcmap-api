@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::invoice::schema::InvoiceStatus;
+use crate::db::main::invoice::schema::InvoiceStatus;
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
@@ -20,7 +20,7 @@ pub struct GetByIdRes {
 #[get("{id}")]
 pub async fn get_by_id(uuid: Path<String>, pool: Data<MainPool>) -> Res<GetByIdRes> {
     let matrix_client = service::matrix::try_client(&pool);
-    let mut invoice = db::invoice::queries::select_by_uuid(uuid.as_str(), &pool)
+    let mut invoice = db::main::invoice::queries::select_by_uuid(uuid.as_str(), &pool)
         .await
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
@@ -32,7 +32,7 @@ pub async fn get_by_id(uuid: Path<String>, pool: Data<MainPool>) -> Res<GetByIdR
             .await
             .map_err(|_| RestApiError::database())?
     {
-        invoice = db::invoice::queries::select_by_uuid(uuid.as_str(), &pool)
+        invoice = db::main::invoice::queries::select_by_uuid(uuid.as_str(), &pool)
             .await
             .map_err(|e| match e {
                 Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
