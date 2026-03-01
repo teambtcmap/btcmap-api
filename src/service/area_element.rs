@@ -33,7 +33,8 @@ pub async fn generate_element_areas_mapping(
 ) -> Result<Option<Diff>> {
     let mut added_areas: Vec<i64> = vec![];
     let mut removed_areas: Vec<i64> = vec![];
-    let old_mappings = db::area_element::queries::select_by_element_id(element.id, pool).await?;
+    let old_mappings =
+        db::main::area_element::queries::select_by_element_id(element.id, pool).await?;
     let new_mappings = service::element::find_areas(element, areas)?;
     // mark no longer active mappings as deleted
     for old_mapping in &old_mappings {
@@ -43,7 +44,7 @@ pub async fn generate_element_areas_mapping(
                 .any(|area| area.id == old_mapping.area_id);
 
             if !still_valid {
-                db::area_element::queries::set_deleted_at(
+                db::main::area_element::queries::set_deleted_at(
                     old_mapping.id,
                     Some(OffsetDateTime::now_utc()),
                     pool,
@@ -54,7 +55,8 @@ pub async fn generate_element_areas_mapping(
         }
     }
     // refresh data to include the changes made above
-    let old_mappings = db::area_element::queries::select_by_element_id(element.id, pool).await?;
+    let old_mappings =
+        db::main::area_element::queries::select_by_element_id(element.id, pool).await?;
     for area in new_mappings {
         let old_mapping = old_mappings
             .iter()
@@ -62,12 +64,13 @@ pub async fn generate_element_areas_mapping(
         match old_mapping {
             Some(old_mapping) => {
                 if old_mapping.deleted_at.is_some() {
-                    db::area_element::queries::set_deleted_at(old_mapping.id, None, pool).await?;
+                    db::main::area_element::queries::set_deleted_at(old_mapping.id, None, pool)
+                        .await?;
                     added_areas.push(area.id);
                 }
             }
             None => {
-                db::area_element::queries::insert(area.id, element.id, pool).await?;
+                db::main::area_element::queries::insert(area.id, element.id, pool).await?;
                 added_areas.push(area.id);
             }
         }

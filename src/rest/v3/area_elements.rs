@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, area_element::schema::AreaElement, main::MainPool},
+    db::{self, main::area_element::schema::AreaElement, main::MainPool},
     Result,
 };
 use actix_web::{
@@ -59,7 +59,7 @@ impl From<AreaElement> for Json<GetItem> {
 
 #[get("")]
 pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>> {
-    let area_elements = db::area_element::queries::select_updated_since(
+    let area_elements = db::main::area_element::queries::select_updated_since(
         args.updated_since,
         Some(args.limit),
         &pool,
@@ -72,7 +72,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetItem>> {
-    db::area_element::queries::select_by_id(*id, &pool)
+    db::main::area_element::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())
 }

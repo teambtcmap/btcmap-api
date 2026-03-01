@@ -55,7 +55,7 @@ pub async fn generate_reports(pool: &Pool) -> Result<usize> {
             }
             _ => {
                 let area_elements =
-                    db::area_element::queries::select_by_area_id(area.id, pool).await?;
+                    db::main::area_element::queries::select_by_area_id(area.id, pool).await?;
                 let mut elements: Vec<Element> = vec![];
                 for area_element in area_elements {
                     let element =

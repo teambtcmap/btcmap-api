@@ -1,5 +1,6 @@
 pub mod access_token;
 pub mod area;
+pub mod area_element;
 
 use super::Migration;
 use crate::Result;

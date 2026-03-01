@@ -88,7 +88,7 @@ pub fn select_ordered_by_severity(
             662 => "".into(),
             _ => format!(
                 "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}", 
-                area_element_table = db::area_element::schema::TABLE_NAME
+                area_element_table = db::main::area_element::schema::TABLE_NAME
             )
         };
     let sql = format!(
@@ -153,7 +153,7 @@ pub fn select_count(
             662 => "".into(),
             _ => format!(
                 "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}",
-                area_element_table = db::area_element::schema::TABLE_NAME
+                area_element_table = db::main::area_element::schema::TABLE_NAME
             )
         };
     let sql = if include_deleted {
@@ -245,9 +245,9 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
-    use crate::db::area_element::blocking_queries as area_element_queries;
     use crate::db::element::blocking_queries as element_queries;
     use crate::db::element_issue::blocking_queries;
+    use crate::db::main::area_element::blocking_queries as area_element_queries;
     use crate::{db::main::test::conn, Result};
     use time::{Duration, OffsetDateTime};
 

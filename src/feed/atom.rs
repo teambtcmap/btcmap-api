@@ -44,7 +44,7 @@ pub async fn new_places_for_area(
     pool: Data<MainPool>,
 ) -> Result<impl Responder> {
     let area = db::main::area::queries::select_by_id_or_alias(area.to_string(), &pool).await?;
-    let area_elements = db::area_element::queries::select_by_area_id(area.id, &pool).await?;
+    let area_elements = db::main::area_element::queries::select_by_area_id(area.id, &pool).await?;
     let area_element_ids: HashSet<i64> =
         area_elements.into_iter().map(|it| it.element_id).collect();
     let events = db::element_event::queries::select_updated_since(

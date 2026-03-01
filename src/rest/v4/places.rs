@@ -644,7 +644,7 @@ pub async fn get_by_id_areas(
             _ => RestApiError::database(),
         })?;
 
-    let area_elements = db::area_element::queries::select_by_element_id(element.id, &pool)
+    let area_elements = db::main::area_element::queries::select_by_element_id(element.id, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
 
@@ -790,7 +790,7 @@ mod test {
         let pool = pool();
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
-        db::area_element::queries::insert(area.id, element.id, &pool).await?;
+        db::main::area_element::queries::insert(area.id, element.id, &pool).await?;
         db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool)
             .await?;
 
@@ -811,7 +811,7 @@ mod test {
         let pool = pool();
         let element = db::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
-        db::area_element::queries::insert(area.id, element.id, &pool).await?;
+        db::main::area_element::queries::insert(area.id, element.id, &pool).await?;
         db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool)
             .await?;
 
