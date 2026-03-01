@@ -183,10 +183,15 @@ async fn mark_element_as_deleted(
     }
     db::main::element::queries::set_deleted_at(element.id, Some(OffsetDateTime::now_utc()), pool)
         .await?;
-    let element_issues = db::element_issue::queries::select_by_element_id(element.id, pool).await?;
+    let element_issues =
+        db::main::element_issue::queries::select_by_element_id(element.id, pool).await?;
     for issue in element_issues {
-        db::element_issue::queries::set_deleted_at(issue.id, Some(OffsetDateTime::now_utc()), pool)
-            .await?;
+        db::main::element_issue::queries::set_deleted_at(
+            issue.id,
+            Some(OffsetDateTime::now_utc()),
+            pool,
+        )
+        .await?;
     }
     let event =
         db::main::element_event::queries::insert(fresh_osm_element.uid, element.id, "delete", pool)

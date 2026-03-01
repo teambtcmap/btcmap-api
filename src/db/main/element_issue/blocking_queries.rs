@@ -245,7 +245,6 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
-    use crate::db::element_issue::blocking_queries;
     use crate::db::main::area_element::blocking_queries as area_element_queries;
     use crate::db::main::element::blocking_queries as element_queries;
     use crate::{db::main::test::conn, Result};
@@ -401,10 +400,10 @@ mod test {
         area_element_queries::insert(area_id, e1.id, &conn)?;
         area_element_queries::insert(area_id, e2.id, &conn)?;
 
-        blocking_queries::insert(e1.id, "outdated", 1, &conn)?;
-        blocking_queries::insert(e2.id, "wrong_location", 3, &conn)?;
+        super::insert(e1.id, "outdated", 1, &conn)?;
+        super::insert(e2.id, "wrong_location", 3, &conn)?;
 
-        let issues = blocking_queries::select_ordered_by_severity(area_id, 10, 0, false, &conn)?;
+        let issues = super::select_ordered_by_severity(area_id, 10, 0, false, &conn)?;
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].issue_code, "wrong_location");
         assert_eq!(issues[0].element_osm_id, element2_id);

@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::element_issue::schema::ElementIssue;
+use crate::db::main::element_issue::schema::ElementIssue;
 use crate::db::main::MainPool;
 use crate::Error;
 use actix_web::get;
@@ -58,7 +58,7 @@ impl From<ElementIssue> for Json<GetItem> {
 
 #[get("")]
 pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
-    let items = db::element_issue::queries::select_updated_since(
+    let items = db::main::element_issue::queries::select_updated_since(
         args.updated_since
             .unwrap_or(datetime!(2000-01-01 00:00 UTC)),
         args.limit,
@@ -70,7 +70,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
-    db::element_issue::queries::select_by_id(*id, &pool)
+    db::main::element_issue::queries::select_by_id(*id, &pool)
         .await
         .map(|it| it.into())
 }

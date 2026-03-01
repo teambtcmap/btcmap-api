@@ -1,4 +1,3 @@
-pub mod element_issue;
 pub mod event;
 pub mod image;
 pub mod invoice;

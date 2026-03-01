@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, element_issue::schema::SelectOrderedBySeverityRow},
+    db::{self, main::element_issue::schema::SelectOrderedBySeverityRow},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -38,14 +38,14 @@ impl From<SelectOrderedBySeverityRow> for ResItem {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let total_issues = db::element_issue::queries::select_count(
+    let total_issues = db::main::element_issue::queries::select_count(
         params.area_id,
         false,
         params.area_id != 662,
         pool,
     )
     .await?;
-    let requested_issues = db::element_issue::queries::select_ordered_by_severity(
+    let requested_issues = db::main::element_issue::queries::select_ordered_by_severity(
         params.area_id,
         params.limit,
         params.offset,
