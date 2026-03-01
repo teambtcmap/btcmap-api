@@ -1,6 +1,6 @@
-use crate::db::element_event::schema::ElementEvent;
 use crate::db::main::element::schema::Element;
 use crate::db::main::element_comment::schema::ElementComment;
+use crate::db::main::element_event::schema::ElementEvent;
 use crate::db::main::MainPool;
 use crate::{db, service, Result};
 use actix_web::{
@@ -14,7 +14,7 @@ use time::{Duration, OffsetDateTime};
 
 #[get("/new-places")]
 pub async fn new_places(pool: Data<MainPool>) -> Result<impl Responder> {
-    let events = db::element_event::queries::select_by_type(
+    let events = db::main::element_event::queries::select_by_type(
         "create".into(),
         Some("DESC".into()),
         Some(100),
@@ -47,7 +47,7 @@ pub async fn new_places_for_area(
     let area_elements = db::main::area_element::queries::select_by_area_id(area.id, &pool).await?;
     let area_element_ids: HashSet<i64> =
         area_elements.into_iter().map(|it| it.element_id).collect();
-    let events = db::element_event::queries::select_updated_since(
+    let events = db::main::element_event::queries::select_updated_since(
         OffsetDateTime::now_utc()
             .checked_sub(Duration::days(180))
             .unwrap(),

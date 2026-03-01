@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::element_event::schema::ElementEvent;
+use crate::db::main::element_event::schema::ElementEvent;
 use crate::service;
 use crate::service::matrix;
 use crate::service::matrix::ROOM_OSM_CHANGES;
@@ -16,7 +16,7 @@ use tracing::info;
 use tracing::warn;
 
 pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
-    for event in db::element_event::queries::select_all(None, None, pool).await? {
+    for event in db::main::element_event::queries::select_all(None, None, pool).await? {
         if event.tags.get("element_osm_type").is_none()
             || event.tags.get("element_osm_id").is_none()
         {
@@ -28,7 +28,7 @@ pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
                 element.overpass_data.r#type.clone().into(),
             );
             event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
-            db::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
+            db::main::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
         }
     }
     Ok(())

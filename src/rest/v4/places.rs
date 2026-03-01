@@ -1,7 +1,7 @@
 use crate::db;
-use crate::db::element_event::queries::ElementEventWithUser;
 use crate::db::main::element::schema::Element;
 use crate::db::main::element_comment::schema::ElementComment;
+use crate::db::main::element_event::queries::ElementEventWithUser;
 use crate::db::main::MainPool;
 use crate::db::place_submission::schema::PlaceSubmission;
 use crate::rest::error::RestApiError;
@@ -611,7 +611,7 @@ pub async fn get_by_id_activity(id: Path<String>, pool: Data<MainPool>) -> Res<V
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
         })?;
-    db::element_event::queries::select_by_element_id(element.id, &pool)
+    db::main::element_event::queries::select_by_element_id(element.id, &pool)
         .await
         .map(|it| Json(it.into_iter().map(Activity::from).collect()))
         .map_err(|_| RestApiError::database())

@@ -134,7 +134,7 @@ pub fn select_most_active(
         u_id = Columns::Id.as_str(),
         u_osm_data = Columns::OsmData.as_str(),
         table = schema::NAME,
-        event_table = db::element_event::schema::TABLE_NAME,
+        event_table = db::main::element_event::schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
         .query_map(
@@ -315,12 +315,15 @@ mod test {
         let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
         let element =
             db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
-        let _event_1 =
-            db::element_event::blocking_queries::insert(user.id, element.id, "update", &conn)?;
-        let _event_2 =
-            db::element_event::blocking_queries::insert(user.id, element.id, "update", &conn)?;
-        let _event_3 =
-            db::element_event::blocking_queries::insert(user.id, element.id, "update", &conn)?;
+        let _event_1 = db::main::element_event::blocking_queries::insert(
+            user.id, element.id, "update", &conn,
+        )?;
+        let _event_2 = db::main::element_event::blocking_queries::insert(
+            user.id, element.id, "update", &conn,
+        )?;
+        let _event_3 = db::main::element_event::blocking_queries::insert(
+            user.id, element.id, "update", &conn,
+        )?;
         let res = super::select_most_active(
             OffsetDateTime::now_utc().saturating_add(Duration::days(-1)),
             OffsetDateTime::now_utc().saturating_add(Duration::days(1)),
