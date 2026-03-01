@@ -54,7 +54,7 @@ pub async fn post(
             .realip_remote_addr()
             .map(|s| s.to_owned());
         if let Some(ip) = ip {
-            db::ban::queries::insert(ip, "spam".to_string(), 3650, &pool)
+            db::main::ban::queries::insert(ip, "spam".to_string(), 3650, &pool)
                 .await
                 .map_err(|_| RestApiError::database())?;
             return Err(RestApiError::new(

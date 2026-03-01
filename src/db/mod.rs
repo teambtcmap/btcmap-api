@@ -1,4 +1,3 @@
-pub mod ban;
 pub mod conf;
 pub mod element;
 pub mod element_comment;
