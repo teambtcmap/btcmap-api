@@ -199,10 +199,10 @@ pub async fn on_invoice_paid(
         }
         let id = id.parse::<i64>().unwrap_or(0);
         if *action == "publish" {
-            let comment = db::element_comment::queries::select_by_id(id, pool).await?;
+            let comment = db::main::element_comment::queries::select_by_id(id, pool).await?;
             let element =
                 db::main::element::queries::select_by_id(comment.element_id, pool).await?;
-            db::element_comment::queries::set_deleted_at(id, None, pool).await?;
+            db::main::element_comment::queries::set_deleted_at(id, None, pool).await?;
             service::comment::refresh_comment_count_tag(&element, pool).await?;
             let message = format!(
                 "{} https://btcmap.org/merchant/{}",

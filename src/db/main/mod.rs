@@ -4,6 +4,7 @@ pub mod area_element;
 pub mod ban;
 pub mod conf;
 pub mod element;
+pub mod element_comment;
 
 use super::Migration;
 use crate::Result;

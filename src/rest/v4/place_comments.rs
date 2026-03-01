@@ -1,6 +1,6 @@
 use crate::db;
-use crate::db::element_comment::schema::ElementComment;
 use crate::db::main::conf::schema::Conf;
+use crate::db::main::element_comment::schema::ElementComment;
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
@@ -74,7 +74,7 @@ impl From<ElementComment> for Json<Item> {
 
 #[get("")]
 pub async fn get(args: Query<Args>, pool: Data<MainPool>) -> Result<Json<Vec<Item>>, Error> {
-    let items = db::element_comment::queries::select_updated_since(
+    let items = db::main::element_comment::queries::select_updated_since(
         args.updated_since,
         args.include_deleted,
         Some(args.limit),
@@ -86,7 +86,7 @@ pub async fn get(args: Query<Args>, pool: Data<MainPool>) -> Result<Json<Vec<Ite
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<Item>, Error> {
-    db::element_comment::queries::select_by_id(*id, &pool)
+    db::main::element_comment::queries::select_by_id(*id, &pool)
         .await
         .map(Into::into)
 }
@@ -131,10 +131,10 @@ pub async fn post(
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
         })?;
-    let comment = db::element_comment::queries::insert(element.id, &args.comment, &pool)
+    let comment = db::main::element_comment::queries::insert(element.id, &args.comment, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
-    db::element_comment::queries::set_deleted_at(
+    db::main::element_comment::queries::set_deleted_at(
         comment.id,
         Some(OffsetDateTime::now_utc()),
         &pool,

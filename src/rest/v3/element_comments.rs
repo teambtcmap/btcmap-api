@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::element_comment::schema::ElementComment;
+use crate::db::main::element_comment::schema::ElementComment;
 use crate::db::main::MainPool;
 use crate::Error;
 use actix_web::get;
@@ -72,7 +72,7 @@ impl From<ElementComment> for Json<GetItem> {
 
 #[get("")]
 pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<GetItem>>, Error> {
-    let element_comments = db::element_comment::queries::select_updated_since(
+    let element_comments = db::main::element_comment::queries::select_updated_since(
         args.updated_since,
         true,
         Some(args.limit),
@@ -86,7 +86,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
-    db::element_comment::queries::select_by_id(*id, &pool)
+    db::main::element_comment::queries::select_by_id(*id, &pool)
         .await
         .map(Into::into)
 }

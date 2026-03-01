@@ -77,7 +77,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         })
         .sum();
     let comments =
-        db::element_comment::queries::select_created_between(params.start, params.end, pool)
+        db::main::element_comment::queries::select_created_between(params.start, params.end, pool)
             .await?;
     let comments: Vec<_> = comments
         .into_iter()

@@ -2,8 +2,8 @@ use crate::db::element_event::schema::ElementEvent;
 use crate::service;
 use crate::{
     db::{
-        self, element_comment::schema::ElementComment, main::area::schema::Area,
-        main::element::schema::Element,
+        self, main::area::schema::Area, main::element::schema::Element,
+        main::element_comment::schema::ElementComment,
     },
     Result,
 };
@@ -183,7 +183,7 @@ pub async fn get_trending_areas(
         }
     }
     let comments =
-        db::element_comment::queries::select_created_between(period_start, period_end, pool)
+        db::main::element_comment::queries::select_created_between(period_start, period_end, pool)
             .await?;
     let comments: Vec<ElementComment> = comments
         .into_iter()
@@ -262,7 +262,7 @@ pub async fn get_comments(
     let area_elements = db::main::area_element::queries::select_by_area_id(area.id, pool).await?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
-        for comment in db::element_comment::queries::select_by_element_id(
+        for comment in db::main::element_comment::queries::select_by_element_id(
             area_element.element_id,
             include_deleted,
             i64::MAX,
@@ -654,7 +654,7 @@ mod test {
     async fn get_comments() -> Result<()> {
         let pool = pool();
         let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let comment = db::element_comment::queries::insert(element.id, "test", &pool).await?;
+        let comment = db::main::element_comment::queries::insert(element.id, "test", &pool).await?;
         let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
         let _area_element =
             db::main::area_element::queries::insert(area.id, element.id, &pool).await?;

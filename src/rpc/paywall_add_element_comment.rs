@@ -21,9 +21,14 @@ pub struct Res {
 pub async fn run(params: Params, pool: &Pool, conf: &Conf) -> Result<Res> {
     let element =
         db::main::element::queries::select_by_id_or_osm_id(params.element_id, pool).await?;
-    let comment = db::element_comment::queries::insert(element.id, &params.comment, pool).await?;
-    db::element_comment::queries::set_deleted_at(comment.id, Some(OffsetDateTime::now_utc()), pool)
-        .await?;
+    let comment =
+        db::main::element_comment::queries::insert(element.id, &params.comment, pool).await?;
+    db::main::element_comment::queries::set_deleted_at(
+        comment.id,
+        Some(OffsetDateTime::now_utc()),
+        pool,
+    )
+    .await?;
     let invoice = service::invoice::create(
         "lnd",
         format!("element_comment:{}:publish", comment.id),

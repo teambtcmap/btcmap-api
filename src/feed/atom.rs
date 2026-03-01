@@ -1,6 +1,6 @@
-use crate::db::element_comment::schema::ElementComment;
 use crate::db::element_event::schema::ElementEvent;
 use crate::db::main::element::schema::Element;
+use crate::db::main::element_comment::schema::ElementComment;
 use crate::db::main::MainPool;
 use crate::{db, service, Result};
 use actix_web::{
@@ -125,7 +125,7 @@ fn event_to_atom_entry(event: (ElementEvent, Element)) -> String {
 
 #[get("/new-comments")]
 pub async fn new_comments(pool: Data<MainPool>) -> Result<impl Responder> {
-    let comments = db::element_comment::queries::select_latest(100, &pool).await?;
+    let comments = db::main::element_comment::queries::select_latest(100, &pool).await?;
     let mut comments_to_elements: Vec<(ElementComment, Element)> = vec![];
     for comment in comments {
         let element_id = comment.element_id;

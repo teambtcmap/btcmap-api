@@ -18,6 +18,7 @@ pub struct Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let element = db::main::element::queries::select_by_id(params.element_id, pool).await?;
-    let comment = db::element_comment::queries::insert(element.id, &params.comment, pool).await?;
+    let comment =
+        db::main::element_comment::queries::insert(element.id, &params.comment, pool).await?;
     Ok(Res { id: comment.id })
 }
