@@ -34,7 +34,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
             id: it.id,
         })
         .collect();
-    let events = db::event::queries::select_all(pool).await?;
+    let events = db::main::event::queries::select_all(pool).await?;
     let events: Vec<_> = events
         .into_iter()
         .filter(|it| {

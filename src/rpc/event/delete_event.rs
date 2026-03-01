@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, event::schema::Event},
+    db::{self, main::event::schema::Event},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -23,7 +23,7 @@ impl From<Event> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    db::event::queries::set_deleted_at(params.id, Some(OffsetDateTime::now_utc()), pool)
+    db::main::event::queries::set_deleted_at(params.id, Some(OffsetDateTime::now_utc()), pool)
         .await
         .map(Into::into)
 }

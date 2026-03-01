@@ -1,5 +1,5 @@
 use crate::db;
-use crate::db::event::schema::Event;
+use crate::db::main::event::schema::Event;
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
@@ -40,7 +40,7 @@ impl From<Event> for Item {
 
 #[get("")]
 pub async fn get(pool: Data<MainPool>) -> RestResult<Vec<Item>> {
-    let items = db::event::queries::select_all(&pool)
+    let items = db::main::event::queries::select_all(&pool)
         .await
         .map_err(|_| RestApiError::database())?;
     let items: Vec<Event> = items
@@ -55,7 +55,7 @@ pub async fn get(pool: Data<MainPool>) -> RestResult<Vec<Item>> {
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> RestResult<Item> {
-    db::event::queries::select_by_id(id.into_inner(), &pool)
+    db::main::event::queries::select_by_id(id.into_inner(), &pool)
         .await
         .map(|it| Json(it.into()))
         .map_err(|e| match e {

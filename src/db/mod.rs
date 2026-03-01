@@ -1,4 +1,3 @@
-pub mod event;
 pub mod image;
 pub mod invoice;
 pub mod log;

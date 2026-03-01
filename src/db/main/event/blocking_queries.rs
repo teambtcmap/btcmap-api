@@ -1,5 +1,5 @@
 use crate::{
-    db::event::schema::{self, Columns, Event},
+    db::main::event::schema::{self, Columns, Event},
     Result,
 };
 use rusqlite::{named_params, params, Connection};

@@ -1,5 +1,5 @@
 use crate::{
-    db::event::{blocking_queries, schema::Event},
+    db::main::event::{blocking_queries, schema::Event},
     Result,
 };
 use deadpool_sqlite::Pool;

@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, event::schema::Event},
+    db::{self, main::event::schema::Event},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -39,6 +39,6 @@ impl From<Event> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let event = db::event::queries::select_by_id(params.id, pool).await?;
+    let event = db::main::event::queries::select_by_id(params.id, pool).await?;
     Ok(event.into())
 }

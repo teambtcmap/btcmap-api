@@ -7,6 +7,7 @@ pub mod element;
 pub mod element_comment;
 pub mod element_event;
 pub mod element_issue;
+pub mod event;
 
 use super::Migration;
 use crate::Result;

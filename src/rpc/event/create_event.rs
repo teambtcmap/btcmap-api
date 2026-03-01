@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, event::schema::Event},
+    db::{self, main::event::schema::Event},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -30,7 +30,7 @@ impl From<Event> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    db::event::queries::insert(
+    db::main::event::queries::insert(
         params.lat,
         params.lon,
         params.name,
