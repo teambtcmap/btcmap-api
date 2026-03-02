@@ -9,6 +9,7 @@ pub mod element_event;
 pub mod element_issue;
 pub mod event;
 pub mod invoice;
+pub mod osm_user;
 
 use super::Migration;
 use crate::Result;

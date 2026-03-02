@@ -19,8 +19,9 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let user = db::osm_user::queries::select_by_name(params.user_name.clone(), pool).await?;
-    let user = db::osm_user::queries::remove_tag(user.id, params.tag_name.clone(), pool).await?;
+    let user = db::main::osm_user::queries::select_by_name(params.user_name.clone(), pool).await?;
+    let user =
+        db::main::osm_user::queries::remove_tag(user.id, params.tag_name.clone(), pool).await?;
     Ok(Res {
         id: user.id,
         tags: user.tags,

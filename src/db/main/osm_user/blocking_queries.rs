@@ -1,7 +1,7 @@
 use super::schema;
 use super::schema::Columns;
 use crate::{
-    db::{self, osm_user::schema::OsmUser},
+    db::{self, main::osm_user::schema::OsmUser},
     service::osm::EditingApiUser,
     Result,
 };

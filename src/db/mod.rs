@@ -1,7 +1,6 @@
 pub mod image;
 pub mod log;
 pub mod main;
-pub mod osm_user;
 pub mod place_submission;
 pub mod report;
 pub mod user;

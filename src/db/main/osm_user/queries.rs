@@ -1,5 +1,5 @@
 use super::blocking_queries::{self, SelectMostActive};
-use crate::{db::osm_user::schema::OsmUser, service::osm::EditingApiUser, Result};
+use crate::{db::main::osm_user::schema::OsmUser, service::osm::EditingApiUser, Result};
 use deadpool_sqlite::Pool;
 use serde_json::Value;
 use time::OffsetDateTime;
