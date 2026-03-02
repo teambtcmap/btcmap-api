@@ -1,7 +1,6 @@
 pub mod image;
 pub mod log;
 pub mod main;
-pub mod user;
 
 use crate::Result;
 use rusqlite::Connection;

@@ -1,4 +1,4 @@
-use crate::db::user::schema::User;
+use crate::db::main::user::schema::User;
 use crate::Result;
 use serde::Serialize;
 use time::format_description::well_known::Rfc3339;
@@ -23,7 +23,7 @@ pub async fn run(user: &User) -> Result<Res> {
 
 #[cfg(test)]
 mod test {
-    use crate::db::user::schema::{Role, User};
+    use crate::db::main::user::schema::{Role, User};
     use crate::Result;
     use actix_web::test;
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};

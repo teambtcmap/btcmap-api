@@ -1,4 +1,4 @@
-use crate::{db::user::schema::User, Result};
+use crate::{db::main::user::schema::User, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +32,7 @@ impl From<User> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    crate::db::user::queries::select_by_id(params.id, pool)
+    crate::db::main::user::queries::select_by_id(params.id, pool)
         .await
         .map(Into::into)
 }

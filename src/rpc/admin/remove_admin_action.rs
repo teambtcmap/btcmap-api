@@ -1,4 +1,4 @@
-use crate::{db::user::schema::Role, Result};
+use crate::{db::main::user::schema::Role, Result};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -17,14 +17,14 @@ pub struct Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let role_to_remove = Role::from_str(&params.action)?;
-    let target_user = crate::db::user::queries::select_by_name(&params.admin, pool).await?;
+    let target_user = crate::db::main::user::queries::select_by_name(&params.admin, pool).await?;
     let new_roles: Vec<Role> = target_user
         .roles
         .into_iter()
         .filter(|it| it != &role_to_remove)
         .collect();
-    crate::db::user::queries::set_roles(target_user.id, &new_roles, pool).await?;
-    let target_user = crate::db::user::queries::select_by_id(target_user.id, pool).await?;
+    crate::db::main::user::queries::set_roles(target_user.id, &new_roles, pool).await?;
+    let target_user = crate::db::main::user::queries::select_by_id(target_user.id, pool).await?;
     Ok(Res {
         name: target_user.name,
         allowed_actions: target_user

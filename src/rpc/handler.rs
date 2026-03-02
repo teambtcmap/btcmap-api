@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, main::conf::schema::Conf, main::MainPool, user::schema::Role},
+    db::{self, main::conf::schema::Conf, main::user::schema::Role, main::MainPool},
     Result,
 };
 use actix_web::{
@@ -317,7 +317,7 @@ pub async fn handle(
         Some(bearer_token) => {
             let bearer_token =
                 db::main::access_token::queries::select_by_secret(bearer_token, &pool).await?;
-            let user = db::user::queries::select_by_id(bearer_token.user_id, &pool).await?;
+            let user = db::main::user::queries::select_by_id(bearer_token.user_id, &pool).await?;
             if bearer_token.roles.is_empty() {
                 if !allowed_methods(&user.roles).contains(&req.method) {
                     return Ok(Json(RpcResponse::error(RpcError {
@@ -730,7 +730,7 @@ mod test {
     #[test]
     async fn valid_request_with_auth() -> Result<()> {
         let pool = pool();
-        let user = db::user::queries::insert("root", "", &pool).await?;
+        let user = db::main::user::queries::insert("root", "", &pool).await?;
         let _token = db::main::access_token::queries::insert(
             user.id,
             "".into(),

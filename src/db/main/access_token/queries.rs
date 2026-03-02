@@ -1,5 +1,5 @@
 use super::{blocking_queries, schema::AccessToken};
-use crate::{db::user::schema::Role, Result};
+use crate::{db::main::user::schema::Role, Result};
 use deadpool_sqlite::Pool;
 
 pub async fn insert(

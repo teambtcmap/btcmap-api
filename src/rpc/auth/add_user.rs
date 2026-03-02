@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, user::schema::Role},
+    db::{self, main::user::schema::Role},
     Result,
 };
 use argon2::PasswordHasher;
@@ -28,8 +28,8 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         .hash_password(params.password.as_bytes(), &salt)
         .map_err(|e| e.to_string())?
         .to_string();
-    let user = crate::db::user::queries::insert(params.name, password_hash, pool).await?;
-    let user = db::user::queries::set_roles(user.id, &[Role::User], pool).await?;
+    let user = crate::db::main::user::queries::insert(params.name, password_hash, pool).await?;
+    let user = db::main::user::queries::set_roles(user.id, &[Role::User], pool).await?;
     Ok(Res {
         name: user.name,
         roles: user.roles.into_iter().map(|it| it.to_string()).collect(),

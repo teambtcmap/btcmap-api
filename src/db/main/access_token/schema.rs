@@ -1,4 +1,4 @@
-use crate::db::user::schema::Role;
+use crate::db::main::user::schema::Role;
 use rusqlite::Row;
 use serde_json::Value;
 use std::{str::FromStr, sync::OnceLock};

@@ -1,6 +1,6 @@
 use super::schema::Columns;
+use super::schema::Role;
 use super::schema::{self, User};
-use crate::db::user::schema::Role;
 use crate::Result;
 use rusqlite::{params, Connection};
 use tracing::warn;
@@ -104,10 +104,8 @@ pub fn set_roles(admin_id: i64, roles: &[Role], conn: &Connection) -> Result<Use
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        db::{main::test::conn, user::schema::Role},
-        Result,
-    };
+    use super::schema::Role;
+    use crate::{db::main::test::conn, Result};
 
     #[test]
     fn insert() -> Result<()> {

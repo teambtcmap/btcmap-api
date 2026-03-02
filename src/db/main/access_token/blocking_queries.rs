@@ -1,6 +1,6 @@
 use super::schema::Columns;
 use super::schema::{self, AccessToken};
-use crate::db::user::schema::Role;
+use crate::db::main::user::schema::Role;
 use crate::Result;
 use rusqlite::{params, Connection};
 
@@ -100,13 +100,13 @@ pub fn set_roles(token_id: i64, roles: &[Role], conn: &Connection) -> Result<()>
 #[cfg(test)]
 mod test {
     use crate::db::main::test::conn;
-    use crate::db::user::schema::Role;
+    use crate::db::main::user::schema::Role;
     use crate::Result;
 
     #[test]
     fn insert() -> Result<()> {
         let conn = conn();
-        let user = crate::db::user::blocking_queries::insert("test_user", "password", &conn)?;
+        let user = crate::db::main::user::blocking_queries::insert("test_user", "password", &conn)?;
         let name = "name";
         let secret = "secret";
         let roles = vec![Role::Admin];
@@ -129,7 +129,7 @@ mod test {
     #[test]
     fn select_all() -> Result<()> {
         let conn = conn();
-        let user = crate::db::user::blocking_queries::insert("test_user", "password", &conn)?;
+        let user = crate::db::main::user::blocking_queries::insert("test_user", "password", &conn)?;
         let token_1 = super::insert(user.id, "name_1", "pwd_1", &[], &conn)?;
         let token_2 = super::insert(user.id, "name_2", "pwd_2", &[], &conn)?;
         let query_res = super::select_all(&conn)?;
@@ -142,7 +142,7 @@ mod test {
     #[test]
     fn select_by_id() -> Result<()> {
         let conn = conn();
-        let user = crate::db::user::blocking_queries::insert("test_user", "password", &conn)?;
+        let user = crate::db::main::user::blocking_queries::insert("test_user", "password", &conn)?;
         let insert_res = super::insert(user.id, "name", "pwd", &[], &conn)?;
         let select_res = super::select_by_id(insert_res.id, &conn)?;
         assert_eq!(insert_res, select_res);
@@ -152,7 +152,7 @@ mod test {
     #[test]
     fn select_by_secret() -> Result<()> {
         let conn = conn();
-        let user = crate::db::user::blocking_queries::insert("test_user", "password", &conn)?;
+        let user = crate::db::main::user::blocking_queries::insert("test_user", "password", &conn)?;
         let secret = "xxx";
         let token = super::insert(user.id, "", secret, &[], &conn)?;
         let select_res = super::select_by_secret(secret, &conn)?;
@@ -163,7 +163,7 @@ mod test {
     #[test]
     fn set_roles() -> Result<()> {
         let conn = conn();
-        let user = crate::db::user::blocking_queries::insert("test_user", "password", &conn)?;
+        let user = crate::db::main::user::blocking_queries::insert("test_user", "password", &conn)?;
         let token = super::insert(user.id, "name", "pwd", &[], &conn)?;
         let roles = vec![Role::User, Role::Admin];
         super::set_roles(token.id, &roles, &conn)?;
