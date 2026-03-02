@@ -351,7 +351,11 @@ pub const TAGS: &[&str] = &[
     "telegram",
 ];
 
-pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Value> {
+pub fn generate_tags(
+    element: &Element,
+    include_tags: &[&str],
+    lang: Option<&str>,
+) -> Map<String, Value> {
     let mut res = Map::new();
     res.insert("id".into(), element.id.into());
     let include_tags: Vec<&str> = include_tags
@@ -375,7 +379,16 @@ pub fn generate_tags(element: &Element, include_tags: &[&str]) -> Map<String, Va
                 };
             }
             "name" => {
-                let name = element.overpass_data.tag("name");
+                let name = if let Some(lang_code) = lang {
+                    let localized_name = element.overpass_data.tag(&format!("name:{}", lang_code));
+                    if !localized_name.is_empty() {
+                        localized_name
+                    } else {
+                        element.overpass_data.tag("name")
+                    }
+                } else {
+                    element.overpass_data.tag("name")
+                };
                 if name.is_empty() {
                     res.insert("name".into(), "Unnamed".into());
                 } else {

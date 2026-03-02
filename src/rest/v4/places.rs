@@ -31,11 +31,13 @@ pub struct GetListArgs {
     include_deleted: Option<bool>,
     include_pending: Option<bool>,
     prevent_pending_id_clash: Option<bool>,
+    lang: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct GetSingleArgs {
     fields: Option<String>,
+    lang: Option<String>,
 }
 
 #[get("")]
@@ -45,6 +47,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
     let include_pending = args.include_pending.unwrap_or(false);
     let prevent_pending_id_clash = args.prevent_pending_id_clash.unwrap_or(true);
+    let lang = args.lang.as_deref();
 
     let elements = db::main::element::queries::select_updated_since(
         updated_since,
@@ -73,7 +76,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     if submissions.is_empty() {
         let elements = elements
             .into_iter()
-            .map(|it| service::element::generate_tags(&it, &fields))
+            .map(|it| service::element::generate_tags(&it, &fields, lang))
             .collect();
 
         Ok(Json(elements))
@@ -117,7 +120,7 @@ impl GetItem {
 
     fn to_json(&self, fields: &Vec<&str>, prevent_pending_id_clash: bool) -> JsonObject {
         match self {
-            GetItem::Element(element) => service::element::generate_tags(element, fields),
+            GetItem::Element(element) => service::element::generate_tags(element, fields, None),
             GetItem::PlaceSubmission(place_submission) => {
                 service::element::generate_submission_tags(
                     place_submission,
@@ -164,7 +167,7 @@ pub async fn get_boosted(
             },
             None => false,
         })
-        .map(|it| service::element::generate_tags(&it, &fields))
+        .map(|it| service::element::generate_tags(&it, &fields, None))
         .collect();
 
     Ok(Json(items))
@@ -532,9 +535,10 @@ pub async fn get_by_id(
     pool: Data<MainPool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
+    let lang = args.lang.as_deref();
     db::main::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
-        .map(|it| Json(service::element::generate_tags(&it, &fields)))
+        .map(|it| Json(service::element::generate_tags(&it, &fields, lang)))
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
