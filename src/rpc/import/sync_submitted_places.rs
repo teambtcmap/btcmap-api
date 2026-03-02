@@ -17,7 +17,8 @@ pub struct Res {
 }
 
 pub async fn run(pool: &Pool) -> Result<Res> {
-    let submissions = db::place_submission::queries::select_open_and_not_revoked(pool).await?;
+    let submissions =
+        db::main::place_submission::queries::select_open_and_not_revoked(pool).await?;
     info!(
         len = submissions.len(),
         "fetched open and non-revoked submissions",
@@ -75,8 +76,12 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 .collect::<Vec<&str>>()
                 .join("\n");
             let issue = service::gitea::create_issue(title, body, vec![901, 1307], pool).await?;
-            db::place_submission::queries::set_ticket_url(submission.id, issue.url.clone(), pool)
-                .await?;
+            db::main::place_submission::queries::set_ticket_url(
+                submission.id,
+                issue.url.clone(),
+                pool,
+            )
+            .await?;
             issues_created += 1;
             let message = format!(
                 "Created Gitea issue for {} {}",
@@ -93,7 +98,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
             };
 
             if issue.state == "closed" {
-                db::place_submission::queries::set_closed_at(
+                db::main::place_submission::queries::set_closed_at(
                     submission.id,
                     Some(OffsetDateTime::now_utc()),
                     pool,

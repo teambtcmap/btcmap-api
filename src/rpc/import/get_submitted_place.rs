@@ -28,8 +28,8 @@ pub struct Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let submission = match params.id {
-        Some(id) => db::place_submission::queries::select_by_id(id, pool).await?,
-        None => db::place_submission::queries::select_by_origin_and_external_id(
+        Some(id) => db::main::place_submission::queries::select_by_id(id, pool).await?,
+        None => db::main::place_submission::queries::select_by_origin_and_external_id(
             params.origin.unwrap(),
             params.external_id.unwrap(),
             pool,

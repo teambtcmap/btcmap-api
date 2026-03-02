@@ -1,5 +1,5 @@
 use crate::{
-    db::place_submission::blocking_queries::InsertArgs,
+    db::main::place_submission::blocking_queries::InsertArgs,
     db::{self},
     Result,
 };
@@ -28,19 +28,23 @@ pub struct Res {
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let extra_fields = params.extra_fields.unwrap_or_default();
 
-    let existing_submission = db::place_submission::queries::select_by_origin_and_external_id(
-        params.origin.clone(),
-        params.external_id.clone(),
-        pool,
-    )
-    .await?;
+    let existing_submission =
+        db::main::place_submission::queries::select_by_origin_and_external_id(
+            params.origin.clone(),
+            params.external_id.clone(),
+            pool,
+        )
+        .await?;
 
     match existing_submission {
         Some(mut existing_submission) => {
             if existing_submission.revoked {
-                existing_submission =
-                    db::place_submission::queries::set_revoked(existing_submission.id, false, pool)
-                        .await?;
+                existing_submission = db::main::place_submission::queries::set_revoked(
+                    existing_submission.id,
+                    false,
+                    pool,
+                )
+                .await?;
             }
 
             let mut fields_changed = false;
@@ -66,7 +70,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
             }
 
             if fields_changed {
-                existing_submission = db::place_submission::queries::set_fields(
+                existing_submission = db::main::place_submission::queries::set_fields(
                     existing_submission.id,
                     params.lat,
                     params.lon,
@@ -94,7 +98,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
                 name: params.name,
                 extra_fields,
             };
-            let new_submission = db::place_submission::queries::insert(args, pool).await?;
+            let new_submission = db::main::place_submission::queries::insert(args, pool).await?;
             Ok(Res {
                 id: new_submission.id,
                 origin: new_submission.origin,
@@ -150,7 +154,7 @@ mod test {
         assert_eq!(params.origin, res.origin);
         assert_eq!(params.external_id, res.external_id);
 
-        let submission = db::place_submission::queries::select_by_id(res.id, &pool).await?;
+        let submission = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
 
         assert_eq!(new_params.category, submission.category);
 

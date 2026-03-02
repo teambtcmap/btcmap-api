@@ -22,9 +22,9 @@ pub struct Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let submission = match params.id {
-        Some(id) => Some(db::place_submission::queries::select_by_id(id, pool).await?),
+        Some(id) => Some(db::main::place_submission::queries::select_by_id(id, pool).await?),
         None => {
-            db::place_submission::queries::select_by_origin_and_external_id(
+            db::main::place_submission::queries::select_by_origin_and_external_id(
                 params.origin.unwrap(),
                 params.external_id.unwrap(),
                 pool,
@@ -37,7 +37,8 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         return Err("can't find place with provided id".into());
     };
 
-    let submission = db::place_submission::queries::set_revoked(submission.id, true, pool).await?;
+    let submission =
+        db::main::place_submission::queries::set_revoked(submission.id, true, pool).await?;
 
     Ok(Res {
         id: submission.id,
@@ -50,7 +51,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
 #[cfg(test)]
 mod test {
     use crate::{
-        db::place_submission::blocking_queries::InsertArgs,
+        db::main::place_submission::blocking_queries::InsertArgs,
         db::{self, main::test::pool},
         Result,
     };
@@ -78,7 +79,7 @@ mod test {
             name: name.into(),
             extra_fields,
         };
-        let submission = db::place_submission::queries::insert(args, &pool).await?;
+        let submission = db::main::place_submission::queries::insert(args, &pool).await?;
 
         assert_eq!(false, submission.revoked);
 
@@ -96,7 +97,7 @@ mod test {
         assert_eq!(origin, res.origin);
         assert_eq!(external_id, res.external_id);
 
-        let submission = db::place_submission::queries::select_by_id(res.id, &pool).await?;
+        let submission = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
 
         assert_eq!(true, submission.revoked);
 

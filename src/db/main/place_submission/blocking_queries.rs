@@ -365,8 +365,8 @@ pub fn set_closed_at(
 
 #[cfg(test)]
 mod test {
+    use crate::db::main::place_submission::blocking_queries::InsertArgs;
     use crate::db::main::test::conn;
-    use crate::db::place_submission::blocking_queries::InsertArgs;
     use crate::Result;
     use geojson::JsonObject;
     use serde_json::Map;

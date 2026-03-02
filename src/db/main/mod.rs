@@ -10,6 +10,7 @@ pub mod element_issue;
 pub mod event;
 pub mod invoice;
 pub mod osm_user;
+pub mod place_submission;
 
 use super::Migration;
 use crate::Result;

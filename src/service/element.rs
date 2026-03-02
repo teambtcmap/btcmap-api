@@ -1,7 +1,7 @@
 use crate::db;
 use crate::db::main::area::schema::Area;
 use crate::db::main::element::schema::Element;
-use crate::db::place_submission::schema::PlaceSubmission;
+use crate::db::main::place_submission::schema::PlaceSubmission;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use geo::Contains;

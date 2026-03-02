@@ -2,8 +2,8 @@ use crate::db;
 use crate::db::main::element::schema::Element;
 use crate::db::main::element_comment::schema::ElementComment;
 use crate::db::main::element_event::queries::ElementEventWithUser;
+use crate::db::main::place_submission::schema::PlaceSubmission;
 use crate::db::main::MainPool;
-use crate::db::place_submission::schema::PlaceSubmission;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
@@ -59,7 +59,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
 
     if include_pending {
         submissions.append(
-            &mut db::place_submission::queries::select_updated_since(
+            &mut db::main::place_submission::queries::select_updated_since(
                 updated_since,
                 args.limit,
                 include_deleted,
@@ -222,7 +222,7 @@ pub struct PendingPlace {
 
 #[get("/pending")]
 pub async fn get_pending(pool: Data<MainPool>) -> Res<Vec<PendingPlace>> {
-    let items = db::place_submission::queries::select_open_and_not_revoked(&pool)
+    let items = db::main::place_submission::queries::select_open_and_not_revoked(&pool)
         .await
         .map_err(|_| RestApiError::database())?;
     let items: Vec<PendingPlace> = items
@@ -366,7 +366,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
                 .await
                 .map_err(|_| RestApiError::database())?;
         if include_pending {
-            pending_matches = db::place_submission::queries::select_pending_by_bbox(
+            pending_matches = db::main::place_submission::queries::select_pending_by_bbox(
                 min_lat, max_lat, min_lon, max_lon, &pool,
             )
             .await
@@ -382,7 +382,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
                 .map_err(|_| RestApiError::database())?;
             if include_pending {
                 pending_matches =
-                    db::place_submission::queries::select_by_search_query(name, false, &pool)
+                    db::main::place_submission::queries::select_by_search_query(name, false, &pool)
                         .await
                         .map_err(|_| RestApiError::database())?;
             }
@@ -414,10 +414,12 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
                 };
 
                 if !origin.is_empty() {
-                    pending_matches =
-                        db::place_submission::queries::select_by_origin(origin.to_string(), &pool)
-                            .await
-                            .map_err(|_| RestApiError::database())?;
+                    pending_matches = db::main::place_submission::queries::select_by_origin(
+                        origin.to_string(),
+                        &pool,
+                    )
+                    .await
+                    .map_err(|_| RestApiError::database())?;
                 }
             }
         } else {

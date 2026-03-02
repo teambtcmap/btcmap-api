@@ -1,5 +1,5 @@
 use crate::{
-    db::place_submission::{
+    db::main::place_submission::{
         blocking_queries, blocking_queries::InsertArgs, schema::PlaceSubmission,
     },
     Result,
