@@ -11,6 +11,7 @@ pub mod event;
 pub mod invoice;
 pub mod osm_user;
 pub mod place_submission;
+pub mod report;
 
 use super::Migration;
 use crate::Result;

@@ -32,8 +32,9 @@ pub struct Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let reports_start =
-        db::report::queries::select_by_date(params.start.date(), None, pool).await?;
-    let reports_end = db::report::queries::select_by_date(params.end.date(), None, pool).await?;
+        db::main::report::queries::select_by_date(params.start.date(), None, pool).await?;
+    let reports_end =
+        db::main::report::queries::select_by_date(params.end.date(), None, pool).await?;
     let global_report_start = reports_start.iter().find(|it| it.area_id == 662).unwrap();
     let global_report_end = reports_end.iter().find(|it| it.area_id == 662).unwrap();
     let total_places_start = global_report_start.tags["total_elements"].as_i64().unwrap();

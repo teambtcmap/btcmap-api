@@ -48,7 +48,7 @@ pub async fn get(pool: Data<MainPool>) -> RestResult<Dashboard> {
         .await
         .map_err(|_| RestApiError::database())?;
 
-    let reports = db::report::queries::select_by_area_id(662, None, &pool)
+    let reports = db::main::report::queries::select_by_area_id(662, None, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
 
