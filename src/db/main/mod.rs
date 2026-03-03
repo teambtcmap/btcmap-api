@@ -49,7 +49,7 @@ pub fn pool() -> Result<MainPool> {
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let mut conn = conn.lock().unwrap();
-            super::configure_connection(&conn);
+            super::configure_connection(&mut conn);
             run_migrations(&mut conn).unwrap();
             Ok(())
         })))
@@ -136,7 +136,8 @@ pub mod test {
             .unwrap()
             .max_size(pool_size)
             .post_create(Hook::Fn(Box::new(|conn, _| {
-                let conn = conn.lock().unwrap();
+                let mut conn = conn.lock().unwrap();
+                super::super::configure_connection(&mut conn);
                 conn.execute_batch(include_str!("schema.sql")).unwrap();
                 Ok(())
             })))
@@ -146,9 +147,9 @@ pub mod test {
     }
 
     pub fn conn() -> Connection {
-        let conn = Connection::open_in_memory().unwrap();
+        let mut conn = Connection::open_in_memory().unwrap();
+        super::super::configure_connection(&mut conn);
         conn.execute_batch(include_str!("schema.sql")).unwrap();
-        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
         conn
     }
 

@@ -36,7 +36,7 @@ pub fn pool() -> Result<ImagePool> {
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {
             let mut conn = conn.lock().unwrap();
-            crate::db::configure_connection(&conn);
+            super::configure_connection(&mut conn);
             run_migrations(&mut conn).unwrap();
             Ok(())
         })));
@@ -111,7 +111,7 @@ pub mod test {
 
     pub fn conn() -> Connection {
         let mut conn = Connection::open_in_memory().unwrap();
-        super::super::configure_connection(&conn);
+        super::super::configure_connection(&mut conn);
         super::run_migrations(&mut conn).unwrap();
         conn
     }
