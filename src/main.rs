@@ -3,10 +3,8 @@ use actix_web::middleware::{from_fn, Compress, ErrorHandlers, NormalizePath};
 use actix_web::{web, App, HttpServer, ResponseError};
 use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
-use tracing::info;
 mod error;
 use std::env;
-use std::time::Instant;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -24,23 +22,15 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
-    let start_time = Instant::now();
     init_env();
 
     let main_pool = db::main::pool()?;
     let image_pool = db::image::pool()?;
     let log_pool = db::log::pool()?;
 
-    service::area::generate_bbox(&main_pool).await?;
-
     let conf = db::main::conf::queries::select(&main_pool).await?;
-    service::matrix::init(&main_pool);
 
-    let startup_duration = start_time.elapsed();
-    info!(
-        "Application startup completed in {:.3} seconds",
-        startup_duration.as_secs_f64()
-    );
+    service::matrix::init(&main_pool);
 
     HttpServer::new(move || {
         App::new()

@@ -65,6 +65,7 @@ pub enum RpcMethod {
     GenerateAreasElementsMapping,
     GenerateReports,
     GetAreaDashboard,
+    GenerateAreaBboxes,
     // user
     GetUserActivity,
     SetUserTag,
@@ -467,6 +468,10 @@ pub async fn handle(
         RpcMethod::GetMostActiveUsers => RpcResponse::from(
             req.id.clone(),
             super::get_most_active_users::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::GenerateAreaBboxes => RpcResponse::from(
+            req.id.clone(),
+            super::area::generate_bboxes::run(&pool).await?,
         ),
         // auth
         RpcMethod::CreateApiKey => RpcResponse::from(

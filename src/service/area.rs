@@ -13,43 +13,13 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use time::OffsetDateTime;
-use tracing::info;
 
-pub async fn generate_bbox(pool: &Pool) -> Result<()> {
-    let areas = db::main::area::queries::select(None, true, None, pool).await?;
-    let ingnored_areas = [357, 515, 558, 514, 25, 418, 632, 633];
-    for area in areas {
-        if ingnored_areas.contains(&area.id) {
-            continue;
-        }
-
-        if area.alias != "earth"
-            && area.bbox_west == -180.0
-            && area.bbox_south == -90.0
-            && area.bbox_east == 180.0
-            && area.bbox_north == 90.0
-        {
-            info!(
-                area.id,
-                area.alias, "found an area without bbox, generating..."
-            );
-            let bbox = area.geo_json()?.bbox().unwrap();
-            let abs = (bbox[0] - bbox[2]).abs();
-            if abs > 300.0 {
-                info!(area.alias, abs, "suspicious area, using catch-all bbox");
-                let message = format!("bbox: {:?}", bbox);
-                info!(message);
-                db::main::area::queries::set_bbox(area.id, -180.0, -90.0, 180.0, 90.0, pool)
-                    .await?;
-            } else {
-                db::main::area::queries::set_bbox(
-                    area.id, bbox[0], bbox[1], bbox[2], bbox[3], pool,
-                )
-                .await?;
-            }
-        }
-    }
-    Ok(())
+#[derive(Debug, PartialEq)]
+pub struct Bbox {
+    pub west: f64,
+    pub south: f64,
+    pub east: f64,
+    pub north: f64,
 }
 
 // it can take a long time to find area_elements
@@ -277,12 +247,12 @@ pub async fn get_comments(
     Ok(comments)
 }
 
-trait BboxGenerator {
-    fn bbox(&self) -> Option<Vec<f64>>;
+pub trait BboxGenerator {
+    fn bbox(&self) -> Option<Bbox>;
 }
 
 impl BboxGenerator for GeoJson {
-    fn bbox(&self) -> Option<Vec<f64>> {
+    fn bbox(&self) -> Option<Bbox> {
         match self {
             GeoJson::Feature(feature) => feature.bbox(),
             GeoJson::FeatureCollection(collection) => collection.bbox(),
@@ -292,31 +262,34 @@ impl BboxGenerator for GeoJson {
 }
 
 impl BboxGenerator for Feature {
-    fn bbox(&self) -> Option<Vec<f64>> {
+    fn bbox(&self) -> Option<Bbox> {
         self.geometry.as_ref().and_then(|geom| geom.bbox())
     }
 }
 
 impl BboxGenerator for FeatureCollection {
-    fn bbox(&self) -> Option<Vec<f64>> {
+    fn bbox(&self) -> Option<Bbox> {
         self.features
             .iter()
             .filter_map(|feature| feature.bbox())
-            .reduce(|acc, bbox| {
-                vec![
-                    acc[0].min(bbox[0]),
-                    acc[1].min(bbox[1]),
-                    acc[2].max(bbox[2]),
-                    acc[3].max(bbox[3]),
-                ]
+            .reduce(|acc, bbox| Bbox {
+                west: acc.west.min(bbox.west),
+                south: acc.south.min(bbox.south),
+                east: acc.east.max(bbox.east),
+                north: acc.north.max(bbox.north),
             })
     }
 }
 
 impl BboxGenerator for Geometry {
-    fn bbox(&self) -> Option<Vec<f64>> {
+    fn bbox(&self) -> Option<Bbox> {
         match &self.value {
-            geojson::Value::Point(coords) => Some(vec![coords[0], coords[1], coords[0], coords[1]]),
+            geojson::Value::Point(coords) => Some(Bbox {
+                west: coords[0],
+                south: coords[1],
+                east: coords[0],
+                north: coords[1],
+            }),
             geojson::Value::MultiPoint(points) => {
                 coordinates_bbox(points.iter().flatten().cloned())
             }
@@ -342,19 +315,17 @@ impl BboxGenerator for Geometry {
             geojson::Value::GeometryCollection(geometries) => geometries
                 .iter()
                 .filter_map(|geom| geom.bbox())
-                .reduce(|acc, bbox| {
-                    vec![
-                        acc[0].min(bbox[0]),
-                        acc[1].min(bbox[1]),
-                        acc[2].max(bbox[2]),
-                        acc[3].max(bbox[3]),
-                    ]
+                .reduce(|acc, bbox| Bbox {
+                    west: acc.west.min(bbox.west),
+                    south: acc.south.min(bbox.south),
+                    east: acc.east.max(bbox.east),
+                    north: acc.north.max(bbox.north),
                 }),
         }
     }
 }
 
-fn coordinates_bbox<I>(coords: I) -> Option<Vec<f64>>
+fn coordinates_bbox<I>(coords: I) -> Option<Bbox>
 where
     I: Iterator<Item = f64>,
 {
@@ -377,7 +348,12 @@ where
         );
 
     if min_x.is_finite() {
-        Some(vec![min_x, min_y, max_x, max_y])
+        Some(Bbox {
+            west: min_x,
+            south: min_y,
+            east: max_x,
+            north: max_y,
+        })
     } else {
         None
     }
