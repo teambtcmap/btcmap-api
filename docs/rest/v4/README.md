@@ -11,7 +11,7 @@ The latest and recommended version of the BTCMap API, offering improved performa
 - **[Events](events.md)** - Fetch events.
 - **[Invoices](invoices.md)** - Check invoice status for boosts, comments and other paywalled features.  
 ### Planned
-- **[Areas](areas.md)** *(Coming soon)* 
+- **[Areas](areas.md)** - Fetch areas.
 ### Proposed
 - Need something extra? Let us know!
 

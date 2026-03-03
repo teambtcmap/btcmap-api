@@ -1,3 +1,4 @@
+pub mod areas;
 pub mod dashboard;
 pub mod element_issues;
 pub mod events;

@@ -43,6 +43,19 @@ pub async fn select_by_id_or_alias(id_or_alias: impl Into<String>, pool: &Pool) 
         .await?
 }
 
+pub async fn select_by_bbox(
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+    pool: &Pool,
+) -> Result<Vec<Area>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_bbox(west, south, east, north, conn))
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Area> {
     pool.get()
         .await?

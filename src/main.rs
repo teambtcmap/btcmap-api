@@ -172,6 +172,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::place_boosts::post),
                     )
                     .service(scope("search").service(rest::v4::search::get))
+                    .service(scope("areas").service(rest::v4::areas::get))
                     .service(scope("dashboard").service(rest::v4::dashboard::get)),
             )
     })

@@ -110,6 +110,37 @@ pub fn select_by_id_or_alias(id_or_alias: impl Into<String>, conn: &Connection) 
     }
 }
 
+pub fn select_by_bbox(
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+    conn: &Connection,
+) -> Result<Vec<Area>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {deleted_at} IS NULL
+            AND {bbox_west} < ?3
+            AND {bbox_east} > ?1
+            AND {bbox_south} < ?4
+            AND {bbox_north} > ?2
+        "#,
+        projection = Area::projection(),
+        table = schema::TABLE_NAME,
+        deleted_at = Columns::DeletedAt.as_str(),
+        bbox_west = Columns::BboxWest.as_str(),
+        bbox_south = Columns::BboxSouth.as_str(),
+        bbox_east = Columns::BboxEast.as_str(),
+        bbox_north = Columns::BboxNorth.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![west, south, east, north], Area::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<Area> {
     let sql = format!(
         r#"

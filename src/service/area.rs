@@ -8,6 +8,10 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
+use geo::Contains;
+use geo::LineString;
+use geo::MultiPolygon;
+use geo::Polygon;
 use geojson::{Feature, FeatureCollection, GeoJson, Geometry};
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -103,6 +107,70 @@ pub async fn soft_delete_async(area_id_or_alias: impl Into<String>, pool: &Pool)
     let area_id_or_alias = area_id_or_alias.into();
     let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
     db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), pool).await
+}
+
+pub async fn find_areas_by_lat_lon(lat: f64, lon: f64, pool: &Pool) -> Result<Vec<Area>> {
+    let bbox_expansion = 0.1;
+    let rough_matches = db::main::area::queries::select_by_bbox(
+        lon - bbox_expansion,
+        lat - bbox_expansion,
+        lon + bbox_expansion,
+        lat + bbox_expansion,
+        pool,
+    )
+    .await?;
+
+    let coord = geo::coord!(x: lon, y: lat);
+
+    let mut result = Vec::new();
+    let mut seen_ids: HashSet<i64> = HashSet::new();
+
+    for area in rough_matches {
+        if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
+            continue;
+        }
+
+        if seen_ids.contains(&area.id) {
+            continue;
+        }
+
+        let geometries = area.geo_json_geometries()?;
+
+        for geometry in &geometries {
+            match &geometry.value {
+                geojson::Value::MultiPolygon(_) => {
+                    let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
+
+                    if multi_poly.contains(&coord) {
+                        seen_ids.insert(area.id);
+                        result.push(area);
+                        break;
+                    }
+                }
+                geojson::Value::Polygon(_) => {
+                    let poly: Polygon = (&geometry.value).try_into().unwrap();
+
+                    if poly.contains(&coord) {
+                        seen_ids.insert(area.id);
+                        result.push(area);
+                        break;
+                    }
+                }
+                geojson::Value::LineString(_) => {
+                    let line_string: LineString = (&geometry.value).try_into().unwrap();
+
+                    if line_string.contains(&coord) {
+                        seen_ids.insert(area.id);
+                        result.push(area);
+                        break;
+                    }
+                }
+                _ => continue,
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 #[derive(Serialize)]
