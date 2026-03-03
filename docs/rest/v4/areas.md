@@ -11,7 +11,7 @@ This document describes the endpoints for interacting with areas in REST API v4.
 Search for areas containing a specific geographic coordinate. This is useful for finding which areas (countries, communities) a particular location belongs to.
 
 ```bash
-curl https://api.btcmap.org/v4/areas/search
+curl https://api.btcmap.org/v4/areas
 ```
 
 #### Parameters
@@ -26,7 +26,7 @@ curl https://api.btcmap.org/v4/areas/search
 ##### Search for areas containing Paris, France
 
 ```bash
-curl 'https://api.btcmap.org/v4/areas/search?lat=48.8566&lon=2.3522'
+curl 'https://api.btcmap.org/v4/areas?lat=48.8566&lon=2.3522'
 ```
 
 ```json
@@ -45,7 +45,7 @@ curl 'https://api.btcmap.org/v4/areas/search?lat=48.8566&lon=2.3522'
 ##### Search for areas containing Phuket, Thailand
 
 ```bash
-curl 'https://api.btcmap.org/v4/areas/search?lat=7.9&lon=98.3'
+curl 'https://api.btcmap.org/v4/areas?lat=7.9&lon=98.3'
 ```
 
 ```json
