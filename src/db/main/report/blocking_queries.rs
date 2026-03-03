@@ -33,30 +33,6 @@ pub fn insert(area_id: i64, date: Date, tags: &JsonObject, conn: &Connection) ->
         .map_err(Into::into)
 }
 
-pub fn select_all(
-    sort_order: Option<String>,
-    limit: Option<i64>,
-    conn: &Connection,
-) -> Result<Vec<Report>> {
-    let sort_order = sort_order.unwrap_or("ASC".into());
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM {table}
-            ORDER BY {updated_at} {sort_order}, {id} {sort_order}
-            LIMIT ?1
-        "#,
-        projection = Report::projection(),
-        table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
-    );
-    Ok(conn
-        .prepare(&sql)?
-        .query_map(params![limit.unwrap_or(i64::MAX)], Report::mapper())?
-        .collect::<Result<Vec<_>, _>>()?)
-}
-
 pub fn select_updated_since(
     updated_since: OffsetDateTime,
     limit: Option<i64>,
@@ -168,21 +144,6 @@ pub fn select_latest_by_area_id(area_id: i64, conn: &Connection) -> Result<Repor
     );
     conn.query_row(&sql, params![area_id], Report::mapper())
         .map_err(Into::into)
-}
-
-pub fn patch_tags(id: i64, tags: &JsonObject, conn: &Connection) -> Result<Report> {
-    let sql = format!(
-        r#"
-            UPDATE {table}
-            SET {tags} = json_patch({tags}, ?2)
-            WHERE {id} = ?1
-        "#,
-        table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
-    );
-    conn.execute(&sql, params![id, &serde_json::to_string(tags)?])?;
-    select_by_id(id, conn)
 }
 
 #[cfg(test)]
@@ -299,29 +260,6 @@ mod test {
             latest_report,
             super::select_latest_by_area_id(area.id, &conn)?,
         );
-        Ok(())
-    }
-
-    #[test]
-    fn merge_tags() -> Result<()> {
-        let conn = conn();
-        db::main::area::blocking_queries::insert(Area::mock_tags(), &conn)?;
-        let tag_1_name = "foo";
-        let tag_1_value = "bar";
-        let tag_2_name = "qwerty";
-        let tag_2_value = "test";
-        let mut tags = Map::new();
-        tags.insert(tag_1_name.into(), tag_1_value.into());
-        super::insert(1, OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
-        let report = super::select_by_id(1, &conn)?;
-        assert!(report.tags.is_empty());
-        super::patch_tags(1, &tags, &conn)?;
-        let report = super::select_by_id(1, &conn)?;
-        assert_eq!(1, report.tags.len());
-        tags.insert(tag_2_name.into(), tag_2_value.into());
-        super::patch_tags(1, &tags, &conn)?;
-        let report = super::select_by_id(1, &conn)?;
-        assert_eq!(2, report.tags.len());
         Ok(())
     }
 
