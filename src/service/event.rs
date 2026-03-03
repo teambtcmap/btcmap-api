@@ -7,32 +7,12 @@ use crate::Result;
 use deadpool_sqlite::Pool;
 use matrix_sdk::Client;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::ops::Add;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
-
-pub async fn enforce_v2_compat(pool: &Pool) -> Result<()> {
-    for event in db::main::element_event::queries::select_all(None, None, pool).await? {
-        if event.tags.get("element_osm_type").is_none()
-            || event.tags.get("element_osm_id").is_none()
-        {
-            warn!(id = event.id, "Event is not v2 compatible, upgrading");
-            let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
-            let mut event_tags: HashMap<String, Value> = HashMap::new();
-            event_tags.insert(
-                "element_osm_type".into(),
-                element.overpass_data.r#type.clone().into(),
-            );
-            event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
-            db::main::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
-        }
-    }
-    Ok(())
-}
 
 pub async fn on_new_event(
     event: &ElementEvent,
