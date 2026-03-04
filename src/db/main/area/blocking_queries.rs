@@ -285,6 +285,34 @@ pub fn set_deleted_at(
     select_by_id(id, conn)
 }
 
+pub fn select_areas_count(conn: &Connection) -> Result<i64> {
+    let sql = format!(
+        r#"
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE {deleted_at} IS NULL
+        "#,
+        table = schema::TABLE_NAME,
+        deleted_at = Columns::DeletedAt.as_str(),
+    );
+    Ok(conn.query_row(&sql, [], |row| row.get::<_, i64>(0))?)
+}
+
+pub fn select_verified_areas_count(conn: &Connection, verified_since: &str) -> Result<i64> {
+    let sql = format!(
+        r#"
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE {deleted_at} IS NULL
+            AND json_extract({tags}, '$.verified:date') > ?1
+        "#,
+        table = schema::TABLE_NAME,
+        deleted_at = Columns::DeletedAt.as_str(),
+        tags = Columns::Tags.as_str(),
+    );
+    Ok(conn.query_row(&sql, params![verified_since], |row| row.get::<_, i64>(0))?)
+}
+
 #[cfg(test)]
 mod test {
     use super::schema::Area;

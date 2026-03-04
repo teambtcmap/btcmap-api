@@ -19,6 +19,8 @@ pub struct Dashboard {
     pub total_exchanges: i64,
     pub total_exchanges_chart: Vec<ChartEntry>,
     pub verified_exchanges_1y: i64,
+    pub total_areas: i64,
+    pub verified_areas_1y: i64,
 }
 
 #[derive(Serialize)]
@@ -47,6 +49,15 @@ pub async fn get(pool: Data<MainPool>) -> RestResult<Dashboard> {
     let total_exchanges = db::main::element::queries::select_exchanges_count(&pool, None)
         .await
         .map_err(|_| RestApiError::database())?;
+
+    let total_areas = db::main::area::queries::select_areas_count(&pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    let verified_areas_1y =
+        db::main::area::queries::select_verified_areas_count(&year_ago.to_string(), &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
 
     let reports = db::main::report::queries::select_by_area_id(662, None, &pool)
         .await
@@ -84,5 +95,7 @@ pub async fn get(pool: Data<MainPool>) -> RestResult<Dashboard> {
         total_exchanges,
         total_exchanges_chart,
         verified_exchanges_1y,
+        total_areas,
+        verified_areas_1y,
     }))
 }

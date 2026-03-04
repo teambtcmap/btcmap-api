@@ -118,3 +118,18 @@ pub async fn set_deleted_at(
         .interact(move |conn| blocking_queries::set_deleted_at(id, deleted_at, conn))
         .await?
 }
+
+pub async fn select_areas_count(pool: &Pool) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(|conn| blocking_queries::select_areas_count(conn))
+        .await?
+}
+
+pub async fn select_verified_areas_count(verified_since: &str, pool: &Pool) -> Result<i64> {
+    let verified_since = verified_since.to_string();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_verified_areas_count(conn, &verified_since))
+        .await?
+}

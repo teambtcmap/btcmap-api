@@ -66,10 +66,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
                     .get("icon:square")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string()),
-                website_url: format!(
-                    "https://btcmap.org/{}/{}",
-                    singular_type, url_alias
-                ),
+                website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
             }
         })
         .collect();
