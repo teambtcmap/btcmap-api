@@ -535,10 +535,10 @@ pub async fn get_by_id(
     pool: Data<MainPool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
-    let lang = args.lang.as_deref();
+    let lang = args.lang.as_deref().unwrap_or("en");
     db::main::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
-        .map(|it| Json(service::element::generate_tags(&it, &fields, lang)))
+        .map(|it| Json(service::element::generate_tags(&it, &fields, Some(lang))))
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
