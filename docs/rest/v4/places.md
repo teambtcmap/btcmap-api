@@ -261,7 +261,11 @@ curl 'https://api.btcmap.org/v4/places/5005?fields=id,name,phone,website'
 
 ### Fetch Place Comments
 
-This is equivalent of filtering the `/place-comments` endpoint by `place_id`.
+Retrieves comments for a specific place by its ID. It supports both BTC Map numerical IDs and OSM IDs (`element_type:id`).
+
+```
+curl https://api.btcmap.org/v4/places/{id}/comments
+```
 
 #### Examples
 
