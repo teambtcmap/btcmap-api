@@ -874,7 +874,7 @@ impl OverpassElement {
         }
 
         if amenity == "dentist" {
-            icon_id = "medical_services"
+            icon_id = "dentistry"
         }
 
         if amenity == "pub" {
@@ -1306,7 +1306,7 @@ impl OverpassElement {
         }
 
         if healthcare == "dentist" {
-            icon_id = "medical_services"
+            icon_id = "dentistry"
         }
 
         if healthcare == "doctor" {
