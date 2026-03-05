@@ -294,3 +294,55 @@ curl GET https://api.btcmap.org/v4/places/22923/comments
   }
 ]
 ```
+
+### Fetch Place Areas
+
+Retrieves Areas for a specific place by its ID. It supports both BTC Map numerical IDs and OSM IDs (`element_type:id`).
+
+```
+curl https://api.btcmap.org/v4/places/{id}/areas
+```
+
+#### Path Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `id` | String | `5` or `node:28` | - | **Required**. |
+| `type` | String | `community` or `country` | All | Use either `country` or `community`. Absence of parameter will return all areas of all types. |
+
+#### Examples
+
+##### Get Community Areas for a Place ID 120
+
+```bash
+curl GET https://api.btcmap.org/v4/places/120/areas?type=community
+```
+
+```json
+[
+  {
+  "id": 120,
+  "alias": "bitcoin-manchester",
+  "tags":
+  {
+    "type": "community",
+    "name": "Bitcoin Manchester",
+    "icon:square": "https://static.btcmap.org/images/areas/120.png",
+    "continent": "europe",
+    "contact:twitter": "https://twitter.com/bitcoin_mcr",
+    "contact:email": "hello@bitcoinmanchester.org.uk",
+    "contact:telegram": "https://t.me/bitcoinmcr",
+    "contact:meetup": "https://www.meetup.com/bitcoin-manchester/",
+    "verified:date": "2026-01-06",
+    "population": 2812568,
+    "population:date": "2021-01-01",
+    "url_alias": "bitcoin-manchester",
+    "area_km2": 1644.48,
+    "contact:nostr": "npub1w2d0xngltuu86yn0jfak23sty9xwnu6kwudswpdrhtxydwnhjslq60jesu",
+    "contact:website": "http://www.bitcoinmanchester.org.uk/"
+  },
+  "created_at": "2023-01-10T13:35:53Z",
+  "updated_at": "2026-02-10T12:25:23.64Z"
+  }
+]
+```
