@@ -140,7 +140,6 @@ async fn main() -> Result<()> {
                     .service(
                         scope("places")
                             .service(rest::v4::places::get)
-                            .service(rest::v4::places::get_boosted)
                             .service(rest::v4::places::get_pending)
                             .service(rest::v4::places::search)
                             .service(rest::v4::places::get_by_id)

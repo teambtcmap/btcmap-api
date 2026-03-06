@@ -18,7 +18,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -47,7 +46,11 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
     let include_pending = args.include_pending.unwrap_or(false);
     let prevent_pending_id_clash = args.prevent_pending_id_clash.unwrap_or(true);
-    let lang = args.lang.as_deref().map(|l| &l[..2.min(l.len())]);
+    let lang = args
+        .lang
+        .as_deref()
+        .map(|l| &l[..2.min(l.len())])
+        .unwrap_or("en");
 
     let elements = db::main::element::queries::select_updated_since(
         updated_since,
@@ -98,7 +101,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
         Ok(Json(
             items
                 .into_iter()
-                .map(|it| it.to_json(&fields, prevent_pending_id_clash))
+                .map(|it| it.to_json(&fields, prevent_pending_id_clash, lang))
                 .take(args.limit.unwrap_or(i64::MAX) as usize)
                 .collect(),
         ))
@@ -118,9 +121,14 @@ impl GetItem {
         }
     }
 
-    fn to_json(&self, fields: &Vec<&str>, prevent_pending_id_clash: bool) -> JsonObject {
+    fn to_json(
+        &self,
+        fields: &Vec<&str>,
+        prevent_pending_id_clash: bool,
+        lang: &str,
+    ) -> JsonObject {
         match self {
-            GetItem::Element(element) => service::element::generate_tags(element, fields, None),
+            GetItem::Element(element) => service::element::generate_tags(element, fields, lang),
             GetItem::PlaceSubmission(place_submission) => {
                 service::element::generate_submission_tags(
                     place_submission,
@@ -130,47 +138,6 @@ impl GetItem {
             }
         }
     }
-}
-
-#[derive(Deserialize)]
-pub struct GetBoostedArgs {
-    fields: Option<String>,
-}
-
-#[get("/boosted")]
-pub async fn get_boosted(
-    args: Query<GetBoostedArgs>,
-    pool: Data<MainPool>,
-) -> Res<Vec<JsonObject>> {
-    let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
-    let updated_since = OffsetDateTime::UNIX_EPOCH;
-    let include_deleted = false;
-
-    let items = db::main::element::queries::select_updated_since(
-        updated_since,
-        None,
-        include_deleted,
-        &pool,
-    )
-    .await
-    .map_err(|_| RestApiError::database())?;
-
-    let items = items
-        .into_iter()
-        .filter(|it| match it.tags.get("boost:expires") {
-            Some(boost_expires) => match boost_expires.as_str() {
-                Some(boost_expires) => match OffsetDateTime::parse(boost_expires, &Rfc3339) {
-                    Ok(boost_expires) => boost_expires > OffsetDateTime::now_utc(),
-                    Err(_) => false,
-                },
-                None => false,
-            },
-            None => false,
-        })
-        .map(|it| service::element::generate_tags(&it, &fields, None))
-        .collect();
-
-    Ok(Json(items))
 }
 
 #[derive(Serialize)]
@@ -535,10 +502,14 @@ pub async fn get_by_id(
     pool: Data<MainPool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
-    let lang = args.lang.as_deref().map(|l| &l[..2.min(l.len())]).unwrap_or("en");
+    let lang = args
+        .lang
+        .as_deref()
+        .map(|l| &l[..2.min(l.len())])
+        .unwrap_or("en");
     db::main::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
-        .map(|it| Json(service::element::generate_tags(&it, &fields, Some(lang))))
+        .map(|it| Json(service::element::generate_tags(&it, &fields, lang)))
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
