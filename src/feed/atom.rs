@@ -107,7 +107,7 @@ fn event_to_atom_entry(event: (ElementEvent, Element)) -> String {
     let event_id = event.0.id;
     let event_created_at = event.0.created_at.format(&Rfc3339).unwrap();
     let element_id = event.1.id;
-    let title = xml_escape(event.1.name());
+    let title = xml_escape(event.1.name(None));
     let summary = "Check BTC Map for more details";
     format!(
         r#"

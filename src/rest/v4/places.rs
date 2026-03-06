@@ -79,7 +79,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     if submissions.is_empty() {
         let elements = elements
             .into_iter()
-            .map(|it| service::element::generate_tags(&it, &fields, lang))
+            .map(|it| service::element::generate_tags(&it, &fields, Some(lang)))
             .collect();
 
         Ok(Json(elements))
@@ -101,7 +101,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
         Ok(Json(
             items
                 .into_iter()
-                .map(|it| it.to_json(&fields, prevent_pending_id_clash, lang))
+                .map(|it| it.to_json(&fields, prevent_pending_id_clash, Some(lang)))
                 .take(args.limit.unwrap_or(i64::MAX) as usize)
                 .collect(),
         ))
@@ -125,7 +125,7 @@ impl GetItem {
         &self,
         fields: &Vec<&str>,
         prevent_pending_id_clash: bool,
-        lang: &str,
+        lang: Option<&str>,
     ) -> JsonObject {
         match self {
             GetItem::Element(element) => service::element::generate_tags(element, fields, lang),
@@ -358,7 +358,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
             }
             filters_applied += 1;
         } else {
-            matches.retain(|it| it.name().to_lowercase().contains(&name));
+            matches.retain(|it| it.name(Some("en")).to_lowercase().contains(&name));
             if include_pending {
                 pending_matches.retain(|it| it.name.to_lowercase().contains(&name));
             }
@@ -470,7 +470,7 @@ impl From<Element> for SearchedPlace {
             lat: it.lat.unwrap(),
             lon: it.lon.unwrap(),
             icon: it.icon("store"),
-            name: it.name(),
+            name: it.name(Some("en")),
             address: it.address(),
             opening_hours: it.opening_hours(),
             comments,
@@ -509,7 +509,7 @@ pub async fn get_by_id(
         .unwrap_or("en");
     db::main::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
-        .map(|it| Json(service::element::generate_tags(&it, &fields, lang)))
+        .map(|it| Json(service::element::generate_tags(&it, &fields, Some(lang))))
         .map_err(|e| match e {
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),

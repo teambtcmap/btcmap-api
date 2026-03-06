@@ -41,7 +41,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
                 "{} {}d element {}",
                 user.osm_data.display_name,
                 it.0.r#type,
-                it.1.name(),
+                it.1.name(None),
             ),
             osm_url: format!(
                 "https://www.openstreetmap.org/{}/{}",

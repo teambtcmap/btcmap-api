@@ -40,7 +40,7 @@ impl From<Element> for MergeResultElement {
         MergeResultElement {
             id: val.id,
             osm_url: val.osm_url(),
-            name: val.name(),
+            name: val.name(Some("en")),
         }
     }
 }
@@ -177,7 +177,7 @@ async fn mark_element_as_deleted(
         element.overpass_data.r#type.clone().into(),
     );
     event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
-    event_tags.insert("element_name".into(), element.name().into());
+    event_tags.insert("element_name".into(), element.name(None).into());
     if element.tags.contains_key("areas") {
         event_tags.insert("areas".into(), element.tags["areas"].clone());
     }

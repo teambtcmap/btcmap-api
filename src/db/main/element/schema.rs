@@ -104,8 +104,24 @@ impl Element {
         self.tags.get(name).unwrap_or(&Value::Null)
     }
 
-    pub fn name(&self) -> String {
-        self.overpass_data.tag("name").into()
+    pub fn name(&self, lang: Option<&str>) -> String {
+        match lang {
+            Some(lang) => {
+                let mut name = self.overpass_data.tag(&format!("name:{}", lang));
+                if name.is_empty() && lang != "en" {
+                    name = self.overpass_data.tag("name:en");
+                }
+                if name.is_empty() {
+                    name = self.overpass_data.tag("name");
+                }
+                if name.is_empty() {
+                    "Unnamed".to_string()
+                } else {
+                    name.to_string()
+                }
+            }
+            None => self.overpass_data.tag("name").to_string(),
+        }
     }
 
     pub fn osm_url(&self) -> String {

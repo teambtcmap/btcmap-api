@@ -91,7 +91,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
 
         for element in elements {
             results.push(SearchResult {
-                name: element.name(),
+                name: element.name(None),
                 r#type: "element".to_string(),
                 id: element.id,
             });

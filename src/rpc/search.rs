@@ -29,7 +29,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let mut res_elements: Vec<Res> = elements
         .into_iter()
         .map(|it| Res {
-            name: it.name(),
+            name: it.name(None),
             r#type: "element".into(),
             id: it.id,
         })

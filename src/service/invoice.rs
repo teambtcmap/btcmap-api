@@ -252,7 +252,7 @@ pub async fn on_invoice_paid(
         let message = format!(
             "Boosted element since invoice has been paid (id = {}, name = {}, days = {})",
             element_id,
-            element.name(),
+            element.name(Some("en")),
             days,
         );
         matrix::send_message(matrix_client, ROOM_PLACE_BOOSTS, &message);

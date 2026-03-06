@@ -29,7 +29,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         if refresh_tag_res.count_changed {
             info!(
                 element.id,
-                element.name = element.name(),
+                element.name = element.name(None),
                 refresh_tag_res.previous_count,
                 refresh_tag_res.current_count,
                 "updated comment count"

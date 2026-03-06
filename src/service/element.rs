@@ -17,11 +17,10 @@ use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::Date;
 use time::OffsetDateTime;
-use tracing::info;
 
 pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a Area>> {
     let mut element_areas = vec![];
-    let mut rough_matches = 0;
+    let mut _rough_matches = 0;
 
     for area in areas {
         if area.tags.get("url_alias") == Some(&Value::String("earth".into())) {
@@ -36,7 +35,7 @@ pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a
             && lat > area.bbox_south
             && lat < area.bbox_north
         {
-            rough_matches += 1;
+            _rough_matches += 1;
         } else {
             continue;
         }
@@ -71,7 +70,6 @@ pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a
         }
     }
 
-    info!(element.id, element.name = element.name(), rough_matches);
     Ok(element_areas)
 }
 
@@ -351,7 +349,11 @@ pub const TAGS: &[&str] = &[
     "telegram",
 ];
 
-pub fn generate_tags(element: &Element, include_tags: &[&str], lang: &str) -> Map<String, Value> {
+pub fn generate_tags(
+    element: &Element,
+    include_tags: &[&str],
+    lang: Option<&str>,
+) -> Map<String, Value> {
     let mut res = Map::new();
     res.insert("id".into(), element.id.into());
     let include_tags: Vec<&str> = include_tags
@@ -375,18 +377,7 @@ pub fn generate_tags(element: &Element, include_tags: &[&str], lang: &str) -> Ma
                 };
             }
             "name" => {
-                let mut name = element.overpass_data.tag(&format!("name:{}", lang));
-                if name.is_empty() && lang != "en" {
-                    name = element.overpass_data.tag("name:en");
-                }
-                if name.is_empty() {
-                    name = element.overpass_data.tag("name");
-                }
-                if name.is_empty() {
-                    res.insert("name".into(), "Unnamed".into());
-                } else {
-                    res.insert("name".into(), name.into());
-                }
+                res.insert("name".into(), element.name(lang).into());
             }
             "opening_hours" => {
                 if let Some(opening_hours) = element.opening_hours() {
