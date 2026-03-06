@@ -47,7 +47,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
     let include_pending = args.include_pending.unwrap_or(false);
     let prevent_pending_id_clash = args.prevent_pending_id_clash.unwrap_or(true);
-    let lang = args.lang.as_deref();
+    let lang = args.lang.as_deref().map(|l| &l[..2.min(l.len())]);
 
     let elements = db::main::element::queries::select_updated_since(
         updated_since,
@@ -535,7 +535,7 @@ pub async fn get_by_id(
     pool: Data<MainPool>,
 ) -> Res<JsonObject> {
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
-    let lang = args.lang.as_deref().unwrap_or("en");
+    let lang = args.lang.as_deref().map(|l| &l[..2.min(l.len())]).unwrap_or("en");
     db::main::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
         .map(|it| Json(service::element::generate_tags(&it, &fields, Some(lang))))

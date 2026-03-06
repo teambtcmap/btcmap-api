@@ -383,6 +383,13 @@ pub fn generate_tags(
                     let localized_name = element.overpass_data.tag(&format!("name:{}", lang_code));
                     if !localized_name.is_empty() {
                         localized_name
+                    } else if lang_code != "en" {
+                        let english_name = element.overpass_data.tag("name:en");
+                        if !english_name.is_empty() {
+                            english_name
+                        } else {
+                            element.overpass_data.tag("name")
+                        }
                     } else {
                         element.overpass_data.tag("name")
                     }
