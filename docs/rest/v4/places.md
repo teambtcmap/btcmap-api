@@ -261,7 +261,11 @@ curl 'https://api.btcmap.org/v4/places/5005?fields=id,name,phone,website'
 
 ### Fetch Place Comments
 
-This is equivalent of filtering the `/place-comments` endpoint by `place_id`.
+Retrieves comments for a specific place by its ID. It supports both BTC Map numerical IDs and OSM IDs (`element_type:id`).
+
+```
+curl https://api.btcmap.org/v4/places/{id}/comments
+```
 
 #### Examples
 
@@ -287,6 +291,58 @@ curl GET https://api.btcmap.org/v4/places/22923/comments
     "id": 1184,
     "text": "They have a nice neon Bitcoin sign",
     "created_at": "2025-02-21T05:07:06.379Z"
+  }
+]
+```
+
+### Fetch Place Areas
+
+Retrieves Areas for a specific place by its ID. It supports both BTC Map numerical IDs and OSM IDs (`element_type:id`).
+
+```
+curl https://api.btcmap.org/v4/places/{id}/areas
+```
+
+#### Path Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `id` | String | `5` or `node:28` | - | **Required**. |
+| `type` | String | `community` or `country` | All | Use either `country` or `community`. Absence of parameter will return all areas of all types. |
+
+#### Examples
+
+##### Get Community Areas for a Place ID 120
+
+```bash
+curl GET https://api.btcmap.org/v4/places/120/areas?type=community
+```
+
+```json
+[
+  {
+  "id": 120,
+  "alias": "bitcoin-manchester",
+  "tags":
+  {
+    "type": "community",
+    "name": "Bitcoin Manchester",
+    "icon:square": "https://static.btcmap.org/images/areas/120.png",
+    "continent": "europe",
+    "contact:twitter": "https://twitter.com/bitcoin_mcr",
+    "contact:email": "hello@bitcoinmanchester.org.uk",
+    "contact:telegram": "https://t.me/bitcoinmcr",
+    "contact:meetup": "https://www.meetup.com/bitcoin-manchester/",
+    "verified:date": "2026-01-06",
+    "population": 2812568,
+    "population:date": "2021-01-01",
+    "url_alias": "bitcoin-manchester",
+    "area_km2": 1644.48,
+    "contact:nostr": "npub1w2d0xngltuu86yn0jfak23sty9xwnu6kwudswpdrhtxydwnhjslq60jesu",
+    "contact:website": "http://www.bitcoinmanchester.org.uk/"
+  },
+  "created_at": "2023-01-10T13:35:53Z",
+  "updated_at": "2026-02-10T12:25:23.64Z"
   }
 ]
 ```
