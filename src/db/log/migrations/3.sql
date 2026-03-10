@@ -1,0 +1,2 @@
+ALTER TABLE sync ADD COLUMN failed_at TEXT;
+ALTER TABLE sync ADD COLUMN fail_reason TEXT;

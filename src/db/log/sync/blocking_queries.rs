@@ -65,6 +65,36 @@ pub fn update(args: UpdateArgs, conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+pub struct UpdateFailedArgs {
+    pub id: i64,
+    pub failed_at: String,
+    pub fail_reason: String,
+}
+
+pub fn update_failed(args: UpdateFailedArgs, conn: &Connection) -> Result<()> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {col_failed_at} = :failed_at,
+                {col_fail_reason} = :fail_reason
+            WHERE {col_id} = :id
+          "#,
+        table = schema::TABLE_NAME,
+        col_id = Columns::Id.as_str(),
+        col_failed_at = Columns::FailedAt.as_str(),
+        col_fail_reason = Columns::FailReason.as_str(),
+    );
+    conn.execute(
+        &sql,
+        named_params! {
+            ":id": args.id,
+            ":failed_at": args.failed_at,
+            ":fail_reason": args.fail_reason,
+        },
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::super::super::test::conn;

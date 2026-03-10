@@ -12,6 +12,8 @@ pub enum Columns {
     ElementsCreated,
     ElementsUpdated,
     ElementsDeleted,
+    FailedAt,
+    FailReason,
 }
 
 impl Columns {
@@ -26,6 +28,8 @@ impl Columns {
             Columns::ElementsCreated => "elements_created",
             Columns::ElementsUpdated => "elements_updated",
             Columns::ElementsDeleted => "elements_deleted",
+            Columns::FailedAt => "failed_at",
+            Columns::FailReason => "fail_reason",
         }
     }
 }
@@ -41,6 +45,8 @@ pub struct Sync {
     pub elements_created: i64,
     pub elements_updated: i64,
     pub elements_deleted: i64,
+    pub failed_at: Option<String>,
+    pub fail_reason: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -58,6 +64,8 @@ impl Sync {
                 Columns::ElementsCreated,
                 Columns::ElementsUpdated,
                 Columns::ElementsDeleted,
+                Columns::FailedAt,
+                Columns::FailReason,
             ]
             .iter()
             .map(Columns::as_str)
@@ -78,6 +86,8 @@ impl Sync {
                 elements_created: row.get(Columns::ElementsCreated.as_str())?,
                 elements_updated: row.get(Columns::ElementsUpdated.as_str())?,
                 elements_deleted: row.get(Columns::ElementsDeleted.as_str())?,
+                failed_at: row.get(Columns::FailedAt.as_str())?,
+                fail_reason: row.get(Columns::FailReason.as_str())?,
             })
         }
     }

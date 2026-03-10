@@ -15,3 +15,10 @@ pub async fn update_completed(args: blocking_queries::UpdateArgs, pool: &LogPool
         .interact(move |conn| blocking_queries::update(args, conn))
         .await?
 }
+
+pub async fn update_failed(args: blocking_queries::UpdateFailedArgs, pool: &LogPool) -> Result<()> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::update_failed(args, conn))
+        .await?
+}

@@ -1,4 +1,5 @@
 use crate::db::log::sync::blocking_queries::UpdateArgs;
+use crate::db::log::sync::blocking_queries::UpdateFailedArgs;
 use crate::db::log::sync::queries as sync_log_queries;
 use crate::db::log::LogPool;
 use crate::service::sync::MergeResult;
@@ -20,11 +21,45 @@ pub async fn run(pool: &Pool, log_pool: &LogPool) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let sync_log_id = sync_log_queries::insert(log_pool).await?;
 
-    let overpass_res = service::overpass::query_bitcoin_merchants().await?;
+    let overpass_res = match service::overpass::query_bitcoin_merchants().await {
+        Ok(res) => res,
+        Err(e) => {
+            let failed_at = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
+            let fail_reason = e.to_string();
+            sync_log_queries::update_failed(
+                UpdateFailedArgs {
+                    id: sync_log_id,
+                    failed_at,
+                    fail_reason,
+                },
+                log_pool,
+            )
+            .await?;
+            return Err(e);
+        }
+    };
     let overpass_elements_len = overpass_res.elements.len();
     let matrix_client = matrix::try_client(pool);
     let merge_res =
-        service::sync::merge_overpass_elements(overpass_res.elements, pool, &matrix_client).await?;
+        match service::sync::merge_overpass_elements(overpass_res.elements, pool, &matrix_client)
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                let failed_at = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
+                let fail_reason = e.to_string();
+                sync_log_queries::update_failed(
+                    UpdateFailedArgs {
+                        id: sync_log_id,
+                        failed_at,
+                        fail_reason,
+                    },
+                    log_pool,
+                )
+                .await?;
+                return Err(e);
+            }
+        };
 
     let finished_at = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
     let duration_s = (OffsetDateTime::now_utc() - started_at).as_seconds_f64();
