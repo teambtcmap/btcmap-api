@@ -192,14 +192,16 @@ pub struct QueryBitcoinMerchantsRes {
 }
 
 pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
-    info!("Querying OSM API, it could take a while...");
     let started_at = OffsetDateTime::now_utc();
     let response = reqwest::Client::new()
         .post(API_URL)
         .body(QUERY)
         .send()
         .await?;
-    info!(http_status_code = ?response.status(), "Got OSM API response");
+    info!(http_status_code = ?response.status(), "got overpass response");
+    if response.status().as_u16() == 504 {
+        Err("overpass server is busy")?
+    }
     let response = response.json::<Response>().await?;
     if response.elements.is_empty() {
         Err(format!(
@@ -208,7 +210,7 @@ pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
         ))?
     }
     info!(elements = response.elements.len(), "Fetched elements");
-    if response.elements.len() < 5000 {
+    if response.elements.len() < 20000 {
         Err("Data set is most likely invalid")?
     }
     Ok(QueryBitcoinMerchantsRes {
