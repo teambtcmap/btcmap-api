@@ -1,6 +1,6 @@
-pub const TABLE_NAME: &str = "request";
-
 use std::sync::OnceLock;
+
+pub const TABLE_NAME: &str = "request";
 
 pub enum Columns {
     Id,
@@ -32,7 +32,6 @@ impl Columns {
     }
 }
 
-#[allow(dead_code)]
 pub struct Request {
     pub id: i64,
     pub date: String,

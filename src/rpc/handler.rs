@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, main::conf::schema::Conf, main::user::schema::Role, main::MainPool},
+    db::{self, log::LogPool, main::conf::schema::Conf, main::user::schema::Role, main::MainPool},
     Result,
 };
 use actix_web::{
@@ -91,6 +91,8 @@ pub enum RpcMethod {
     SyncSubmittedPlaces,
     // Matrix
     SendMatrixMessage,
+    // Debug
+    GetRequestLog,
 }
 
 impl Role {
@@ -271,6 +273,7 @@ pub async fn handle(
     req_body: String,
     pool: Data<MainPool>,
     conf: Data<Conf>,
+    log_pool: Data<LogPool>,
 ) -> Result<Json<RpcResponse>> {
     let headers = req.headers();
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
@@ -556,6 +559,10 @@ pub async fn handle(
                 serde_json::Value::Null,
             ))
         }
+        RpcMethod::GetRequestLog => RpcResponse::from(
+            req.id.clone(),
+            super::log::get_request_log::run(params(req.params)?, &log_pool).await?,
+        ),
     }?;
 
     Ok(Json(res))
@@ -583,7 +590,9 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{db::main::test::pool, service::overpass::OverpassElement};
+    use crate::{
+        db::log::test::pool as log_pool, db::main::test::pool, service::overpass::OverpassElement,
+    };
     use actix_web::{
         http::{header, StatusCode},
         test,
@@ -598,11 +607,13 @@ mod test {
         let pool = pool();
         let conf = Conf::mock();
         let client: Option<Client> = None;
+        let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
                 .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -624,11 +635,13 @@ mod test {
         let pool = pool();
         let conf = Conf::mock();
         let client: Option<Client> = None;
+        let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
                 .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -651,11 +664,13 @@ mod test {
         db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let conf = Conf::mock();
         let client: Option<Client> = None;
+        let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
                 .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -680,11 +695,13 @@ mod test {
         let pool = pool();
         let conf = Conf::mock();
         let client: Option<Client> = None;
+        let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
                 .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -709,11 +726,13 @@ mod test {
         let pool = pool();
         let conf = Conf::mock();
         let client: Option<Client> = None;
+        let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
                 .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -746,11 +765,13 @@ mod test {
         .await?;
         let conf = Conf::mock();
         let client: Option<Client> = None;
+        let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
                 .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -775,11 +796,13 @@ mod test {
         let pool = pool();
         let conf = Conf::mock();
         let client: Option<Client> = None;
+        let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(conf))
                 .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;

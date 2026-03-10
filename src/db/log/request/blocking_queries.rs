@@ -62,6 +62,29 @@ pub fn insert(request: InsertArgs, conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
+pub fn select_latest(minutes: i64, conn: &Connection) -> Result<Vec<schema::Request>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {date} > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-{minutes} minutes')
+            ORDER BY {date} DESC
+        "#,
+        projection = schema::Request::projection(),
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        minutes = minutes,
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], schema::Request::mapper())?;
+    let mut requests = Vec::new();
+    for row in rows {
+        requests.push(row?);
+    }
+    Ok(requests)
+}
+
 #[cfg(test)]
 mod test {
     use crate::db::log::request::blocking_queries::InsertArgs;
@@ -176,6 +199,31 @@ mod test {
 
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM request", [], |row| row.get(0))?;
         assert_eq!(count, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_latest() -> crate::Result<()> {
+        let conn = conn();
+
+        conn.execute(
+            "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.1', '/api/v1/old', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 minutes'))",
+            [],
+        )?;
+
+        conn.execute(
+            "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.2', '/api/v1/recent', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            [],
+        )?;
+
+        let requests = super::select_latest(1, &conn)?;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].ip, "10.0.0.2");
+        assert_eq!(requests[0].path, "/api/v1/recent");
+
+        let requests = super::select_latest(5, &conn)?;
+        assert_eq!(requests.len(), 2);
 
         Ok(())
     }

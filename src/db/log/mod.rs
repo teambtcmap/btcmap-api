@@ -108,6 +108,7 @@ fn get_migrations() -> Result<Vec<Migration>> {
 #[cfg(test)]
 pub mod test {
     use crate::db::log::run_migrations;
+    use deadpool_sqlite::{Config, Hook, Runtime};
     use rusqlite::Connection;
 
     pub fn conn() -> Connection {
@@ -115,6 +116,25 @@ pub mod test {
         super::super::configure_connection(&mut conn);
         run_migrations(&mut conn).unwrap();
         conn
+    }
+
+    pub fn pool() -> super::LogPool {
+        let pool_size = std::thread::available_parallelism()
+            .map(|n| n.get() * 2)
+            .unwrap_or(8);
+        let inner = Config::new(":memory:")
+            .builder(Runtime::Tokio1)
+            .unwrap()
+            .max_size(pool_size)
+            .post_create(Hook::Fn(Box::new(|conn, _| {
+                let mut conn = conn.lock().unwrap();
+                super::super::configure_connection(&mut conn);
+                run_migrations(&mut conn).unwrap();
+                Ok(())
+            })))
+            .build()
+            .unwrap();
+        super::LogPool::new(inner)
     }
 
     #[test]
