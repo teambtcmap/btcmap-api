@@ -93,6 +93,7 @@ pub enum RpcMethod {
     SendMatrixMessage,
     // Debug
     GetRequestLog,
+    GetDailyInfraReport,
 }
 
 impl Role {
@@ -154,6 +155,8 @@ impl Role {
         RpcMethod::RevokeSubmittedPlace,
         // Admins can query place submissions by id
         RpcMethod::GetSubmittedPlace,
+        // Admins can get daily infrastructure report
+        RpcMethod::GetDailyInfraReport,
     ];
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
@@ -563,6 +566,10 @@ pub async fn handle(
         RpcMethod::GetRequestLog => RpcResponse::from(
             req.id.clone(),
             super::log::get_request_log::run(params(req.params)?, &log_pool).await?,
+        ),
+        RpcMethod::GetDailyInfraReport => RpcResponse::from(
+            req.id.clone(),
+            super::log::get_daily_infra_report::run(&log_pool).await?,
         ),
     }?;
 

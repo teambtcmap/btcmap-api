@@ -85,6 +85,88 @@ pub fn select_latest(minutes: i64, conn: &Connection) -> Result<Vec<schema::Requ
     Ok(requests)
 }
 
+pub struct DailyInfraReport {
+    pub total_requests: i64,
+    pub unique_ips: i64,
+    pub web_requests: i64,
+    pub web_unique_ips: i64,
+    pub android_requests: i64,
+    pub android_unique_ips: i64,
+    pub ios_requests: i64,
+    pub ios_unique_ips: i64,
+}
+
+pub fn select_daily_infra_report(conn: &Connection) -> Result<DailyInfraReport> {
+    let sql_total = format!(
+        r#"
+            SELECT COUNT(*), COUNT(DISTINCT {ip})
+            FROM {table}
+            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        ip = Columns::Ip.as_str(),
+    );
+    let (total_requests, unique_ips): (i64, i64) =
+        conn.query_row(&sql_total, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
+
+    let sql_web = format!(
+        r#"
+            SELECT COUNT(*), COUNT(DISTINCT {ip})
+            FROM {table}
+            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND ({user_agent} LIKE 'axios%' OR {user_agent} = 'btcmap.org')
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        ip = Columns::Ip.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+    );
+    let (web_requests, web_unique_ips): (i64, i64) =
+        conn.query_row(&sql_web, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
+
+    let sql_android = format!(
+        r#"
+            SELECT COUNT(*), COUNT(DISTINCT {ip})
+            FROM {table}
+            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND ({user_agent} LIKE 'okhttp%' OR {user_agent} LIKE 'BTC Map Android%')
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        ip = Columns::Ip.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+    );
+    let (android_requests, android_unique_ips): (i64, i64) =
+        conn.query_row(&sql_android, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
+
+    let sql_ios = format!(
+        r#"
+            SELECT COUNT(*), COUNT(DISTINCT {ip})
+            FROM {table}
+            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {user_agent} LIKE '%CFNetwork%'
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        ip = Columns::Ip.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+    );
+    let (ios_requests, ios_unique_ips): (i64, i64) =
+        conn.query_row(&sql_ios, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
+
+    Ok(DailyInfraReport {
+        total_requests,
+        unique_ips,
+        web_requests,
+        web_unique_ips,
+        android_requests,
+        android_unique_ips,
+        ios_requests,
+        ios_unique_ips,
+    })
+}
+
 #[cfg(test)]
 mod test {
     use crate::db::log::request::blocking_queries::InsertArgs;
