@@ -5,6 +5,7 @@ use error::Error;
 use rest::error::{RestApiError, RestApiErrorCode};
 mod error;
 use std::env;
+use std::time::Duration;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -175,6 +176,7 @@ async fn main() -> Result<()> {
                     .service(scope("dashboard").service(rest::v4::dashboard::get)),
             )
     })
+    .client_request_timeout(Duration::from_millis(0))
     .bind(("127.0.0.1", 8000))?
     .run()
     .await?;
