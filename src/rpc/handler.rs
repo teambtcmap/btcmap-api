@@ -393,9 +393,10 @@ pub async fn handle(
             req.id.clone(),
             super::generate_element_issues::run(&pool).await?,
         ),
-        RpcMethod::SyncElements => {
-            RpcResponse::from(req.id.clone(), super::sync_elements::run(&pool).await?)
-        }
+        RpcMethod::SyncElements => RpcResponse::from(
+            req.id.clone(),
+            super::sync_elements::run(&pool, &log_pool).await?,
+        ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
             super::generate_element_icons::run(params(req.params)?, &pool).await?,

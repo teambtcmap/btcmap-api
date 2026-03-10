@@ -1,4 +1,5 @@
 pub mod request;
+pub mod sync;
 
 use super::Migration;
 use crate::Result;
