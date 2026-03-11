@@ -51,6 +51,7 @@ pub enum RpcMethod {
     SyncElements,
     GenerateElementIcons,
     GenerateElementCategories,
+    HumanizeWorkingHours,
     GetElementIssues,
     GenerateElementCommentCounts,
     // area
@@ -407,6 +408,10 @@ pub async fn handle(
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
             super::generate_element_categories::run(params(req.params)?, &pool).await?,
+        ),
+        RpcMethod::HumanizeWorkingHours => RpcResponse::from(
+            req.id.clone(),
+            super::humanize_working_hours::run(params(req.params)?, &pool).await?,
         ),
         RpcMethod::GetElementIssues => RpcResponse::from(
             req.id.clone(),

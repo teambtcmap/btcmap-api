@@ -299,6 +299,17 @@ pub async fn sync_updated_elements(
             .await?;
         }
         service::element::generate_issues(vec![&updated_element], pool).await?;
+        if updated_element
+            .tags
+            .contains_key("opening_hours:en:human_readable")
+        {
+            db::main::element::queries::remove_tag(
+                updated_element.id,
+                "opening_hours:en:human_readable",
+                pool,
+            )
+            .await?;
+        }
         //area_element::service::generate_mapping(&vec![updated_element], &sp)?;
     }
     Ok(res)

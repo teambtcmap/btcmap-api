@@ -152,6 +152,31 @@ pub fn select_by_osm_tag_value(
         .map_err(Into::into)
 }
 
+pub fn select_with_opening_hours_without_humanization(
+    limit: i64,
+    conn: &Connection,
+) -> Result<Vec<Element>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE json_extract({overpass_data}, '$.tags.opening_hours') IS NOT NULL
+            AND json_extract({tags}, '$.opening_hours:en:human_readable') IS NULL
+            AND deleted_at IS NULL
+            ORDER BY RANDOM()
+            LIMIT ?
+        "#,
+        projection = Element::projection(),
+        table = schema::TABLE_NAME,
+        overpass_data = Columns::OverpassData.as_str(),
+        tags = Columns::Tags.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![limit], Element::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id_or_osm_id(id: impl Into<String>, conn: &Connection) -> Result<Element> {
     let id: String = id.into();
     let id = id.as_str();
