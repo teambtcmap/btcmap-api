@@ -347,6 +347,7 @@ pub const TAGS: &[&str] = &[
     "image",
     "payment_provider",
     "telegram",
+    "localized_name",
 ];
 
 pub fn generate_tags(
@@ -378,6 +379,19 @@ pub fn generate_tags(
             }
             "name" => {
                 res.insert("name".into(), element.name(lang).into());
+            }
+            "localized_name" => {
+                let mut localized = Map::new();
+                for (key, value) in osm_tags {
+                    if let Some(lang_code) = key.strip_prefix("name:") {
+                        if lang_code.len() == 2 && value.is_string() {
+                            localized.insert(lang_code.to_string(), value.clone());
+                        }
+                    }
+                }
+                if !localized.is_empty() {
+                    res.insert("localized_name".into(), Value::Object(localized));
+                }
             }
             "opening_hours" => {
                 if let Some(opening_hours) = element.opening_hours() {
