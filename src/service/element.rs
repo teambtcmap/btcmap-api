@@ -348,6 +348,7 @@ pub const TAGS: &[&str] = &[
     "payment_provider",
     "telegram",
     "localized_name",
+    "localized_opening_hours",
 ];
 
 pub fn generate_tags(
@@ -391,6 +392,21 @@ pub fn generate_tags(
                 }
                 if !localized.is_empty() {
                     res.insert("localized_name".into(), Value::Object(localized));
+                }
+            }
+            "localized_opening_hours" => {
+                let mut localized = Map::new();
+                for (key, value) in &element.tags {
+                    if let Some(suffix) = key.strip_prefix("opening_hours:") {
+                        if let Some(lang_code) = suffix.strip_suffix(":human_readable") {
+                            if lang_code.len() == 2 && value.is_string() {
+                                localized.insert(lang_code.to_string(), value.clone());
+                            }
+                        }
+                    }
+                }
+                if !localized.is_empty() {
+                    res.insert("localized_opening_hours".into(), Value::Object(localized));
                 }
             }
             "opening_hours" => {
