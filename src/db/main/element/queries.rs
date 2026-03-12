@@ -81,6 +81,21 @@ pub async fn select_with_opening_hours_without_humanization(
         .await?
 }
 
+pub async fn select_with_opening_hours_without_humanization_by_area(
+    area_id: i64,
+    limit: i64,
+    pool: &Pool,
+) -> Result<Vec<Element>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_with_opening_hours_without_humanization_by_area(
+                area_id, limit, conn,
+            )
+        })
+        .await?
+}
+
 pub async fn select_by_osm_type_and_id(
     osm_type: String,
     osm_id: i64,

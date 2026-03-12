@@ -1,4 +1,5 @@
 use super::schema::{self, Columns, Element};
+use crate::db::main::area_element::schema::{self as area_element_schema};
 use crate::{service::overpass::OverpassElement, Result};
 use rusqlite::{named_params, params, Connection};
 use serde_json::{Map, Value};
@@ -173,6 +174,40 @@ pub fn select_with_opening_hours_without_humanization(
     );
     conn.prepare(&sql)?
         .query_map(params![limit], Element::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_with_opening_hours_without_humanization_by_area(
+    area_id: i64,
+    limit: i64,
+    conn: &Connection,
+) -> Result<Vec<Element>> {
+    let table = schema::TABLE_NAME;
+    let sql = format!(
+        r#"
+            SELECT {table}.{id}, {table}.{overpass_data}, {table}.{tags}, {table}.{lat}, {table}.{lon}, {table}.{created_at}, {table}.{updated_at}, {table}.{deleted_at}
+            FROM {table}
+            INNER JOIN {area_element_table} ae ON ae.element_id = {table}.id AND ae.area_id = ?1 AND ae.deleted_at IS NULL
+            WHERE json_extract({table}.{overpass_data}, '$.tags.opening_hours') IS NOT NULL
+            AND json_extract({table}.{tags}, '$.opening_hours:en:human_readable') IS NULL
+            AND {table}.{deleted_at} IS NULL
+            ORDER BY RANDOM()
+            LIMIT ?2
+        "#,
+        table = table,
+        id = Columns::Id.as_str(),
+        overpass_data = Columns::OverpassData.as_str(),
+        tags = Columns::Tags.as_str(),
+        lat = Columns::Lat.as_str(),
+        lon = Columns::Lon.as_str(),
+        created_at = Columns::CreatedAt.as_str(),
+        updated_at = Columns::UpdatedAt.as_str(),
+        deleted_at = Columns::DeletedAt.as_str(),
+        area_element_table = area_element_schema::TABLE_NAME,
+    );
+    conn.prepare(&sql)?
+        .query_map(params![area_id, limit], Element::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }

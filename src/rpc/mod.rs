@@ -19,7 +19,7 @@ pub mod get_trending_communities;
 pub mod get_trending_countries;
 pub mod get_user_activity;
 pub mod handler;
-pub mod humanize_working_hours;
+pub mod humanize_opening_hours;
 pub mod import;
 pub mod invoice;
 pub mod log;

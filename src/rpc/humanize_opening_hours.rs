@@ -11,6 +11,7 @@ use tracing::info;
 #[derive(Deserialize)]
 pub struct Params {
     max_places: i64,
+    area: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -29,11 +30,20 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let elements = db::main::element::queries::select_with_opening_hours_without_humanization(
-        params.max_places,
-        pool,
-    )
-    .await?;
+    let elements = if let Some(area_id) = params.area {
+        db::main::element::queries::select_with_opening_hours_without_humanization_by_area(
+            area_id,
+            params.max_places,
+            pool,
+        )
+        .await?
+    } else {
+        db::main::element::queries::select_with_opening_hours_without_humanization(
+            params.max_places,
+            pool,
+        )
+        .await?
+    };
 
     let mut results = Vec::new();
 
@@ -49,7 +59,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
 Source format (OSM opening_hours specification - formal and hard to read):
 {}
 
-Target format: Human readable, multi-line string where each day of the week is on a separate line, using full day names in English. Use 24-hour time format.
+Target format: Human readable, multi-line string where each day of the week is on a separate line, using full day names in English. Use 24-hour time format. Always list all days. For closed days just print "closed" instead of opening hours.
 
 Example:
 
