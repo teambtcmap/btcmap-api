@@ -1,5 +1,6 @@
-use super::blocking_queries::{self, SelectMostActive};
+use super::blocking_queries;
 use crate::{db::main::osm_user::schema::OsmUser, service::osm::EditingApiUser, Result};
+use blocking_queries::SelectMostActive;
 use deadpool_sqlite::Pool;
 use serde_json::Value;
 use time::OffsetDateTime;
@@ -22,12 +23,20 @@ pub async fn select_most_active(
     period_start: OffsetDateTime,
     period_end: OffsetDateTime,
     limit: i64,
+    excluded_ids: &[i64],
     pool: &Pool,
 ) -> Result<Vec<SelectMostActive>> {
+    let excluded_ids = excluded_ids.to_vec();
     pool.get()
         .await?
         .interact(move |conn| {
-            super::blocking_queries::select_most_active(period_start, period_end, limit, conn)
+            super::blocking_queries::select_most_active(
+                period_start,
+                period_end,
+                limit,
+                &excluded_ids,
+                conn,
+            )
         })
         .await?
 }

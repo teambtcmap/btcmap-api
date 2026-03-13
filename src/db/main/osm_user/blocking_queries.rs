@@ -113,8 +113,15 @@ pub fn select_most_active(
     period_start: OffsetDateTime,
     period_end: OffsetDateTime,
     limit: i64,
+    excluded_ids: &[i64],
     conn: &Connection,
 ) -> Result<Vec<SelectMostActive>> {
+    let excluded_ids_str: Vec<String> = excluded_ids.iter().map(|id| id.to_string()).collect();
+    let excluded_clause = if excluded_ids.is_empty() {
+        String::new()
+    } else {
+        format!(" AND e.user_id NOT IN ({})", excluded_ids_str.join(","))
+    };
     let sql = format!(
         r#"
             SELECT 
@@ -123,10 +130,12 @@ pub fn select_most_active(
                 json_extract(u.{u_osm_data}, '$.img.href'),
                 json_extract(u.{u_osm_data}, '$.description'),
                 count(*) AS edits,
-                (SELECT count(*) FROM {event_table} WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'create'),
-                (SELECT count(*) FROM {event_table} WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'update'),
-                (SELECT count(*) FROM {event_table} WHERE user_id = u.id AND created_at between ?1 AND ?2 AND type = 'delete')
-            FROM {event_table} e JOIN {table} u ON u.{u_id} = e.user_id WHERE e.created_at BETWEEN ?1 AND ?2
+                SUM(CASE WHEN e.{type} = 'create' THEN 1 ELSE 0 END) AS created,
+                SUM(CASE WHEN e.{type} = 'update' THEN 1 ELSE 0 END) AS updated,
+                SUM(CASE WHEN e.{type} = 'delete' THEN 1 ELSE 0 END) AS deleted
+            FROM {event_table} e
+            JOIN {table} u ON u.{u_id} = e.user_id
+            WHERE e.created_at BETWEEN ?1 AND ?2{excluded_clause}
             GROUP BY e.user_id
             ORDER BY edits DESC
             LIMIT ?3
@@ -135,6 +144,7 @@ pub fn select_most_active(
         u_osm_data = Columns::OsmData.as_str(),
         table = schema::NAME,
         event_table = db::main::element_event::schema::TABLE_NAME,
+        type = db::main::element_event::schema::Columns::Type.as_str(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -309,6 +319,7 @@ mod test {
             OffsetDateTime::now_utc(),
             OffsetDateTime::now_utc(),
             10,
+            &[],
             &conn,
         )?;
         assert_eq!(0, res.len());
@@ -328,6 +339,7 @@ mod test {
             OffsetDateTime::now_utc().saturating_add(Duration::days(-1)),
             OffsetDateTime::now_utc().saturating_add(Duration::days(1)),
             10,
+            &[],
             &conn,
         )?;
         assert_eq!(1, res.len());

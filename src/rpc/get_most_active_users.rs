@@ -36,6 +36,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         period_start,
         period_end,
         params.limit,
+        &[],
         pool,
     )
     .await?;

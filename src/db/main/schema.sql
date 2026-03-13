@@ -211,6 +211,7 @@ CREATE INDEX admin_updated_at ON "user"(updated_at);
 CREATE INDEX access_token_secret ON access_token(secret);
 CREATE UNIQUE INDEX area_element_area_id_element_id ON area_element(area_id, element_id);
 CREATE INDEX element_event_updated_at ON element_event(updated_at);
+CREATE INDEX element_event_user_created_type ON element_event(user_id, created_at, type);
 CREATE INDEX idx_area_bbox_west ON area(bbox_west);
 CREATE INDEX idx_area_bbox_south ON area(bbox_south);
 CREATE INDEX idx_area_bbox_east ON area(bbox_east);

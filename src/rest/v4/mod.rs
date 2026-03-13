@@ -7,3 +7,4 @@ pub mod place_boosts;
 pub mod place_comments;
 pub mod places;
 pub mod search;
+pub mod top_editors;
