@@ -1,3 +1,4 @@
+use crate::db;
 use crate::db::main::MainPool;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
@@ -7,8 +8,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct SearchArgs {
-    pub lat: f64,
-    pub lon: f64,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub r#type: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -23,29 +25,43 @@ pub struct AreaSearchResult {
 
 #[get("")]
 pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaSearchResult>> {
-    let lat = args.lat;
-    let lon = args.lon;
+    let type_filter = args.r#type.clone();
 
-    if !(-90.0..=90.0).contains(&lat) {
-        return Err(RestApiError::new(
-            RestApiErrorCode::InvalidInput,
-            "Latitude must be between -90 and 90",
-        ));
-    }
+    let areas = if let (Some(lat), Some(lon)) = (args.lat, args.lon) {
+        if !(-90.0..=90.0).contains(&lat) {
+            return Err(RestApiError::new(
+                RestApiErrorCode::InvalidInput,
+                "Latitude must be between -90 and 90",
+            ));
+        }
 
-    if !(-180.0..=180.0).contains(&lon) {
-        return Err(RestApiError::new(
-            RestApiErrorCode::InvalidInput,
-            "Longitude must be between -180 and 180",
-        ));
-    }
+        if !(-180.0..=180.0).contains(&lon) {
+            return Err(RestApiError::new(
+                RestApiErrorCode::InvalidInput,
+                "Longitude must be between -180 and 180",
+            ));
+        }
 
-    let areas = service::area::find_areas_by_lat_lon(lat, lon, &pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
+        service::area::find_areas_by_lat_lon(lat, lon, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+    } else {
+        db::main::area::queries::select(None, false, None, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+    };
 
     let results: Vec<AreaSearchResult> = areas
         .into_iter()
+        .filter(|area| {
+            if let Some(ref filter_type) = type_filter {
+                let area_type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                if area_type != filter_type {
+                    return false;
+                }
+            }
+            true
+        })
         .map(|area| {
             let r#type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
             let singular_type = if let Some(stripped) = r#type.strip_suffix("ies") {
