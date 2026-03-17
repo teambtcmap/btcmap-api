@@ -133,3 +133,10 @@ pub async fn select_verified_areas_count(verified_since: &str, pool: &Pool) -> R
         .interact(move |conn| blocking_queries::select_verified_areas_count(conn, &verified_since))
         .await?
 }
+
+pub async fn select_without_icon_square(pool: &Pool) -> Result<Vec<Area>> {
+    pool.get()
+        .await?
+        .interact(|conn| blocking_queries::select_without_icon_square(conn))
+        .await?
+}

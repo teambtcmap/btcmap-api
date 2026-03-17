@@ -31,6 +31,8 @@ async fn main() -> Result<()> {
 
     let conf = db::main::conf::queries::select(&main_pool).await?;
 
+    check_areas_without_icon_square(&main_pool).await;
+
     service::matrix::init(&main_pool);
 
     HttpServer::new(move || {
@@ -196,4 +198,111 @@ fn init_env() {
         .with(EnvFilter::from_default_env())
         .with(Layer::new().json())
         .init();
+}
+
+async fn check_areas_without_icon_square(pool: &deadpool_sqlite::Pool) {
+    use crate::db::main::area::queries;
+    use reqwest::Client;
+    use serde_json::Map;
+    use serde_json::Value;
+
+    match queries::select_without_icon_square(pool).await {
+        Ok(areas) => {
+            if areas.is_empty() {
+                tracing::warn!("All non-deleted areas have icon:square tag");
+                return;
+            }
+
+            let names: Vec<_> = areas.iter().map(|a| a.name()).collect();
+            tracing::warn!(
+                "Found {} non-deleted areas without icon:square tag: {:?}",
+                areas.len(),
+                names
+            );
+
+            let client = Client::new();
+
+            for area in areas {
+                let alias = area.alias();
+                tracing::warn!("Checking area '{}' with alias '{}'", area.name(), alias);
+
+                if alias.len() != 2 || !alias.chars().all(|c| c.is_ascii_lowercase()) {
+                    tracing::warn!(
+                        "Skipping area '{}': alias '{}' is not a two-letter lowercase code",
+                        area.name(),
+                        alias
+                    );
+                    continue;
+                }
+
+                let url = format!("https://static.btcmap.org/images/countries/{}.svg", alias);
+                tracing::warn!("Checking URL: {}", url);
+
+                match client.get(&url).send().await {
+                    Ok(response) => {
+                        let status = response.status();
+                        tracing::warn!("URL {} returned status {}", url, status);
+
+                        if !status.is_success() {
+                            tracing::warn!(
+                                "Skipping area '{}': URL {} returned non-success status {}",
+                                area.name(),
+                                url,
+                                status
+                            );
+                            continue;
+                        }
+
+                        let content_type = response
+                            .headers()
+                            .get("content-type")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("");
+                        tracing::warn!("Content-Type: {}", content_type);
+
+                        if !content_type.contains("svg") {
+                            tracing::warn!(
+                                "Skipping area '{}': URL {} returned content-type '{}' instead of SVG",
+                                area.name(),
+                                url,
+                                content_type
+                            );
+                            continue;
+                        }
+
+                        tracing::warn!(
+                            "Saving icon:square URL '{}' for area '{}'",
+                            url,
+                            area.name()
+                        );
+
+                        let mut tags = Map::new();
+                        tags.insert("icon:square".to_string(), Value::String(url.clone()));
+
+                        match queries::patch_tags(area.id, tags, pool).await {
+                            Ok(_) => {
+                                tracing::warn!(
+                                    "Successfully saved icon:square for area '{}'",
+                                    area.name()
+                                );
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to save icon:square for area '{}': {}",
+                                    area.name(),
+                                    e
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to fetch URL {}: {}", url, e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to check areas without icon:square tag: {}", e);
+        }
+    }
 }

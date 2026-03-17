@@ -313,6 +313,27 @@ pub fn select_verified_areas_count(conn: &Connection, verified_since: &str) -> R
     Ok(conn.query_row(&sql, params![verified_since], |row| row.get::<_, i64>(0))?)
 }
 
+pub fn select_without_icon_square(conn: &Connection) -> Result<Vec<Area>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {deleted_at} IS NULL
+            AND json_extract({tags}, '$.icon:square') IS NULL
+            ORDER BY {id}
+        "#,
+        projection = Area::projection(),
+        table = schema::TABLE_NAME,
+        deleted_at = Columns::DeletedAt.as_str(),
+        tags = Columns::Tags.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map({}, Area::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use super::schema::Area;
