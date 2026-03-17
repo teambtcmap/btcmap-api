@@ -288,6 +288,8 @@ pub struct SearchedPlace {
     pub payment_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pending: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub localized_name: Option<Map<String, Value>>,
 }
 
 #[get("/search")]
@@ -449,6 +451,7 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
                 image: it.image(),
                 payment_provider: it.payment_provider(),
                 pending: Some(true),
+                localized_name: None,
             }
         })
         .collect();
@@ -464,6 +467,21 @@ impl From<Element> for SearchedPlace {
     fn from(it: Element) -> Self {
         let comments = it.comment_count();
         let comments = if comments > 0 { Some(comments) } else { None };
+
+        let mut localized_name: Option<Map<String, Value>> = None;
+        if let Some(ref tags) = it.overpass_data.tags {
+            let mut localized = Map::new();
+            for (key, value) in tags {
+                if let Some(lang_code) = key.strip_prefix("name:") {
+                    if lang_code.len() == 2 && value.is_string() {
+                        localized.insert(lang_code.to_string(), value.clone());
+                    }
+                }
+            }
+            if !localized.is_empty() {
+                localized_name = Some(localized);
+            }
+        }
 
         SearchedPlace {
             id: it.id,
@@ -491,6 +509,7 @@ impl From<Element> for SearchedPlace {
             image: it.image(),
             payment_provider: it.payment_provider(),
             pending: None,
+            localized_name,
         }
     }
 }
