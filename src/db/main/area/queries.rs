@@ -1,4 +1,4 @@
-use super::blocking_queries;
+use super::blocking_queries::{self, CommunityStats};
 use super::schema::Area;
 use crate::Result;
 use deadpool_sqlite::Pool;
@@ -138,5 +138,12 @@ pub async fn select_without_icon_square(pool: &Pool) -> Result<Vec<Area>> {
     pool.get()
         .await?
         .interact(|conn| blocking_queries::select_without_icon_square(conn))
+        .await?
+}
+
+pub async fn select_top_communities(pool: &Pool) -> Result<Vec<CommunityStats>> {
+    pool.get()
+        .await?
+        .interact(|conn| blocking_queries::select_top_communities(conn))
         .await?
 }

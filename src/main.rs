@@ -176,7 +176,8 @@ async fn main() -> Result<()> {
                     .service(scope("search").service(rest::v4::search::get))
                     .service(scope("areas").service(rest::v4::areas::get))
                     .service(scope("dashboard").service(rest::v4::dashboard::get))
-                    .service(scope("top-editors").service(rest::v4::top_editors::get)),
+                    .service(scope("top-editors").service(rest::v4::top_editors::get))
+                    .service(scope("communities").service(rest::v4::communities::get_top)),
             )
     })
     .client_request_timeout(Duration::from_millis(0))

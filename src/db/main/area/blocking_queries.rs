@@ -334,6 +334,79 @@ pub fn select_without_icon_square(conn: &Connection) -> Result<Vec<Area>> {
         .map_err(Into::into)
 }
 
+#[derive(Debug)]
+pub struct CommunityStats {
+    pub id: i64,
+    pub alias: String,
+    pub name: String,
+    pub icon_url: Option<String>,
+    pub places_total: i64,
+    pub places_verified_1y: i64,
+}
+
+pub fn select_top_communities(conn: &Connection) -> Result<Vec<CommunityStats>> {
+    let year_ago = time::OffsetDateTime::now_utc()
+        .saturating_sub(time::Duration::days(365))
+        .date()
+        .to_string();
+
+    let sql = format!(
+        r#"
+            WITH community_areas AS (
+                SELECT id, alias, tags
+                FROM area
+                WHERE deleted_at IS NULL
+                AND json_extract(tags, '$.type') = 'community'
+            ),
+            element_stats AS (
+                SELECT 
+                    ca.id as area_id,
+                    COUNT(e.id) as total_elements,
+                    SUM(CASE 
+                        WHEN (COALESCE(json_extract(e.overpass_data, '$.tags.survey:date'), '2000-01-01') > '{year_ago}'
+                            OR COALESCE(json_extract(e.overpass_data, '$.tags.check_date'), '2000-01-01') > '{year_ago}'
+                            OR COALESCE(json_extract(e.overpass_data, '$.tags.check_date:currency:XBT'), '2000-01-01') > '{year_ago}')
+                        THEN 1 ELSE 0 
+                    END) as verified_1y
+                FROM community_areas ca
+                INNER JOIN area_element ae ON ae.area_id = ca.id AND ae.deleted_at IS NULL
+                INNER JOIN element e ON e.id = ae.element_id AND e.deleted_at IS NULL
+                GROUP BY ca.id
+            )
+            SELECT 
+                ca.id,
+                ca.alias,
+                COALESCE(json_extract(ca.tags, '$.name'), '') as name,
+                json_extract(ca.tags, '$.icon:square') as icon_url,
+                COALESCE(es.total_elements, 0) as places_total,
+                COALESCE(es.verified_1y, 0) as places_verified_1y
+            FROM community_areas ca
+            LEFT JOIN element_stats es ON es.area_id = ca.id
+            ORDER BY 
+                (COALESCE(es.verified_1y, 0) - (COALESCE(es.total_elements, 0) - COALESCE(es.verified_1y, 0)) * 5) DESC,
+                COALESCE(es.total_elements, 0) DESC
+        "#
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], |row| {
+        Ok(CommunityStats {
+            id: row.get(0)?,
+            alias: row.get(1)?,
+            name: row.get(2)?,
+            icon_url: row.get(3)?,
+            places_total: row.get(4)?,
+            places_verified_1y: row.get(5)?,
+        })
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row?);
+    }
+    Ok(results)
+}
+
 #[cfg(test)]
 mod test {
     use super::schema::Area;
