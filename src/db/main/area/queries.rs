@@ -147,3 +147,11 @@ pub async fn select_top_communities(pool: &Pool) -> Result<Vec<CommunityStats>> 
         .interact(|conn| blocking_queries::select_top_communities(conn))
         .await?
 }
+
+pub async fn select_top_areas_by_type(pool: &Pool, area_type: &str) -> Result<Vec<CommunityStats>> {
+    let area_type = area_type.to_string();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_top_areas_by_type(conn, &area_type))
+        .await?
+}

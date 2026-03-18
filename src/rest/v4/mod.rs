@@ -1,5 +1,6 @@
 pub mod areas;
 pub mod communities;
+pub mod countries;
 pub mod dashboard;
 pub mod element_issues;
 pub mod events;
