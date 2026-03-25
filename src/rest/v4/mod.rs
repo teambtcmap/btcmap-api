@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod areas;
 pub mod communities;
 pub mod countries;
