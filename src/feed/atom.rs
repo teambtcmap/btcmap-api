@@ -71,7 +71,7 @@ pub async fn new_places_for_area(
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(events_to_atom_feed(
-            &format!("https://api.btcmap.org/feeds/new-places?area={}", area.id),
+            &format!("https://api.btcmap.org/feeds/new-places/{}", area.id),
             &format!("BTC Map - New Places in {}", area.name()),
             events_to_elements,
         )))
@@ -166,7 +166,7 @@ pub async fn new_comments_for_area(
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(comments_to_atom_feed(
-            &format!("https://api.btcmap.org/feeds/new-comments?area={}", area_id),
+            &format!("https://api.btcmap.org/feeds/new-comments/{}", area_id),
             &format!("BTC Map - New Comments in {}", area_name),
             comments_to_elements,
         )))
