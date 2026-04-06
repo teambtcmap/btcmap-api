@@ -36,6 +36,7 @@ A JSON array of feed items sorted by `created_at` descending. Each item has a `t
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | String | Item type: `"edit"`, `"comment"`, or `"boost"`. |
+| `id` | Integer | Unique ID of the item (event ID, comment ID, or boost ID). |
 | `element_id` | Integer | The btcmap element ID. |
 | `element_name` | String | Human-readable place name. |
 | `created_at` | ISO 8601 datetime | When the item was created. |
@@ -44,7 +45,6 @@ A JSON array of feed items sorted by `created_at` descending. Each item has a `t
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | Integer | Event ID. |
 | `user_id` | Integer | ID of the user who made the edit. |
 | `user_name` | String | Display name of the user. |
 | `action` | String | Edit action: `"create"`, `"update"`, or `"delete"`. |
@@ -53,14 +53,12 @@ A JSON array of feed items sorted by `created_at` descending. Each item has a `t
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | Integer | Comment ID. |
 | `comment` | String | The comment text. |
 
 **Additional fields for `boost` items:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | Integer | Boost ID. |
 | `duration_days` | Integer | Duration of the boost in days. |
 
 #### Example Response

@@ -293,7 +293,10 @@ pub async fn get_feed(
 
     let area = Area::select_by_id_or_alias(area_id_or_alias, &pool)
         .await
-        .map_err(|_| Error::not_found())?;
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => Error::not_found(),
+            other => other,
+        })?;
     let area_id = area.id;
 
     let items = pool
