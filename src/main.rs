@@ -145,7 +145,8 @@ async fn main() -> Result<()> {
                         scope("place-issues")
                             .service(element_issue::v4::get)
                             .service(element_issue::v4::get_by_id),
-                    ),
+                    )
+                    .service(scope("areas").service(area::v4::get_feed)),
             )
     })
     .bind(("127.0.0.1", 8000))?

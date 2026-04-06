@@ -31,6 +31,8 @@ The API is versioned with the paths `/v2/`, `/v3/`, and `/v4/`. When a new incom
 
 - **Area Elements ([v3](v3/area-elements.md))** - Access relationships between areas and elements
 
+- **Area Feed ([v4](v4/area-feed.md))** - Combined activity feed (edits, comments, boosts) for an area
+
 ## Authentication
 
 Most REST API endpoints are publicly accessible without authentication. However, some administrative endpoints may require authentication.
