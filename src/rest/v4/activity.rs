@@ -73,7 +73,12 @@ pub async fn get(
         let area =
             db::main::area::queries::select_by_id_or_alias(area_id_or_alias.clone(), &pool)
                 .await
-                .map_err(|_| RestApiError::not_found())?;
+                .map_err(|e| match e {
+                    crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
+                        RestApiError::not_found()
+                    }
+                    _ => RestApiError::database(),
+                })?;
         let area_elements =
             db::main::area_element::queries::select_by_area_id(area.id, &pool)
                 .await
@@ -455,6 +460,96 @@ mod test {
         let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(1, res.len());
 
+        Ok(())
+    }
+
+    #[test]
+    async fn get_comments_filtered_by_area() -> Result<()> {
+        let pool = pool();
+
+        let element_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+
+        let area = db::main::area::queries::insert(
+            db::main::area::schema::Area::mock_tags(),
+            &pool,
+        )
+        .await?;
+        db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
+
+        db::main::element_comment::queries::insert(element_in_area.id, "In area", &pool).await?;
+        db::main::element_comment::queries::insert(element_outside.id, "Outside", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?area={}", area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(super::EVENT_TYPE_COMMENT, res[0].r#type);
+        assert_eq!(Some("In area".to_string()), res[0].comment);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_boosts_filtered_by_area() -> Result<()> {
+        let pool = pool();
+
+        let element_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+
+        let area = db::main::area::queries::insert(
+            db::main::area::schema::Area::mock_tags(),
+            &pool,
+        )
+        .await?;
+        db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
+
+        db::main::invoice::queries::insert(
+            "src",
+            format!("element_boost:{}:30", element_in_area.id),
+            1000,
+            "hash1",
+            "req1",
+            db::main::invoice::schema::InvoiceStatus::Paid,
+            &pool,
+        )
+        .await?;
+        db::main::invoice::queries::insert(
+            "src",
+            format!("element_boost:{}:30", element_outside.id),
+            1000,
+            "hash2",
+            "req2",
+            db::main::invoice::schema::InvoiceStatus::Paid,
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?area={}", area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(super::EVENT_TYPE_BOOST, res[0].r#type);
+        assert_eq!(element_in_area.id, res[0].place_id);
         Ok(())
     }
 
