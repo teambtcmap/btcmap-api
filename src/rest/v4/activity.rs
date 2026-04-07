@@ -10,6 +10,7 @@ use actix_web::web::Query;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 use time::Duration;
 use time::OffsetDateTime;
@@ -25,6 +26,7 @@ const EVENT_TYPE_BOOST: &str = "place_boosted";
 #[derive(Deserialize)]
 pub struct GetActivityArgs {
     days: Option<i64>,
+    area: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -66,6 +68,27 @@ pub async fn get(
     let days = args.days.unwrap_or(1);
     let day_ago = now.saturating_sub(Duration::days(days));
 
+    // If area is specified, resolve it and build a set of element IDs in that area
+    let area_element_ids: Option<HashSet<i64>> = if let Some(ref area_id_or_alias) = args.area {
+        let area =
+            db::main::area::queries::select_by_id_or_alias(area_id_or_alias.clone(), &pool)
+                .await
+                .map_err(|_| RestApiError::not_found())?;
+        let area_elements =
+            db::main::area_element::queries::select_by_area_id(area.id, &pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
+        Some(
+            area_elements
+                .into_iter()
+                .filter(|ae| ae.deleted_at.is_none())
+                .map(|ae| ae.element_id)
+                .collect(),
+        )
+    } else {
+        None
+    };
+
     let events = db::main::element_event::queries::select_created_between(
         day_ago,
         now + Duration::seconds(1),
@@ -76,6 +99,12 @@ pub async fn get(
 
     let mut items: Vec<ActivityItem> = Vec::with_capacity(events.len());
     for event in events {
+        if let Some(ref ids) = area_element_ids {
+            if !ids.contains(&event.element_id) {
+                continue;
+            }
+        }
+
         let element = db::main::element::queries::select_by_id(event.element_id, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
@@ -117,6 +146,12 @@ pub async fn get(
             continue;
         }
 
+        if let Some(ref ids) = area_element_ids {
+            if !ids.contains(&comment.element_id) {
+                continue;
+            }
+        }
+
         let element = db::main::element::queries::select_by_id(comment.element_id, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
@@ -150,6 +185,12 @@ pub async fn get(
         else {
             continue;
         };
+
+        if let Some(ref ids) = area_element_ids {
+            if !ids.contains(&element_id) {
+                continue;
+            }
+        }
 
         let created_at = OffsetDateTime::parse(
             &invoice.created_at,
@@ -359,6 +400,78 @@ mod test {
         assert_eq!(1, res.len());
         assert_eq!(super::EVENT_TYPE_BOOST, res[0].r#type);
         assert_eq!(Some(30), res[0].duration_days);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_filtered_by_area() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let element_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+
+        let area = db::main::area::queries::insert(
+            db::main::area::schema::Area::mock_tags(),
+            &pool,
+        )
+        .await?;
+        db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, element_in_area.id, "create", &pool)
+            .await?;
+        db::main::element_event::queries::insert(user.id, element_outside.id, "create", &pool)
+            .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Without area filter: both events
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+
+        // With area filter: only the event for the element in the area
+        let req = TestRequest::get()
+            .uri(&format!("/?area={}", area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(element_in_area.id, res[0].place_id);
+
+        // With area alias
+        let req = TestRequest::get().uri("/?area=alias").to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_area_not_found() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?area=nonexistent")
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::NOT_FOUND, res.status());
         Ok(())
     }
 }
