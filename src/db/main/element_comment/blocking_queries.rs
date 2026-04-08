@@ -115,6 +115,44 @@ pub fn select_created_between(
         .map_err(Into::into)
 }
 
+pub fn select_created_between_for_area(
+    area_id: i64,
+    period_start: &OffsetDateTime,
+    period_end: &OffsetDateTime,
+    conn: &Connection,
+) -> Result<Vec<ElementComment>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {element_id} IN (
+                SELECT element_id FROM {area_element_table}
+                WHERE area_id = ?1 AND deleted_at IS NULL
+            )
+            AND {deleted_at} IS NULL
+            AND {created_at} > ?2 AND {created_at} < ?3
+            ORDER BY {created_at} DESC
+        "#,
+        projection = ElementComment::projection(),
+        table = schema::TABLE_NAME,
+        element_id = Columns::ElementId.as_str(),
+        created_at = Columns::CreatedAt.as_str(),
+        deleted_at = Columns::DeletedAt.as_str(),
+        area_element_table = crate::db::main::area_element::schema::TABLE_NAME,
+    );
+    conn.prepare(&sql)?
+        .query_map(
+            params![
+                area_id,
+                period_start.format(&Rfc3339)?,
+                period_end.format(&Rfc3339)?,
+            ],
+            ElementComment::mapper(),
+        )?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_element_id(
     element_id: i64,
     include_deleted: bool,

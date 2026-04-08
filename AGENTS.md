@@ -139,6 +139,8 @@ pub fn select_by_id(id: i64, conn: &mut Connection) -> Result<User> {
 
 Full database schema is always available in schema.sql, use it as reference and don't try to make up non-existing tables and fields.
 
+**All SQL queries must go through the blocking_queries/queries layer. Never embed raw SQL in REST or RPC handlers.** If you need a new query, add it to the appropriate `blocking_queries.rs` file and create an async wrapper in `queries.rs`. Each table has its own subfolder under `src/db/main/` (e.g., `element_event/`, `element_comment/`, `area_element/`).
+
 ### REST Handler Patterns
 Handlers return `RestResult<T>` which is `Result<Json<T>, RestApiError>`:
 

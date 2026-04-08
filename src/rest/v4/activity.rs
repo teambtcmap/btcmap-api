@@ -1,6 +1,4 @@
 use crate::db;
-use crate::db::main::element_comment::schema::ElementComment;
-use crate::db::main::element_event::schema::ElementEvent;
 use crate::db::main::invoice::schema::{InvoiceStatus, InvoicedService};
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
@@ -10,12 +8,10 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Query;
 use regex::Regex;
-use rusqlite::params;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::LazyLock;
-use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
 
@@ -63,74 +59,6 @@ fn get_event_type(r#type: &str) -> String {
     }
 }
 
-// Area-scoped queries that use a subquery to filter by area membership at the DB level.
-// This avoids loading the full global dataset and filtering in-memory.
-
-fn select_area_events(
-    area_id: i64,
-    period_start: &OffsetDateTime,
-    period_end: &OffsetDateTime,
-    conn: &rusqlite::Connection,
-) -> crate::Result<Vec<ElementEvent>> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM element_event
-            WHERE element_id IN (
-                SELECT element_id FROM area_element
-                WHERE area_id = ?1 AND deleted_at IS NULL
-            )
-            AND created_at > ?2 AND created_at < ?3
-            ORDER BY created_at DESC
-        "#,
-        projection = ElementEvent::projection(),
-    );
-    conn.prepare(&sql)?
-        .query_map(
-            params![
-                area_id,
-                period_start.format(&Rfc3339)?,
-                period_end.format(&Rfc3339)?,
-            ],
-            ElementEvent::mapper(),
-        )?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(Into::into)
-}
-
-fn select_area_comments(
-    area_id: i64,
-    period_start: &OffsetDateTime,
-    period_end: &OffsetDateTime,
-    conn: &rusqlite::Connection,
-) -> crate::Result<Vec<ElementComment>> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM element_comment
-            WHERE element_id IN (
-                SELECT element_id FROM area_element
-                WHERE area_id = ?1 AND deleted_at IS NULL
-            )
-            AND deleted_at IS NULL
-            AND created_at > ?2 AND created_at < ?3
-            ORDER BY created_at DESC
-        "#,
-        projection = ElementComment::projection(),
-    );
-    conn.prepare(&sql)?
-        .query_map(
-            params![
-                area_id,
-                period_start.format(&Rfc3339)?,
-                period_end.format(&Rfc3339)?,
-            ],
-            ElementComment::mapper(),
-        )?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(Into::into)
-}
-
 #[get("")]
 pub async fn get(
     args: Query<GetActivityArgs>,
@@ -143,15 +71,14 @@ pub async fn get(
 
     // Resolve area if specified, build element ID set for boost filtering
     let area_id: Option<i64> = if let Some(ref area_id_or_alias) = args.area {
-        let area =
-            db::main::area::queries::select_by_id_or_alias(area_id_or_alias.clone(), &pool)
-                .await
-                .map_err(|e| match e {
-                    crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
-                        RestApiError::not_found()
-                    }
-                    _ => RestApiError::database(),
-                })?;
+        let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias.clone(), &pool)
+            .await
+            .map_err(|e| match e {
+                crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
+                    RestApiError::not_found()
+                }
+                _ => RestApiError::database(),
+            })?;
         Some(area.id)
     } else {
         None
@@ -160,10 +87,9 @@ pub async fn get(
     // For boost filtering we need element IDs (invoices store element_id in a
     // description string, not a JOINable column)
     let area_element_ids: Option<HashSet<i64>> = if let Some(area_id) = area_id {
-        let area_elements =
-            db::main::area_element::queries::select_by_area_id(area_id, &pool)
-                .await
-                .map_err(|_| RestApiError::database())?;
+        let area_elements = db::main::area_element::queries::select_by_area_id(area_id, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
         Some(
             area_elements
                 .into_iter()
@@ -182,15 +108,13 @@ pub async fn get(
         }
     };
 
-    // Fetch events — SQL JOIN for area, global query otherwise
+    // Fetch events — area-scoped or global
     let events = if let Some(area_id) = area_id {
-        pool.get()
-            .await
-            .map_err(|_| RestApiError::database())?
-            .interact(move |conn| select_area_events(area_id, &day_ago, &period_end, conn))
-            .await
-            .map_err(|_| RestApiError::database())?
-            .map_err(|_| RestApiError::database())?
+        db::main::element_event::queries::select_created_between_for_area(
+            area_id, day_ago, period_end, &pool,
+        )
+        .await
+        .map_err(|_| RestApiError::database())?
     } else {
         db::main::element_event::queries::select_created_between(day_ago, period_end, &pool)
             .await
@@ -227,15 +151,13 @@ pub async fn get(
         });
     }
 
-    // Fetch comments — SQL JOIN for area, global query otherwise
+    // Fetch comments — area-scoped or global
     let comments = if let Some(area_id) = area_id {
-        pool.get()
-            .await
-            .map_err(|_| RestApiError::database())?
-            .interact(move |conn| select_area_comments(area_id, &day_ago, &period_end, conn))
-            .await
-            .map_err(|_| RestApiError::database())?
-            .map_err(|_| RestApiError::database())?
+        db::main::element_comment::queries::select_created_between_for_area(
+            area_id, day_ago, period_end, &pool,
+        )
+        .await
+        .map_err(|_| RestApiError::database())?
     } else {
         db::main::element_comment::queries::select_created_between(day_ago, period_end, &pool)
             .await
@@ -513,11 +435,9 @@ mod test {
         let element_outside =
             db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
 
-        let area = db::main::area::queries::insert(
-            db::main::area::schema::Area::mock_tags(),
-            &pool,
-        )
-        .await?;
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
         db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
 
         db::main::element_event::queries::insert(user.id, element_in_area.id, "create", &pool)
@@ -562,11 +482,9 @@ mod test {
         let element_outside =
             db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
 
-        let area = db::main::area::queries::insert(
-            db::main::area::schema::Area::mock_tags(),
-            &pool,
-        )
-        .await?;
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
         db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
 
         db::main::element_comment::queries::insert(element_in_area.id, "In area", &pool).await?;
@@ -598,11 +516,9 @@ mod test {
         let element_outside =
             db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
 
-        let area = db::main::area::queries::insert(
-            db::main::area::schema::Area::mock_tags(),
-            &pool,
-        )
-        .await?;
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
         db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
 
         db::main::invoice::queries::insert(
@@ -652,9 +568,7 @@ mod test {
                 .service(scope("/").service(super::get)),
         )
         .await;
-        let req = TestRequest::get()
-            .uri("/?area=nonexistent")
-            .to_request();
+        let req = TestRequest::get().uri("/?area=nonexistent").to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(actix_web::http::StatusCode::NOT_FOUND, res.status());
         Ok(())

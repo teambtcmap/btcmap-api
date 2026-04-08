@@ -160,6 +160,42 @@ pub fn select_created_between(
     Ok(res)
 }
 
+pub fn select_created_between_for_area(
+    area_id: i64,
+    period_start: &OffsetDateTime,
+    period_end: &OffsetDateTime,
+    conn: &Connection,
+) -> Result<Vec<ElementEvent>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {element_id} IN (
+                SELECT element_id FROM {area_element_table}
+                WHERE area_id = ?1 AND deleted_at IS NULL
+            )
+            AND {created_at} > ?2 AND {created_at} < ?3
+            ORDER BY {created_at} DESC
+        "#,
+        projection = ElementEvent::projection(),
+        table = schema::TABLE_NAME,
+        element_id = Columns::ElementId.as_str(),
+        created_at = Columns::CreatedAt.as_str(),
+        area_element_table = crate::db::main::area_element::schema::TABLE_NAME,
+    );
+    conn.prepare(&sql)?
+        .query_map(
+            params![
+                area_id,
+                period_start.format(&Rfc3339)?,
+                period_end.format(&Rfc3339)?,
+            ],
+            ElementEvent::mapper(),
+        )?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_user(id: i64, limit: i64, conn: &Connection) -> Result<Vec<ElementEvent>> {
     let sql = format!(
         r#"

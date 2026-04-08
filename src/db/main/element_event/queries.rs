@@ -32,6 +32,25 @@ pub async fn select_created_between(
         .await?
 }
 
+pub async fn select_created_between_for_area(
+    area_id: i64,
+    period_start: OffsetDateTime,
+    period_end: OffsetDateTime,
+    pool: &Pool,
+) -> Result<Vec<ElementEvent>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_created_between_for_area(
+                area_id,
+                &period_start,
+                &period_end,
+                conn,
+            )
+        })
+        .await?
+}
+
 pub async fn select_all(
     sort_order: Option<String>,
     limit: Option<i64>,
