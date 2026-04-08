@@ -71,6 +71,7 @@ pub async fn get(
     .await
     .map_err(|_| RestApiError::database())?;
 
+    let tip_re = Regex::new(r"(lightning:[^)]+)").unwrap();
     let mut items: Vec<ActivityItem> = Vec::with_capacity(events.len());
     for event in events {
         let element = db::main::element::queries::select_by_id(event.element_id, &pool)
@@ -83,8 +84,7 @@ pub async fn get(
 
         let element_name = element.name(None);
 
-        let re = Regex::new(r"(lightning:[^)]+)").unwrap();
-        let user_tip = re
+        let user_tip = tip_re
             .captures(&osm_user.osm_data.description)
             .map(|c| c[1].to_string());
 
