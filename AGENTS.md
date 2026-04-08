@@ -42,8 +42,16 @@ cargo test get_empty_array
 cargo test get_not_empty_array
 ```
 
-### Git commits
-Always run cargo fmt before commiting changes
+### Pre-commit checklist
+Always run these before committing:
+```bash
+cargo fmt            # Format code
+cargo clippy -- -D warnings  # Lint (must pass with zero warnings)
+cargo test           # Run tests
+```
+
+### Rust version
+The project pins its Rust version in `rust-toolchain.toml`. Rustup handles this automatically — no manual version management needed. The toolchain file also ensures `rustfmt` and `clippy` components are installed.
 
 ## Code Structure
 
