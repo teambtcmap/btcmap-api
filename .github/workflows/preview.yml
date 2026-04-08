@@ -15,9 +15,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install the latest toolchain
-      run: rustup update
-
     - name: Run tests
       run: cargo test --verbose
 
