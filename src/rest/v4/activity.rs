@@ -1,4 +1,6 @@
 use crate::db;
+use crate::db::main::element_comment::schema::ElementComment;
+use crate::db::main::element_event::schema::ElementEvent;
 use crate::db::main::invoice::schema::{InvoiceStatus, InvoicedService};
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
@@ -8,10 +10,12 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Query;
 use regex::Regex;
+use rusqlite::params;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::LazyLock;
+use time::format_description::well_known::Rfc3339;
 use time::Duration;
 use time::OffsetDateTime;
 
@@ -59,6 +63,74 @@ fn get_event_type(r#type: &str) -> String {
     }
 }
 
+// Area-scoped queries that use a subquery to filter by area membership at the DB level.
+// This avoids loading the full global dataset and filtering in-memory.
+
+fn select_area_events(
+    area_id: i64,
+    period_start: &OffsetDateTime,
+    period_end: &OffsetDateTime,
+    conn: &rusqlite::Connection,
+) -> crate::Result<Vec<ElementEvent>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM element_event
+            WHERE element_id IN (
+                SELECT element_id FROM area_element
+                WHERE area_id = ?1 AND deleted_at IS NULL
+            )
+            AND created_at > ?2 AND created_at < ?3
+            ORDER BY created_at DESC
+        "#,
+        projection = ElementEvent::projection(),
+    );
+    conn.prepare(&sql)?
+        .query_map(
+            params![
+                area_id,
+                period_start.format(&Rfc3339)?,
+                period_end.format(&Rfc3339)?,
+            ],
+            ElementEvent::mapper(),
+        )?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+fn select_area_comments(
+    area_id: i64,
+    period_start: &OffsetDateTime,
+    period_end: &OffsetDateTime,
+    conn: &rusqlite::Connection,
+) -> crate::Result<Vec<ElementComment>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM element_comment
+            WHERE element_id IN (
+                SELECT element_id FROM area_element
+                WHERE area_id = ?1 AND deleted_at IS NULL
+            )
+            AND deleted_at IS NULL
+            AND created_at > ?2 AND created_at < ?3
+            ORDER BY created_at DESC
+        "#,
+        projection = ElementComment::projection(),
+    );
+    conn.prepare(&sql)?
+        .query_map(
+            params![
+                area_id,
+                period_start.format(&Rfc3339)?,
+                period_end.format(&Rfc3339)?,
+            ],
+            ElementComment::mapper(),
+        )?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 #[get("")]
 pub async fn get(
     args: Query<GetActivityArgs>,
@@ -67,9 +139,10 @@ pub async fn get(
     let now = OffsetDateTime::now_utc();
     let days = args.days.unwrap_or(1);
     let day_ago = now.saturating_sub(Duration::days(days));
+    let period_end = now + Duration::seconds(1);
 
-    // If area is specified, resolve it and build a set of element IDs in that area
-    let area_element_ids: Option<HashSet<i64>> = if let Some(ref area_id_or_alias) = args.area {
+    // Resolve area if specified, build element ID set for boost filtering
+    let area_id: Option<i64> = if let Some(ref area_id_or_alias) = args.area {
         let area =
             db::main::area::queries::select_by_id_or_alias(area_id_or_alias.clone(), &pool)
                 .await
@@ -79,8 +152,16 @@ pub async fn get(
                     }
                     _ => RestApiError::database(),
                 })?;
+        Some(area.id)
+    } else {
+        None
+    };
+
+    // For boost filtering we need element IDs (invoices store element_id in a
+    // description string, not a JOINable column)
+    let area_element_ids: Option<HashSet<i64>> = if let Some(area_id) = area_id {
         let area_elements =
-            db::main::area_element::queries::select_by_area_id(area.id, &pool)
+            db::main::area_element::queries::select_by_area_id(area_id, &pool)
                 .await
                 .map_err(|_| RestApiError::database())?;
         Some(
@@ -94,22 +175,30 @@ pub async fn get(
         None
     };
 
-    let events = db::main::element_event::queries::select_created_between(
-        day_ago,
-        now + Duration::seconds(1),
-        &pool,
-    )
-    .await
-    .map_err(|_| RestApiError::database())?;
+    let in_area = |element_id: i64| -> bool {
+        match &area_element_ids {
+            Some(ids) => ids.contains(&element_id),
+            None => true,
+        }
+    };
+
+    // Fetch events — SQL JOIN for area, global query otherwise
+    let events = if let Some(area_id) = area_id {
+        pool.get()
+            .await
+            .map_err(|_| RestApiError::database())?
+            .interact(move |conn| select_area_events(area_id, &day_ago, &period_end, conn))
+            .await
+            .map_err(|_| RestApiError::database())?
+            .map_err(|_| RestApiError::database())?
+    } else {
+        db::main::element_event::queries::select_created_between(day_ago, period_end, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+    };
 
     let mut items: Vec<ActivityItem> = Vec::with_capacity(events.len());
     for event in events {
-        if let Some(ref ids) = area_element_ids {
-            if !ids.contains(&event.element_id) {
-                continue;
-            }
-        }
-
         let element = db::main::element::queries::select_by_id(event.element_id, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
@@ -138,23 +227,24 @@ pub async fn get(
         });
     }
 
-    let comments = db::main::element_comment::queries::select_created_between(
-        day_ago,
-        now + Duration::seconds(1),
-        &pool,
-    )
-    .await
-    .map_err(|_| RestApiError::database())?;
+    // Fetch comments — SQL JOIN for area, global query otherwise
+    let comments = if let Some(area_id) = area_id {
+        pool.get()
+            .await
+            .map_err(|_| RestApiError::database())?
+            .interact(move |conn| select_area_comments(area_id, &day_ago, &period_end, conn))
+            .await
+            .map_err(|_| RestApiError::database())?
+            .map_err(|_| RestApiError::database())?
+    } else {
+        db::main::element_comment::queries::select_created_between(day_ago, period_end, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+    };
 
     for comment in comments {
         if comment.deleted_at.is_some() {
             continue;
-        }
-
-        if let Some(ref ids) = area_element_ids {
-            if !ids.contains(&comment.element_id) {
-                continue;
-            }
         }
 
         let element = db::main::element::queries::select_by_id(comment.element_id, &pool)
@@ -177,6 +267,8 @@ pub async fn get(
         });
     }
 
+    // Fetch boosts — invoices store element_id in a description string,
+    // not a JOINable column, so we use the in_area() helper for filtering
     let paid_invoices = db::main::invoice::queries::select_by_status(InvoiceStatus::Paid, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -191,10 +283,8 @@ pub async fn get(
             continue;
         };
 
-        if let Some(ref ids) = area_element_ids {
-            if !ids.contains(&element_id) {
-                continue;
-            }
+        if !in_area(element_id) {
+            continue;
         }
 
         let created_at = OffsetDateTime::parse(
