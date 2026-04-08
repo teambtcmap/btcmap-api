@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod error;
 pub mod v2;
 pub mod v3;

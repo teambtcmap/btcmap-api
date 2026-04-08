@@ -38,6 +38,13 @@ impl RestApiError {
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::new(RestApiErrorCode::InvalidInput, message.into())
     }
+
+    pub fn unauthorized() -> Self {
+        Self::new(
+            RestApiErrorCode::Unauthorized,
+            "Authentication required".to_string(),
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -45,6 +52,7 @@ pub enum RestApiErrorCode {
     InvalidInput,
     NotFound,
     Database,
+    Unauthorized,
 }
 
 impl fmt::Display for RestApiError {
@@ -59,6 +67,7 @@ impl std::fmt::Display for RestApiErrorCode {
             RestApiErrorCode::InvalidInput => write!(f, "invalid_input"),
             RestApiErrorCode::NotFound => write!(f, "not_found"),
             RestApiErrorCode::Database => write!(f, "database"),
+            RestApiErrorCode::Unauthorized => write!(f, "unauthorized"),
         }
     }
 }
@@ -69,6 +78,7 @@ impl RestApiErrorCode {
             Self::InvalidInput => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
         }
     }
 }

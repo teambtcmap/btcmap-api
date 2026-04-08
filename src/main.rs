@@ -179,7 +179,8 @@ async fn main() -> Result<()> {
                     .service(scope("top-editors").service(rest::v4::top_editors::get))
                     .service(scope("communities").service(rest::v4::communities::get_top))
                     .service(scope("countries").service(rest::v4::countries::get_top))
-                    .service(scope("activity").service(rest::v4::activity::get)),
+                    .service(scope("activity").service(rest::v4::activity::get))
+                    .service(scope("users").service(rest::v4::users::me)),
             )
     })
     .client_request_timeout(Duration::from_millis(0))
