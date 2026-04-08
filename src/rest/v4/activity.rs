@@ -14,8 +14,7 @@ use std::sync::LazyLock;
 use time::Duration;
 use time::OffsetDateTime;
 
-static TIP_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(lightning:[^)]+)").unwrap());
+static TIP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(lightning:[^)]+)").unwrap());
 
 const EVENT_TYPE_CREATE: &str = "place_added";
 const EVENT_TYPE_UPDATE: &str = "place_updated";
