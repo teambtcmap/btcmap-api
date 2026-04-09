@@ -38,6 +38,8 @@ mod test {
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
+            saved_places: vec![],
+            saved_areas: vec![],
         };
 
         let result = super::run(&user).await.unwrap();
@@ -61,6 +63,8 @@ mod test {
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
+            saved_places: vec![],
+            saved_areas: vec![],
         };
 
         let result = super::run(&user).await.unwrap();
@@ -78,6 +82,8 @@ mod test {
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
+            saved_places: vec![],
+            saved_areas: vec![],
         };
 
         let result = super::run(&user).await.unwrap();
@@ -95,6 +101,8 @@ mod test {
             created_at: "not-a-timestamp".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
+            saved_places: vec![],
+            saved_areas: vec![],
         };
 
         let result = super::run(&user).await;
@@ -113,6 +121,8 @@ mod test {
             created_at: future_date.format(&Rfc3339)?,
             updated_at: future_date.format(&Rfc3339)?,
             deleted_at: None,
+            saved_places: vec![],
+            saved_areas: vec![],
         };
 
         let result = super::run(&user).await?;

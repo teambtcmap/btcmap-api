@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS "user"(
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
-) STRICT;
+, saved_places TEXT NOT NULL DEFAULT '', saved_areas TEXT NOT NULL DEFAULT '') STRICT;
 CREATE TABLE access_token(
     id INTEGER PRIMARY KEY NOT NULL,
     user_id INTEGER NOT NULL REFERENCES "user"(id),
@@ -139,10 +139,6 @@ CREATE TABLE place_submission(
     closed_at TEXT,
     deleted_at TEXT
 ) STRICT;
-CREATE TRIGGER user_updated_at UPDATE OF osm_data, tags, created_at, deleted_at ON "osm_user"
-BEGIN
-    UPDATE "osm_user" SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
-END;
 CREATE TRIGGER report_updated_at UPDATE OF area_id, date, tags, created_at, deleted_at ON report
 BEGIN
     UPDATE report SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -162,10 +158,6 @@ END;
 CREATE TRIGGER element_issue_updated_at UPDATE OF element_id, code, severity, created_at, deleted_at ON element_issue
 BEGIN
     UPDATE element_issue SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
-END;
-CREATE TRIGGER admin_updated_at UPDATE OF name, password, roles, created_at, deleted_at ON "user"
-BEGIN
-    UPDATE "user" SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
 CREATE TRIGGER acess_token_updated_at UPDATE OF user_id, name, secret, roles, created_at, deleted_at ON access_token
 BEGIN
@@ -191,6 +183,14 @@ CREATE TRIGGER element_updated_at UPDATE OF overpass_data, tags, lat, lon, creat
 BEGIN
     UPDATE element SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
+CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, created_at, deleted_at ON user
+BEGIN
+    UPDATE user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
+CREATE TRIGGER osm_user_updated_at UPDATE OF osm_data, tags, created_at, deleted_at ON osm_user
+BEGIN
+    UPDATE osm_user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
 CREATE INDEX idx_user_updated_at ON "osm_user"(updated_at);
 CREATE INDEX area_updated_at ON area(updated_at);
 CREATE INDEX report_updated_at ON report(updated_at);
@@ -211,7 +211,6 @@ CREATE INDEX admin_updated_at ON "user"(updated_at);
 CREATE INDEX access_token_secret ON access_token(secret);
 CREATE UNIQUE INDEX area_element_area_id_element_id ON area_element(area_id, element_id);
 CREATE INDEX element_event_updated_at ON element_event(updated_at);
-CREATE INDEX element_event_user_created_type ON element_event(user_id, created_at, type);
 CREATE INDEX idx_area_bbox_west ON area(bbox_west);
 CREATE INDEX idx_area_bbox_south ON area(bbox_south);
 CREATE INDEX idx_area_bbox_east ON area(bbox_east);
@@ -220,4 +219,6 @@ CREATE UNIQUE INDEX place_submission_origin_external_id ON place_submission(orig
 CREATE INDEX element_lat_lon ON element(lat, lon);
 CREATE INDEX place_submission_lat_lon ON place_submission(lat, lon);
 CREATE INDEX element_deleted_at ON element(deleted_at);
+CREATE INDEX element_event_user_created_type ON element_event(user_id, created_at, type);
+CREATE INDEX area_type ON area(json_extract(tags, '$.type'));
 COMMIT;

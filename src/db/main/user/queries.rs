@@ -45,3 +45,21 @@ pub async fn set_roles(admin_id: i64, roles: &[Role], pool: &Pool) -> Result<Use
         .interact(move |conn| blocking_queries::set_roles(admin_id, &roles, conn))
         .await?
 }
+
+#[allow(dead_code)]
+pub async fn set_saved_places(id: i64, saved_places: &[i64], pool: &Pool) -> Result<User> {
+    let saved_places = saved_places.to_vec();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_saved_places(id, &saved_places, conn))
+        .await?
+}
+
+#[allow(dead_code)]
+pub async fn set_saved_areas(id: i64, saved_areas: &[i64], pool: &Pool) -> Result<User> {
+    let saved_areas = saved_areas.to_vec();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_saved_areas(id, &saved_areas, conn))
+        .await?
+}

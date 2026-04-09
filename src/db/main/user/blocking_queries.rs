@@ -99,6 +99,52 @@ pub fn set_roles(admin_id: i64, roles: &[Role], conn: &Connection) -> Result<Use
     .map_err(Into::into)
 }
 
+#[allow(dead_code)]
+pub fn set_saved_places(id: i64, saved_places: &[i64], conn: &Connection) -> Result<User> {
+    let saved_places: String = saved_places
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    conn.query_row(
+        &format!(
+            r#"
+                UPDATE {TABLE}
+                SET {SavedPlaces} = ?1
+                WHERE {Id} = ?2
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![saved_places, id],
+        User::mapper(),
+    )
+    .map_err(Into::into)
+}
+
+#[allow(dead_code)]
+pub fn set_saved_areas(id: i64, saved_areas: &[i64], conn: &Connection) -> Result<User> {
+    let saved_areas: String = saved_areas
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    conn.query_row(
+        &format!(
+            r#"
+                UPDATE {TABLE}
+                SET {SavedAreas} = ?1
+                WHERE {Id} = ?2
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![saved_areas, id],
+        User::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use super::schema::Role;
@@ -156,6 +202,32 @@ mod test {
         let roles = vec![Role::User, Role::Admin];
         super::set_roles(admin_id, &roles, &conn)?;
         assert_eq!(roles, super::select_by_id(admin_id, &conn)?.roles,);
+        Ok(())
+    }
+
+    #[test]
+    fn set_saved_places() -> Result<()> {
+        let conn = conn();
+        let admin_id = super::insert("name", "pwd", &conn)?.id;
+        let saved_places = vec![1, 2, 3];
+        super::set_saved_places(admin_id, &saved_places, &conn)?;
+        assert_eq!(
+            saved_places,
+            super::select_by_id(admin_id, &conn)?.saved_places
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_saved_areas() -> Result<()> {
+        let conn = conn();
+        let admin_id = super::insert("name", "pwd", &conn)?.id;
+        let saved_areas = vec![10, 20, 30];
+        super::set_saved_areas(admin_id, &saved_areas, &conn)?;
+        assert_eq!(
+            saved_areas,
+            super::select_by_id(admin_id, &conn)?.saved_areas
+        );
         Ok(())
     }
 }

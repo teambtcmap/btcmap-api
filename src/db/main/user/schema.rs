@@ -12,6 +12,8 @@ pub enum Columns {
     Name,
     Password,
     Roles,
+    SavedPlaces,
+    SavedAreas,
     CreatedAt,
     UpdatedAt,
     DeletedAt,
@@ -23,6 +25,8 @@ pub struct User {
     pub name: String,
     pub password: String,
     pub roles: Vec<Role>,
+    pub saved_places: Vec<i64>,
+    pub saved_areas: Vec<i64>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -60,6 +64,8 @@ impl User {
                 Columns::Name,
                 Columns::Password,
                 Columns::Roles,
+                Columns::SavedPlaces,
+                Columns::SavedAreas,
                 Columns::CreatedAt,
                 Columns::UpdatedAt,
                 Columns::DeletedAt,
@@ -78,6 +84,8 @@ impl User {
                 name: row.get(Columns::Name.as_ref())?,
                 password: row.get(Columns::Password.as_ref())?,
                 roles: Self::parse_roles(row.get(Columns::Roles.as_ref())?),
+                saved_places: Self::parse_saved_items(row.get(Columns::SavedPlaces.as_ref())?),
+                saved_areas: Self::parse_saved_items(row.get(Columns::SavedAreas.as_ref())?),
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
                 updated_at: row.get(Columns::UpdatedAt.as_ref())?,
                 deleted_at: row.get(Columns::DeletedAt.as_ref())?,
@@ -90,6 +98,20 @@ impl User {
         roles
             .into_iter()
             .filter_map(|s| Role::from_str(&s).ok())
+            .collect()
+    }
+
+    fn parse_saved_items(column_value: String) -> Vec<i64> {
+        column_value
+            .split(',')
+            .filter_map(|s| {
+                let s = s.trim();
+                if s.is_empty() {
+                    None
+                } else {
+                    s.parse().ok()
+                }
+            })
             .collect()
     }
 }
