@@ -10,8 +10,11 @@ use actix_web::web::Query;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
+use std::sync::LazyLock;
 use time::Duration;
 use time::OffsetDateTime;
+
+static TIP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(lightning:[^)]+)").unwrap());
 
 const EVENT_TYPE_CREATE: &str = "place_added";
 const EVENT_TYPE_UPDATE: &str = "place_updated";
@@ -83,8 +86,7 @@ pub async fn get(
 
         let element_name = element.name(None);
 
-        let re = Regex::new(r"(lightning:[^)]+)").unwrap();
-        let user_tip = re
+        let user_tip = TIP_RE
             .captures(&osm_user.osm_data.description)
             .map(|c| c[1].to_string());
 
