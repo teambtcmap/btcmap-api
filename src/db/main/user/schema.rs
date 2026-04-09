@@ -5,6 +5,8 @@ use std::sync::OnceLock;
 
 pub const TABLE_NAME: &str = "user";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Name,
@@ -13,20 +15,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Name => "name",
-            Columns::Password => "password",
-            Columns::Roles => "roles",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -77,7 +65,7 @@ impl User {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -86,13 +74,13 @@ impl User {
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row: &Row| -> rusqlite::Result<Self> {
             Ok(User {
-                id: row.get(Columns::Id.as_str())?,
-                name: row.get(Columns::Name.as_str())?,
-                password: row.get(Columns::Password.as_str())?,
-                roles: Self::parse_roles(row.get(Columns::Roles.as_str())?),
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                name: row.get(Columns::Name.as_ref())?,
+                password: row.get(Columns::Password.as_ref())?,
+                roles: Self::parse_roles(row.get(Columns::Roles.as_ref())?),
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }

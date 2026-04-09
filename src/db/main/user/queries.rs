@@ -30,7 +30,7 @@ pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<User
         .await?
 }
 
-pub async fn set_password(id: i64, password: impl Into<String>, pool: &Pool) -> Result<()> {
+pub async fn set_password(id: i64, password: impl Into<String>, pool: &Pool) -> Result<usize> {
     let password = password.into();
     pool.get()
         .await?

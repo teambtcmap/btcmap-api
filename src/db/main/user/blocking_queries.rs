@@ -1,105 +1,102 @@
-use super::schema::Columns;
 use super::schema::Role;
 use super::schema::{self, User};
 use crate::Result;
 use rusqlite::{params, Connection};
-use tracing::warn;
+use schema::Columns::*;
+use schema::TABLE_NAME as TABLE;
 
 pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<User> {
-    let sql = format!(
-        r#"
-            INSERT INTO {table} ({name}, {password})
-            VALUES (?1, ?2)
-            RETURNING {projection}
-        "#,
-        table = schema::TABLE_NAME,
-        name = Columns::Name.as_str(),
-        password = Columns::Password.as_str(),
-        projection = User::projection(),
-    );
-    conn.query_row(&sql, params![name, password], User::mapper())
-        .map_err(Into::into)
+    conn.query_row(
+        &format!(
+            r#"
+                INSERT INTO {TABLE} ({Name}, {Password})
+                VALUES (?1, ?2)
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![name, password],
+        User::mapper(),
+    )
+    .map_err(Into::into)
 }
 
-#[cfg(test)]
+#[allow(dead_code)]
 pub fn select_all(conn: &Connection) -> Result<Vec<User>> {
-    let sql = format!(
+    conn.prepare(&format!(
         r#"
             SELECT {projection}
-            FROM {table}
+            FROM {TABLE}
         "#,
         projection = User::projection(),
-        table = schema::TABLE_NAME,
-    );
-    conn.prepare(&sql)?
-        .query_map({}, User::mapper())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(Into::into)
+    ))?
+    .query_map({}, User::mapper())?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(Into::into)
 }
 
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<User> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM {table}
-            WHERE {id} = ?1
-        "#,
-        projection = User::projection(),
-        table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
-    );
-    conn.query_row(&sql, params![id], User::mapper())
-        .map_err(Into::into)
+    conn.query_row(
+        &format!(
+            r#"
+                SELECT {projection}
+                FROM {TABLE}
+                WHERE {Id} = ?1
+            "#,
+            projection = User::projection(),
+        ),
+        params![id],
+        User::mapper(),
+    )
+    .map_err(Into::into)
 }
 
 pub fn select_by_name(name: &str, conn: &Connection) -> Result<User> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM {table}
-            WHERE {name} = ?1
-        "#,
-        projection = User::projection(),
-        table = schema::TABLE_NAME,
-        name = Columns::Name.as_str(),
-    );
-    conn.query_row(&sql, params![name], User::mapper())
-        .map_err(Into::into)
+    conn.query_row(
+        &format!(
+            r#"
+                SELECT {projection}
+                FROM {TABLE}
+                WHERE {Name} = ?1
+            "#,
+            projection = User::projection(),
+        ),
+        params![name],
+        User::mapper(),
+    )
+    .map_err(Into::into)
 }
 
-pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> Result<()> {
-    let sql = format!(
-        r#"
-            UPDATE {table}
-            SET {password} = ?1
-            WHERE {id} = ?2
-        "#,
-        table = schema::TABLE_NAME,
-        password = Columns::Password.as_str(),
-        id = Columns::Id.as_str(),
-    );
-    warn!(sql);
-    conn.execute(&sql, params![password.into(), id])?;
-    Ok(())
+pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> Result<usize> {
+    conn.execute(
+        &format!(
+            r#"
+                UPDATE {TABLE}
+                SET {Password} = ?1
+                WHERE {Id} = ?2
+            "#,
+        ),
+        params![password.into(), id],
+    )
+    .map_err(Into::into)
 }
 
 pub fn set_roles(admin_id: i64, roles: &[Role], conn: &Connection) -> Result<User> {
-    let sql = format!(
-        r#"
-            UPDATE {table}
-            SET {roles} = json(?1)
-            WHERE {id} = ?2
-            RETURNING {projection}
-        "#,
-        table = schema::TABLE_NAME,
-        roles = Columns::Roles.as_str(),
-        id = Columns::Id.as_str(),
-        projection = User::projection(),
-    );
     let roles: Vec<String> = roles.iter().map(|role| role.to_string()).collect();
-    let params = params![serde_json::to_string(&roles)?, admin_id];
-    conn.query_row(&sql, params, User::mapper())
-        .map_err(Into::into)
+    conn.query_row(
+        &format!(
+            r#"
+                UPDATE {TABLE}
+                SET {Roles} = json(?1)
+                WHERE {Id} = ?2
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![serde_json::to_string(&roles)?, admin_id],
+        User::mapper(),
+    )
+    .map_err(Into::into)
 }
 
 #[cfg(test)]
