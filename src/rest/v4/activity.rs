@@ -10,6 +10,7 @@ use actix_web::web::Query;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 use time::Duration;
 use time::OffsetDateTime;
@@ -25,6 +26,7 @@ const EVENT_TYPE_BOOST: &str = "place_boosted";
 #[derive(Deserialize)]
 pub struct GetActivityArgs {
     days: Option<i64>,
+    area: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,14 +67,59 @@ pub async fn get(
     let now = OffsetDateTime::now_utc();
     let days = args.days.unwrap_or(1);
     let day_ago = now.saturating_sub(Duration::days(days));
+    let period_end = now + Duration::seconds(1);
 
-    let events = db::main::element_event::queries::select_created_between(
-        day_ago,
-        now + Duration::seconds(1),
-        &pool,
-    )
-    .await
-    .map_err(|_| RestApiError::database())?;
+    // Resolve area if specified, build element ID set for boost filtering
+    let area_id: Option<i64> = if let Some(ref area_id_or_alias) = args.area {
+        let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias.clone(), &pool)
+            .await
+            .map_err(|e| match e {
+                crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
+                    RestApiError::not_found()
+                }
+                _ => RestApiError::database(),
+            })?;
+        Some(area.id)
+    } else {
+        None
+    };
+
+    // For boost filtering we need element IDs (invoices store element_id in a
+    // description string, not a JOINable column)
+    let area_element_ids: Option<HashSet<i64>> = if let Some(area_id) = area_id {
+        let area_elements = db::main::area_element::queries::select_by_area_id(area_id, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+        Some(
+            area_elements
+                .into_iter()
+                .filter(|ae| ae.deleted_at.is_none())
+                .map(|ae| ae.element_id)
+                .collect(),
+        )
+    } else {
+        None
+    };
+
+    let in_area = |element_id: i64| -> bool {
+        match &area_element_ids {
+            Some(ids) => ids.contains(&element_id),
+            None => true,
+        }
+    };
+
+    // Fetch events — area-scoped or global
+    let events = if let Some(area_id) = area_id {
+        db::main::element_event::queries::select_created_between_for_area(
+            area_id, day_ago, period_end, &pool,
+        )
+        .await
+        .map_err(|_| RestApiError::database())?
+    } else {
+        db::main::element_event::queries::select_created_between(day_ago, period_end, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+    };
 
     let mut items: Vec<ActivityItem> = Vec::with_capacity(events.len());
     for event in events {
@@ -104,13 +151,18 @@ pub async fn get(
         });
     }
 
-    let comments = db::main::element_comment::queries::select_created_between(
-        day_ago,
-        now + Duration::seconds(1),
-        &pool,
-    )
-    .await
-    .map_err(|_| RestApiError::database())?;
+    // Fetch comments — area-scoped or global
+    let comments = if let Some(area_id) = area_id {
+        db::main::element_comment::queries::select_created_between_for_area(
+            area_id, day_ago, period_end, &pool,
+        )
+        .await
+        .map_err(|_| RestApiError::database())?
+    } else {
+        db::main::element_comment::queries::select_created_between(day_ago, period_end, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+    };
 
     for comment in comments {
         if comment.deleted_at.is_some() {
@@ -137,6 +189,8 @@ pub async fn get(
         });
     }
 
+    // Fetch boosts — invoices store element_id in a description string,
+    // not a JOINable column, so we use the in_area() helper for filtering
     let paid_invoices = db::main::invoice::queries::select_by_status(InvoiceStatus::Paid, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -150,6 +204,10 @@ pub async fn get(
         else {
             continue;
         };
+
+        if !in_area(element_id) {
+            continue;
+        }
 
         let created_at = OffsetDateTime::parse(
             &invoice.created_at,
@@ -359,6 +417,160 @@ mod test {
         assert_eq!(1, res.len());
         assert_eq!(super::EVENT_TYPE_BOOST, res[0].r#type);
         assert_eq!(Some(30), res[0].duration_days);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_filtered_by_area() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let element_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
+        db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, element_in_area.id, "create", &pool)
+            .await?;
+        db::main::element_event::queries::insert(user.id, element_outside.id, "create", &pool)
+            .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Without area filter: both events
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+
+        // With area filter: only the event for the element in the area
+        let req = TestRequest::get()
+            .uri(&format!("/?area={}", area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(element_in_area.id, res[0].place_id);
+
+        // With area alias
+        let req = TestRequest::get().uri("/?area=alias").to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_comments_filtered_by_area() -> Result<()> {
+        let pool = pool();
+
+        let element_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
+        db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
+
+        db::main::element_comment::queries::insert(element_in_area.id, "In area", &pool).await?;
+        db::main::element_comment::queries::insert(element_outside.id, "Outside", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?area={}", area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(super::EVENT_TYPE_COMMENT, res[0].r#type);
+        assert_eq!(Some("In area".to_string()), res[0].comment);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_boosts_filtered_by_area() -> Result<()> {
+        let pool = pool();
+
+        let element_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let element_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
+        db::main::area_element::queries::insert(area.id, element_in_area.id, &pool).await?;
+
+        db::main::invoice::queries::insert(
+            "src",
+            format!("element_boost:{}:30", element_in_area.id),
+            1000,
+            "hash1",
+            "req1",
+            db::main::invoice::schema::InvoiceStatus::Paid,
+            &pool,
+        )
+        .await?;
+        db::main::invoice::queries::insert(
+            "src",
+            format!("element_boost:{}:30", element_outside.id),
+            1000,
+            "hash2",
+            "req2",
+            db::main::invoice::schema::InvoiceStatus::Paid,
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?area={}", area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(super::EVENT_TYPE_BOOST, res[0].r#type);
+        assert_eq!(element_in_area.id, res[0].place_id);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_area_not_found() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?area=nonexistent").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::NOT_FOUND, res.status());
         Ok(())
     }
 }
