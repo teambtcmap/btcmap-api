@@ -1,6 +1,8 @@
 use super::schema::{self, OgImage};
 use crate::Result;
 use rusqlite::{params, Connection};
+use schema::Columns::*;
+use schema::TABLE_NAME as TABLE;
 
 pub fn insert(
     element_id: i64,
@@ -10,14 +12,10 @@ pub fn insert(
 ) -> Result<OgImage> {
     let sql = format!(
         r#"
-            INSERT INTO {table} ({element_id}, {version}, {image_data})
+            INSERT INTO {TABLE} ({ElementId}, {Version}, {ImageData})
             VALUES (?1, ?2, ?3)
             RETURNING {projection}
         "#,
-        table = schema::TABLE_NAME,
-        element_id = schema::Columns::ElementId.as_str(),
-        version = schema::Columns::Version.as_str(),
-        image_data = schema::Columns::ImageData.as_str(),
         projection = OgImage::projection(),
     );
     conn.query_row(
@@ -29,49 +27,46 @@ pub fn insert(
 }
 
 pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Option<OgImage>> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM {table}
-            WHERE {element_id} = ?1
-        "#,
-        projection = OgImage::projection(),
-        table = schema::TABLE_NAME,
-        element_id = schema::Columns::ElementId.as_str(),
-    );
-    let result = conn
-        .prepare(&sql)?
-        .query_row(params![element_id], OgImage::mapper());
-    match result {
+    match conn
+        .prepare(&format!(
+            r#"
+                SELECT {projection}
+                FROM {TABLE}
+                WHERE {ElementId} = ?1
+            "#,
+            projection = OgImage::projection(),
+        ))?
+        .query_row(params![element_id], OgImage::mapper())
+    {
         Ok(og_image) => Ok(Some(og_image)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.into()),
     }
 }
 
-pub fn delete(element_id: i64, conn: &Connection) -> Result<()> {
-    let sql = format!(
-        r#"
-            DELETE FROM {table}
-            WHERE {element_id} = ?1
-        "#,
-        table = schema::TABLE_NAME,
-        element_id = schema::Columns::ElementId.as_str(),
-    );
-    conn.execute(&sql, params![element_id])?;
-    Ok(())
+pub fn delete(element_id: i64, conn: &Connection) -> Result<usize> {
+    conn.execute(
+        &format!(
+            r#"
+                DELETE FROM {TABLE}
+                WHERE {ElementId} = ?1
+            "#
+        ),
+        params![element_id],
+    )
+    .map_err(Into::into)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::db::image::test::conn;
+    use super::super::super::test::conn;
     use crate::Result;
 
     #[test]
     fn insert() -> Result<()> {
         let conn = conn();
-        let element_id = 1i64;
-        let version = 1i64;
+        let element_id = 1;
+        let version = 1;
         let image_data = vec![1, 2, 3, 4, 5];
 
         let _inserted = super::insert(element_id, version, image_data.clone(), &conn)?;
@@ -82,7 +77,7 @@ mod test {
         assert_eq!(selected.element_id, element_id);
         assert_eq!(selected.version, version);
         assert_eq!(selected.image_data, image_data);
-        assert!(selected.created_at > time::OffsetDateTime::from_unix_timestamp(0).unwrap());
+        assert!(selected.created_at > time::OffsetDateTime::UNIX_EPOCH);
 
         Ok(())
     }
@@ -90,15 +85,15 @@ mod test {
     #[test]
     fn select_by_element_id_exists() -> Result<()> {
         let conn = conn();
-        let element_id = 1i64;
-        let version = 1i64;
+        let element_id = 1;
+        let version = 1;
         let image_data = vec![1, 2, 3];
 
         super::insert(element_id, version, image_data, &conn)?;
-        let result = super::select_by_element_id(element_id, &conn)?;
+        let res = super::select_by_element_id(element_id, &conn)?;
 
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().element_id, element_id);
+        assert!(res.is_some());
+        assert_eq!(res.unwrap().element_id, element_id);
 
         Ok(())
     }
@@ -106,9 +101,9 @@ mod test {
     #[test]
     fn select_by_element_id_not_exists() -> Result<()> {
         let conn = conn();
-        let result = super::select_by_element_id(9999i64, &conn)?;
+        let res = super::select_by_element_id(9999i64, &conn)?;
 
-        assert!(result.is_none());
+        assert!(res.is_none());
 
         Ok(())
     }

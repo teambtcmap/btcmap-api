@@ -22,7 +22,7 @@ pub async fn select_by_element_id(element_id: i64, pool: &Pool) -> Result<Option
         .await?
 }
 
-pub async fn delete(element_id: i64, pool: &Pool) -> Result<()> {
+pub async fn delete(element_id: i64, pool: &Pool) -> Result<usize> {
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::delete(element_id, conn))
