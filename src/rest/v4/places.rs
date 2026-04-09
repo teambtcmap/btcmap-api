@@ -4,11 +4,13 @@ use crate::db::main::element_comment::schema::ElementComment;
 use crate::db::main::element_event::queries::ElementEventWithUser;
 use crate::db::main::place_submission::schema::PlaceSubmission;
 use crate::db::main::MainPool;
+use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
 use crate::Error;
 use actix_web::get;
+use actix_web::put;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
@@ -19,6 +21,7 @@ use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 use time::OffsetDateTime;
+use tracing::warn;
 
 #[derive(Deserialize)]
 pub struct GetListArgs {
@@ -678,6 +681,31 @@ pub async fn get_by_id_areas(
     }
 
     Ok(Json(areas))
+}
+
+#[get("/saved")]
+pub async fn get_saved(auth: Auth, pool: Data<MainPool>) -> Res<Vec<JsonObject>> {
+    warn!("PRE USER");
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    warn!("USER LOADED");
+    let elements = db::main::element::queries::select_by_ids(&user.saved_places, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    warn!("ELEMENTS LOADED");
+    let items: Vec<JsonObject> = elements
+        .into_iter()
+        .map(|e| service::element::generate_tags(&e, &["name", "lat", "lon"], None))
+        .collect();
+    Ok(Json(items))
+}
+
+#[put("/saved")]
+pub async fn put_saved(auth: Auth, args: Json<Vec<i64>>, pool: Data<MainPool>) -> Res<Vec<i64>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    db::main::user::queries::set_saved_places(user.id, &args, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(actix_web::web::Json(args.into_inner()))
 }
 
 #[cfg(test)]

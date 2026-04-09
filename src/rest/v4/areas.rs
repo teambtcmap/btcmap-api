@@ -1,9 +1,10 @@
 use crate::db;
 use crate::db::main::MainPool;
+use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
 use crate::service;
-use actix_web::{get, web::Data, web::Json, web::Query};
+use actix_web::{get, put, web::Data, web::Json, web::Query};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -88,6 +89,50 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
         .collect();
 
     Ok(Json(results))
+}
+
+#[get("/saved")]
+pub async fn get_saved(auth: Auth, pool: Data<MainPool>) -> Res<Vec<AreaSearchResult>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    let areas = db::main::area::queries::select_by_ids(&user.saved_areas, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    let results: Vec<AreaSearchResult> = areas
+        .into_iter()
+        .map(|area| {
+            let r#type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let singular_type = if let Some(stripped) = r#type.strip_suffix("ies") {
+                format!("{}y", stripped)
+            } else if let Some(stripped) = r#type.strip_suffix('s') {
+                stripped.to_string()
+            } else {
+                r#type.to_string()
+            };
+            let url_alias = area.alias();
+            AreaSearchResult {
+                id: area.id,
+                name: area.name(),
+                r#type: r#type.to_string(),
+                url_alias: url_alias.clone(),
+                icon: area
+                    .tags
+                    .get("icon:square")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
+            }
+        })
+        .collect();
+    Ok(Json(results))
+}
+
+#[put("/saved")]
+pub async fn put_saved(auth: Auth, args: Json<Vec<i64>>, pool: Data<MainPool>) -> Res<Vec<i64>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    db::main::user::queries::set_saved_areas(user.id, &args, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(actix_web::web::Json(args.into_inner()))
 }
 
 #[cfg(test)]

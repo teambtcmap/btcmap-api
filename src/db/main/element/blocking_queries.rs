@@ -246,6 +246,34 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Element> {
         .map_err(Into::into)
 }
 
+pub fn select_by_ids(ids: &[i64], conn: &Connection) -> Result<Vec<Element>> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {id} IN ({placeholders})
+            AND deleted_at IS NULL
+        "#,
+        projection = Element::projection(),
+        table = schema::TABLE_NAME,
+        id = Columns::Id.as_str(),
+        placeholders = placeholders.join(", "),
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<&dyn rusqlite::ToSql> =
+        ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    let mut rows = stmt.query(params.as_slice())?;
+    let mut elements = Vec::new();
+    while let Some(row) = rows.next()? {
+        elements.push(Element::mapper()(row)?);
+    }
+    Ok(elements)
+}
+
 pub fn select_by_osm_type_and_id(
     osm_type: &str,
     osm_id: i64,
@@ -714,5 +742,31 @@ mod test {
         assert!(result.is_err());
 
         Ok(())
+    }
+
+    #[test]
+    fn select_by_ids_empty() {
+        let conn = conn();
+        let result = super::select_by_ids(&[], &conn);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn select_by_ids_not_found() {
+        let conn = conn();
+        let result = super::select_by_ids(&[999, 998], &conn);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn select_by_ids_found() {
+        use crate::service::overpass::OverpassElement;
+        let conn = conn();
+        let element1 = super::insert(&OverpassElement::mock(1), &conn).unwrap();
+        let element2 = super::insert(&OverpassElement::mock(2), &conn).unwrap();
+        let result = super::select_by_ids(&[element1.id, element2.id], &conn).unwrap();
+        assert_eq!(2, result.len());
     }
 }

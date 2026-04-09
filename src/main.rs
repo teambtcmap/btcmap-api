@@ -142,6 +142,8 @@ async fn main() -> Result<()> {
                     })
                     .service(
                         scope("places")
+                            .service(rest::v4::places::get_saved)
+                            .service(rest::v4::places::put_saved)
                             .service(rest::v4::places::get)
                             .service(rest::v4::places::get_pending)
                             .service(rest::v4::places::search)
@@ -174,7 +176,12 @@ async fn main() -> Result<()> {
                             .service(rest::v4::place_boosts::post),
                     )
                     .service(scope("search").service(rest::v4::search::get))
-                    .service(scope("areas").service(rest::v4::areas::get))
+                    .service(
+                        scope("areas")
+                            .service(rest::v4::areas::get_saved)
+                            .service(rest::v4::areas::put_saved)
+                            .service(rest::v4::areas::get),
+                    )
                     .service(scope("dashboard").service(rest::v4::dashboard::get))
                     .service(scope("top-editors").service(rest::v4::top_editors::get))
                     .service(scope("communities").service(rest::v4::communities::get_top))

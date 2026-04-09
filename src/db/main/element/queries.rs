@@ -122,6 +122,14 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Element> {
         .await?
 }
 
+pub async fn select_by_ids(ids: &[i64], pool: &Pool) -> Result<Vec<Element>> {
+    let ids = ids.to_vec();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_ids(&ids, conn))
+        .await?
+}
+
 pub async fn select_merchants_count(pool: &Pool, verified_since: Option<Date>) -> Result<i64> {
     pool.get()
         .await?

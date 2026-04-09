@@ -63,6 +63,14 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Area> {
         .await?
 }
 
+pub async fn select_by_ids(ids: &[i64], pool: &Pool) -> Result<Vec<Area>> {
+    let ids = ids.to_vec();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_ids(&ids, conn))
+        .await?
+}
+
 pub async fn select_by_alias(alias: impl Into<String>, pool: &Pool) -> Result<Area> {
     let alias = alias.into();
     pool.get()

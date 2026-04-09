@@ -156,6 +156,34 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Area> {
         .map_err(Into::into)
 }
 
+pub fn select_by_ids(ids: &[i64], conn: &Connection) -> Result<Vec<Area>> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {id} IN ({placeholders})
+            AND deleted_at IS NULL
+        "#,
+        projection = Area::projection(),
+        table = schema::TABLE_NAME,
+        id = Columns::Id.as_str(),
+        placeholders = placeholders.join(", "),
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<&dyn rusqlite::ToSql> =
+        ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    let mut rows = stmt.query(params.as_slice())?;
+    let mut areas = Vec::new();
+    while let Some(row) = rows.next()? {
+        areas.push(Area::mapper()(row)?);
+    }
+    Ok(areas)
+}
+
 pub fn select_by_alias(alias: impl Into<String>, conn: &Connection) -> Result<Area> {
     let sql = format!(
         r#"
