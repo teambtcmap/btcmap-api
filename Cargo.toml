@@ -99,3 +99,5 @@ uuid = { version = "1.16.0", default-features = false, features = ["v4"] }
 strum = { version = "0.28.0", features = ["derive"] }
 
 tokio = "1.48.0"
+
+names = "0.14.0"

@@ -1,10 +1,25 @@
 use crate::db::main::user::schema::User;
+use crate::db::main::MainPool;
+use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use actix_web::get;
+use actix_web::http::header;
+use actix_web::post;
+use actix_web::web;
+use actix_web::web::Data;
 use actix_web::web::Json;
+use argon2::password_hash::rand_core::OsRng;
+use argon2::password_hash::SaltString;
+use argon2::Argon2;
+use argon2::PasswordHash;
+use argon2::PasswordHasher;
+use argon2::PasswordVerifier;
+use names::Generator;
+use names::Name;
 use serde::Deserialize;
 use serde::Serialize;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub struct MeResponse {
@@ -29,6 +44,97 @@ pub async fn me(auth: Auth) -> Result<Json<MeResponse>, RestApiError> {
         Some(user) => Ok(Json(MeResponse::from(&user))),
         None => Err(RestApiError::unauthorized()),
     }
+}
+
+#[derive(Deserialize)]
+pub struct PostArgs {
+    pub name: Option<String>,
+    pub password: String,
+}
+
+#[derive(Serialize)]
+pub struct PostResponse {
+    pub id: i64,
+    pub name: String,
+    pub roles: Vec<String>,
+}
+
+#[post("")]
+pub async fn post(
+    args: Json<PostArgs>,
+    pool: Data<MainPool>,
+) -> Result<Json<PostResponse>, RestApiError> {
+    let name = match &args.name {
+        Some(n) => n.clone(),
+        None => Generator::with_naming(Name::Numbered)
+            .next()
+            .unwrap_or_default(),
+    };
+    let salt = SaltString::generate(&mut OsRng);
+    let password_hash = Argon2::default()
+        .hash_password(args.password.as_bytes(), &salt)
+        .map_err(|e| RestApiError::invalid_input(e.to_string()))?
+        .to_string();
+    let user = db::main::user::queries::insert(&name, password_hash, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    let user = db::main::user::queries::set_roles(user.id, &[Role::User], &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(PostResponse {
+        id: user.id,
+        name: user.name,
+        roles: user.roles.into_iter().map(|it| it.to_string()).collect(),
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct CreateTokenArgs {
+    pub label: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct CreateTokenResponse {
+    pub token: String,
+}
+
+#[post("/{username}/tokens")]
+pub async fn create_token(
+    req: actix_web::HttpRequest,
+    username: web::Path<String>,
+    args: Json<CreateTokenArgs>,
+    pool: Data<MainPool>,
+) -> Result<Json<CreateTokenResponse>, RestApiError> {
+    let password = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .map(String::from)
+        .ok_or_else(RestApiError::unauthorized)?;
+
+    let user = db::main::user::queries::select_by_name(&*username, &pool)
+        .await
+        .map_err(|_| RestApiError::unauthorized())?;
+
+    let password_hash = PasswordHash::new(&user.password)
+        .map_err(|_| RestApiError::invalid_input("Invalid password hash"))?;
+
+    Argon2::default()
+        .verify_password(password.as_bytes(), &password_hash)
+        .map_err(|_| RestApiError::invalid_input("Invalid credentials"))?;
+
+    let token = Uuid::new_v4().to_string();
+    db::main::access_token::queries::insert(
+        user.id,
+        args.label.clone().unwrap_or_default(),
+        token.clone(),
+        vec![],
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
+    Ok(Json(CreateTokenResponse { token }))
 }
 
 #[cfg(test)]
