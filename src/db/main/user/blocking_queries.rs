@@ -81,6 +81,23 @@ pub fn set_password(id: i64, password: impl Into<String>, conn: &Connection) -> 
     .map_err(Into::into)
 }
 
+pub fn set_name(id: i64, name: &str, conn: &Connection) -> Result<User> {
+    conn.query_row(
+        &format!(
+            r#"
+                UPDATE {TABLE}
+                SET {Name} = ?1
+                WHERE {Id} = ?2
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![name, id],
+        User::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 pub fn set_roles(admin_id: i64, roles: &[Role], conn: &Connection) -> Result<User> {
     let roles: Vec<String> = roles.iter().map(|role| role.to_string()).collect();
     conn.query_row(

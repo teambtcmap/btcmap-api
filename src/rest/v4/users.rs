@@ -6,6 +6,7 @@ use crate::rest::error::RestApiError;
 use actix_web::get;
 use actix_web::http::header;
 use actix_web::post;
+use actix_web::put;
 use actix_web::web;
 use actix_web::web::Data;
 use actix_web::web::Json;
@@ -96,6 +97,53 @@ pub struct CreateTokenArgs {
 #[derive(Serialize)]
 pub struct CreateTokenResponse {
     pub token: String,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ChangePasswordArgs {
+    pub old_password: String,
+    pub new_password: String,
+}
+
+#[put("/me/password")]
+pub async fn change_password(
+    auth: Auth,
+    args: Json<ChangePasswordArgs>,
+    pool: Data<MainPool>,
+) -> Result<Json<()>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    let old_password_hash = PasswordHash::new(&user.password)
+        .map_err(|_| RestApiError::invalid_input("Invalid password hash"))?;
+    Argon2::default()
+        .verify_password(args.old_password.as_bytes(), &old_password_hash)
+        .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
+    let salt = SaltString::generate(&mut OsRng);
+    let password_hash = Argon2::default()
+        .hash_password(args.new_password.as_bytes(), &salt)
+        .map_err(|e| RestApiError::invalid_input(e.to_string()))?
+        .to_string();
+    db::main::user::queries::set_password(user.id, password_hash, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(()))
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct UpdateUsernameArgs {
+    pub username: String,
+}
+
+#[put("/me/username")]
+pub async fn update_username(
+    auth: Auth,
+    args: Json<UpdateUsernameArgs>,
+    pool: Data<MainPool>,
+) -> Result<Json<MeResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    let updated_user = db::main::user::queries::set_name(user.id, &args.username, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(MeResponse::from(&updated_user)))
 }
 
 #[post("/{username}/tokens")]
@@ -191,6 +239,162 @@ mod test {
         let res: MeResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, user.id);
         assert_eq!(res.name, "test_user");
+        Ok(())
+    }
+
+    fn make_password_hash(password: &str) -> String {
+        let salt = SaltString::generate(&mut OsRng);
+        Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    async fn change_password_unauthenticated_returns_401() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(scope("/users").service(change_password)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .uri("/users/me/password")
+            .set_json(ChangePasswordArgs {
+                old_password: "old".into(),
+                new_password: "new".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn change_password_success() -> Result<()> {
+        let pool = pool();
+        let old_password_hash = make_password_hash("old_password");
+        let user = db::main::user::queries::insert("test_user", &old_password_hash, &pool).await?;
+        let _token = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/users").service(change_password)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/password")
+            .set_json(ChangePasswordArgs {
+                old_password: "old_password".into(),
+                new_password: "new_password".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let updated_user = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        let updated_hash = PasswordHash::new(&updated_user.password).unwrap();
+        assert!(Argon2::default()
+            .verify_password("new_password".as_bytes(), &updated_hash)
+            .is_ok());
+        Ok(())
+    }
+
+    #[test]
+    async fn change_password_wrong_old_password_returns_400() -> Result<()> {
+        let pool = pool();
+        let old_password_hash = make_password_hash("correct_password");
+        let user = db::main::user::queries::insert("test_user", &old_password_hash, &pool).await?;
+        let _token = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(change_password)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/password")
+            .set_json(ChangePasswordArgs {
+                old_password: "wrong_password".into(),
+                new_password: "new_password".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn update_username_unauthenticated_returns_401() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(scope("/users").service(update_username)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .uri("/users/me/username")
+            .set_json(UpdateUsernameArgs {
+                username: "new_name".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn update_username_success() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("old_name", "", &pool).await?;
+        let _token = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(update_username)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/username")
+            .set_json(UpdateUsernameArgs {
+                username: "new_name".into(),
+            })
+            .to_request();
+        let res: MeResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.id, user.id);
+        assert_eq!(res.name, "new_name");
         Ok(())
     }
 }

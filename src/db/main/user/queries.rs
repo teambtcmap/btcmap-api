@@ -38,6 +38,14 @@ pub async fn set_password(id: i64, password: impl Into<String>, pool: &Pool) -> 
         .await?
 }
 
+pub async fn set_name(id: i64, name: impl Into<String>, pool: &Pool) -> Result<User> {
+    let name = name.into();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_name(id, &name, conn))
+        .await?
+}
+
 pub async fn set_roles(admin_id: i64, roles: &[Role], pool: &Pool) -> Result<User> {
     let roles = roles.to_vec();
     pool.get()

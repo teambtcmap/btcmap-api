@@ -7,6 +7,8 @@ This document describes the endpoints for interacting with users in REST API v4.
 - [Get Authenticated User](#get-authenticated-user)
 - [Create User](#create-user)
 - [Create Token](#create-token)
+- [Change Password](#change-password)
+- [Update Username](#update-username)
 
 ### Get Authenticated User
 
@@ -129,3 +131,81 @@ curl -X POST https://api.btcmap.org/v4/users/satoshi/tokens \
 | Field | Type | Description |
 |-------|------|-------------|
 | token | String | New authentication token (UUID v4) |
+
+### Change Password
+
+Changes the authenticated user's password. Requires a valid Bearer token.
+
+#### Example Request
+
+```bash
+curl -X PUT https://api.btcmap.org/v4/users/me/password \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"old_password": "oldPassword123", "new_password": "newSecurePassword456"}'
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| old_password | String | Yes | User's current password |
+| new_password | String | Yes | New password to set |
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Password changed |
+| 400  | Bad Request - Invalid old password or input error |
+| 401  | Unauthorized - Missing or invalid token |
+| 500  | Internal Server Error - Database error |
+
+##### Example Response (200 OK)
+
+```json
+{}
+```
+
+### Update Username
+
+Updates the authenticated user's username. Requires a valid Bearer token.
+
+#### Example Request
+
+```bash
+curl -X PUT https://api.btcmap.org/v4/users/me/username \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "newSatoshi"}'
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| username | String | Yes | New username to set |
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Username updated |
+| 401  | Unauthorized - Missing or invalid token |
+| 500  | Internal Server Error - Database error |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "id": 124,
+  "name": "newSatoshi",
+  "roles": ["user"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id    | Number | User ID |
+| name  | String | Updated username |
+| roles | Array  | List of user roles |

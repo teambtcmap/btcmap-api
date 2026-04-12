@@ -191,6 +191,8 @@ async fn main() -> Result<()> {
                         scope("users")
                             .service(rest::v4::users::me)
                             .service(rest::v4::users::post)
+                            .service(rest::v4::users::change_password)
+                            .service(rest::v4::users::update_username)
                             .service(rest::v4::users::create_token),
                     ),
             )
