@@ -1,7 +1,7 @@
 use super::schema::Role;
 use super::schema::{self, User};
 use crate::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use schema::Columns::*;
 use schema::TABLE_NAME as TABLE;
 
@@ -64,6 +64,24 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<User> {
         params![name],
         User::mapper(),
     )
+    .map_err(Into::into)
+}
+
+#[allow(dead_code)]
+pub fn select_by_npub(npub: &str, conn: &Connection) -> Result<Option<User>> {
+    conn.query_row(
+        &format!(
+            r#"
+                SELECT {projection}
+                FROM {TABLE}
+                WHERE {Npub} = ?1
+            "#,
+            projection = User::projection(),
+        ),
+        params![npub],
+        User::mapper(),
+    )
+    .optional()
     .map_err(Into::into)
 }
 
@@ -162,6 +180,24 @@ pub fn set_saved_areas(id: i64, saved_areas: &[i64], conn: &Connection) -> Resul
     .map_err(Into::into)
 }
 
+#[allow(dead_code)]
+pub fn set_npub(id: i64, npub: Option<String>, conn: &Connection) -> Result<User> {
+    conn.query_row(
+        &format!(
+            r#"
+                UPDATE {TABLE}
+                SET {Npub} = ?1
+                WHERE {Id} = ?2
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![npub, id],
+        User::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use super::schema::Role;
@@ -213,6 +249,17 @@ mod test {
     }
 
     #[test]
+    fn select_by_npub() -> Result<()> {
+        let conn = conn();
+        let npub_value = "npub1test123";
+        let admin_id = super::insert("name", "pwd", &conn)?.id;
+        super::set_npub(admin_id, Some(npub_value.to_string()), &conn)?;
+        let res_admin = super::select_by_npub(npub_value, &conn)?;
+        assert_eq!(admin_id, res_admin.unwrap().id);
+        Ok(())
+    }
+
+    #[test]
     fn set_roles() -> Result<()> {
         let conn = conn();
         let admin_id = super::insert("name", "pwd", &conn)?.id;
@@ -245,6 +292,29 @@ mod test {
             saved_areas,
             super::select_by_id(admin_id, &conn)?.saved_areas
         );
+        Ok(())
+    }
+
+    #[test]
+    fn set_npub() -> Result<()> {
+        let conn = conn();
+        let admin_id = super::insert("name", "pwd", &conn)?;
+        let npub_value = "npub1test123";
+        super::set_npub(admin_id.id, Some(npub_value.to_string()), &conn)?;
+        assert_eq!(
+            Some(npub_value.to_string()),
+            super::select_by_id(admin_id.id, &conn)?.npub
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_npub_null() -> Result<()> {
+        let conn = conn();
+        let admin_id = super::insert("name", "pwd", &conn)?;
+        super::set_npub(admin_id.id, Some("npub1test123".to_string()), &conn)?;
+        super::set_npub(admin_id.id, None, &conn)?;
+        assert_eq!(None, super::select_by_id(admin_id.id, &conn)?.npub);
         Ok(())
     }
 }

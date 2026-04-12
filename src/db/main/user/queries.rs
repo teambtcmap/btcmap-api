@@ -30,6 +30,15 @@ pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<User
         .await?
 }
 
+#[allow(dead_code)]
+pub async fn select_by_npub(npub: impl Into<String>, pool: &Pool) -> Result<Option<User>> {
+    let npub = npub.into();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_npub(&npub, conn))
+        .await?
+}
+
 pub async fn set_password(id: i64, password: impl Into<String>, pool: &Pool) -> Result<usize> {
     let password = password.into();
     pool.get()
@@ -69,5 +78,13 @@ pub async fn set_saved_areas(id: i64, saved_areas: &[i64], pool: &Pool) -> Resul
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::set_saved_areas(id, &saved_areas, conn))
+        .await?
+}
+
+#[allow(dead_code)]
+pub async fn set_npub(id: i64, npub: Option<String>, pool: &Pool) -> Result<User> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_npub(id, npub, conn))
         .await?
 }

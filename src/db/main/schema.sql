@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS "user"(
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
-, saved_places TEXT NOT NULL DEFAULT '', saved_areas TEXT NOT NULL DEFAULT '') STRICT;
+, saved_places TEXT NOT NULL DEFAULT '', saved_areas TEXT NOT NULL DEFAULT '', npub TEXT) STRICT;
 CREATE TABLE access_token(
     id INTEGER PRIMARY KEY NOT NULL,
     user_id INTEGER NOT NULL REFERENCES "user"(id),
@@ -183,13 +183,13 @@ CREATE TRIGGER element_updated_at UPDATE OF overpass_data, tags, lat, lon, creat
 BEGIN
     UPDATE element SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, created_at, deleted_at ON user
-BEGIN
-    UPDATE user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
-END;
 CREATE TRIGGER osm_user_updated_at UPDATE OF osm_data, tags, created_at, deleted_at ON osm_user
 BEGIN
     UPDATE osm_user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
+CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, npub, created_at, deleted_at ON user
+BEGIN
+    UPDATE user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
 CREATE INDEX idx_user_updated_at ON "osm_user"(updated_at);
 CREATE INDEX area_updated_at ON area(updated_at);

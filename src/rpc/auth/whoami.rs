@@ -35,11 +35,12 @@ mod test {
             name: "Test User".to_string(),
             password: "".to_string(),
             roles: vec![Role::Admin, Role::User],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
-            saved_places: vec![],
-            saved_areas: vec![],
         };
 
         let result = super::run(&user).await.unwrap();
@@ -60,11 +61,12 @@ mod test {
             name: "".into(),
             password: "".to_string(),
             roles: vec![Role::Admin, Role::User],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
-            saved_places: vec![],
-            saved_areas: vec![],
         };
 
         let result = super::run(&user).await.unwrap();
@@ -79,11 +81,12 @@ mod test {
             name: "".into(),
             password: "".to_string(),
             roles: vec![],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
-            saved_places: vec![],
-            saved_areas: vec![],
         };
 
         let result = super::run(&user).await.unwrap();
@@ -98,11 +101,12 @@ mod test {
             name: "".into(),
             password: "".to_string(),
             roles: vec![],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
             created_at: "not-a-timestamp".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
-            saved_places: vec![],
-            saved_areas: vec![],
         };
 
         let result = super::run(&user).await;
@@ -118,11 +122,12 @@ mod test {
             name: "".into(),
             password: "".into(),
             roles: vec![],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
             created_at: future_date.format(&Rfc3339)?,
             updated_at: future_date.format(&Rfc3339)?,
             deleted_at: None,
-            saved_places: vec![],
-            saved_areas: vec![],
         };
 
         let result = super::run(&user).await?;
