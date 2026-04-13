@@ -44,19 +44,18 @@ impl FromRequest for NostrAuth {
             // The `u` tag must match the URL the client signed against. We
             // reconstruct it from the actual request so a signature for one
             // endpoint can't be replayed on another.
-            let conn_info = req.connection_info();
-            let scheme = conn_info.scheme();
-            let host = conn_info.host();
-            let path_and_query = req
-                .uri()
-                .path_and_query()
-                .map(|p| p.as_str())
-                .unwrap_or(req.uri().path());
-            let full_url = format!("{scheme}://{host}{path_and_query}");
-            let method = req.method().as_str().to_string();
-            drop(conn_info);
+            let full_url = {
+                let ci = req.connection_info();
+                let path_and_query = req
+                    .uri()
+                    .path_and_query()
+                    .map(|p| p.as_str())
+                    .unwrap_or(req.uri().path());
+                format!("{}://{}{}", ci.scheme(), ci.host(), path_and_query)
+            };
+            let method = req.method().as_str();
 
-            match nip98::verify(payload, &full_url, &method) {
+            match nip98::verify(payload, &full_url, method) {
                 Ok(event) => Ok(NostrAuth {
                     npub: Some(event.npub),
                 }),
