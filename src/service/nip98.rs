@@ -120,11 +120,20 @@ pub fn verify(
 }
 
 /// Extract the base64 payload from an `Authorization` header value. Matches
-/// the `Nostr` scheme case-insensitively per RFC 9110.
+/// the `Nostr` scheme case-insensitively per RFC 9110. Tolerates multiple
+/// whitespace characters between scheme and credentials, as `1*SP` in the
+/// `credentials` ABNF permits. Rejects headers with extra trailing tokens.
 pub fn extract_nostr_auth(authorization_header: &str) -> Option<&str> {
-    let (scheme, rest) = authorization_header.split_once(' ')?;
+    let mut parts = authorization_header.split_whitespace();
+    let scheme = parts.next()?;
+    let payload = parts.next()?;
+    // `token68` in the ABNF contains no whitespace — any further tokens mean
+    // the header is malformed.
+    if parts.next().is_some() {
+        return None;
+    }
     if scheme.eq_ignore_ascii_case("Nostr") {
-        Some(rest)
+        Some(payload)
     } else {
         None
     }
@@ -298,5 +307,18 @@ mod test {
     #[test]
     fn extract_nostr_auth_rejects_no_space() {
         assert_eq!(extract_nostr_auth("Nostr"), None);
+    }
+
+    #[test]
+    fn extract_nostr_auth_tolerates_multiple_spaces() {
+        // Per RFC 9110 §11.6.2: credentials = auth-scheme 1*SP (...) — one
+        // or more SP characters between scheme and credentials is legal.
+        assert_eq!(extract_nostr_auth("Nostr   abc"), Some("abc"));
+    }
+
+    #[test]
+    fn extract_nostr_auth_rejects_extra_tokens() {
+        // token68 contains no whitespace, so "Nostr abc extra" is malformed.
+        assert_eq!(extract_nostr_auth("Nostr abc extra"), None);
     }
 }
