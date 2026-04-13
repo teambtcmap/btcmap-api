@@ -10,6 +10,8 @@ pub struct Res {
     pub roles: Vec<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub npub: Option<String>,
 }
 
 pub async fn run(user: &User) -> Result<Res> {
@@ -18,6 +20,7 @@ pub async fn run(user: &User) -> Result<Res> {
         name: user.name.clone(),
         roles,
         created_at: OffsetDateTime::parse(&user.created_at, &Rfc3339)?,
+        npub: user.npub.clone(),
     })
 }
 

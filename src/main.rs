@@ -189,12 +189,16 @@ async fn main() -> Result<()> {
                     .service(scope("activity").service(rest::v4::activity::get))
                     .service(
                         scope("users")
+                            .service(rest::v4::users::get_nostr_identity)
+                            .service(rest::v4::users::put_nostr_identity)
+                            .service(rest::v4::users::delete_nostr_identity)
                             .service(rest::v4::users::me)
                             .service(rest::v4::users::post)
                             .service(rest::v4::users::change_password)
                             .service(rest::v4::users::update_username)
                             .service(rest::v4::users::create_token),
-                    ),
+                    )
+                    .service(scope("nostr").service(rest::v4::nostr::create_token)),
             )
     })
     .client_request_timeout(Duration::from_millis(0))

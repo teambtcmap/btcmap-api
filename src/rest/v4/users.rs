@@ -3,6 +3,8 @@ use crate::db::main::MainPool;
 use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
+use crate::service::nip98;
+use actix_web::delete;
 use actix_web::get;
 use actix_web::http::header;
 use actix_web::post;
@@ -27,6 +29,8 @@ pub struct MeResponse {
     pub id: i64,
     pub name: String,
     pub roles: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub npub: Option<String>,
 }
 
 impl From<&User> for MeResponse {
@@ -35,6 +39,7 @@ impl From<&User> for MeResponse {
             id: user.id,
             name: user.name.clone(),
             roles: user.roles.iter().map(|r| r.to_string()).collect(),
+            npub: user.npub.clone(),
         }
     }
 }
@@ -183,6 +188,97 @@ pub async fn create_token(
     .await
     .map_err(|_| RestApiError::database())?;
     Ok(Json(CreateTokenResponse { token }))
+}
+
+#[derive(Serialize)]
+pub struct NostrIdentityResponse {
+    pub npub: Option<String>,
+}
+
+/// GET /v4/users/me/nostr
+///
+/// Returns the Nostr pubkey linked to the authenticated user.
+#[get("/me/nostr")]
+pub async fn get_nostr_identity(auth: Auth) -> Result<Json<NostrIdentityResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    Ok(Json(NostrIdentityResponse { npub: user.npub }))
+}
+
+#[derive(Deserialize)]
+pub struct LinkNostrArgs {
+    pub nostr_event: String,
+}
+
+#[derive(Serialize)]
+pub struct LinkNostrResponse {
+    pub npub: String,
+}
+
+/// PUT /v4/users/me/nostr
+///
+/// Link or update the Nostr identity for the authenticated user.
+/// The request body must contain a base64-encoded NIP-98 kind 27235 event.
+#[put("/me/nostr")]
+pub async fn put_nostr_identity(
+    req: actix_web::HttpRequest,
+    auth: Auth,
+    args: Json<LinkNostrArgs>,
+    pool: Data<MainPool>,
+) -> Result<Json<LinkNostrResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+
+    let url = format!(
+        "{}://{}{}",
+        req.connection_info().scheme(),
+        req.connection_info().host(),
+        req.uri(),
+    );
+
+    let verified = nip98::verify(&args.nostr_event, &url, "PUT")
+        .map_err(|e| RestApiError::invalid_input(format!("NIP-98 verification failed: {e}")))?;
+
+    // Check if this pubkey is already linked to another account
+    let existing = db::main::user::queries::select_by_npub(&verified.pubkey, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    if let Some(existing_user) = existing {
+        if existing_user.id != user.id {
+            return Err(RestApiError::invalid_input(
+                "This Nostr pubkey is already linked to another account",
+            ));
+        }
+    }
+
+    db::main::user::queries::set_npub(user.id, Some(verified.pubkey.clone()), &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    Ok(Json(LinkNostrResponse {
+        npub: verified.pubkey,
+    }))
+}
+
+/// DELETE /v4/users/me/nostr
+///
+/// Remove the Nostr identity linked to the authenticated user.
+#[delete("/me/nostr")]
+pub async fn delete_nostr_identity(
+    auth: Auth,
+    pool: Data<MainPool>,
+) -> Result<Json<NostrIdentityResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+
+    if user.npub.is_none() {
+        return Err(RestApiError::invalid_input(
+            "No Nostr identity linked to this account",
+        ));
+    }
+
+    db::main::user::queries::set_npub(user.id, None, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    Ok(Json(NostrIdentityResponse { npub: None }))
 }
 
 #[cfg(test)]

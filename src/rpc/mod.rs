@@ -24,6 +24,7 @@ pub mod import;
 pub mod invoice;
 pub mod log;
 pub mod matrix;
+pub mod nostr;
 pub mod paywall_add_element_comment;
 pub mod paywall_boost_element;
 pub mod paywall_get_add_element_comment_quote;

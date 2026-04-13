@@ -101,3 +101,7 @@ strum = { version = "0.28.0", features = ["derive"] }
 tokio = "1.48.0"
 
 names = "0.14.0"
+
+# Used for NIP-98 HTTP auth (Nostr event verification)
+# https://github.com/rust-nostr/nostr
+nostr = { version = "0.44.2", default-features = false, features = ["std"] }

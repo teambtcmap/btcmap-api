@@ -1,5 +1,6 @@
 use crate::{
     db::{self, log::LogPool, main::conf::schema::Conf, main::user::schema::Role, main::MainPool},
+    service::nip98,
     Result,
 };
 use actix_web::{
@@ -95,6 +96,11 @@ pub enum RpcMethod {
     // Debug
     GetRequestLog,
     GetDailyInfraReport,
+    // Nostr
+    LinkNostrIdentity,
+    UpdateNostrIdentity,
+    RemoveNostrIdentity,
+    CreateApiKeyWithNostr,
 }
 
 impl Role {
@@ -117,9 +123,16 @@ impl Role {
         RpcMethod::GetElementIssues,
         RpcMethod::GetAreaDashboard,
         RpcMethod::GetMostActiveUsers,
+        RpcMethod::CreateApiKeyWithNostr,
     ];
 
-    const USER_METHODS: &[RpcMethod] = &[RpcMethod::Whoami, RpcMethod::GetEvent];
+    const USER_METHODS: &[RpcMethod] = &[
+        RpcMethod::Whoami,
+        RpcMethod::GetEvent,
+        RpcMethod::LinkNostrIdentity,
+        RpcMethod::UpdateNostrIdentity,
+        RpcMethod::RemoveNostrIdentity,
+    ];
 
     const ADMIN_METHODS: &[RpcMethod] = &[
         // Admins can set and override custom place tags
@@ -273,13 +286,14 @@ fn allowed_methods(roles: &[Role]) -> HashSet<RpcMethod> {
 
 #[post("")]
 pub async fn handle(
-    req: HttpRequest,
+    http_req: HttpRequest,
     req_body: String,
     pool: Data<MainPool>,
     conf: Data<Conf>,
     log_pool: Data<LogPool>,
 ) -> Result<Json<RpcResponse>> {
-    let headers = req.headers();
+    let headers = http_req.headers();
+    let req_ref = &http_req;
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
         let error_data = json!("Request body is not a valid JSON object");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
@@ -576,6 +590,38 @@ pub async fn handle(
             req.id.clone(),
             super::log::get_daily_infra_report::run(&log_pool).await?,
         ),
+        // Nostr
+        RpcMethod::LinkNostrIdentity => RpcResponse::from(
+            req.id.clone(),
+            super::nostr::link_nostr_identity::run(params(req.params)?, &user.unwrap(), &pool)
+                .await?,
+        ),
+        RpcMethod::UpdateNostrIdentity => RpcResponse::from(
+            req.id.clone(),
+            super::nostr::update_nostr_identity::run(params(req.params)?, &user.unwrap(), &pool)
+                .await?,
+        ),
+        RpcMethod::RemoveNostrIdentity => RpcResponse::from(
+            req.id.clone(),
+            super::nostr::remove_nostr_identity::run(&user.unwrap(), &pool).await?,
+        ),
+        RpcMethod::CreateApiKeyWithNostr => {
+            let nostr_payload = headers
+                .get(header::AUTHORIZATION)
+                .and_then(|h| h.to_str().ok())
+                .and_then(nip98::extract_nostr_auth)
+                .ok_or("Missing or invalid Authorization: Nostr header")?;
+            let url = format!(
+                "{}://{}{}",
+                req_ref.connection_info().scheme(),
+                req_ref.connection_info().host(),
+                req_ref.uri(),
+            );
+            RpcResponse::from(
+                req.id.clone(),
+                super::nostr::create_api_key_with_nostr::run(nostr_payload, &url, &pool).await?,
+            )
+        }
     }?;
 
     Ok(Json(res))

@@ -7,6 +7,7 @@ These methods are intended to be used by user-facing apps, such as the Web App, 
 
 - [AddElementComment](#addelementcomment)
 - [BoostElement](#boostelement)
+- [CreateApiKeyWithNostr](#createapikeywithnostr)
 - [GetArea](#getarea)
 - [GetAreaDashboard](#getareadashboard)
 - [GetElement](#getelement)
@@ -440,6 +441,35 @@ Gets quotes for boosting an element for different durations.
     "quote_30d_sat": 1000,
     "quote_90d_sat": 2500,
     "quote_365d_sat": 8000
+  },
+  "id": 1
+}
+```
+
+### CreateApiKeyWithNostr
+
+Obtain a BTC Map API Bearer token using [NIP-98](https://github.com/nostr-protocol/nips/blob/master/98.md) Nostr authentication. No password or existing token required. The Nostr pubkey must be linked to a BTC Map account first (see [Nostr RPCs](nostr.md)).
+
+**Authentication**: `Authorization: Nostr <base64-encoded NIP-98 event>` header
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "create_api_key_with_nostr",
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "token": "550e8400-e29b-41d4-a716-446655440000",
+    "time_ms": 5
   },
   "id": 1
 }
