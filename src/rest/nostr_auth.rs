@@ -10,7 +10,7 @@ use std::pin::Pin;
 use crate::service::nip98;
 
 /// Trusted external base URL of the API (e.g. `https://api.btcmap.org`, or
-/// `http://localhost:8080` in dev). Must be injected via `app_data` by
+/// `http://localhost:8000` in dev). Must be injected via `app_data` by
 /// `main.rs`. The extractor uses this, not the `Host`/`X-Forwarded-*`
 /// headers, to reconstruct the URL the signed NIP-98 event is expected to
 /// bind to. Trusting the request headers here would allow an attacker who
