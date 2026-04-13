@@ -76,7 +76,15 @@ impl FromRequest for NostrAuth {
                 Ok(event) => Ok(NostrAuth {
                     npub: Some(event.npub),
                 }),
-                Err(_) => Ok(NostrAuth { npub: None }),
+                Err(e) => {
+                    tracing::debug!(
+                        error = %e,
+                        url = %full_url,
+                        method = %method,
+                        "NIP-98 verification failed"
+                    );
+                    Ok(NostrAuth { npub: None })
+                }
             }
         })
     }
