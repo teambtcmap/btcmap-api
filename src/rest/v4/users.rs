@@ -23,10 +23,24 @@ use serde::Serialize;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
+pub struct SavedPlace {
+    pub id: i64,
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SavedArea {
+    pub id: i64,
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct MeResponse {
     pub id: i64,
     pub name: String,
     pub roles: Vec<String>,
+    pub saved_places: Vec<SavedPlace>,
+    pub saved_areas: Vec<SavedArea>,
 }
 
 impl From<&User> for MeResponse {
@@ -35,16 +49,40 @@ impl From<&User> for MeResponse {
             id: user.id,
             name: user.name.clone(),
             roles: user.roles.iter().map(|r| r.to_string()).collect(),
+            saved_places: vec![],
+            saved_areas: vec![],
         }
     }
 }
 
 #[get("/me")]
-pub async fn me(auth: Auth) -> Result<Json<MeResponse>, RestApiError> {
-    match auth.user {
-        Some(user) => Ok(Json(MeResponse::from(&user))),
-        None => Err(RestApiError::unauthorized()),
-    }
+pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    let saved_places = db::main::element::queries::select_by_ids(&user.saved_places, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?
+        .into_iter()
+        .map(|e| SavedPlace {
+            id: e.id,
+            name: e.name(None),
+        })
+        .collect();
+    let saved_areas = db::main::area::queries::select_by_ids(&user.saved_areas, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?
+        .into_iter()
+        .map(|a| SavedArea {
+            id: a.id,
+            name: a.name(),
+        })
+        .collect();
+    Ok(Json(MeResponse {
+        id: user.id,
+        name: user.name,
+        roles: user.roles.iter().map(|r| r.to_string()).collect(),
+        saved_places,
+        saved_areas,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -97,6 +135,7 @@ pub struct CreateTokenArgs {
 #[derive(Serialize)]
 pub struct CreateTokenResponse {
     pub token: String,
+    pub user: MeResponse,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -182,7 +221,36 @@ pub async fn create_token(
     )
     .await
     .map_err(|_| RestApiError::database())?;
-    Ok(Json(CreateTokenResponse { token }))
+
+    let saved_places = db::main::element::queries::select_by_ids(&user.saved_places, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?
+        .into_iter()
+        .map(|e| SavedPlace {
+            id: e.id,
+            name: e.name(None),
+        })
+        .collect();
+    let saved_areas = db::main::area::queries::select_by_ids(&user.saved_areas, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?
+        .into_iter()
+        .map(|a| SavedArea {
+            id: a.id,
+            name: a.name(),
+        })
+        .collect();
+
+    Ok(Json(CreateTokenResponse {
+        token,
+        user: MeResponse {
+            id: user.id,
+            name: user.name,
+            roles: user.roles.iter().map(|r| r.to_string()).collect(),
+            saved_places,
+            saved_areas,
+        },
+    }))
 }
 
 #[cfg(test)]
