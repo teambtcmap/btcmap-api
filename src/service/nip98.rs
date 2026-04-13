@@ -1,3 +1,25 @@
+//! NIP-98 HTTP auth event verification.
+//!
+//! ## Intentional limitation: no request-body binding
+//!
+//! NIP-98 specifies an optional `payload` tag whose value is the SHA256 hash
+//! of the HTTP request body. When present it binds the signature to the body
+//! content, preventing an attacker who captures a signed event from replaying
+//! it with a different body inside the ±60s recency window.
+//!
+//! **This module does not verify the `payload` tag.** The follow-up endpoint
+//! it will be used from (`POST /v4/auth/nostr`) carries no request body —
+//! the signed event travels entirely in the `Authorization` header. For that
+//! endpoint a `payload` check would compute `SHA256("")` on every call and
+//! add no security.
+//!
+//! Future endpoints with request bodies (e.g. `PUT /v4/users/me/nostr`)
+//! **must** add body-hash verification. Wiring that in after the fact
+//! requires either a second extractor variant that consumes `web::Bytes`
+//! (so the handler cannot also read the body) or a middleware that buffers
+//! and replays. See https://github.com/nostr-protocol/nips/blob/master/98.md
+//! for the spec text.
+
 // Lands in isolation ahead of the endpoints that will consume it. The next
 // PR wires `NostrAuth` into `POST /v4/auth/nostr`; until then clippy sees
 // these items as dead.
