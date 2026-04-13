@@ -109,3 +109,8 @@ tokio = "1.52.1"
 
 # https://github.com/fnichol/names/blob/main/CHANGELOG.md
 names = "0.14.0"
+
+# Nostr protocol types + Schnorr signature verification, used by the NIP-98
+# HTTP auth extractor
+# https://github.com/rust-nostr/nostr/releases
+nostr = { version = "0.44.2", default-features = false, features = ["std"] }

@@ -8,6 +8,7 @@ pub mod gitea;
 pub mod invoice;
 pub mod log;
 pub mod matrix;
+pub mod nip98;
 pub mod og;
 pub mod osm;
 pub mod overpass;
