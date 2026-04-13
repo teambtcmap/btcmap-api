@@ -219,6 +219,44 @@ mod test {
     }
 
     #[test]
+    fn tampered_signature_rejected() {
+        // Build a valid event, then flip one hex nibble of its signature so
+        // the structure and tags remain valid but the Schnorr check fails.
+        let keys = Keys::generate();
+        let url = "https://api.btcmap.org/v4/auth/nostr";
+        let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
+            .tags(vec![
+                Tag::parse(["u", url]).unwrap(),
+                Tag::parse(["method", "POST"]).unwrap(),
+            ])
+            .custom_created_at(Timestamp::now())
+            .sign_with_keys(&keys)
+            .unwrap();
+
+        // Flip one character of the sig hex. The event's `id` still matches
+        // the content, the tags are valid, only the signature is wrong.
+        let mut json: serde_json::Value = serde_json::from_str(&event.as_json()).unwrap();
+        let sig = json["sig"].as_str().unwrap().to_string();
+        let first = sig.chars().next().unwrap();
+        let flipped = if first == '0' { '1' } else { '0' };
+        let mut new_sig = flipped.to_string();
+        new_sig.push_str(&sig[1..]);
+        json["sig"] = serde_json::Value::String(new_sig);
+        let tampered_json = serde_json::to_string(&json).unwrap();
+        let b64 = BASE64.encode(tampered_json.as_bytes());
+
+        let err = verify(&b64, url, "POST").unwrap_err();
+        let msg = err.to_string();
+        // `event.verify()` checks both the id and the signature; either
+        // failing here is acceptable — we just need the verifier to reject.
+        assert!(
+            msg.contains("Signature verification failed")
+                || msg.contains("Invalid Nostr event JSON"),
+            "expected rejection, got: {msg}"
+        );
+    }
+
+    #[test]
     fn extract_nostr_auth_uppercase_scheme() {
         let header = "Nostr eyJpZCI6IjEyMyJ9";
         assert_eq!(extract_nostr_auth(header), Some("eyJpZCI6IjEyMyJ9"));
