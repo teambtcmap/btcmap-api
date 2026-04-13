@@ -9,7 +9,9 @@ use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
 use crate::Error;
+use actix_web::delete;
 use actix_web::get;
+use actix_web::post;
 use actix_web::put;
 use actix_web::web::Data;
 use actix_web::web::Json;
@@ -706,6 +708,31 @@ pub async fn put_saved(auth: Auth, args: Json<Vec<i64>>, pool: Data<MainPool>) -
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(actix_web::web::Json(args.into_inner()))
+}
+
+#[post("/saved")]
+pub async fn post_saved(auth: Auth, args: Json<i64>, pool: Data<MainPool>) -> Res<Vec<i64>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    let mut saved_places = user.saved_places.clone();
+    if !saved_places.contains(&args) {
+        saved_places.push(args.into_inner());
+    }
+    db::main::user::queries::set_saved_places(user.id, &saved_places, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(actix_web::web::Json(saved_places))
+}
+
+#[delete("/saved/{id}")]
+pub async fn delete_saved(auth: Auth, path: Path<i64>, pool: Data<MainPool>) -> Res<Vec<i64>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    let id = path.into_inner();
+    let mut saved_places = user.saved_places.clone();
+    saved_places.retain(|x| *x != id);
+    db::main::user::queries::set_saved_places(user.id, &saved_places, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(actix_web::web::Json(saved_places))
 }
 
 #[cfg(test)]

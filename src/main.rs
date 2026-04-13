@@ -144,6 +144,8 @@ async fn main() -> Result<()> {
                         scope("places")
                             .service(rest::v4::places::get_saved)
                             .service(rest::v4::places::put_saved)
+                            .service(rest::v4::places::post_saved)
+                            .service(rest::v4::places::delete_saved)
                             .service(rest::v4::places::get)
                             .service(rest::v4::places::get_pending)
                             .service(rest::v4::places::search)
