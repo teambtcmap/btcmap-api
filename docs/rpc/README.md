@@ -8,6 +8,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 
 - [Public Methods](public-methods.md) - Methods for client apps to use
 - [Auth](auth.md) - Methods for admins to manage passwords.
+- [Nostr](nostr.md) - Link Nostr identity and authenticate via NIP-98
 - [Element Methods](element-methods.md) - Methods for working with map elements
 - [Area Methods](area-methods.md) - Methods for working with geographic areas
 - [User Methods](user-methods.md) - Methods for working with user data

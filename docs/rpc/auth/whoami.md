@@ -12,7 +12,8 @@ This method can help you if you forgot your name.
   "roles": [
     "root"
   ],
-  "created_at": "2024-06-13T10:33:73Z"
+  "created_at": "2024-06-13T10:33:73Z",
+  "npub": "abc123def456..."
 }
 ```
 

@@ -9,6 +9,9 @@ This document describes the endpoints for interacting with users in REST API v4.
 - [Create Token](#create-token)
 - [Change Password](#change-password)
 - [Update Username](#update-username)
+- [Get Nostr Identity](#get-nostr-identity)
+- [Link/Update Nostr Identity](#linkupdate-nostr-identity)
+- [Remove Nostr Identity](#remove-nostr-identity)
 
 ### Get Authenticated User
 
@@ -34,7 +37,8 @@ curl https://api.btcmap.org/v4/users/me \
 {
   "id": 123,
   "name": "satoshi",
-  "roles": ["user", "admin"]
+  "roles": ["user", "admin"],
+  "npub": "abc123def456..."
 }
 ```
 
@@ -43,6 +47,7 @@ curl https://api.btcmap.org/v4/users/me \
 | id    | Number | User ID |
 | name  | String | Username |
 | roles | Array  | List of user roles (e.g., "user", "admin", "root") |
+| npub  | String or null | Linked Nostr public key (hex-encoded), omitted if not linked |
 
 ### Create User
 
@@ -209,3 +214,109 @@ curl -X PUT https://api.btcmap.org/v4/users/me/username \
 | id    | Number | User ID |
 | name  | String | Updated username |
 | roles | Array  | List of user roles |
+
+### Get Nostr Identity
+
+Returns the Nostr public key linked to the authenticated user's account. Requires a valid Bearer token.
+
+#### Example Request
+
+```bash
+curl https://api.btcmap.org/v4/users/me/nostr \
+  -H "Authorization: Bearer <your-token>"
+```
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Returns linked Nostr pubkey |
+| 401  | Unauthorized - Missing or invalid token |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "npub": "abc123def456..."
+}
+```
+
+If no Nostr identity is linked, `npub` will be `null`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| npub  | String or null | Hex-encoded Nostr public key, or null if not linked |
+
+### Link/Update Nostr Identity
+
+Links or updates the Nostr identity for the authenticated user. The request body must contain a base64-encoded [NIP-98](https://github.com/nostr-protocol/nips/blob/master/98.md) kind 27235 event signed by the Nostr key to link.
+
+The NIP-98 event must have:
+- `kind`: 27235
+- `u` tag: the exact request URL (e.g., `https://api.btcmap.org/v4/users/me/nostr`)
+- `method` tag: `PUT`
+- `created_at`: within 60 seconds of server time
+- Valid Schnorr signature
+
+Each Nostr pubkey can only be linked to one BTC Map account (and vice versa).
+
+#### Example Request
+
+```bash
+curl -X PUT https://api.btcmap.org/v4/users/me/nostr \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"nostr_event": "<base64-encoded NIP-98 event>"}'
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| nostr_event | String | Yes | Base64-encoded NIP-98 kind 27235 event |
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Nostr identity linked/updated |
+| 400  | Bad Request - NIP-98 verification failed or pubkey already linked |
+| 401  | Unauthorized - Missing or invalid Bearer token |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "npub": "abc123def456..."
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| npub  | String | Hex-encoded Nostr public key that was linked |
+
+### Remove Nostr Identity
+
+Removes the Nostr identity linked to the authenticated user's account. Requires a valid Bearer token.
+
+#### Example Request
+
+```bash
+curl -X DELETE https://api.btcmap.org/v4/users/me/nostr \
+  -H "Authorization: Bearer <your-token>"
+```
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Nostr identity removed |
+| 400  | Bad Request - No Nostr identity linked |
+| 401  | Unauthorized - Missing or invalid token |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "npub": null
+}

@@ -45,6 +45,10 @@ impl RestApiError {
             "Authentication required".to_string(),
         )
     }
+
+    pub fn unauthorized_with_message(message: impl Into<String>) -> Self {
+        Self::new(RestApiErrorCode::Unauthorized, message)
+    }
 }
 
 #[derive(Debug)]
