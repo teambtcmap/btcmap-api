@@ -191,6 +191,9 @@ fn get_issues(element: &Element) -> Vec<Issue> {
     if let Some(issue) = get_missing_icon_issue(element) {
         res.push(issue);
     };
+    if let Some(issue) = get_missing_currency_xbt_issue(element) {
+        res.push(issue);
+    };
     if let Some(issue) = get_not_verified_issue(element) {
         res.push(issue);
     };
@@ -271,6 +274,18 @@ fn get_missing_icon_issue(element: &Element) -> Option<Issue> {
             r#type: "missing_icon".into(),
             severity: 400,
             description: "Icon is missing".into(),
+        });
+    }
+
+    None
+}
+
+fn get_missing_currency_xbt_issue(element: &Element) -> Option<Issue> {
+    if element.overpass_data.tag("currency:XBT") == "" {
+        return Some(Issue {
+            r#type: "missing_currency_xbt".into(),
+            severity: 400,
+            description: "currency:XBT tag is missing".into(),
         });
     }
 
