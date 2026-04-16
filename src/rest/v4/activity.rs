@@ -1,4 +1,6 @@
 use crate::db;
+use crate::db::main::element_comment::schema::ElementComment;
+use crate::db::main::element_event::schema::ElementEvent;
 use crate::db::main::invoice::schema::{InvoiceStatus, InvoicedService};
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
@@ -27,6 +29,7 @@ const EVENT_TYPE_BOOST: &str = "place_boosted";
 pub struct GetActivityArgs {
     days: Option<i64>,
     area: Option<String>,
+    areas: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -69,52 +72,77 @@ pub async fn get(
     let day_ago = now.saturating_sub(Duration::days(days));
     let period_end = now + Duration::seconds(1);
 
-    // Resolve area if specified, build element ID set for boost filtering
-    let area_id: Option<i64> = if let Some(ref area_id_or_alias) = args.area {
-        let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias.clone(), &pool)
-            .await
-            .map_err(|e| match e {
-                crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
-                    RestApiError::not_found()
-                }
-                _ => RestApiError::database(),
-            })?;
-        Some(area.id)
-    } else {
-        None
-    };
+    let mut areas: Vec<i64> = Vec::new();
 
-    // For boost filtering we need element IDs (invoices store element_id in a
-    // description string, not a JOINable column)
-    let area_element_ids: Option<HashSet<i64>> = if let Some(area_id) = area_id {
-        let area_elements = db::main::area_element::queries::select_by_area_id(area_id, &pool)
-            .await
-            .map_err(|_| RestApiError::database())?;
-        Some(
-            area_elements
-                .into_iter()
-                .filter(|ae| ae.deleted_at.is_none())
-                .map(|ae| ae.element_id)
-                .collect(),
-        )
-    } else {
-        None
-    };
+    match &args.areas {
+        Some(comma_separated_areas) => {
+            let ids_or_aliases: Vec<&str> = comma_separated_areas.split(",").collect();
+            for id_or_alias in ids_or_aliases {
+                let area = db::main::area::queries::select_by_id_or_alias(id_or_alias, &pool)
+                    .await
+                    .map_err(|e| match e {
+                        crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
+                            RestApiError::not_found()
+                        }
+                        _ => RestApiError::database(),
+                    })?;
+                areas.push(area.id);
+            }
+        }
+        None => match &args.area {
+            Some(area) => {
+                let area = db::main::area::queries::select_by_id_or_alias(area, &pool)
+                    .await
+                    .map_err(|e| match e {
+                        crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
+                            RestApiError::not_found()
+                        }
+                        _ => RestApiError::database(),
+                    })?;
+                areas.push(area.id);
+            }
+            None => {}
+        },
+    }
+
+    let mut elements: Option<HashSet<i64>> = None;
+
+    if !areas.is_empty() {
+        let mut combined_elements: HashSet<i64> = HashSet::new();
+        for area in &areas {
+            let area_elements = db::main::area_element::queries::select_by_area_id(*area, &pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
+            for area_element in area_elements {
+                if area_element.deleted_at.is_none() {
+                    combined_elements.insert(area_element.element_id);
+                }
+            }
+        }
+        elements = Some(combined_elements);
+    }
 
     let in_area = |element_id: i64| -> bool {
-        match &area_element_ids {
+        match &elements {
             Some(ids) => ids.contains(&element_id),
             None => true,
         }
     };
 
-    // Fetch events — area-scoped or global
-    let events = if let Some(area_id) = area_id {
-        db::main::element_event::queries::select_created_between_for_area(
-            area_id, day_ago, period_end, &pool,
-        )
-        .await
-        .map_err(|_| RestApiError::database())?
+    // Fetch events — areas-scoped or global
+    let events = if !areas.is_empty() {
+        let mut combined: HashSet<ElementEvent> = HashSet::new();
+        for area in &areas {
+            let area_events = db::main::element_event::queries::select_created_between_for_area(
+                *area, day_ago, period_end, &pool,
+            )
+            .await
+            .map_err(|_| RestApiError::database())?;
+            for event in area_events {
+                combined.insert(event);
+            }
+        }
+        combined.into_iter().collect()
     } else {
         db::main::element_event::queries::select_created_between(day_ago, period_end, &pool)
             .await
@@ -151,13 +179,20 @@ pub async fn get(
         });
     }
 
-    // Fetch comments — area-scoped or global
-    let comments = if let Some(area_id) = area_id {
-        db::main::element_comment::queries::select_created_between_for_area(
-            area_id, day_ago, period_end, &pool,
-        )
-        .await
-        .map_err(|_| RestApiError::database())?
+    // Fetch comments — areas-scoped or global
+    let comments = if !areas.is_empty() {
+        let mut combined: HashSet<ElementComment> = HashSet::new();
+        for area in areas {
+            let comments = db::main::element_comment::queries::select_created_between_for_area(
+                area, day_ago, period_end, &pool,
+            )
+            .await
+            .map_err(|_| RestApiError::database())?;
+            for comment in comments {
+                combined.insert(comment);
+            }
+        }
+        combined.into_iter().collect()
     } else {
         db::main::element_comment::queries::select_created_between(day_ago, period_end, &pool)
             .await

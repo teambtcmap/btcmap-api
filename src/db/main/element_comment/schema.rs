@@ -26,7 +26,7 @@ impl Columns {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct ElementComment {
     pub id: i64,
     pub element_id: i64,

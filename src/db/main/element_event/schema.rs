@@ -31,7 +31,7 @@ impl Columns {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct ElementEvent {
     pub id: i64,
     pub user_id: i64,
