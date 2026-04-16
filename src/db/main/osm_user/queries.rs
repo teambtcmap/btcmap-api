@@ -41,6 +41,30 @@ pub async fn select_most_active(
         .await?
 }
 
+pub async fn select_most_active_for_area(
+    area_id: i64,
+    period_start: OffsetDateTime,
+    period_end: OffsetDateTime,
+    limit: i64,
+    excluded_ids: &[i64],
+    pool: &Pool,
+) -> Result<Vec<SelectMostActive>> {
+    let excluded_ids = excluded_ids.to_vec();
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            super::blocking_queries::select_most_active_for_area(
+                area_id,
+                period_start,
+                period_end,
+                limit,
+                &excluded_ids,
+                conn,
+            )
+        })
+        .await?
+}
+
 pub async fn select_all(limit: Option<i64>, pool: &Pool) -> Result<Vec<OsmUser>> {
     pool.get()
         .await?

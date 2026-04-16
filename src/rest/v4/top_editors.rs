@@ -30,22 +30,26 @@ pub struct TopEditor {
     pub tip_url: Option<String>,
 }
 
+/// Spam/bot user ids excluded from "top editors" rankings. Shared with the
+/// area-scoped top-editors endpoint in `super::areas` so the two views can't
+/// drift apart.
+pub(crate) const EXCLUDED_USER_IDS: &[i64] = &[
+    9451067, 18545877, 19880430, 242345, 232801, 1778799, 21749653,
+];
+
 #[get("")]
 pub async fn get(args: Query<GetTopEditorsArgs>, pool: Data<MainPool>) -> Res<Vec<TopEditor>> {
     let period_start = parse_date(&args.period_start, true)?;
     let period_end = parse_date(&args.period_end, false)?;
     let limit = args.limit.unwrap_or(100);
 
-    let excluded_ids = [
-        9451067, 18545877, 19880430, 242345, 232801, 1778799, 21749653,
-    ];
-    let query_limit = limit + excluded_ids.len() as i64;
+    let query_limit = limit + EXCLUDED_USER_IDS.len() as i64;
 
     let editors = crate::db::main::osm_user::queries::select_most_active(
         period_start,
         period_end,
         query_limit,
-        &excluded_ids,
+        EXCLUDED_USER_IDS,
         &pool,
     )
     .await
@@ -83,7 +87,7 @@ fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiE
         .map_err(|_| RestApiError::invalid_input("Invalid date format"))
 }
 
-fn extract_tip_url(description: &str) -> Option<String> {
+pub(crate) fn extract_tip_url(description: &str) -> Option<String> {
     let re = Regex::new(r"(lightning:[^)]+)").ok()?;
     re.captures(description).map(|c| c[1].to_string())
 }
