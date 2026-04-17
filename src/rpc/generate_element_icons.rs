@@ -774,7 +774,7 @@ impl OverpassElement {
         }
 
         if shop == "water" {
-            icon_id = "sports";
+            icon_id = "water_drop";
         }
 
         if shop == "video" {
