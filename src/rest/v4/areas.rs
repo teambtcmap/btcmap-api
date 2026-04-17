@@ -3,12 +3,13 @@ use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
-use crate::rest::v4::top_editors::{extract_tip_url, parse_date, TopEditor, EXCLUDED_USER_IDS};
+use crate::rest::v4::top_editors::{
+    extract_tip_url, far_future, parse_date, validate_limit, TopEditor, EXCLUDED_USER_IDS,
+};
 use crate::service;
 use crate::Error;
 use actix_web::{get, put, web::Data, web::Json, web::Path, web::Query};
 use serde::{Deserialize, Serialize};
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -108,6 +109,9 @@ pub struct GetByIdRes {
 
 #[get("{id}")]
 pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Res<GetByIdRes> {
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
     let area = db::main::area::queries::select_by_id_or_alias(id.into_inner(), &pool)
         .await
         .map_err(|e| match e {
@@ -205,6 +209,9 @@ pub async fn get_by_id_top_editors(
     args: Query<GetTopEditorsForAreaArgs>,
     pool: Data<MainPool>,
 ) -> Res<Vec<TopEditor>> {
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
     let area = db::main::area::queries::select_by_id_or_alias(id.into_inner(), &pool)
         .await
         .map_err(|e| match e {
@@ -220,14 +227,13 @@ pub async fn get_by_id_top_editors(
         Some(s) => parse_date(s, false)?,
         None => far_future(),
     };
-    let limit = args.limit.unwrap_or(100).clamp(1, 1000);
-    let query_limit = limit.saturating_add(EXCLUDED_USER_IDS.len() as i64);
+    let limit = validate_limit(args.limit)?;
 
     let editors = db::main::osm_user::queries::select_most_active_for_area(
         area.id,
         period_start,
         period_end,
-        query_limit,
+        limit,
         EXCLUDED_USER_IDS,
         &pool,
     )
@@ -246,15 +252,9 @@ pub async fn get_by_id_top_editors(
             places_deleted: e.deleted,
             tip_url: extract_tip_url(&e.description),
         })
-        .take(limit as usize)
         .collect();
 
     Ok(Json(editors))
-}
-
-fn far_future() -> OffsetDateTime {
-    OffsetDateTime::parse("2200-01-01T00:00:00Z", &Rfc3339)
-        .expect("constant date literal must parse")
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::sync::OnceLock;
 use time::format_description::well_known::Rfc3339;
+use time::macros::datetime;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -42,14 +43,12 @@ pub(crate) const EXCLUDED_USER_IDS: &[i64] = &[
 pub async fn get(args: Query<GetTopEditorsArgs>, pool: Data<MainPool>) -> Res<Vec<TopEditor>> {
     let period_start = parse_date(&args.period_start, true)?;
     let period_end = parse_date(&args.period_end, false)?;
-    let limit = args.limit.unwrap_or(100).clamp(1, 1000);
-
-    let query_limit = limit.saturating_add(EXCLUDED_USER_IDS.len() as i64);
+    let limit = validate_limit(args.limit)?;
 
     let editors = crate::db::main::osm_user::queries::select_most_active(
         period_start,
         period_end,
-        query_limit,
+        limit,
         EXCLUDED_USER_IDS,
         &pool,
     )
@@ -68,7 +67,6 @@ pub async fn get(args: Query<GetTopEditorsArgs>, pool: Data<MainPool>) -> Res<Ve
             places_deleted: e.deleted,
             tip_url: extract_tip_url(&e.description),
         })
-        .take(limit as usize)
         .collect();
 
     Ok(Json(editors))
@@ -86,6 +84,20 @@ pub(crate) fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTim
 
     OffsetDateTime::parse(&date_str, &Rfc3339)
         .map_err(|_| RestApiError::invalid_input("Invalid date format"))
+}
+
+pub(crate) fn validate_limit(limit: Option<i64>) -> Result<i64, RestApiError> {
+    let limit = limit.unwrap_or(100);
+    if !(1..=1000).contains(&limit) {
+        return Err(RestApiError::invalid_input(
+            "limit must be between 1 and 1000",
+        ));
+    }
+    Ok(limit)
+}
+
+pub(crate) fn far_future() -> OffsetDateTime {
+    datetime!(2200-01-01 0:00 UTC)
 }
 
 static TIP_URL_RE: OnceLock<Regex> = OnceLock::new();
