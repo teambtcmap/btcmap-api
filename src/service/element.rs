@@ -281,7 +281,7 @@ fn get_missing_icon_issue(element: &Element) -> Option<Issue> {
 }
 
 fn get_missing_currency_xbt_issue(element: &Element) -> Option<Issue> {
-    if element.overpass_data.tag("currency:XBT") == "" {
+    if element.overpass_data.tag("currency:XBT").is_empty() {
         return Some(Issue {
             r#type: "missing_currency_xbt".into(),
             severity: 400,
