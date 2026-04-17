@@ -4,7 +4,8 @@ use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
 use crate::service;
-use actix_web::{get, put, web::Data, web::Json, web::Query};
+use crate::Error;
+use actix_web::{get, put, web::Data, web::Json, web::Path, web::Query};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -89,6 +90,55 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
         .collect();
 
     Ok(Json(results))
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GetByIdRes {
+    pub id: i64,
+    pub name: String,
+    pub r#type: String,
+    pub url_alias: String,
+    pub icon: Option<String>,
+    pub website_url: String,
+    pub description: String,
+}
+
+#[get("{id}")]
+pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Res<GetByIdRes> {
+    let area = db::main::area::queries::select_by_id_or_alias(id.into_inner(), &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+    let r#type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let singular_type = if let Some(stripped) = r#type.strip_suffix("ies") {
+        format!("{}y", stripped)
+    } else if let Some(stripped) = r#type.strip_suffix('s') {
+        stripped.to_string()
+    } else {
+        r#type.to_string()
+    };
+    let url_alias = area.alias();
+    let description = area
+        .tags
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    Ok(Json(GetByIdRes {
+        id: area.id,
+        name: area.name(),
+        r#type: r#type.to_string(),
+        url_alias: url_alias.clone(),
+        icon: area
+            .tags
+            .get("icon:square")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
+        description,
+    }))
 }
 
 #[get("/saved")]
@@ -221,6 +271,58 @@ mod test {
 
         assert!(!res.is_empty());
         assert_eq!(res[0].name, "Phuket");
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_returns_area() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert("name".into(), json!("Phuket"));
+        tags.insert("type".into(), json!("country"));
+        tags.insert(
+            "description".into(),
+            json!("A beautiful island in Thailand"),
+        );
+        tags.insert(
+            "geo_json".into(),
+            json!(
+                {
+                    "type": "FeatureCollection",
+                    "features": [
+                      {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                          "coordinates": [
+                            [
+                              [98.2181205776469, 8.20412838698085],
+                              [98.2181205776469, 7.74024270965898],
+                              [98.4806081271079, 7.74024270965898],
+                              [98.4806081271079, 8.20412838698085],
+                              [98.2181205776469, 8.20412838698085]
+                            ]
+                          ],
+                          "type": "Polygon"
+                        }
+                      }
+                    ]
+                  }
+            ),
+        );
+        let area = db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/areas").service(super::get_by_id)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}", area.id))
+            .to_request();
+        let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.name, "Phuket");
+        assert_eq!(res.description, "A beautiful island in Thailand");
         Ok(())
     }
 }

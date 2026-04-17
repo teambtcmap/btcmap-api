@@ -182,7 +182,8 @@ async fn main() -> Result<()> {
                         scope("areas")
                             .service(rest::v4::areas::get_saved)
                             .service(rest::v4::areas::put_saved)
-                            .service(rest::v4::areas::get),
+                            .service(rest::v4::areas::get)
+                            .service(rest::v4::areas::get_by_id),
                     )
                     .service(scope("dashboard").service(rest::v4::dashboard::get))
                     .service(scope("top-editors").service(rest::v4::top_editors::get))
