@@ -9,7 +9,6 @@ use std::{
     fs::create_dir_all,
     path::PathBuf,
 };
-use tracing::info;
 
 pub struct Migration(pub i16, pub String);
 
@@ -39,11 +38,6 @@ pub fn db_file_path(db_name: &str) -> Result<PathBuf> {
 }
 
 pub fn configure_connection(conn: &mut Connection) {
-    conn.trace(Some(|sql| {
-        let formatted = format_sql(sql);
-        info!(sql = %formatted, "sql");
-    }));
-
     // WAL + NORMAL combination provides good concurrency, good crash safety, decent performance and simple maintenance
     conn.pragma_update(None, "journal_mode", "WAL").unwrap();
     conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
@@ -52,11 +46,4 @@ pub fn configure_connection(conn: &mut Connection) {
     // 5 seconds is a common default value in production systems
     // SQLite will make make multiple retries during that time window
     conn.pragma_update(None, "busy_timeout", 5000).unwrap();
-}
-
-fn format_sql(sql: &str) -> String {
-    sql.replace('\n', " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }

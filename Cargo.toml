@@ -14,7 +14,7 @@ edition = "2021"
 
 # This is the main dependency, providing a webserver and core infra
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
-actix-web = { version = "4.12.1", default-features = false, features = ["macros", "compress-brotli"] }
+actix-web = { version = "4.13.0", default-features = false, features = ["macros", "compress-brotli"] }
 
 # HTTP types and services for the Actix ecosystem
 # https://github.com/actix/actix-web/blob/main/actix-http/CHANGES.md
@@ -22,12 +22,16 @@ actix-http = { version = "3.12.0", default-features = false }
 
 # Actix middleware needs that
 # https://github.com/rust-lang/futures-rs/releases
-futures-util = { version = "0.3.31", default-features = false }
+futures-util = { version = "0.3.32", default-features = false }
 
 # We're using SQLite because it's portable and it requires no maintenance
 # SQLite is fast enough for our needs and we aren't aiming for infinite scalability
 # https://github.com/rusqlite/rusqlite/releases
-rusqlite = { version = "0.32.1", default-features = false, features = ["bundled", "time", "serde_json", "trace"] }
+rusqlite = { version = "0.38.0", default-features = false, features = ["bundled", "time", "serde_json", "trace"] }
+
+# We're wrapping blocking SQLite connections into an async pool
+# https://github.com/deadpool-rs/deadpool/blob/main/crates/deadpool-sqlite/CHANGELOG.md
+deadpool-sqlite = { version = "0.13.0", default-features = false, features = ["rt_tokio_1"] }
 
 # That's an industry standard for making HTTP requests
 # https://github.com/seanmonstar/reqwest/releases
@@ -65,10 +69,6 @@ geojson = { version = "0.24.1", default-features = false, features = ["geo-types
 # Used for dealing with area bounds
 # https://github.com/georust/geo/blob/main/geo/CHANGES.md
 geo = { version = "0.29.3", default-features = false }
-
-# We're wrapping blocking SQLite connections into an async pool
-# https://github.com/bikeshedder/deadpool/blob/master/sqlite/CHANGELOG.md
-deadpool-sqlite = { version = "0.9.0", default-features = false, features = ["rt_tokio_1"] }
 
 # Used to handle area icons
 # https://crates.io/crates/base64

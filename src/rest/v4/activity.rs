@@ -89,17 +89,19 @@ pub async fn get(
                 areas.push(area.id);
             }
         }
-        None => if let Some(area) = &args.area {
-            let area = db::main::area::queries::select_by_id_or_alias(area, &pool)
-                .await
-                .map_err(|e| match e {
-                    crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
-                        RestApiError::not_found()
-                    }
-                    _ => RestApiError::database(),
-                })?;
-            areas.push(area.id);
-        },
+        None => {
+            if let Some(area) = &args.area {
+                let area = db::main::area::queries::select_by_id_or_alias(area, &pool)
+                    .await
+                    .map_err(|e| match e {
+                        crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => {
+                            RestApiError::not_found()
+                        }
+                        _ => RestApiError::database(),
+                    })?;
+                areas.push(area.id);
+            }
+        }
     }
 
     let mut elements: Option<HashSet<i64>> = None;
