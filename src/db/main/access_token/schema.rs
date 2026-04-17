@@ -4,8 +4,10 @@ use serde_json::Value;
 use std::{str::FromStr, sync::OnceLock};
 use time::OffsetDateTime;
 
-pub const NAME: &str = "access_token";
+pub const TABLE: &str = "access_token";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     UserId,
@@ -15,21 +17,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::UserId => "user_id",
-            Columns::Name => "name",
-            Columns::Secret => "secret",
-            Columns::Roles => "roles",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -60,7 +47,7 @@ impl AccessToken {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -69,23 +56,24 @@ impl AccessToken {
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row: &Row| -> rusqlite::Result<Self> {
             Ok(AccessToken {
-                id: row.get(Columns::Id.as_str())?,
-                user_id: row.get(Columns::UserId.as_str())?,
-                name: row.get(Columns::Name.as_str())?,
-                secret: row.get(Columns::Secret.as_str())?,
-                roles: Self::parse_roles(row.get(Columns::Roles.as_str())?),
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                user_id: row.get(Columns::UserId.as_ref())?,
+                name: row.get(Columns::Name.as_ref())?,
+                secret: row.get(Columns::Secret.as_ref())?,
+                roles: Self::parse_roles(row.get(Columns::Roles.as_ref())?)?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }
 
-    fn parse_roles(column_value: Value) -> Vec<Role> {
-        let roles: Vec<String> = serde_json::from_value(column_value).unwrap_or_default();
-        roles
+    fn parse_roles(column_value: Value) -> rusqlite::Result<Vec<Role>> {
+        let roles: Vec<String> = serde_json::from_value(column_value)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        Ok(roles
             .into_iter()
             .filter_map(|s| Role::from_str(&s).ok())
-            .collect()
+            .collect())
     }
 }
