@@ -5,6 +5,7 @@ use crate::{
     service::osm::EditingApiUser,
     Result,
 };
+use rusqlite::types::ToSql;
 use rusqlite::{params, Connection, Row};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -116,11 +117,24 @@ pub fn select_most_active(
     excluded_ids: &[i64],
     conn: &Connection,
 ) -> Result<Vec<SelectMostActive>> {
-    let excluded_ids_str: Vec<String> = excluded_ids.iter().map(|id| id.to_string()).collect();
+    let mut sql_params: Vec<Box<dyn ToSql>> = vec![
+        Box::new(period_start.format(&Rfc3339)?),
+        Box::new(period_end.format(&Rfc3339)?),
+        Box::new(limit),
+    ];
     let excluded_clause = if excluded_ids.is_empty() {
         String::new()
     } else {
-        format!(" AND e.user_id NOT IN ({})", excluded_ids_str.join(","))
+        let start = sql_params.len() + 1;
+        let placeholders: Vec<String> = excluded_ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| {
+                sql_params.push(Box::new(id));
+                format!("?{}", start + i)
+            })
+            .collect();
+        format!(" AND e.user_id NOT IN ({})", placeholders.join(", "))
     };
     let sql = format!(
         r#"
@@ -146,15 +160,9 @@ pub fn select_most_active(
         event_table = db::main::element_event::schema::TABLE_NAME,
         type = db::main::element_event::schema::Columns::Type.as_str(),
     );
+    let refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
     conn.prepare(&sql)?
-        .query_map(
-            params![
-                period_start.format(&Rfc3339)?,
-                period_end.format(&Rfc3339)?,
-                limit,
-            ],
-            SelectMostActive::mapper(),
-        )?
+        .query_map(refs.as_slice(), SelectMostActive::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
@@ -167,11 +175,25 @@ pub fn select_most_active_for_area(
     excluded_ids: &[i64],
     conn: &Connection,
 ) -> Result<Vec<SelectMostActive>> {
-    let excluded_ids_str: Vec<String> = excluded_ids.iter().map(|id| id.to_string()).collect();
+    let mut sql_params: Vec<Box<dyn ToSql>> = vec![
+        Box::new(area_id),
+        Box::new(period_start.format(&Rfc3339)?),
+        Box::new(period_end.format(&Rfc3339)?),
+        Box::new(limit),
+    ];
     let excluded_clause = if excluded_ids.is_empty() {
         String::new()
     } else {
-        format!(" AND e.user_id NOT IN ({})", excluded_ids_str.join(","))
+        let start = sql_params.len() + 1;
+        let placeholders: Vec<String> = excluded_ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| {
+                sql_params.push(Box::new(id));
+                format!("?{}", start + i)
+            })
+            .collect();
+        format!(" AND e.user_id NOT IN ({})", placeholders.join(", "))
     };
     let sql = format!(
         r#"
@@ -205,16 +227,9 @@ pub fn select_most_active_for_area(
         ae_area_id = db::main::area_element::schema::Columns::AreaId.as_str(),
         ae_deleted_at = db::main::area_element::schema::Columns::DeletedAt.as_str(),
     );
+    let refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
     conn.prepare(&sql)?
-        .query_map(
-            params![
-                area_id,
-                period_start.format(&Rfc3339)?,
-                period_end.format(&Rfc3339)?,
-                limit,
-            ],
-            SelectMostActive::mapper(),
-        )?
+        .query_map(refs.as_slice(), SelectMostActive::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }

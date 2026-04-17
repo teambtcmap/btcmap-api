@@ -3,7 +3,7 @@ use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
-use crate::rest::v4::top_editors::{extract_tip_url, TopEditor, EXCLUDED_USER_IDS};
+use crate::rest::v4::top_editors::{extract_tip_url, parse_date, TopEditor, EXCLUDED_USER_IDS};
 use crate::service;
 use crate::Error;
 use actix_web::{get, put, web::Data, web::Json, web::Path, web::Query};
@@ -220,8 +220,8 @@ pub async fn get_by_id_top_editors(
         Some(s) => parse_date(s, false)?,
         None => far_future(),
     };
-    let limit = args.limit.unwrap_or(100);
-    let query_limit = limit + EXCLUDED_USER_IDS.len() as i64;
+    let limit = args.limit.unwrap_or(100).clamp(1, 1000);
+    let query_limit = limit.saturating_add(EXCLUDED_USER_IDS.len() as i64);
 
     let editors = db::main::osm_user::queries::select_most_active_for_area(
         area.id,
@@ -252,23 +252,9 @@ pub async fn get_by_id_top_editors(
     Ok(Json(editors))
 }
 
-fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiError> {
-    let formatted = if is_start {
-        format!("{}T00:00:00Z", date_str)
-    } else {
-        let next_day = OffsetDateTime::parse(&format!("{}T00:00:00Z", date_str), &Rfc3339)
-            .map_err(|_| RestApiError::invalid_input("Invalid date format"))?
-            .saturating_add(time::Duration::days(1));
-        format!("{}T00:00:00Z", next_day.date())
-    };
-    OffsetDateTime::parse(&formatted, &Rfc3339)
-        .map_err(|_| RestApiError::invalid_input("Invalid date format"))
-}
-
 fn far_future() -> OffsetDateTime {
-    // Sentinel upper bound used when the caller doesn't specify period_end.
-    // Any year well past today's date works; 2200-01-01 leaves plenty of headroom.
-    OffsetDateTime::parse("2200-01-01T00:00:00Z", &Rfc3339).unwrap_or(OffsetDateTime::UNIX_EPOCH)
+    OffsetDateTime::parse("2200-01-01T00:00:00Z", &Rfc3339)
+        .expect("constant date literal must parse")
 }
 
 #[cfg(test)]

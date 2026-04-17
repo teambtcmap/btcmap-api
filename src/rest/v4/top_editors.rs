@@ -8,6 +8,7 @@ use actix_web::web::Query;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
+use std::sync::OnceLock;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -41,9 +42,9 @@ pub(crate) const EXCLUDED_USER_IDS: &[i64] = &[
 pub async fn get(args: Query<GetTopEditorsArgs>, pool: Data<MainPool>) -> Res<Vec<TopEditor>> {
     let period_start = parse_date(&args.period_start, true)?;
     let period_end = parse_date(&args.period_end, false)?;
-    let limit = args.limit.unwrap_or(100);
+    let limit = args.limit.unwrap_or(100).clamp(1, 1000);
 
-    let query_limit = limit + EXCLUDED_USER_IDS.len() as i64;
+    let query_limit = limit.saturating_add(EXCLUDED_USER_IDS.len() as i64);
 
     let editors = crate::db::main::osm_user::queries::select_most_active(
         period_start,
@@ -73,7 +74,7 @@ pub async fn get(args: Query<GetTopEditorsArgs>, pool: Data<MainPool>) -> Res<Ve
     Ok(Json(editors))
 }
 
-fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiError> {
+pub(crate) fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiError> {
     let date_str = if is_start {
         format!("{}T00:00:00Z", date_str)
     } else {
@@ -87,8 +88,10 @@ fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiE
         .map_err(|_| RestApiError::invalid_input("Invalid date format"))
 }
 
+static TIP_URL_RE: OnceLock<Regex> = OnceLock::new();
+
 pub(crate) fn extract_tip_url(description: &str) -> Option<String> {
-    let re = Regex::new(r"(lightning:[^)]+)").ok()?;
+    let re = TIP_URL_RE.get_or_init(|| Regex::new(r"(lightning:[^)]+)").unwrap());
     re.captures(description).map(|c| c[1].to_string())
 }
 
