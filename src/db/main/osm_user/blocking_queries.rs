@@ -5,6 +5,7 @@ use crate::{
     service::osm::EditingApiUser,
     Result,
 };
+use rusqlite::types::ToSql;
 use rusqlite::{params, Connection, Row};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -116,15 +117,28 @@ pub fn select_most_active(
     excluded_ids: &[i64],
     conn: &Connection,
 ) -> Result<Vec<SelectMostActive>> {
-    let excluded_ids_str: Vec<String> = excluded_ids.iter().map(|id| id.to_string()).collect();
+    let mut sql_params: Vec<Box<dyn ToSql>> = vec![
+        Box::new(period_start.format(&Rfc3339)?),
+        Box::new(period_end.format(&Rfc3339)?),
+        Box::new(limit),
+    ];
     let excluded_clause = if excluded_ids.is_empty() {
         String::new()
     } else {
-        format!(" AND e.user_id NOT IN ({})", excluded_ids_str.join(","))
+        let start = sql_params.len() + 1;
+        let placeholders: Vec<String> = excluded_ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| {
+                sql_params.push(Box::new(id));
+                format!("?{}", start + i)
+            })
+            .collect();
+        format!(" AND e.user_id NOT IN ({})", placeholders.join(", "))
     };
     let sql = format!(
         r#"
-            SELECT 
+            SELECT
                 u.{u_id},
                 json_extract(u.{u_osm_data}, '$.display_name'),
                 json_extract(u.{u_osm_data}, '$.img.href'),
@@ -146,15 +160,76 @@ pub fn select_most_active(
         event_table = db::main::element_event::schema::TABLE_NAME,
         type = db::main::element_event::schema::Columns::Type.as_str(),
     );
+    let refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
     conn.prepare(&sql)?
-        .query_map(
-            params![
-                period_start.format(&Rfc3339)?,
-                period_end.format(&Rfc3339)?,
-                limit,
-            ],
-            SelectMostActive::mapper(),
-        )?
+        .query_map(refs.as_slice(), SelectMostActive::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_most_active_for_area(
+    area_id: i64,
+    period_start: OffsetDateTime,
+    period_end: OffsetDateTime,
+    limit: i64,
+    excluded_ids: &[i64],
+    conn: &Connection,
+) -> Result<Vec<SelectMostActive>> {
+    let mut sql_params: Vec<Box<dyn ToSql>> = vec![
+        Box::new(area_id),
+        Box::new(period_start.format(&Rfc3339)?),
+        Box::new(period_end.format(&Rfc3339)?),
+        Box::new(limit),
+    ];
+    let excluded_clause = if excluded_ids.is_empty() {
+        String::new()
+    } else {
+        let start = sql_params.len() + 1;
+        let placeholders: Vec<String> = excluded_ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| {
+                sql_params.push(Box::new(id));
+                format!("?{}", start + i)
+            })
+            .collect();
+        format!(" AND e.user_id NOT IN ({})", placeholders.join(", "))
+    };
+    let sql = format!(
+        r#"
+            SELECT
+                u.{u_id},
+                json_extract(u.{u_osm_data}, '$.display_name'),
+                json_extract(u.{u_osm_data}, '$.img.href'),
+                json_extract(u.{u_osm_data}, '$.description'),
+                count(*) AS edits,
+                SUM(CASE WHEN e.{type} = 'create' THEN 1 ELSE 0 END) AS created,
+                SUM(CASE WHEN e.{type} = 'update' THEN 1 ELSE 0 END) AS updated,
+                SUM(CASE WHEN e.{type} = 'delete' THEN 1 ELSE 0 END) AS deleted
+            FROM {event_table} e
+            JOIN {table} u ON u.{u_id} = e.user_id
+            JOIN {area_element_table} ae ON ae.{ae_element_id} = e.{e_element_id}
+            WHERE ae.{ae_area_id} = ?1
+              AND ae.{ae_deleted_at} IS NULL
+              AND e.created_at BETWEEN ?2 AND ?3{excluded_clause}
+            GROUP BY e.user_id
+            ORDER BY edits DESC
+            LIMIT ?4
+        "#,
+        u_id = Columns::Id.as_str(),
+        u_osm_data = Columns::OsmData.as_str(),
+        table = schema::NAME,
+        event_table = db::main::element_event::schema::TABLE_NAME,
+        type = db::main::element_event::schema::Columns::Type.as_str(),
+        e_element_id = db::main::element_event::schema::Columns::ElementId.as_str(),
+        area_element_table = db::main::area_element::schema::TABLE_NAME,
+        ae_element_id = db::main::area_element::schema::Columns::ElementId.as_str(),
+        ae_area_id = db::main::area_element::schema::Columns::AreaId.as_str(),
+        ae_deleted_at = db::main::area_element::schema::Columns::DeletedAt.as_str(),
+    );
+    let refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
+    conn.prepare(&sql)?
+        .query_map(refs.as_slice(), SelectMostActive::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
@@ -345,6 +420,87 @@ mod test {
         assert_eq!(1, res.len());
         assert_eq!(3, res.first().unwrap().updated);
         assert_eq!(3, res.first().unwrap().edits);
+        Ok(())
+    }
+
+    #[test]
+    fn select_most_active_for_area() -> Result<()> {
+        let conn = conn();
+        let user = super::insert(1, &EditingApiUser::mock(), &conn)?;
+        let other_user = super::insert(2, &EditingApiUser::mock(), &conn)?;
+
+        let element_in_area =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element_outside =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(2), &conn)?;
+
+        let area = db::main::area::blocking_queries::insert(
+            db::main::area::schema::Area::mock_tags(),
+            &conn,
+        )?;
+        db::main::area_element::blocking_queries::insert(area.id, element_in_area.id, &conn)?;
+
+        // Two events on an in-area element by `user` -> should count.
+        db::main::element_event::blocking_queries::insert(
+            user.id,
+            element_in_area.id,
+            "update",
+            &conn,
+        )?;
+        db::main::element_event::blocking_queries::insert(
+            user.id,
+            element_in_area.id,
+            "update",
+            &conn,
+        )?;
+        // One event on an in-area element by `other_user` -> should also count.
+        db::main::element_event::blocking_queries::insert(
+            other_user.id,
+            element_in_area.id,
+            "create",
+            &conn,
+        )?;
+        // One event on an out-of-area element by `user` -> should be excluded.
+        db::main::element_event::blocking_queries::insert(
+            user.id,
+            element_outside.id,
+            "update",
+            &conn,
+        )?;
+
+        let yesterday = OffsetDateTime::now_utc().saturating_add(Duration::days(-1));
+        let tomorrow = OffsetDateTime::now_utc().saturating_add(Duration::days(1));
+
+        let res = super::select_most_active_for_area(area.id, yesterday, tomorrow, 10, &[], &conn)?;
+
+        // Two distinct users have events on in-area elements; user(1) has 2 edits, user(2) has 1.
+        assert_eq!(2, res.len());
+        assert_eq!(user.id, res[0].id);
+        assert_eq!(2, res[0].edits);
+        assert_eq!(other_user.id, res[1].id);
+        assert_eq!(1, res[1].edits);
+
+        // The out-of-area event must not have been counted.
+        assert_eq!(2, res[0].updated);
+        assert_eq!(0, res[0].created);
+
+        // exclude `user` and confirm only `other_user` remains.
+        let res = super::select_most_active_for_area(
+            area.id,
+            yesterday,
+            tomorrow,
+            10,
+            &[user.id],
+            &conn,
+        )?;
+        assert_eq!(1, res.len());
+        assert_eq!(other_user.id, res[0].id);
+
+        // Non-existent area id returns no rows.
+        let res =
+            super::select_most_active_for_area(area.id + 999, yesterday, tomorrow, 10, &[], &conn)?;
+        assert_eq!(0, res.len());
+
         Ok(())
     }
 

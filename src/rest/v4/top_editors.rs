@@ -8,7 +8,9 @@ use actix_web::web::Query;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
+use std::sync::OnceLock;
 use time::format_description::well_known::Rfc3339;
+use time::macros::datetime;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -30,22 +32,24 @@ pub struct TopEditor {
     pub tip_url: Option<String>,
 }
 
+/// Spam/bot user ids excluded from "top editors" rankings. Shared with the
+/// area-scoped top-editors endpoint in `super::areas` so the two views can't
+/// drift apart.
+pub(crate) const EXCLUDED_USER_IDS: &[i64] = &[
+    9451067, 18545877, 19880430, 242345, 232801, 1778799, 21749653,
+];
+
 #[get("")]
 pub async fn get(args: Query<GetTopEditorsArgs>, pool: Data<MainPool>) -> Res<Vec<TopEditor>> {
     let period_start = parse_date(&args.period_start, true)?;
     let period_end = parse_date(&args.period_end, false)?;
-    let limit = args.limit.unwrap_or(100);
-
-    let excluded_ids = [
-        9451067, 18545877, 19880430, 242345, 232801, 1778799, 21749653,
-    ];
-    let query_limit = limit + excluded_ids.len() as i64;
+    let limit = validate_limit(args.limit)?;
 
     let editors = crate::db::main::osm_user::queries::select_most_active(
         period_start,
         period_end,
-        query_limit,
-        &excluded_ids,
+        limit,
+        EXCLUDED_USER_IDS,
         &pool,
     )
     .await
@@ -63,13 +67,12 @@ pub async fn get(args: Query<GetTopEditorsArgs>, pool: Data<MainPool>) -> Res<Ve
             places_deleted: e.deleted,
             tip_url: extract_tip_url(&e.description),
         })
-        .take(limit as usize)
         .collect();
 
     Ok(Json(editors))
 }
 
-fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiError> {
+pub(crate) fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiError> {
     let date_str = if is_start {
         format!("{}T00:00:00Z", date_str)
     } else {
@@ -83,8 +86,24 @@ fn parse_date(date_str: &str, is_start: bool) -> Result<OffsetDateTime, RestApiE
         .map_err(|_| RestApiError::invalid_input("Invalid date format"))
 }
 
-fn extract_tip_url(description: &str) -> Option<String> {
-    let re = Regex::new(r"(lightning:[^)]+)").ok()?;
+pub(crate) fn validate_limit(limit: Option<i64>) -> Result<i64, RestApiError> {
+    let limit = limit.unwrap_or(100);
+    if !(1..=1000).contains(&limit) {
+        return Err(RestApiError::invalid_input(
+            "limit must be between 1 and 1000",
+        ));
+    }
+    Ok(limit)
+}
+
+pub(crate) fn far_future() -> OffsetDateTime {
+    datetime!(2200-01-01 0:00 UTC)
+}
+
+static TIP_URL_RE: OnceLock<Regex> = OnceLock::new();
+
+pub(crate) fn extract_tip_url(description: &str) -> Option<String> {
+    let re = TIP_URL_RE.get_or_init(|| Regex::new(r"(lightning:[^)]+)").unwrap());
     re.captures(description).map(|c| c[1].to_string())
 }
 
