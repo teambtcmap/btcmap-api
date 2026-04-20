@@ -103,6 +103,7 @@ pub struct GetByIdRes {
     pub r#type: String,
     pub url_alias: String,
     pub icon: Option<String>,
+    pub icon_wide: Option<String>,
     pub website_url: String,
     pub description: String,
 }
@@ -141,6 +142,11 @@ pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Res<GetByIdRes
         icon: area
             .tags
             .get("icon:square")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        icon_wide: area
+            .tags
+            .get("icon:wide")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
