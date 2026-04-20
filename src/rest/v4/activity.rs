@@ -117,7 +117,7 @@ pub async fn get(
         Some(comma_separated_places) => {
             if comma_separated_places.split(',').count() > MAX_PLACES {
                 return Err(RestApiError::invalid_input(format!(
-                    "places must contain at most {MAX_PLACES} IDs"
+                    "places accepts at most {MAX_PLACES} comma-separated values"
                 )));
             }
             comma_separated_places
