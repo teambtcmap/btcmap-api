@@ -30,6 +30,7 @@ pub struct GetActivityArgs {
     days: Option<i64>,
     area: Option<String>,
     areas: Option<String>,
+    places: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -104,9 +105,17 @@ pub async fn get(
         }
     }
 
+    let places: Vec<i64> = match &args.places {
+        Some(comma_separated_places) => comma_separated_places
+            .split(",")
+            .filter_map(|s| s.trim().parse::<i64>().ok())
+            .collect(),
+        None => Vec::new(),
+    };
+
     let mut elements: Option<HashSet<i64>> = None;
 
-    if !areas.is_empty() {
+    if !areas.is_empty() || !places.is_empty() {
         let mut combined_elements: HashSet<i64> = HashSet::new();
         for area in &areas {
             let area_elements = db::main::area_element::queries::select_by_area_id(*area, &pool)
@@ -118,18 +127,21 @@ pub async fn get(
                 }
             }
         }
+        for place_id in &places {
+            combined_elements.insert(*place_id);
+        }
         elements = Some(combined_elements);
     }
 
-    let in_area = |element_id: i64| -> bool {
+    let in_filter = |element_id: i64| -> bool {
         match &elements {
             Some(ids) => ids.contains(&element_id),
             None => true,
         }
     };
 
-    // Fetch events — areas-scoped or global
-    let events = if !areas.is_empty() {
+    // Fetch events — area-scoped (optimized), global, or global + post-filter
+    let events = if !areas.is_empty() && places.is_empty() {
         let mut combined: HashSet<ElementEvent> = HashSet::new();
         for area in &areas {
             let area_events = db::main::element_event::queries::select_created_between_for_area(
@@ -150,6 +162,9 @@ pub async fn get(
 
     let mut items: Vec<ActivityItem> = Vec::with_capacity(events.len());
     for event in events {
+        if !in_filter(event.element_id) {
+            continue;
+        }
         let element = db::main::element::queries::select_by_id(event.element_id, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
@@ -178,8 +193,8 @@ pub async fn get(
         });
     }
 
-    // Fetch comments — areas-scoped or global
-    let comments = if !areas.is_empty() {
+    // Fetch comments — area-scoped (optimized), global, or global + post-filter
+    let comments = if !areas.is_empty() && places.is_empty() {
         let mut combined: HashSet<ElementComment> = HashSet::new();
         for area in areas {
             let comments = db::main::element_comment::queries::select_created_between_for_area(
@@ -200,6 +215,9 @@ pub async fn get(
 
     for comment in comments {
         if comment.deleted_at.is_some() {
+            continue;
+        }
+        if !in_filter(comment.element_id) {
             continue;
         }
 
@@ -239,7 +257,7 @@ pub async fn get(
             continue;
         };
 
-        if !in_area(element_id) {
+        if !in_filter(element_id) {
             continue;
         }
 
@@ -287,6 +305,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use std::collections::HashSet;
 
     #[test]
     async fn get_empty_array() -> Result<()> {
@@ -590,6 +609,134 @@ mod test {
         assert_eq!(1, res.len());
         assert_eq!(super::EVENT_TYPE_BOOST, res[0].r#type);
         assert_eq!(element_in_area.id, res[0].place_id);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_filtered_by_places() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let place_a = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let place_b = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let place_c = db::main::element::queries::insert(OverpassElement::mock(3), &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, place_a.id, "create", &pool).await?;
+        db::main::element_event::queries::insert(user.id, place_b.id, "create", &pool).await?;
+        db::main::element_event::queries::insert(user.id, place_c.id, "create", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Without places filter: all three events
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(3, res.len());
+
+        // With places filter: only matching events
+        let req = TestRequest::get()
+            .uri(&format!("/?places={},{}", place_a.id, place_c.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+        let place_ids: HashSet<i64> = res.iter().map(|i| i.place_id).collect();
+        assert!(place_ids.contains(&place_a.id));
+        assert!(place_ids.contains(&place_c.id));
+        assert!(!place_ids.contains(&place_b.id));
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_area_plus_place_inside_area_dedupes() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let place_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
+        db::main::area_element::queries::insert(area.id, place_in_area.id, &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, place_in_area.id, "create", &pool)
+            .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?areas={}&places={}", area.id, place_in_area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(place_in_area.id, res[0].place_id);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_area_plus_place_outside_area_includes_both() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let place_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let place_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let place_ignored =
+            db::main::element::queries::insert(OverpassElement::mock(3), &pool).await?;
+
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
+        db::main::area_element::queries::insert(area.id, place_in_area.id, &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, place_in_area.id, "create", &pool)
+            .await?;
+        db::main::element_event::queries::insert(user.id, place_outside.id, "create", &pool)
+            .await?;
+        db::main::element_event::queries::insert(user.id, place_ignored.id, "create", &pool)
+            .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?areas={}&places={}", area.id, place_outside.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+        let place_ids: HashSet<i64> = res.iter().map(|i| i.place_id).collect();
+        assert!(place_ids.contains(&place_in_area.id));
+        assert!(place_ids.contains(&place_outside.id));
+        assert!(!place_ids.contains(&place_ignored.id));
         Ok(())
     }
 
