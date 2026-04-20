@@ -25,6 +25,8 @@ const EVENT_TYPE_DELETE: &str = "place_deleted";
 const EVENT_TYPE_COMMENT: &str = "place_commented";
 const EVENT_TYPE_BOOST: &str = "place_boosted";
 
+const MAX_DAYS: i64 = 3650;
+
 #[derive(Deserialize)]
 pub struct GetActivityArgs {
     days: Option<i64>,
@@ -70,6 +72,11 @@ pub async fn get(
 ) -> RestResult<Vec<ActivityItem>> {
     let now = OffsetDateTime::now_utc();
     let days = args.days.unwrap_or(1);
+    if !(1..=MAX_DAYS).contains(&days) {
+        return Err(RestApiError::invalid_input(format!(
+            "days must be between 1 and {MAX_DAYS}"
+        )));
+    }
     let day_ago = now.saturating_sub(Duration::days(days));
     let period_end = now + Duration::seconds(1);
 
@@ -742,6 +749,31 @@ mod test {
         assert!(place_ids.contains(&place_in_area.id));
         assert!(place_ids.contains(&place_outside.id));
         assert!(!place_ids.contains(&place_ignored.id));
+        Ok(())
+    }
+
+    #[test]
+    async fn get_days_out_of_range_returns_400() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        for bad in ["0", "-1", "3651", "36500"] {
+            let req = TestRequest::get()
+                .uri(&format!("/?days={bad}"))
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                res.status(),
+                "days={bad} should be 400",
+            );
+        }
+
         Ok(())
     }
 
