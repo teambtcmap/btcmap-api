@@ -114,23 +114,24 @@ pub async fn get(
     }
 
     let places: HashSet<i64> = match &args.places {
-        Some(comma_separated_places) => comma_separated_places
-            .split(",")
-            .map(|s| s.trim().parse::<i64>())
-            .collect::<Result<HashSet<_>, _>>()
-            .map_err(|_| {
-                RestApiError::invalid_input(
-                    "places must be a comma-separated list of integer place IDs",
-                )
-            })?,
+        Some(comma_separated_places) => {
+            if comma_separated_places.split(',').count() > MAX_PLACES {
+                return Err(RestApiError::invalid_input(format!(
+                    "places must contain at most {MAX_PLACES} IDs"
+                )));
+            }
+            comma_separated_places
+                .split(',')
+                .map(|s| s.trim().parse::<i64>())
+                .collect::<Result<HashSet<_>, _>>()
+                .map_err(|_| {
+                    RestApiError::invalid_input(
+                        "places must be a comma-separated list of integer place IDs",
+                    )
+                })?
+        }
         None => HashSet::new(),
     };
-
-    if places.len() > MAX_PLACES {
-        return Err(RestApiError::invalid_input(format!(
-            "places must contain at most {MAX_PLACES} unique IDs"
-        )));
-    }
 
     let mut elements: Option<HashSet<i64>> = None;
 
