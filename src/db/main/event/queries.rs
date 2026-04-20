@@ -5,7 +5,9 @@ use crate::{
 use deadpool_sqlite::Pool;
 use time::OffsetDateTime;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert(
+    area_id: Option<i64>,
     lat: f64,
     lon: f64,
     name: String,
@@ -17,7 +19,7 @@ pub async fn insert(
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::insert(lat, lon, &name, &website, starts_at, ends_at, conn)
+            blocking_queries::insert(area_id, lat, lon, &name, &website, starts_at, ends_at, conn)
         })
         .await?
 }

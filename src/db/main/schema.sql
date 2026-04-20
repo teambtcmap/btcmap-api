@@ -122,7 +122,7 @@ CREATE TABLE event(
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
-, starts_at TEXT) STRICT;
+, starts_at TEXT, area_id INTEGER REFERENCES area(id)) STRICT;
 CREATE TABLE place_submission(
     id INTEGER PRIMARY KEY NOT NULL,
     origin TEXT NOT NULL,
@@ -167,10 +167,6 @@ CREATE TRIGGER element_event_updated_at UPDATE OF user_id, element_id, type, tag
 BEGIN
     UPDATE element_event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER event_updated_at UPDATE OF lat, lon, name, website, starts_at, ends_at, created_at, deleted_at ON event
-BEGIN
-    UPDATE event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
-END;
 CREATE TRIGGER area_updated_at UPDATE OF alias, bbox_west, bbox_south, bbox_east, bbox_north, tags, created_at, deleted_at ON area
 BEGIN
     UPDATE area SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -190,6 +186,10 @@ END;
 CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, npub, created_at, deleted_at ON user
 BEGIN
     UPDATE user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
+CREATE TRIGGER event_updated_at UPDATE OF lat, lon, name, website, starts_at, ends_at, area_id, created_at, deleted_at ON event
+BEGIN
+    UPDATE event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
 CREATE INDEX idx_user_updated_at ON "osm_user"(updated_at);
 CREATE INDEX area_updated_at ON area(updated_at);

@@ -8,6 +8,7 @@ pub const TABLE: &str = "event";
 #[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
+    AreaId,
     Lat,
     Lon,
     Name,
@@ -23,6 +24,7 @@ pub enum Columns {
 #[derive(PartialEq, Debug)]
 pub struct Event {
     pub id: i64,
+    pub area_id: Option<i64>,
     pub lat: f64,
     pub lon: f64,
     pub name: String,
@@ -40,6 +42,7 @@ impl Event {
         PROJECTION.get_or_init(|| {
             [
                 Columns::Id,
+                Columns::AreaId,
                 Columns::Lat,
                 Columns::Lon,
                 Columns::Name,
@@ -61,6 +64,7 @@ impl Event {
         |row: &Row| -> rusqlite::Result<Self> {
             Ok(Event {
                 id: row.get(Columns::Id.as_ref())?,
+                area_id: row.get(Columns::AreaId.as_ref())?,
                 lat: row.get(Columns::Lat.as_ref())?,
                 lon: row.get(Columns::Lon.as_ref())?,
                 name: row.get(Columns::Name.as_ref())?,

@@ -7,7 +7,9 @@ use schema::Columns::*;
 use schema::TABLE;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
+#[allow(clippy::too_many_arguments)]
 pub fn insert(
+    area_id: Option<i64>,
     lat: f64,
     lon: f64,
     name: &str,
@@ -18,13 +20,14 @@ pub fn insert(
 ) -> Result<Event> {
     let sql = format!(
         r#"
-            INSERT INTO {TABLE} ({Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt})
-            VALUES (:lat, :lon, :name, :website, :starts_at, :ends_at)
+            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt})
+            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at)
             RETURNING {projection}
         "#,
         projection = Event::projection(),
     );
     let params = named_params! {
+        ":area_id": area_id,
         ":lat": lat,
         ":lon": lon,
         ":name": name,
@@ -111,6 +114,7 @@ mod test {
     fn insert() -> Result<()> {
         let conn = conn();
         let event = super::insert(
+            None,
             1.23,
             4.56,
             "name",
@@ -126,7 +130,7 @@ mod test {
     #[test]
     fn insert_null_started_at() -> Result<()> {
         let conn = conn();
-        let event = super::insert(1.23, 4.56, "name", "website", None, None, &conn)?;
+        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
         assert_eq!(Some(&event), super::select_all(&conn)?.first());
         Ok(())
     }
@@ -135,6 +139,7 @@ mod test {
     fn select_all() -> Result<()> {
         let conn = conn();
         let event_1 = super::insert(
+            None,
             1.23,
             4.56,
             "name",
@@ -144,6 +149,7 @@ mod test {
             &conn,
         )?;
         let event_2 = super::insert(
+            None,
             1.23,
             4.56,
             "name",
@@ -153,6 +159,7 @@ mod test {
             &conn,
         )?;
         let event_3 = super::insert(
+            None,
             1.23,
             4.56,
             "name",
@@ -169,6 +176,7 @@ mod test {
     fn set_deleted_at() -> Result<()> {
         let conn = conn();
         let event = super::insert(
+            None,
             1.23,
             4.56,
             "name",

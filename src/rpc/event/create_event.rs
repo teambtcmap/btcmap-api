@@ -8,6 +8,7 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
+    area_id: Option<i64>,
     lat: f64,
     lon: f64,
     name: String,
@@ -31,6 +32,7 @@ impl From<Event> for Res {
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     db::main::event::queries::insert(
+        params.area_id,
         params.lat,
         params.lon,
         params.name,
