@@ -8,6 +8,10 @@ This document describes the endpoints for interacting with places in REST API v4
 - [Search](#search)
 - [Fetch Place](#fetch-place)
 - [Fetch Place Comments](#fetch-place-comments)
+- [Get Saved Places](#get-saved-places)
+- [Set Saved Places](#set-saved-places)
+- [Add Saved Place](#add-saved-place)
+- [Delete Saved Place](#delete-saved-place)
 
 ### Chronological Sync
 
@@ -345,4 +349,103 @@ curl GET https://api.btcmap.org/v4/places/120/areas?type=community
   "updated_at": "2026-02-10T12:25:23.64Z"
   }
 ]
+```
+
+### Get Saved Places
+
+Returns the authenticated user's saved places.
+
+```bash
+curl https://api.btcmap.org/v4/places/saved
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Examples
+
+```json
+[
+  {
+    "id": 4829,
+    "lat": 53.2689435,
+    "lon": 9.8538715,
+    "name": "Der Schafstall"
+  }
+]
+```
+
+### Set Saved Places
+
+Replaces the authenticated user's saved places list.
+
+```bash
+curl -X PUT https://api.btcmap.org/v4/places/saved \
+  -H "Authorization: Bearer {token}" \
+  -d '[123, 456, 789]'
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Request Body
+
+| Type | Example | Description |
+|------|---------|-------------|
+| Array of Numbers | `[123, 456]` | Array of place IDs to save. |
+
+#### Response
+
+Returns the updated list of saved place IDs.
+
+```json
+[123, 456, 789]
+```
+
+### Add Saved Place
+
+Adds a single place to the authenticated user's saved places.
+
+```bash
+curl -X POST https://api.btcmap.org/v4/places/saved \
+  -H "Authorization: Bearer {token}" \
+  -d 123
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Request Body
+
+| Type | Example | Description |
+|------|---------|-------------|
+| Number | `123` | Place ID to add. |
+
+#### Response
+
+Returns the updated list of saved place IDs. If the place is already saved, the list is unchanged.
+
+```json
+[123, 456, 789]
+```
+
+### Delete Saved Place
+
+Removes a single place from the authenticated user's saved places.
+
+```bash
+curl -X DELETE https://api.btcmap.org/v4/places/saved/123
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Path Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `id` | Number | `123` | **Required**. Place ID to remove. |
+
+#### Response
+
+Returns the updated list of saved place IDs.
+
+```json
+[456, 789]
 ```

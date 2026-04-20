@@ -4,8 +4,111 @@ This document describes the endpoints for interacting with areas in REST API v4.
 
 ## Available Endpoints
 
-- [Search](#search)
-- [Get Area](#get-area)
+- [Get Saved Areas](#get-saved-areas)
+- [Set Saved Areas](#set-saved-areas)
+- [Add Saved Area](#add-saved-area)
+- [Delete Saved Area](#delete-saved-area)
+
+### Get Saved Areas
+
+Returns the authenticated user's saved areas.
+
+```bash
+curl https://api.btcmap.org/v4/areas/saved
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Examples
+
+```json
+[
+  {
+    "id": 123,
+    "name": "Grand Paris",
+    "type": "community",
+    "url_alias": "grand-paris",
+    "icon": "https://static.btcmap.org/images/communities/grand-paris.jpg",
+    "website_url": "https://btcmap.org/community/grand-paris"
+  }
+]
+```
+
+### Set Saved Areas
+
+Replaces the authenticated user's saved areas list.
+
+```bash
+curl -X PUT https://api.btcmap.org/v4/areas/saved \
+  -H "Authorization: Bearer {token}" \
+  -d '[123, 456, 789]'
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Request Body
+
+| Type | Example | Description |
+|------|---------|-------------|
+| Array of Numbers | `[123, 456]` | Array of area IDs to save. |
+
+#### Response
+
+Returns the updated list of saved area IDs.
+
+```json
+[123, 456, 789]
+```
+
+### Add Saved Area
+
+Adds a single area to the authenticated user's saved areas.
+
+```bash
+curl -X POST https://api.btcmap.org/v4/areas/saved \
+  -H "Authorization: Bearer {token}" \
+  -d 123
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Request Body
+
+| Type | Example | Description |
+|------|---------|-------------|
+| Number | `123` | Area ID to add. |
+
+#### Response
+
+Returns the updated list of saved area IDs. If the area is already saved, the list is unchanged.
+
+```json
+[123, 456, 789]
+```
+
+### Delete Saved Area
+
+Removes a single area from the authenticated user's saved areas.
+
+```bash
+curl -X DELETE https://api.btcmap.org/v4/areas/saved/123
+```
+
+**Requires authentication.** See [Users API](users.md) for details.
+
+#### Path Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `id` | Number | `123` | **Required**. Area ID to remove. |
+
+#### Response
+
+Returns the updated list of saved area IDs.
+
+```json
+[456, 789]
+```
 
 ### Search
 

@@ -8,7 +8,7 @@ use crate::rest::v4::top_editors::{
 };
 use crate::service;
 use crate::Error;
-use actix_web::{get, put, web::Data, web::Json, web::Path, web::Query};
+use actix_web::{delete, get, post, put, web::Data, web::Json, web::Path, web::Query};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -196,6 +196,31 @@ pub async fn put_saved(auth: Auth, args: Json<Vec<i64>>, pool: Data<MainPool>) -
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(actix_web::web::Json(args.into_inner()))
+}
+
+#[post("/saved")]
+pub async fn post_saved(auth: Auth, args: Json<i64>, pool: Data<MainPool>) -> Res<Vec<i64>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    let mut saved_areas = user.saved_areas.clone();
+    if !saved_areas.contains(&args) {
+        saved_areas.push(args.into_inner());
+    }
+    db::main::user::queries::set_saved_areas(user.id, &saved_areas, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(actix_web::web::Json(saved_areas))
+}
+
+#[delete("/saved/{id}")]
+pub async fn delete_saved(auth: Auth, path: Path<i64>, pool: Data<MainPool>) -> Res<Vec<i64>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    let id = path.into_inner();
+    let mut saved_areas = user.saved_areas.clone();
+    saved_areas.retain(|x| *x != id);
+    db::main::user::queries::set_saved_areas(user.id, &saved_areas, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(actix_web::web::Json(saved_areas))
 }
 
 #[derive(Deserialize)]
