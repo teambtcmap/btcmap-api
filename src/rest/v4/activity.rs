@@ -26,6 +26,7 @@ const EVENT_TYPE_COMMENT: &str = "place_commented";
 const EVENT_TYPE_BOOST: &str = "place_boosted";
 
 const MAX_DAYS: i64 = 3650;
+const MAX_PLACES: usize = 500;
 
 #[derive(Deserialize)]
 pub struct GetActivityArgs {
@@ -124,6 +125,12 @@ pub async fn get(
             })?,
         None => Vec::new(),
     };
+
+    if places.len() > MAX_PLACES {
+        return Err(RestApiError::invalid_input(format!(
+            "places must contain at most {MAX_PLACES} IDs"
+        )));
+    }
 
     let mut elements: Option<HashSet<i64>> = None;
 
@@ -749,6 +756,28 @@ mod test {
         assert!(place_ids.contains(&place_in_area.id));
         assert!(place_ids.contains(&place_outside.id));
         assert!(!place_ids.contains(&place_ignored.id));
+        Ok(())
+    }
+
+    #[test]
+    async fn get_too_many_places_returns_400() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let ids: Vec<String> = (1..=(super::MAX_PLACES + 1))
+            .map(|n| n.to_string())
+            .collect();
+        let req = TestRequest::get()
+            .uri(&format!("/?places={}", ids.join(",")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::BAD_REQUEST, res.status());
+
         Ok(())
     }
 
