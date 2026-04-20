@@ -242,7 +242,7 @@ pub async fn get(
     }
 
     // Fetch boosts — invoices store element_id in a description string,
-    // not a JOINable column, so we use the in_area() helper for filtering
+    // not a JOINable column, so we use the in_filter() helper for filtering
     let paid_invoices = db::main::invoice::queries::select_by_status(InvoiceStatus::Paid, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
