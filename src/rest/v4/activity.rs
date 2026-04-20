@@ -108,8 +108,13 @@ pub async fn get(
     let places: Vec<i64> = match &args.places {
         Some(comma_separated_places) => comma_separated_places
             .split(",")
-            .filter_map(|s| s.trim().parse::<i64>().ok())
-            .collect(),
+            .map(|s| s.trim().parse::<i64>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| {
+                RestApiError::invalid_input(
+                    "places must be a comma-separated list of integer place IDs",
+                )
+            })?,
         None => Vec::new(),
     };
 
@@ -737,6 +742,27 @@ mod test {
         assert!(place_ids.contains(&place_in_area.id));
         assert!(place_ids.contains(&place_outside.id));
         assert!(!place_ids.contains(&place_ignored.id));
+        Ok(())
+    }
+
+    #[test]
+    async fn get_invalid_places_returns_400() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get().uri("/?places=foo").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::BAD_REQUEST, res.status());
+
+        let req = TestRequest::get().uri("/?places=1,bar,3").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::BAD_REQUEST, res.status());
+
         Ok(())
     }
 
