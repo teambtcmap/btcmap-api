@@ -2,8 +2,10 @@ use rusqlite::Row;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
 
-pub const TABLE_NAME: &str = "event";
+pub const TABLE: &str = "event";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Lat,
@@ -15,23 +17,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Lat => "lat",
-            Columns::Lon => "lon",
-            Columns::Name => "name",
-            Columns::Website => "website",
-            Columns::StartsAt => "starts_at",
-            Columns::EndsAt => "ends_at",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -66,7 +51,7 @@ impl Event {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -75,16 +60,16 @@ impl Event {
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row: &Row| -> rusqlite::Result<Self> {
             Ok(Event {
-                id: row.get(Columns::Id.as_str())?,
-                lat: row.get(Columns::Lat.as_str())?,
-                lon: row.get(Columns::Lon.as_str())?,
-                name: row.get(Columns::Name.as_str())?,
-                website: row.get(Columns::Website.as_str())?,
-                starts_at: row.get(Columns::StartsAt.as_str())?,
-                ends_at: row.get(Columns::EndsAt.as_str())?,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                lat: row.get(Columns::Lat.as_ref())?,
+                lon: row.get(Columns::Lon.as_ref())?,
+                name: row.get(Columns::Name.as_ref())?,
+                website: row.get(Columns::Website.as_ref())?,
+                starts_at: row.get(Columns::StartsAt.as_ref())?,
+                ends_at: row.get(Columns::EndsAt.as_ref())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }

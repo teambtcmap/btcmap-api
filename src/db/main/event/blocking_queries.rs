@@ -1,8 +1,10 @@
 use crate::{
-    db::main::event::schema::{self, Columns, Event},
+    db::main::event::schema::{self, Event},
     Result,
 };
 use rusqlite::{named_params, params, Connection};
+use schema::Columns::*;
+use schema::TABLE;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub fn insert(
@@ -16,17 +18,10 @@ pub fn insert(
 ) -> Result<Event> {
     let sql = format!(
         r#"
-            INSERT INTO {table} ({lat}, {lon}, {name}, {website}, {starts_at}, {ends_at})
+            INSERT INTO {TABLE} ({Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt})
             VALUES (:lat, :lon, :name, :website, :starts_at, :ends_at)
             RETURNING {projection}
         "#,
-        table = schema::TABLE_NAME,
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        name = Columns::Name.as_str(),
-        website = Columns::Website.as_str(),
-        starts_at = Columns::StartsAt.as_str(),
-        ends_at = Columns::EndsAt.as_str(),
         projection = Event::projection(),
     );
     let params = named_params! {
@@ -45,10 +40,9 @@ pub fn select_all(conn: &Connection) -> Result<Vec<Event>> {
     let sql = format!(
         "
         SELECT {projection}
-        FROM {table}
+        FROM {TABLE}
     ",
         projection = Event::projection(),
-        table = schema::TABLE_NAME
     );
     conn.prepare(&sql)?
         .query_map({}, Event::mapper())?
@@ -60,12 +54,10 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Event> {
     let sql = format!(
         r#"
             SELECT {projection}
-            FROM {table}
-            WHERE {id} = ?1
+            FROM {TABLE}
+            WHERE {Id} = ?1
         "#,
         projection = Event::projection(),
-        table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
     );
     conn.query_row(&sql, params![id], Event::mapper())
         .map_err(Into::into)
@@ -80,14 +72,11 @@ pub fn set_deleted_at(
         Some(deleted_at) => {
             let sql = format!(
                 r#"
-                    UPDATE {table}
-                    SET {deleted_at} = ?2
-                    WHERE {id} = ?1
+                    UPDATE {TABLE}
+                    SET {DeletedAt} = ?2
+                    WHERE {Id} = ?1
                     RETURNING {projection}
                 "#,
-                table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
                 projection = Event::projection(),
             );
             conn.query_row(
@@ -100,14 +89,11 @@ pub fn set_deleted_at(
         None => {
             let sql = format!(
                 r#"
-                    UPDATE {table}
-                    SET {deleted_at} = NULL
-                    WHERE {id} = ?1
+                    UPDATE {TABLE}
+                    SET {DeletedAt} = NULL
+                    WHERE {Id} = ?1
                     RETURNING {projection}
                 "#,
-                table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
                 projection = Event::projection(),
             );
             conn.query_row(&sql, params![id], Event::mapper())
