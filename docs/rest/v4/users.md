@@ -34,7 +34,9 @@ curl https://api.btcmap.org/v4/users/me \
 {
   "id": 123,
   "name": "satoshi",
-  "roles": ["user", "admin"]
+  "roles": ["user", "admin"],
+  "saved_places": [{"id": 1, "name": "Bitcoin Cafe"}],
+  "saved_areas": [{"id": 2, "name": "Downtown District"}]
 }
 ```
 
@@ -43,6 +45,8 @@ curl https://api.btcmap.org/v4/users/me \
 | id    | Number | User ID |
 | name  | String | Username |
 | roles | Array  | List of user roles (e.g., "user", "admin", "root") |
+| saved_places | Array | List of saved places with `id` and `name` fields |
+| saved_areas | Array | List of saved areas with `id` and `name` fields |
 
 ### Create User
 
