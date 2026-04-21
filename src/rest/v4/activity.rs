@@ -25,11 +25,15 @@ const EVENT_TYPE_DELETE: &str = "place_deleted";
 const EVENT_TYPE_COMMENT: &str = "place_commented";
 const EVENT_TYPE_BOOST: &str = "place_boosted";
 
+const MAX_DAYS: i64 = 3650;
+const MAX_PLACES: usize = 500;
+
 #[derive(Deserialize)]
 pub struct GetActivityArgs {
     days: Option<i64>,
     area: Option<String>,
     areas: Option<String>,
+    places: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -69,6 +73,11 @@ pub async fn get(
 ) -> RestResult<Vec<ActivityItem>> {
     let now = OffsetDateTime::now_utc();
     let days = args.days.unwrap_or(1);
+    if !(1..=MAX_DAYS).contains(&days) {
+        return Err(RestApiError::invalid_input(format!(
+            "days must be between 1 and {MAX_DAYS}"
+        )));
+    }
     let day_ago = now.saturating_sub(Duration::days(days));
     let period_end = now + Duration::seconds(1);
 
@@ -104,9 +113,29 @@ pub async fn get(
         }
     }
 
+    let places: HashSet<i64> = match &args.places {
+        Some(comma_separated_places) => {
+            if comma_separated_places.split(',').count() > MAX_PLACES {
+                return Err(RestApiError::invalid_input(format!(
+                    "places accepts at most {MAX_PLACES} comma-separated values"
+                )));
+            }
+            comma_separated_places
+                .split(',')
+                .map(|s| s.trim().parse::<i64>())
+                .collect::<Result<HashSet<_>, _>>()
+                .map_err(|_| {
+                    RestApiError::invalid_input(
+                        "places must be a comma-separated list of integer place IDs",
+                    )
+                })?
+        }
+        None => HashSet::new(),
+    };
+
     let mut elements: Option<HashSet<i64>> = None;
 
-    if !areas.is_empty() {
+    if !areas.is_empty() || !places.is_empty() {
         let mut combined_elements: HashSet<i64> = HashSet::new();
         for area in &areas {
             let area_elements = db::main::area_element::queries::select_by_area_id(*area, &pool)
@@ -118,18 +147,21 @@ pub async fn get(
                 }
             }
         }
+        for place_id in &places {
+            combined_elements.insert(*place_id);
+        }
         elements = Some(combined_elements);
     }
 
-    let in_area = |element_id: i64| -> bool {
+    let in_filter = |element_id: i64| -> bool {
         match &elements {
             Some(ids) => ids.contains(&element_id),
             None => true,
         }
     };
 
-    // Fetch events — areas-scoped or global
-    let events = if !areas.is_empty() {
+    // Fetch events — area-scoped (optimized), global, or global + post-filter
+    let events = if !areas.is_empty() && places.is_empty() {
         let mut combined: HashSet<ElementEvent> = HashSet::new();
         for area in &areas {
             let area_events = db::main::element_event::queries::select_created_between_for_area(
@@ -150,6 +182,9 @@ pub async fn get(
 
     let mut items: Vec<ActivityItem> = Vec::with_capacity(events.len());
     for event in events {
+        if !in_filter(event.element_id) {
+            continue;
+        }
         let element = db::main::element::queries::select_by_id(event.element_id, &pool)
             .await
             .map_err(|_| RestApiError::database())?;
@@ -178,8 +213,8 @@ pub async fn get(
         });
     }
 
-    // Fetch comments — areas-scoped or global
-    let comments = if !areas.is_empty() {
+    // Fetch comments — area-scoped (optimized), global, or global + post-filter
+    let comments = if !areas.is_empty() && places.is_empty() {
         let mut combined: HashSet<ElementComment> = HashSet::new();
         for area in areas {
             let comments = db::main::element_comment::queries::select_created_between_for_area(
@@ -200,6 +235,9 @@ pub async fn get(
 
     for comment in comments {
         if comment.deleted_at.is_some() {
+            continue;
+        }
+        if !in_filter(comment.element_id) {
             continue;
         }
 
@@ -224,7 +262,7 @@ pub async fn get(
     }
 
     // Fetch boosts — invoices store element_id in a description string,
-    // not a JOINable column, so we use the in_area() helper for filtering
+    // not a JOINable column, so we use the in_filter() helper for filtering
     let paid_invoices = db::main::invoice::queries::select_by_status(InvoiceStatus::Paid, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -239,7 +277,7 @@ pub async fn get(
             continue;
         };
 
-        if !in_area(element_id) {
+        if !in_filter(element_id) {
             continue;
         }
 
@@ -287,6 +325,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use std::collections::HashSet;
 
     #[test]
     async fn get_empty_array() -> Result<()> {
@@ -590,6 +629,202 @@ mod test {
         assert_eq!(1, res.len());
         assert_eq!(super::EVENT_TYPE_BOOST, res[0].r#type);
         assert_eq!(element_in_area.id, res[0].place_id);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_filtered_by_places() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let place_a = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let place_b = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let place_c = db::main::element::queries::insert(OverpassElement::mock(3), &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, place_a.id, "create", &pool).await?;
+        db::main::element_event::queries::insert(user.id, place_b.id, "create", &pool).await?;
+        db::main::element_event::queries::insert(user.id, place_c.id, "create", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Without places filter: all three events
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(3, res.len());
+
+        // With places filter: only matching events
+        let req = TestRequest::get()
+            .uri(&format!("/?places={},{}", place_a.id, place_c.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+        let place_ids: HashSet<i64> = res.iter().map(|i| i.place_id).collect();
+        assert!(place_ids.contains(&place_a.id));
+        assert!(place_ids.contains(&place_c.id));
+        assert!(!place_ids.contains(&place_b.id));
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_area_plus_place_inside_area_dedupes() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let place_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
+        db::main::area_element::queries::insert(area.id, place_in_area.id, &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, place_in_area.id, "create", &pool)
+            .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?areas={}&places={}", area.id, place_in_area.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(place_in_area.id, res[0].place_id);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_area_plus_place_outside_area_includes_both() -> Result<()> {
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+
+        let place_in_area =
+            db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let place_outside =
+            db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let place_ignored =
+            db::main::element::queries::insert(OverpassElement::mock(3), &pool).await?;
+
+        let area =
+            db::main::area::queries::insert(db::main::area::schema::Area::mock_tags(), &pool)
+                .await?;
+        db::main::area_element::queries::insert(area.id, place_in_area.id, &pool).await?;
+
+        db::main::element_event::queries::insert(user.id, place_in_area.id, "create", &pool)
+            .await?;
+        db::main::element_event::queries::insert(user.id, place_outside.id, "create", &pool)
+            .await?;
+        db::main::element_event::queries::insert(user.id, place_ignored.id, "create", &pool)
+            .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/?areas={}&places={}", area.id, place_outside.id))
+            .to_request();
+        let res: Vec<super::ActivityItem> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+        let place_ids: HashSet<i64> = res.iter().map(|i| i.place_id).collect();
+        assert!(place_ids.contains(&place_in_area.id));
+        assert!(place_ids.contains(&place_outside.id));
+        assert!(!place_ids.contains(&place_ignored.id));
+        Ok(())
+    }
+
+    #[test]
+    async fn get_too_many_places_returns_400() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let ids: Vec<String> = (1..=(super::MAX_PLACES + 1))
+            .map(|n| n.to_string())
+            .collect();
+        let req = TestRequest::get()
+            .uri(&format!("/?places={}", ids.join(",")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::BAD_REQUEST, res.status());
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_days_out_of_range_returns_400() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        for bad in ["0", "-1", "3651", "36500"] {
+            let req = TestRequest::get()
+                .uri(&format!("/?days={bad}"))
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                res.status(),
+                "days={bad} should be 400",
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_invalid_places_returns_400() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get().uri("/?places=foo").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::BAD_REQUEST, res.status());
+
+        let req = TestRequest::get().uri("/?places=1,bar,3").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(actix_web::http::StatusCode::BAD_REQUEST, res.status());
+
         Ok(())
     }
 
