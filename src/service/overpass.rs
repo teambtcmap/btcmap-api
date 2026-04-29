@@ -1,5 +1,6 @@
 use crate::Result;
 use geo::{coord, Coord};
+use reqwest::header::USER_AGENT;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{hash::Hash, hash::Hasher};
@@ -9,6 +10,7 @@ use time::{
 use tracing::info;
 
 static API_URL: &str = "https://overpass-api.de/api/interpreter";
+static USER_AGENT_VALUE: &str = "btcmap-api/1.0 (https://btcmap.org)";
 
 static QUERY: &str = r#"
     [out:json][timeout:300];
@@ -195,6 +197,7 @@ pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
     let started_at = OffsetDateTime::now_utc();
     let response = reqwest::Client::new()
         .post(API_URL)
+        .header(USER_AGENT, USER_AGENT_VALUE)
         .body(QUERY)
         .send()
         .await?;
