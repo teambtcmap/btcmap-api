@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS request_user_agent_date ON request(user_agent, date);

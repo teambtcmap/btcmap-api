@@ -1,6 +1,9 @@
 use super::schema::{self, Columns};
 use crate::Result;
 use rusqlite::{named_params, Connection};
+use std::time::Instant;
+use time::{Duration, OffsetDateTime};
+use tracing::info;
 
 pub struct InsertArgs {
     pub ip: String,
@@ -115,7 +118,7 @@ pub fn select_daily_infra_report(conn: &Connection) -> Result<DailyInfraReport> 
             SELECT COUNT(*), COUNT(DISTINCT {ip})
             FROM {table}
             WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND ({user_agent} LIKE 'axios%' OR {user_agent} = 'btcmap.org')
+            AND {user_agent} = 'btcmap.org'
         "#,
         table = schema::TABLE_NAME,
         date = Columns::Date.as_str(),
@@ -130,7 +133,7 @@ pub fn select_daily_infra_report(conn: &Connection) -> Result<DailyInfraReport> 
             SELECT COUNT(*), COUNT(DISTINCT {ip})
             FROM {table}
             WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND ({user_agent} LIKE 'okhttp%' OR {user_agent} LIKE 'BTC Map Android%')
+            AND {user_agent} LIKE 'BTC Map Android%'
         "#,
         table = schema::TABLE_NAME,
         date = Columns::Date.as_str(),
@@ -165,6 +168,106 @@ pub fn select_daily_infra_report(conn: &Connection) -> Result<DailyInfraReport> 
         ios_requests,
         ios_unique_ips,
     })
+}
+
+pub struct TopUserAgent {
+    pub user_agent: String,
+    pub count: i64,
+    pub unique_ips: i64,
+}
+
+pub fn select_top_user_agents(conn: &Connection) -> Result<Vec<TopUserAgent>> {
+    let overall_start = Instant::now();
+
+    let since_date = (OffsetDateTime::now_utc() - Duration::hours(24))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap()
+        .to_string();
+
+    let sql_top = format!(
+        r#"
+            SELECT {user_agent}, COUNT(*) as count
+            FROM {table}
+            WHERE {date} >= ?1
+            AND {user_agent} IS NOT NULL
+            GROUP BY {user_agent}
+            ORDER BY count DESC
+            LIMIT 10
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+    );
+
+    let top_agents: Vec<(String, i64)> = {
+        let start = Instant::now();
+        let mut stmt = conn.prepare(&sql_top)?;
+        let rows = stmt.query_map([&since_date], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let result = rows.collect::<Result<Vec<_>, _>>()?;
+        info!(
+            elapsed_ms = start.elapsed().as_millis() as u64,
+            count = result.len(),
+            "top_user_agents: first query (get top 10 user agents)"
+        );
+        result
+    };
+
+    if top_agents.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders: Vec<String> = top_agents.iter().map(|_| "?".to_string()).collect();
+    let sql_unique = format!(
+        r#"
+            SELECT {user_agent}, COUNT(DISTINCT {ip}) as unique_ips
+            FROM {table}
+            WHERE {date} >= ?1
+            AND {user_agent} IN ({})
+            GROUP BY {user_agent}
+        "#,
+        placeholders.join(", "),
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+        ip = Columns::Ip.as_str(),
+    );
+
+    let unique_ips: std::collections::HashMap<String, i64> = {
+        let start = Instant::now();
+        let mut stmt = conn.prepare(&sql_unique)?;
+        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&since_date as &dyn rusqlite::ToSql];
+        params.extend(top_agents.iter().map(|(ua, _)| ua as &dyn rusqlite::ToSql));
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        let result = rows
+            .collect::<Result<Vec<(String, i64)>, _>>()?
+            .into_iter()
+            .collect::<std::collections::HashMap<_, _>>();
+        info!(
+            elapsed_ms = start.elapsed().as_millis() as u64,
+            count = result.len(),
+            "top_user_agents: second query (get unique IPs for {} agents)",
+            top_agents.len()
+        );
+        result
+    };
+
+    let result = top_agents
+        .into_iter()
+        .map(|(user_agent, count)| TopUserAgent {
+            user_agent: user_agent.clone(),
+            count,
+            unique_ips: *unique_ips.get(&user_agent).unwrap_or(&0),
+        })
+        .collect();
+
+    info!(
+        elapsed_ms = overall_start.elapsed().as_millis() as u64,
+        "top_user_agents: total"
+    );
+
+    Ok(result)
 }
 
 #[cfg(test)]
