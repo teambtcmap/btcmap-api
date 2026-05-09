@@ -91,17 +91,19 @@ pub fn verify(
         )));
     }
 
-    let u_tag = find_tag_value(&event, "u")
-        .ok_or_else(|| Error::Other("Missing 'u' tag in NIP-98 event".to_string()))?;
+    let u_tag = require_unique_tag(&event, "u")?;
     if u_tag != expected_url {
         return Err(Error::Other(format!(
             "URL mismatch: event has '{u_tag}', expected '{expected_url}'"
         )));
     }
 
-    let method_tag = find_tag_value(&event, "method")
-        .ok_or_else(|| Error::Other("Missing 'method' tag in NIP-98 event".to_string()))?;
-    if !method_tag.eq_ignore_ascii_case(expected_method) {
+    // RFC 9110 §9.1 makes HTTP method tokens case-sensitive, and NIP-98
+    // requires the tag value be the same HTTP method as the request. All
+    // standard methods are uppercase, so a strict comparison costs nothing
+    // and matches what every real client sends.
+    let method_tag = require_unique_tag(&event, "method")?;
+    if method_tag != expected_method {
         return Err(Error::Other(format!(
             "Method mismatch: event has '{method_tag}', expected '{expected_method}'"
         )));
@@ -139,14 +141,28 @@ pub fn extract_nostr_auth(authorization_header: &str) -> Option<&str> {
     }
 }
 
-fn find_tag_value(event: &Event, tag_name: &str) -> Option<String> {
+/// Look up a NIP-98 tag, rejecting both absence and duplication.
+///
+/// NIP-98 doesn't explicitly say "exactly one", but accepting duplicates
+/// would let a malicious frontend trick a user into signing an event with
+/// e.g. two `u` tags — one matching, one bogus — and have the verifier
+/// accept it via the matching one. The signature covers all tags so an
+/// attacker can't add tags after the fact, but nothing stops a hostile
+/// client from constructing such an event in the first place.
+fn require_unique_tag(event: &Event, tag_name: &str) -> Result<String, Error> {
+    let mut found: Option<String> = None;
     for tag in event.tags.iter() {
         let tag_vec = tag.as_slice();
         if tag_vec.len() >= 2 && tag_vec[0] == tag_name {
-            return Some(tag_vec[1].to_string());
+            if found.is_some() {
+                return Err(Error::Other(format!(
+                    "Duplicate '{tag_name}' tag in NIP-98 event"
+                )));
+            }
+            found = Some(tag_vec[1].to_string());
         }
     }
-    None
+    found.ok_or_else(|| Error::Other(format!("Missing '{tag_name}' tag in NIP-98 event")))
 }
 
 #[cfg(test)]
@@ -185,11 +201,14 @@ mod test {
     }
 
     #[test]
-    fn method_match_is_case_insensitive() {
+    fn method_match_is_case_sensitive() {
+        // RFC 9110 §9.1: HTTP method tokens are case-sensitive. Lowercase
+        // 'post' must not match 'POST'.
         let keys = Keys::generate();
         let url = "https://api.btcmap.org/v4/auth/nostr";
         let b64 = make_nip98_event(&keys, url, "post");
-        assert!(verify(&b64, url, "POST").is_ok());
+        let err = verify(&b64, url, "POST").unwrap_err();
+        assert!(err.to_string().contains("Method mismatch"));
     }
 
     #[test]
@@ -278,12 +297,91 @@ mod test {
 
         let err = verify(&b64, url, "POST").unwrap_err();
         let msg = err.to_string();
-        // `event.verify()` checks both the id and the signature; either
-        // failing here is acceptable — we just need the verifier to reject.
+        // Only `sig` is mutated. The Nostr event id (sha256 of pubkey,
+        // created_at, kind, tags, content) does not include the signature,
+        // so `event.verify()`'s id check still passes — the failure must
+        // come from the Schnorr step specifically.
         assert!(
-            msg.contains("Signature verification failed")
-                || msg.contains("Invalid Nostr event JSON"),
-            "expected rejection, got: {msg}"
+            msg.contains("Signature verification failed"),
+            "expected Schnorr rejection, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn missing_u_tag_rejected() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
+            .tags(vec![Tag::parse(["method", "POST"]).unwrap()])
+            .custom_created_at(Timestamp::now())
+            .sign_with_keys(&keys)
+            .unwrap();
+        let b64 = BASE64.encode(event.as_json().as_bytes());
+        let err = verify(&b64, "https://api.btcmap.org/v4/auth/nostr", "POST").unwrap_err();
+        assert!(
+            err.to_string().contains("Missing 'u' tag"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn missing_method_tag_rejected() {
+        let keys = Keys::generate();
+        let url = "https://api.btcmap.org/v4/auth/nostr";
+        let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
+            .tags(vec![Tag::parse(["u", url]).unwrap()])
+            .custom_created_at(Timestamp::now())
+            .sign_with_keys(&keys)
+            .unwrap();
+        let b64 = BASE64.encode(event.as_json().as_bytes());
+        let err = verify(&b64, url, "POST").unwrap_err();
+        assert!(
+            err.to_string().contains("Missing 'method' tag"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn duplicate_u_tag_rejected() {
+        // Defense in depth: a hostile client could construct an event with
+        // two `u` tags — one real, one decoy. The signature covers both, so
+        // the user signs both. Reject outright.
+        let keys = Keys::generate();
+        let url = "https://api.btcmap.org/v4/auth/nostr";
+        let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
+            .tags(vec![
+                Tag::parse(["u", url]).unwrap(),
+                Tag::parse(["u", "https://evil.example/auth"]).unwrap(),
+                Tag::parse(["method", "POST"]).unwrap(),
+            ])
+            .custom_created_at(Timestamp::now())
+            .sign_with_keys(&keys)
+            .unwrap();
+        let b64 = BASE64.encode(event.as_json().as_bytes());
+        let err = verify(&b64, url, "POST").unwrap_err();
+        assert!(
+            err.to_string().contains("Duplicate 'u' tag"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn duplicate_method_tag_rejected() {
+        let keys = Keys::generate();
+        let url = "https://api.btcmap.org/v4/auth/nostr";
+        let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
+            .tags(vec![
+                Tag::parse(["u", url]).unwrap(),
+                Tag::parse(["method", "POST"]).unwrap(),
+                Tag::parse(["method", "GET"]).unwrap(),
+            ])
+            .custom_created_at(Timestamp::now())
+            .sign_with_keys(&keys)
+            .unwrap();
+        let b64 = BASE64.encode(event.as_json().as_bytes());
+        let err = verify(&b64, url, "POST").unwrap_err();
+        assert!(
+            err.to_string().contains("Duplicate 'method' tag"),
+            "got: {err}"
         );
     }
 
