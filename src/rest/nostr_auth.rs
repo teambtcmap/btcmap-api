@@ -139,7 +139,7 @@ mod test {
         BASE64.encode(event.as_json().as_bytes())
     }
 
-    #[test]
+    #[actix_web::test]
     async fn missing_header_yields_none() {
         let app = test::init_service(app_with_base()).await;
         let req = TestRequest::post().uri("/").to_request();
@@ -147,7 +147,7 @@ mod test {
         assert_eq!(res.status(), 401);
     }
 
-    #[test]
+    #[actix_web::test]
     async fn bearer_header_yields_none() {
         let app = test::init_service(app_with_base()).await;
         let req = TestRequest::post()
@@ -158,7 +158,7 @@ mod test {
         assert_eq!(res.status(), 401);
     }
 
-    #[test]
+    #[actix_web::test]
     async fn valid_header_yields_bech32_npub() {
         let keys = Keys::generate();
         let app = test::init_service(app_with_base()).await;
@@ -174,7 +174,7 @@ mod test {
         assert_eq!(npub, keys.public_key().to_bech32().unwrap());
     }
 
-    #[test]
+    #[actix_web::test]
     async fn lowercase_scheme_accepted() {
         let keys = Keys::generate();
         let app = test::init_service(app_with_base()).await;
@@ -187,7 +187,7 @@ mod test {
         assert_eq!(res.status(), 200);
     }
 
-    #[test]
+    #[actix_web::test]
     async fn url_mismatch_yields_none() {
         let keys = Keys::generate();
         let app = test::init_service(app_with_base()).await;
@@ -201,7 +201,7 @@ mod test {
         assert_eq!(res.status(), 401);
     }
 
-    #[test]
+    #[actix_web::test]
     async fn method_derived_from_request() {
         let keys = Keys::generate();
         let app = test::init_service(app_with_base()).await;
@@ -215,7 +215,7 @@ mod test {
         assert_eq!(res.status(), 401);
     }
 
-    #[test]
+    #[actix_web::test]
     async fn spoofed_host_header_is_ignored() {
         // Attacker signs an event for "http://evil.example/auth" and replays
         // it to the real server, sending a spoofed Host header. Because the
@@ -233,7 +233,7 @@ mod test {
         assert_eq!(res.status(), 401);
     }
 
-    #[test]
+    #[actix_web::test]
     async fn no_base_url_configured_yields_none() {
         let keys = Keys::generate();
         // Intentionally omit Data::new(ApiBaseUrl(...)). Auth must fail
