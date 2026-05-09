@@ -45,8 +45,11 @@ impl FromRequest for NostrAuth {
         let base_url = req.app_data::<Data<ApiBaseUrl>>().cloned();
         Box::pin(async move {
             // Without a trusted base URL we can't safely verify the `u` tag,
-            // so fail closed (matches the `Auth` extractor's pattern of
-            // returning None-auth when state is missing).
+            // so refuse to attempt verification: yield `npub: None` and let
+            // the handler decide whether to reject (matches the `Auth`
+            // extractor's pattern when state is missing). Whether this ends
+            // up fail-closed or fail-open in practice depends on the
+            // handler — required-auth handlers must treat `None` as 401.
             let Some(base_url) = base_url else {
                 return Ok(NostrAuth { npub: None });
             };

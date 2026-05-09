@@ -55,7 +55,7 @@ pub struct VerifiedNip98Event {
 /// 2. `kind == 27235`
 /// 3. `created_at` within 60 seconds of server time
 /// 4. `u` tag matches `expected_url`
-/// 5. `method` tag matches `expected_method` (case-insensitive)
+/// 5. `method` tag matches `expected_method` (case-sensitive, per RFC 9110 §9.1)
 /// 6. Schnorr signature is valid
 pub fn verify(
     authorization_payload: &str,
