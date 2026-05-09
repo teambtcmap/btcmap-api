@@ -317,10 +317,7 @@ mod test {
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, "https://api.btcmap.org/v4/auth/nostr", "POST").unwrap_err();
-        assert!(
-            err.to_string().contains("Missing 'u' tag"),
-            "got: {err}"
-        );
+        assert!(err.to_string().contains("Missing 'u' tag"), "got: {err}");
     }
 
     #[test]
@@ -358,10 +355,7 @@ mod test {
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, url, "POST").unwrap_err();
-        assert!(
-            err.to_string().contains("Duplicate 'u' tag"),
-            "got: {err}"
-        );
+        assert!(err.to_string().contains("Duplicate 'u' tag"), "got: {err}");
     }
 
     #[test]
