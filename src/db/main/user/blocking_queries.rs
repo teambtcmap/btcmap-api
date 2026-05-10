@@ -21,17 +21,24 @@ pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<User> {
     .map_err(Into::into)
 }
 
-pub fn insert_with_npub(name: &str, password: &str, npub: &str, conn: &Connection) -> Result<User> {
+pub fn insert_with_npub(
+    name: &str,
+    password: &str,
+    npub: &str,
+    roles: &[Role],
+    conn: &Connection,
+) -> Result<User> {
+    let roles_json: Vec<String> = roles.iter().map(|r| r.to_string()).collect();
     conn.query_row(
         &format!(
             r#"
-                INSERT INTO {TABLE} ({Name}, {Password}, {Npub})
-                VALUES (?1, ?2, ?3)
+                INSERT INTO {TABLE} ({Name}, {Password}, {Npub}, {Roles})
+                VALUES (?1, ?2, ?3, json(?4))
                 RETURNING {projection}
             "#,
             projection = User::projection(),
         ),
-        params![name, password, npub],
+        params![name, password, npub, serde_json::to_string(&roles_json)?],
         User::mapper(),
     )
     .map_err(Into::into)

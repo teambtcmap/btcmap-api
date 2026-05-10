@@ -15,23 +15,29 @@ pub async fn insert(
         .await?
 }
 
-/// Insert a user with `npub` set in a single statement. Errors with a
-/// SQLite UNIQUE-violation if another row already has the same `npub`
-/// (see migration 101). Used by the NIP-98 sign-in endpoint to make
-/// auto-creation race-safe: a concurrent first-time login for the same
-/// pubkey will lose this insert and fall back to `select_by_npub`.
+/// Insert a user with `npub` and `roles` set in a single statement.
+/// Errors with a SQLite UNIQUE-violation if another row already has the
+/// same `npub` (see migration 101). Used by the NIP-98 sign-in endpoint to
+/// make auto-creation race-safe and atomic: a concurrent first-time login
+/// for the same pubkey will lose this insert and fall back to
+/// `select_by_npub`, and there is no window where a row exists with empty
+/// roles.
 pub async fn insert_with_npub(
     name: impl Into<String>,
     password: impl Into<String>,
     npub: impl Into<String>,
+    roles: &[Role],
     pool: &Pool,
 ) -> Result<User> {
     let name = name.into();
     let password = password.into();
     let npub = npub.into();
+    let roles = roles.to_vec();
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::insert_with_npub(&name, &password, &npub, conn))
+        .interact(move |conn| {
+            blocking_queries::insert_with_npub(&name, &password, &npub, &roles, conn)
+        })
         .await?
 }
 

@@ -1,7 +1,7 @@
 use crate::db;
 use crate::db::main::user::schema::{Role, User};
 use crate::db::main::MainPool;
-use crate::rest::error::RestApiError;
+use crate::rest::error::{RestApiError, RestResult};
 use crate::rest::nostr_auth::NostrAuth;
 use actix_web::post;
 use actix_web::web::Data;
@@ -28,19 +28,18 @@ pub struct AuthNostrResponse {
 /// (`Host`, `X-Forwarded-*`) are not trusted.
 ///
 /// On success, looks up the user by bech32 npub. If no user is linked to
-/// the pubkey, a fresh account is auto-created (generated name, empty
-/// password, role `User`, npub set). A token is minted bound to that user
-/// and returned alongside `username` and `npub`.
+/// the pubkey, a fresh account is auto-created in a single INSERT
+/// (generated name, empty password, role `User`, npub set). A token is
+/// minted bound to that user and returned alongside `username` and `npub`.
 ///
 /// Concurrency: two simultaneous first-time sign-ins for the same pubkey
 /// race on `INSERT INTO user(... npub)`. The unique partial index from
-/// migration 101 fails the loser; this handler then re-selects by npub and
-/// uses the winning row, so exactly one user is created.
+/// migration 101 fails the loser with a SQLite ConstraintViolation; this
+/// handler then re-selects by npub and uses the winning row, so exactly
+/// one fully-initialized user exists. Any other database error is
+/// propagated rather than masked as a lost race.
 #[post("/nostr")]
-pub async fn auth_nostr(
-    auth: NostrAuth,
-    pool: Data<MainPool>,
-) -> Result<Json<AuthNostrResponse>, RestApiError> {
+pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<AuthNostrResponse> {
     let npub = auth.npub.ok_or_else(RestApiError::unauthorized)?;
 
     let user = match db::main::user::queries::select_by_npub(npub.clone(), &pool)
@@ -69,23 +68,45 @@ pub async fn auth_nostr(
     }))
 }
 
-/// Auto-create a user for an unknown npub. If the insert loses a race
-/// against a concurrent first-time login for the same pubkey, the unique
-/// index fires and we recover by selecting the winning row.
+/// Auto-create a user for an unknown npub. The insert sets `roles`
+/// atomically alongside `npub`. If the insert loses a race against a
+/// concurrent first-time login for the same pubkey, the unique partial
+/// index from migration 101 fires a SQLite ConstraintViolation and we
+/// recover by selecting the winning row. Any other error (pool, panic,
+/// non-constraint SQLite error) is propagated as a database error rather
+/// than silently masked as a lost race.
 async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiError> {
     let name = Generator::with_naming(Name::Numbered)
         .next()
         .unwrap_or_default();
 
-    match db::main::user::queries::insert_with_npub(name, String::new(), npub, pool).await {
-        Ok(user) => db::main::user::queries::set_roles(user.id, &[Role::User], pool)
-            .await
-            .map_err(|_| RestApiError::database()),
-        Err(_) => db::main::user::queries::select_by_npub(npub.to_string(), pool)
-            .await
-            .map_err(|_| RestApiError::database())?
-            .ok_or_else(RestApiError::database),
+    match db::main::user::queries::insert_with_npub(
+        name,
+        String::new(),
+        npub,
+        &[Role::User],
+        pool,
+    )
+    .await
+    {
+        Ok(user) => Ok(user),
+        Err(e) if is_unique_violation(&e) => db::main::user::queries::select_by_npub(
+            npub.to_string(),
+            pool,
+        )
+        .await
+        .map_err(|_| RestApiError::database())?
+        .ok_or_else(RestApiError::database),
+        Err(_) => Err(RestApiError::database()),
     }
+}
+
+fn is_unique_violation(err: &crate::Error) -> bool {
+    matches!(
+        err,
+        crate::Error::Rusqlite(rusqlite::Error::SqliteFailure(e, _))
+            if e.code == rusqlite::ErrorCode::ConstraintViolation
+    )
 }
 
 #[cfg(test)]
@@ -165,9 +186,14 @@ mod test {
         let pool = pool();
         let keys = Keys::generate();
         let npub = keys.public_key().to_bech32().unwrap();
-        let user =
-            db::main::user::queries::insert_with_npub("preexisting_user", "", &npub, &pool).await?;
-        let user = db::main::user::queries::set_roles(user.id, &[Role::User], &pool).await?;
+        let user = db::main::user::queries::insert_with_npub(
+            "preexisting_user",
+            "",
+            &npub,
+            &[Role::User],
+            &pool,
+        )
+        .await?;
 
         let app = test::init_service(build_app(Data::new(pool.clone()))).await;
         let payload = signed_nip98(&keys, "POST");
@@ -234,9 +260,13 @@ mod test {
         let user_a = a.expect("first call should succeed");
         let user_b = b.expect("second call should succeed (via recover path)");
 
-        // Both calls must agree on the same row
+        // Both calls must agree on the same row, and roles must be set —
+        // there is no window where the row exists with empty roles, even
+        // for the loser branch which selects the winner's row.
         assert_eq!(user_a.id, user_b.id);
         assert_eq!(user_a.npub, Some(npub.clone()));
+        assert!(user_a.roles.contains(&Role::User));
+        assert!(user_b.roles.contains(&Role::User));
         Ok(())
     }
 }
