@@ -20,7 +20,6 @@ pub async fn insert(
 /// (see migration 101). Used by the NIP-98 sign-in endpoint to make
 /// auto-creation race-safe: a concurrent first-time login for the same
 /// pubkey will lose this insert and fall back to `select_by_npub`.
-#[allow(dead_code)]
 pub async fn insert_with_npub(
     name: impl Into<String>,
     password: impl Into<String>,
@@ -51,7 +50,6 @@ pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<User
         .await?
 }
 
-#[allow(dead_code)]
 pub async fn select_by_npub(npub: impl Into<String>, pool: &Pool) -> Result<Option<User>> {
     let npub = npub.into();
     pool.get()
