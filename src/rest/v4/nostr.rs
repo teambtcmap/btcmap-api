@@ -50,16 +50,14 @@ pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<Aut
         None => create_or_recover(&npub, &pool).await?,
     };
 
+    // Mint with empty token roles so authorization always derives from
+    // the user's current roles (see rpc::handler — non-empty token roles
+    // override the user's). Otherwise role revocations on the user would
+    // not take effect for already-issued Nostr tokens.
     let secret = Uuid::new_v4().to_string();
-    db::main::access_token::queries::insert(
-        user.id,
-        String::new(),
-        secret.clone(),
-        user.roles.clone(),
-        &pool,
-    )
-    .await
-    .map_err(|_| RestApiError::database())?;
+    db::main::access_token::queries::insert(user.id, String::new(), secret.clone(), vec![], &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
 
     Ok(Json(AuthNostrResponse {
         token: secret,
@@ -69,36 +67,59 @@ pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<Aut
 }
 
 /// Auto-create a user for an unknown npub. The insert sets `roles`
-/// atomically alongside `npub`. If the insert loses a race against a
-/// concurrent first-time login for the same pubkey, the unique partial
-/// index from migration 101 fires a SQLite ConstraintViolation and we
-/// recover by selecting the winning row. Any other error (pool, panic,
-/// non-constraint SQLite error) is propagated as a database error rather
-/// than silently masked as a lost race.
-async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiError> {
-    let name = Generator::with_naming(Name::Numbered)
-        .next()
-        .unwrap_or_default();
+/// atomically alongside `npub`. Two distinct UNIQUE failures are possible
+/// here, and they're handled differently:
+///
+/// * `user.npub` — lost a race against a concurrent first-time login for
+///   the same pubkey. Recover by selecting the winning row so both
+///   callers agree on a single, fully-initialized user.
+/// * `user.name` — the random `Name::Numbered` generator collided with an
+///   existing user. Retry with a fresh name a few times.
+///
+/// Any other database error (pool, panic, NOT NULL, other UNIQUE indexes,
+/// foreign keys, ...) is propagated as a database error rather than
+/// silently masked as a lost race.
+const NAME_RETRIES: u8 = 5;
 
-    match db::main::user::queries::insert_with_npub(name, String::new(), npub, &[Role::User], pool)
+async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiError> {
+    for _ in 0..NAME_RETRIES {
+        let name = Generator::with_naming(Name::Numbered)
+            .next()
+            .unwrap_or_default();
+
+        match db::main::user::queries::insert_with_npub(
+            name,
+            String::new(),
+            npub,
+            &[Role::User],
+            pool,
+        )
         .await
-    {
-        Ok(user) => Ok(user),
-        Err(e) if is_unique_violation(&e) => {
-            db::main::user::queries::select_by_npub(npub.to_string(), pool)
-                .await
-                .map_err(|_| RestApiError::database())?
-                .ok_or_else(RestApiError::database)
+        {
+            Ok(user) => return Ok(user),
+            Err(e) if is_unique_violation_on(&e, "user.npub") => {
+                return db::main::user::queries::select_by_npub(npub.to_string(), pool)
+                    .await
+                    .map_err(|_| RestApiError::database())?
+                    .ok_or_else(RestApiError::database);
+            }
+            Err(e) if is_unique_violation_on(&e, "user.name") => continue,
+            Err(_) => return Err(RestApiError::database()),
         }
-        Err(_) => Err(RestApiError::database()),
     }
+    Err(RestApiError::database())
 }
 
-fn is_unique_violation(err: &crate::Error) -> bool {
+/// True iff `err` is a SQLite `ConstraintViolation` whose message names
+/// `target` (e.g. `"user.npub"`). SQLite's UNIQUE failure message has the
+/// form `UNIQUE constraint failed: <table>.<col>`, so column-level
+/// matching is robust enough without parsing extended error codes.
+fn is_unique_violation_on(err: &crate::Error, target: &str) -> bool {
     matches!(
         err,
-        crate::Error::Rusqlite(rusqlite::Error::SqliteFailure(e, _))
+        crate::Error::Rusqlite(rusqlite::Error::SqliteFailure(e, msg))
             if e.code == rusqlite::ErrorCode::ConstraintViolation
+                && msg.as_deref().is_some_and(|m| m.contains(target))
     )
 }
 
