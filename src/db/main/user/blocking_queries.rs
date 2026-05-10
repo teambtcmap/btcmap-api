@@ -21,6 +21,22 @@ pub fn insert(name: &str, password: &str, conn: &Connection) -> Result<User> {
     .map_err(Into::into)
 }
 
+pub fn insert_with_npub(name: &str, password: &str, npub: &str, conn: &Connection) -> Result<User> {
+    conn.query_row(
+        &format!(
+            r#"
+                INSERT INTO {TABLE} ({Name}, {Password}, {Npub})
+                VALUES (?1, ?2, ?3)
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![name, password, npub],
+        User::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 #[allow(dead_code)]
 pub fn select_all(conn: &Connection) -> Result<Vec<User>> {
     conn.prepare(&format!(

@@ -15,6 +15,27 @@ pub async fn insert(
         .await?
 }
 
+/// Insert a user with `npub` set in a single statement. Errors with a
+/// SQLite UNIQUE-violation if another row already has the same `npub`
+/// (see migration 101). Used by the NIP-98 sign-in endpoint to make
+/// auto-creation race-safe: a concurrent first-time login for the same
+/// pubkey will lose this insert and fall back to `select_by_npub`.
+#[allow(dead_code)]
+pub async fn insert_with_npub(
+    name: impl Into<String>,
+    password: impl Into<String>,
+    npub: impl Into<String>,
+    pool: &Pool,
+) -> Result<User> {
+    let name = name.into();
+    let password = password.into();
+    let npub = npub.into();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::insert_with_npub(&name, &password, &npub, conn))
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<User> {
     pool.get()
         .await?
