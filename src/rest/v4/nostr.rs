@@ -80,23 +80,16 @@ async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiE
         .next()
         .unwrap_or_default();
 
-    match db::main::user::queries::insert_with_npub(
-        name,
-        String::new(),
-        npub,
-        &[Role::User],
-        pool,
-    )
-    .await
+    match db::main::user::queries::insert_with_npub(name, String::new(), npub, &[Role::User], pool)
+        .await
     {
         Ok(user) => Ok(user),
-        Err(e) if is_unique_violation(&e) => db::main::user::queries::select_by_npub(
-            npub.to_string(),
-            pool,
-        )
-        .await
-        .map_err(|_| RestApiError::database())?
-        .ok_or_else(RestApiError::database),
+        Err(e) if is_unique_violation(&e) => {
+            db::main::user::queries::select_by_npub(npub.to_string(), pool)
+                .await
+                .map_err(|_| RestApiError::database())?
+                .ok_or_else(RestApiError::database)
+        }
         Err(_) => Err(RestApiError::database()),
     }
 }
