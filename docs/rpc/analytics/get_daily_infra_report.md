@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns a daily infrastructure report containing request statistics, unique IP counts, platform breakdowns (web, android, ios), and top user agents.
+Returns a daily infrastructure report containing request statistics, unique IP counts, platform breakdowns (web, android, ios), top user agents, and user statistics (total users, new users in last 1 day, new users in last 1 month).
 
 ## Params
 
@@ -34,7 +34,12 @@ Returns a daily infrastructure report containing request statistics, unique IP c
       "count": 500,
       "unique_ips": 150
     }
-  ]
+  ],
+  "user_stats": {
+    "total": 5000,
+    "new_1d": 10,
+    "new_1m": 150
+  }
 }
 ```
 

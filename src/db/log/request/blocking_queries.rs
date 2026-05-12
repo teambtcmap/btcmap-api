@@ -176,6 +176,23 @@ pub struct TopUserAgent {
     pub unique_ips: i64,
 }
 
+pub struct TopClientsReport {
+    pub web: PlatformClientStats,
+    pub android: PlatformClientStats,
+    pub ios: PlatformClientStats,
+}
+
+pub struct PlatformClientStats {
+    pub total_requests: i64,
+    pub unique_ips: i64,
+    pub top_ips: Vec<TopIp>,
+}
+
+pub struct TopIp {
+    pub ip: String,
+    pub count: i64,
+}
+
 pub fn select_top_user_agents(conn: &Connection) -> Result<Vec<TopUserAgent>> {
     let overall_start = Instant::now();
 
@@ -268,6 +285,152 @@ pub fn select_top_user_agents(conn: &Connection) -> Result<Vec<TopUserAgent>> {
     );
 
     Ok(result)
+}
+
+pub fn select_top_clients(conn: &Connection) -> Result<TopClientsReport> {
+    let sql_web = format!(
+        r#"
+            SELECT {ip}, COUNT(*) as count
+            FROM {table}
+            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {user_agent} = 'btcmap.org'
+            GROUP BY {ip}
+            ORDER BY count DESC
+            LIMIT 10
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        ip = Columns::Ip.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+    );
+    let web_top_ips: Vec<TopIp> = {
+        let mut stmt = conn.prepare(&sql_web)?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TopIp {
+                ip: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+    let (web_requests, web_unique_ips): (i64, i64) = conn.query_row(
+        &format!(
+            r#"
+                SELECT COUNT(*), COUNT(DISTINCT {ip})
+                FROM {table}
+                WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+                AND {user_agent} = 'btcmap.org'
+            "#,
+            table = schema::TABLE_NAME,
+            date = Columns::Date.as_str(),
+            ip = Columns::Ip.as_str(),
+            user_agent = Columns::UserAgent.as_str(),
+        ),
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let sql_android = format!(
+        r#"
+            SELECT {ip}, COUNT(*) as count
+            FROM {table}
+            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {user_agent} LIKE 'BTC Map Android%'
+            GROUP BY {ip}
+            ORDER BY count DESC
+            LIMIT 10
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        ip = Columns::Ip.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+    );
+    let android_top_ips: Vec<TopIp> = {
+        let mut stmt = conn.prepare(&sql_android)?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TopIp {
+                ip: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+    let (android_requests, android_unique_ips): (i64, i64) = conn.query_row(
+        &format!(
+            r#"
+                SELECT COUNT(*), COUNT(DISTINCT {ip})
+                FROM {table}
+                WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+                AND {user_agent} LIKE 'BTC Map Android%'
+            "#,
+            table = schema::TABLE_NAME,
+            date = Columns::Date.as_str(),
+            ip = Columns::Ip.as_str(),
+            user_agent = Columns::UserAgent.as_str(),
+        ),
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let sql_ios = format!(
+        r#"
+            SELECT {ip}, COUNT(*) as count
+            FROM {table}
+            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {user_agent} LIKE '%CFNetwork%'
+            GROUP BY {ip}
+            ORDER BY count DESC
+            LIMIT 10
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+        ip = Columns::Ip.as_str(),
+        user_agent = Columns::UserAgent.as_str(),
+    );
+    let ios_top_ips: Vec<TopIp> = {
+        let mut stmt = conn.prepare(&sql_ios)?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TopIp {
+                ip: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+    let (ios_requests, ios_unique_ips): (i64, i64) = conn.query_row(
+        &format!(
+            r#"
+                SELECT COUNT(*), COUNT(DISTINCT {ip})
+                FROM {table}
+                WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+                AND {user_agent} LIKE '%CFNetwork%'
+            "#,
+            table = schema::TABLE_NAME,
+            date = Columns::Date.as_str(),
+            ip = Columns::Ip.as_str(),
+            user_agent = Columns::UserAgent.as_str(),
+        ),
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok(TopClientsReport {
+        web: PlatformClientStats {
+            total_requests: web_requests,
+            unique_ips: web_unique_ips,
+            top_ips: web_top_ips,
+        },
+        android: PlatformClientStats {
+            total_requests: android_requests,
+            unique_ips: android_unique_ips,
+            top_ips: android_top_ips,
+        },
+        ios: PlatformClientStats {
+            total_requests: ios_requests,
+            unique_ips: ios_unique_ips,
+            top_ips: ios_top_ips,
+        },
+    })
 }
 
 #[cfg(test)]

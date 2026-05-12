@@ -95,6 +95,7 @@ pub enum RpcMethod {
     // Debug
     GetRequestLog,
     GetDailyInfraReport,
+    GetTopClients,
 }
 
 impl Role {
@@ -158,6 +159,8 @@ impl Role {
         RpcMethod::GetSubmittedPlace,
         // Admins can get daily infrastructure report
         RpcMethod::GetDailyInfraReport,
+        // Admins can get top clients report
+        RpcMethod::GetTopClients,
     ];
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
@@ -570,11 +573,15 @@ pub async fn handle(
         }
         RpcMethod::GetRequestLog => RpcResponse::from(
             req.id.clone(),
-            super::log::get_request_log::run(params(req.params)?, &log_pool).await?,
+            super::analytics::get_request_log::run(params(req.params)?, &log_pool).await?,
         ),
         RpcMethod::GetDailyInfraReport => RpcResponse::from(
             req.id.clone(),
-            super::log::get_daily_infra_report::run(&log_pool).await?,
+            super::analytics::get_daily_infra_report::run(&log_pool, &pool).await?,
+        ),
+        RpcMethod::GetTopClients => RpcResponse::from(
+            req.id.clone(),
+            super::analytics::get_top_clients::run(&log_pool).await?,
         ),
     }?;
 

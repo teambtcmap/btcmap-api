@@ -88,3 +88,10 @@ pub async fn set_npub(id: i64, npub: Option<String>, pool: &Pool) -> Result<User
         .interact(move |conn| blocking_queries::set_npub(id, npub, conn))
         .await?
 }
+
+pub async fn select_user_stats(pool: &Pool) -> Result<blocking_queries::UserStats> {
+    pool.get()
+        .await?
+        .interact(|conn| blocking_queries::select_user_stats(conn))
+        .await?
+}

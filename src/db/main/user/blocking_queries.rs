@@ -198,6 +198,46 @@ pub fn set_npub(id: i64, npub: Option<String>, conn: &Connection) -> Result<User
     .map_err(Into::into)
 }
 
+pub struct UserStats {
+    pub total: i64,
+    pub new_1d: i64,
+    pub new_1m: i64,
+}
+
+pub fn select_user_stats(conn: &Connection) -> Result<UserStats> {
+    let total: i64 = conn.query_row(&format!(r#"SELECT COUNT(*) FROM {TABLE}"#), [], |row| {
+        row.get(0)
+    })?;
+
+    let new_1d: i64 = conn.query_row(
+        &format!(
+            r#"
+                SELECT COUNT(*) FROM {TABLE}
+                WHERE {CreatedAt} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day')
+            "#
+        ),
+        [],
+        |row| row.get(0),
+    )?;
+
+    let new_1m: i64 = conn.query_row(
+        &format!(
+            r#"
+                SELECT COUNT(*) FROM {TABLE}
+                WHERE {CreatedAt} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 month')
+            "#
+        ),
+        [],
+        |row| row.get(0),
+    )?;
+
+    Ok(UserStats {
+        total,
+        new_1d,
+        new_1m,
+    })
+}
+
 #[cfg(test)]
 mod test {
     use super::schema::Role;
