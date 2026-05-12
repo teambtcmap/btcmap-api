@@ -12,6 +12,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 - [Area Methods](area-methods.md) - Methods for working with geographic areas
 - [User Methods](user-methods.md) - Methods for working with user data
 - [Admin Methods](admin-methods.md) - Methods for administrative operations
+- [Log Methods](log/README.md) - Methods for log analysis and infrastructure reporting
 - [Invoice Methods](invoice-methods.md) - Methods for handling payments
 - [Search Methods](search-methods.md) - Methods for searching
 
