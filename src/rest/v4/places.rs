@@ -123,10 +123,17 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
         None => None,
     };
 
-    // When a bbox filter is active we cannot push the SQL `LIMIT` down into
-    // `select_updated_since`, because the limit applies before the bbox
-    // filter — callers would see fewer results than they asked for. Defer
-    // applying the limit until after bbox filtering instead.
+    // The caller's `limit` is always applied to the FINAL merged + sorted
+    // result, never per-source. Otherwise (when `include_pending=true`)
+    // we'd drop legitimate candidates from one collection before merging
+    // it with the other, returning the wrong top-N (CodeRabbit on PR #90).
+    //
+    // When no bbox filter is active, the SQL `LIMIT` is still pushed down
+    // to `select_updated_since` because the rows already match the final
+    // shape — no in-memory filter step is going to discard any of them.
+    // With a bbox we have to fetch everything and filter in memory, then
+    // apply the limit once at the very end of the merge.
+    let limit = args.limit.unwrap_or(i64::MAX).max(0) as usize;
     let db_limit = if bbox.is_some() { None } else { args.limit };
 
     let mut elements = db::main::element::queries::select_updated_since(
@@ -148,9 +155,6 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
             }
             _ => false,
         });
-        if let Some(limit) = args.limit {
-            elements.truncate(limit.max(0) as usize);
-        }
     }
 
     let mut submissions: Vec<PlaceSubmission> = vec![];
@@ -173,9 +177,6 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
                     && s.lon >= bbox.min_lon
                     && s.lon <= bbox.max_lon
             });
-            if let Some(limit) = args.limit {
-                submissions.truncate(limit.max(0) as usize);
-            }
         }
     }
 
@@ -183,6 +184,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
         let elements = elements
             .into_iter()
             .map(|it| service::element::generate_tags(&it, &fields, Some(lang)))
+            .take(limit)
             .collect();
 
         Ok(Json(elements))
@@ -205,7 +207,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
             items
                 .into_iter()
                 .map(|it| it.to_json(&fields, prevent_pending_id_clash, Some(lang)))
-                .take(args.limit.unwrap_or(i64::MAX) as usize)
+                .take(limit)
                 .collect(),
         ))
     }
