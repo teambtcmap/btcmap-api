@@ -36,6 +36,65 @@ pub struct GetListArgs {
     include_pending: Option<bool>,
     prevent_pending_id_clash: Option<bool>,
     lang: Option<String>,
+    // Comma-separated bounding box following the GeoJSON / Leaflet
+    // convention: `min_lon,min_lat,max_lon,max_lat` (sw corner first,
+    // longitude first). When present, only places whose coordinates fall
+    // inside the bbox are returned.
+    bbox: Option<String>,
+}
+
+// Parsed bounding box in (min_lon, min_lat, max_lon, max_lat) order.
+struct BoundingBox {
+    min_lon: f64,
+    min_lat: f64,
+    max_lon: f64,
+    max_lat: f64,
+}
+
+// Parses a `min_lon,min_lat,max_lon,max_lat` bbox string and validates
+// that the values are numeric, within geographic range and that the
+// minimum corner is strictly below/left of the maximum corner.
+fn parse_bbox(raw: &str) -> Result<BoundingBox, RestApiError> {
+    let parts: Vec<&str> = raw.split(',').collect();
+    if parts.len() != 4 {
+        return Err(RestApiError::invalid_input(
+            "bbox must be four comma-separated values: min_lon,min_lat,max_lon,max_lat",
+        ));
+    }
+    let parsed: Vec<f64> = parts
+        .iter()
+        .map(|p| p.trim().parse::<f64>())
+        .collect::<Result<Vec<f64>, _>>()
+        .map_err(|_| RestApiError::invalid_input("bbox values must be numeric"))?;
+    let (min_lon, min_lat, max_lon, max_lat) = (parsed[0], parsed[1], parsed[2], parsed[3]);
+
+    if !(-180.0..=180.0).contains(&min_lon) || !(-180.0..=180.0).contains(&max_lon) {
+        return Err(RestApiError::invalid_input(
+            "bbox longitude values must be within [-180, 180]",
+        ));
+    }
+    if !(-90.0..=90.0).contains(&min_lat) || !(-90.0..=90.0).contains(&max_lat) {
+        return Err(RestApiError::invalid_input(
+            "bbox latitude values must be within [-90, 90]",
+        ));
+    }
+    if min_lat > max_lat {
+        return Err(RestApiError::invalid_input(
+            "bbox min_lat must be less than or equal to max_lat",
+        ));
+    }
+    if min_lon > max_lon {
+        return Err(RestApiError::invalid_input(
+            "bbox min_lon must be less than or equal to max_lon",
+        ));
+    }
+
+    Ok(BoundingBox {
+        min_lon,
+        min_lat,
+        max_lon,
+        max_lat,
+    })
 }
 
 #[derive(Deserialize)]
@@ -57,14 +116,46 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
         .map(|l| &l[..2.min(l.len())])
         .unwrap_or("en");
 
-    let elements = db::main::element::queries::select_updated_since(
+    // Parse the optional bbox up-front so a malformed value short-circuits
+    // before we touch the database.
+    let bbox = match args.bbox.as_deref() {
+        Some(raw) => Some(parse_bbox(raw)?),
+        None => None,
+    };
+
+    // The caller's `limit` is always applied to the FINAL merged + sorted
+    // result, never per-source. Otherwise (when `include_pending=true`)
+    // we'd drop legitimate candidates from one collection before merging
+    // it with the other, returning the wrong top-N (CodeRabbit on PR #90).
+    //
+    // When no bbox filter is active, the SQL `LIMIT` is still pushed down
+    // to `select_updated_since` because the rows already match the final
+    // shape — no in-memory filter step is going to discard any of them.
+    // With a bbox we have to fetch everything and filter in memory, then
+    // apply the limit once at the very end of the merge.
+    let limit = args.limit.unwrap_or(i64::MAX).max(0) as usize;
+    let db_limit = if bbox.is_some() { None } else { args.limit };
+
+    let mut elements = db::main::element::queries::select_updated_since(
         updated_since,
-        args.limit,
+        db_limit,
         include_deleted,
         &pool,
     )
     .await
     .map_err(|_| RestApiError::database())?;
+
+    if let Some(bbox) = &bbox {
+        elements.retain(|e| match (e.lat, e.lon) {
+            (Some(lat), Some(lon)) => {
+                lat >= bbox.min_lat
+                    && lat <= bbox.max_lat
+                    && lon >= bbox.min_lon
+                    && lon <= bbox.max_lon
+            }
+            _ => false,
+        });
+    }
 
     let mut submissions: Vec<PlaceSubmission> = vec![];
 
@@ -72,19 +163,28 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
         submissions.append(
             &mut db::main::place_submission::queries::select_updated_since(
                 updated_since,
-                args.limit,
+                db_limit,
                 include_deleted,
                 &pool,
             )
             .await
             .map_err(|_| RestApiError::database())?,
         );
+        if let Some(bbox) = &bbox {
+            submissions.retain(|s| {
+                s.lat >= bbox.min_lat
+                    && s.lat <= bbox.max_lat
+                    && s.lon >= bbox.min_lon
+                    && s.lon <= bbox.max_lon
+            });
+        }
     }
 
     if submissions.is_empty() {
         let elements = elements
             .into_iter()
             .map(|it| service::element::generate_tags(&it, &fields, Some(lang)))
+            .take(limit)
             .collect();
 
         Ok(Json(elements))
@@ -107,7 +207,7 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
             items
                 .into_iter()
                 .map(|it| it.to_json(&fields, prevent_pending_id_clash, Some(lang)))
-                .take(args.limit.unwrap_or(i64::MAX) as usize)
+                .take(limit)
                 .collect(),
         ))
     }
@@ -866,6 +966,94 @@ mod test {
         let req = TestRequest::get().uri("/1/areas").to_request();
         let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
         assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_bbox_filters_outside_points() -> Result<()> {
+        // Inserts two elements at different coordinates and asks for only
+        // the one that falls inside the bbox. The lat/lon columns are
+        // populated separately from the embedded overpass_data JSON, so
+        // we set them explicitly via `set_lat_lon`.
+        let pool = pool();
+        let inside = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let inside = db::main::element::queries::set_lat_lon(inside.id, 51.5, -0.1, &pool).await?;
+        let outside = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let _outside =
+            db::main::element::queries::set_lat_lon(outside.id, 40.7, -74.0, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        // London-ish bbox (sw corner -1,50 / ne corner 2,54)
+        let req = TestRequest::get().uri("/?bbox=-1,50,2,54").to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(inside.id, res[0]["id"].as_i64().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_bbox_rejects_non_numeric() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?bbox=foo,50,2,54").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(400, res.status().as_u16());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_bbox_rejects_inverted_corners() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        // min_lat > max_lat
+        let req = TestRequest::get().uri("/?bbox=-1,54,2,50").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(400, res.status().as_u16());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_bbox_rejects_out_of_range() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        // lon > 180
+        let req = TestRequest::get().uri("/?bbox=-1,50,200,54").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(400, res.status().as_u16());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_bbox_wrong_arity() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?bbox=-1,50,2").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(400, res.status().as_u16());
         Ok(())
     }
 

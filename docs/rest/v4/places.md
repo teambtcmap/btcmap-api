@@ -31,6 +31,7 @@ curl https://api.btcmap.org/v4/places
 | `updated_since` | ISO 8601 datetime | `2025-01-01T00:00:00Z` | `1970-01-01T00:00:00Z` | Filter places updated since this time. |
 | `include_deleted` | Boolean | `true` | `false` | Whether to include deleted places. |
 | `limit` | Integer | `5` | - | Limit the number of places returned. |
+| `bbox` | String | `-1,50,2,54` | - | Bounding box `min_lon,min_lat,max_lon,max_lat` (GeoJSON / Leaflet order). When present, only places whose coordinates fall inside the bbox are returned. Combines with `fields`, `updated_since`, `include_deleted` and `limit`. |
 
 The `include_deleted` parameter is not needed for an initial cold sync but is essential afterward to evict places from your cache when they are deleted.
 
@@ -101,6 +102,18 @@ curl 'https://api.btcmap.org/v4/places?fields=id,lat,lon,name'
   }
 ]
 ```
+
+##### Fetch Places Inside a Bounding Box
+
+Useful for mobile / low-bandwidth clients that want only the places visible in the current map viewport, instead of downloading the full worldwide dataset.
+
+```bash
+curl 'https://api.btcmap.org/v4/places?bbox=-1,50,2,54&fields=id,lat,lon,name'
+```
+
+The four values are `min_lon,min_lat,max_lon,max_lat` — the south-west corner first, longitude first (the GeoJSON / Leaflet convention). Values must be numeric, within `[-180, 180]` for longitude and `[-90, 90]` for latitude, with each minimum less than or equal to its matching maximum; otherwise the API returns `400 invalid_input`.
+
+`bbox` can be combined with `updated_since` to incrementally sync only the changes inside a viewport.
 
 ### Search
 
