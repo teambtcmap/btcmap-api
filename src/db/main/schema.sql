@@ -108,6 +108,7 @@ CREATE TABLE access_token(
     name TEXT,
     secret TEXT NOT NULL,
     roles TEXT NOT NULL DEFAULT '[]',
+    import_origins TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
@@ -159,7 +160,7 @@ CREATE TRIGGER element_issue_updated_at UPDATE OF element_id, code, severity, cr
 BEGIN
     UPDATE element_issue SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER acess_token_updated_at UPDATE OF user_id, name, secret, roles, created_at, deleted_at ON access_token
+CREATE TRIGGER acess_token_updated_at UPDATE OF user_id, name, secret, roles, import_origins, created_at, deleted_at ON access_token
 BEGIN
     UPDATE access_token SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;

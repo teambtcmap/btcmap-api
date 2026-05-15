@@ -24,12 +24,11 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         "fetched open and non-revoked submissions",
     );
 
-    let enabled_origins = ["square".to_string()];
     let mut issues_created = 0;
     let mut issues_closed = 0;
 
     for submission in &submissions {
-        if !enabled_origins.contains(&submission.origin) {
+        if !db::main::place_submission::vendor::sync_enabled(&submission.origin) {
             warn!(submission.origin, "disabled origin");
             continue;
         }

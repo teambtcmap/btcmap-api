@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Clone)]
 pub struct Params {
-    origin: String,
+    pub origin: String,
     external_id: String,
     lat: f64,
     lon: f64,
@@ -157,6 +157,39 @@ mod test {
         let submission = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
 
         assert_eq!(new_params.category, submission.category);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn submit_place_allows_same_external_id_for_different_origins() -> Result<()> {
+        let pool = pool();
+
+        let square_params = super::Params {
+            origin: "square".into(),
+            external_id: "merchant-1".into(),
+            lat: 1.23,
+            lon: 3.45,
+            category: "restaurants".into(),
+            name: "Square Place".into(),
+            extra_fields: None,
+        };
+        let coinos_params = super::Params {
+            origin: "coinos".into(),
+            external_id: "merchant-1".into(),
+            lat: 1.23,
+            lon: 3.45,
+            category: "cafe".into(),
+            name: "Coinos Place".into(),
+            extra_fields: None,
+        };
+
+        let square_res = super::run(square_params, &pool).await?;
+        let coinos_res = super::run(coinos_params, &pool).await?;
+
+        assert_ne!(square_res.id, coinos_res.id);
+        assert_eq!("merchant-1", square_res.external_id);
+        assert_eq!("merchant-1", coinos_res.external_id);
 
         Ok(())
     }

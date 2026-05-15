@@ -11,3 +11,5 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 ## Authentication
 
 We provide bearer tokens for all trusted sources, you just need to include your token in HTTP request headers.
+
+Places-source tokens are scoped with an `import_origins` JSON array. Use the source origin, for example `["coinos"]`, to restrict a token to one vendor. Use `["*"]` for a token that can manage submissions for all origins.
