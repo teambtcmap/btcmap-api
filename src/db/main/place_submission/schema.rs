@@ -121,7 +121,7 @@ impl PlaceSubmission {
     }
 
     pub fn icon(&self) -> String {
-        vendor::icon(&self.origin, &self.category)
+        "store".to_string()
     }
 
     pub fn description(&self) -> Option<String> {
