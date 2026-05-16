@@ -20,11 +20,6 @@
 //! and replays. See https://github.com/nostr-protocol/nips/blob/master/98.md
 //! for the spec text.
 
-// Lands in isolation ahead of the endpoints that will consume it. The next
-// PR wires `NostrAuth` into `POST /v4/auth/nostr`; until then clippy sees
-// these items as dead.
-#![allow(dead_code)]
-
 use crate::error::Error;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;

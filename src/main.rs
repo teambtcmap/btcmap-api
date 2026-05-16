@@ -31,6 +31,14 @@ async fn main() -> Result<()> {
 
     let conf = db::main::conf::queries::select(&main_pool).await?;
 
+    // Trusted external base URL of this API. Used by the NIP-98 NostrAuth
+    // extractor to reconstruct the URL the signed event must bind to.
+    // Per-deployment infrastructure value, so it lives in env, not in Conf
+    // (which is DB-backed and meant for runtime-tunable values shared across
+    // deployments). Production must set this to the public URL.
+    let api_base_url =
+        env::var("BTCMAP_API_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
+
     check_areas_without_icon_square(&main_pool).await;
 
     service::matrix::init(&main_pool);
@@ -45,6 +53,9 @@ async fn main() -> Result<()> {
             .app_data(Data::new(image_pool.clone()))
             .app_data(Data::new(log_pool.clone()))
             .app_data(Data::new(conf.clone()))
+            .app_data(Data::new(rest::nostr_auth::ApiBaseUrl(
+                api_base_url.clone(),
+            )))
             .service(og::element::get_element)
             .service(
                 scope("rpc")
@@ -188,6 +199,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::areas::get_by_id)
                             .service(rest::v4::areas::get),
                     )
+                    .service(scope("auth").service(rest::v4::nostr::auth_nostr))
                     .service(scope("dashboard").service(rest::v4::dashboard::get))
                     .service(scope("top-editors").service(rest::v4::top_editors::get))
                     .service(scope("communities").service(rest::v4::communities::get_top))
