@@ -9,8 +9,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize)]
 pub struct Params {
     id: Option<i64>,
-    origin: Option<String>,
+    pub origin: Option<String>,
     external_id: Option<String>,
+}
+
+impl Params {
+    pub const fn origin(&self) -> Option<&String> {
+        self.origin.as_ref()
+    }
 }
 
 #[derive(Serialize)]

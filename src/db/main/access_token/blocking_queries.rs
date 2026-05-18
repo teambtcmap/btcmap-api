@@ -12,18 +12,35 @@ pub fn insert(
     roles: &[Role],
     conn: &Connection,
 ) -> Result<AccessToken> {
+    insert_with_import_origins(user_id, name, secret, roles, &[], conn)
+}
+
+pub fn insert_with_import_origins(
+    user_id: i64,
+    name: &str,
+    secret: &str,
+    roles: &[Role],
+    import_origins: &[String],
+    conn: &Connection,
+) -> Result<AccessToken> {
     let roles: Vec<String> = roles.iter().map(|it| it.to_string()).collect();
     let sql = format!(
         r#"
-            INSERT INTO {TABLE} ({UserId}, {Name}, {Secret}, {Roles})
-            VALUES (?1, ?2, ?3, json(?4))
+            INSERT INTO {TABLE} ({UserId}, {Name}, {Secret}, {Roles}, {ImportOrigins})
+            VALUES (?1, ?2, ?3, json(?4), json(?5))
             RETURNING {projection}
         "#,
         projection = AccessToken::projection(),
     );
     conn.query_row(
         &sql,
-        params![user_id, name, secret, serde_json::to_string(&roles)?],
+        params![
+            user_id,
+            name,
+            secret,
+            serde_json::to_string(&roles)?,
+            serde_json::to_string(import_origins)?,
+        ],
         AccessToken::mapper(),
     )
     .map_err(Into::into)
@@ -92,7 +109,25 @@ mod test {
         assert_eq!(Some(name), selected_token.name.as_deref());
         assert_eq!(secret, selected_token.secret);
         assert_eq!(roles, selected_token.roles);
+        assert!(selected_token.import_origins.is_empty());
         assert!(selected_token.deleted_at.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn insert_with_import_origins() -> Result<()> {
+        let conn = conn();
+        let import_origins = vec!["square".to_string(), "coinos".to_string()];
+        let inserted_token = super::insert_with_import_origins(
+            2,
+            "name",
+            "secret",
+            &[Role::PlacesSource],
+            &import_origins,
+            &conn,
+        )?;
+        let selected_token = super::select_by_id(inserted_token.id, &conn)?;
+        assert_eq!(import_origins, selected_token.import_origins);
         Ok(())
     }
 

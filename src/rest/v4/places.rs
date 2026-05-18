@@ -384,13 +384,9 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
             .await
             .map_err(|_| RestApiError::database())?;
             if include_pending {
-                let origin = if tag_name == "payment:lightning:operator" && tag_value == "square" {
-                    "square"
-                } else {
-                    ""
-                };
-
-                if !origin.is_empty() {
+                if let Some(origin) = db::main::place_submission::vendor::origin_for_payment_tag(
+                    &tag_name, &tag_value,
+                ) {
                     pending_matches = db::main::place_submission::queries::select_by_origin(
                         origin.to_string(),
                         &pool,
@@ -408,13 +404,9 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
                 None => false,
             });
             if include_pending {
-                let origin = if tag_name == "payment:lightning:operator" && tag_value == "square" {
-                    "square"
-                } else {
-                    ""
-                };
-
-                if !origin.is_empty() {
+                if let Some(origin) = db::main::place_submission::vendor::origin_for_payment_tag(
+                    &tag_name, &tag_value,
+                ) {
                     pending_matches.retain(|it| it.origin == origin);
                 }
             }

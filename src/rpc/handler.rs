@@ -324,7 +324,7 @@ pub async fn handle(
         })));
     }
 
-    let user = match bearer_token {
+    let auth_token = match bearer_token {
         Some(bearer_token) => {
             let bearer_token =
                 db::main::access_token::queries::select_by_secret(bearer_token, &pool).await?;
@@ -344,11 +344,23 @@ pub async fn handle(
                     data: None,
                 })));
             }
-            Some(user)
+            Some((bearer_token, user))
         }
 
         None => None,
     };
+
+    let effective_roles = auth_token
+        .as_ref()
+        .map(|(token, user)| {
+            if token.roles.is_empty() {
+                user.roles.as_slice()
+            } else {
+                token.roles.as_slice()
+            }
+        })
+        .unwrap_or(&[]);
+    let user = auth_token.as_ref().map(|(_, user)| user);
 
     if req.jsonrpc != "2.0" {
         return Ok(Json(RpcResponse::invalid_request(Value::Null)));
@@ -357,7 +369,7 @@ pub async fn handle(
     let res: RpcResponse = match req.method {
         RpcMethod::Whoami => RpcResponse::from(
             req.id.clone(),
-            super::auth::whoami::run(&user.unwrap()).await?,
+            super::auth::whoami::run(user.unwrap()).await?,
         ),
         // element
         RpcMethod::GetElement => RpcResponse::from(
@@ -548,18 +560,41 @@ pub async fn handle(
             req.id.clone(),
             super::event::delete_event::run(params(req.params)?, &pool).await?,
         ),
-        RpcMethod::SubmitPlace => RpcResponse::from(
-            req.id.clone(),
-            super::import::submit_place::run(params(req.params)?, &pool).await?,
-        ),
-        RpcMethod::RevokeSubmittedPlace => RpcResponse::from(
-            req.id.clone(),
-            super::import::revoke_submitted_place::run(params(req.params)?, &pool).await?,
-        ),
-        RpcMethod::GetSubmittedPlace => RpcResponse::from(
-            req.id.clone(),
-            super::import::get_submitted_place::run(params(req.params)?, &pool).await?,
-        ),
+        RpcMethod::SubmitPlace => {
+            let params: super::import::submit_place::Params = params(req.params)?;
+            let token = &auth_token.as_ref().unwrap().0;
+            super::import::ensure_can_access_origin(effective_roles, token, &params.origin)?;
+            RpcResponse::from(
+                req.id.clone(),
+                super::import::submit_place::run(params, &pool).await?,
+            )
+        }
+        RpcMethod::RevokeSubmittedPlace => {
+            let params: super::import::revoke_submitted_place::Params = params(req.params)?;
+            let token = &auth_token.as_ref().unwrap().0;
+            super::import::ensure_can_access_optional_origin(
+                effective_roles,
+                token,
+                params.origin(),
+            )?;
+            RpcResponse::from(
+                req.id.clone(),
+                super::import::revoke_submitted_place::run(params, &pool).await?,
+            )
+        }
+        RpcMethod::GetSubmittedPlace => {
+            let params: super::import::get_submitted_place::Params = params(req.params)?;
+            let token = &auth_token.as_ref().unwrap().0;
+            super::import::ensure_can_access_optional_origin(
+                effective_roles,
+                token,
+                params.origin(),
+            )?;
+            RpcResponse::from(
+                req.id.clone(),
+                super::import::get_submitted_place::run(params, &pool).await?,
+            )
+        }
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
             req.id.clone(),
             super::import::sync_submitted_places::run(&pool).await?,
