@@ -24,6 +24,14 @@ const VENDORS: &[Vendor] = &[
         payment_tag_value: Some("yes"),
         gitea_label_ids: &[],
     },
+    Vendor {
+        origin: "btcpayserver",
+        sync_enabled: true,
+        payment_provider: Some("btcpayserver"),
+        payment_tag_name: Some("payment:btcpayserver"),
+        payment_tag_value: Some("yes"),
+        gitea_label_ids: &[1538],
+    },
 ];
 
 pub fn get(origin: &str) -> Option<&'static Vendor> {
