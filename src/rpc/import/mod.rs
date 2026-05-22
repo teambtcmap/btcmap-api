@@ -33,27 +33,6 @@ pub fn ensure_can_access_origin(
     }
 }
 
-pub fn ensure_can_access_optional_origin(
-    roles: &[Role],
-    token: &AccessToken,
-    origin: Option<&String>,
-) -> crate::Result<()> {
-    if roles
-        .iter()
-        .any(|role| matches!(role, Role::Admin | Role::Root))
-    {
-        return Ok(());
-    }
-
-    let Some(origin) = origin else {
-        return Err(
-            "places_source tokens must identify submitted places by origin and external_id".into(),
-        );
-    };
-
-    ensure_can_access_origin(roles, token, origin)
-}
-
 #[cfg(test)]
 mod test {
     use crate::db::main::access_token::schema::AccessToken;

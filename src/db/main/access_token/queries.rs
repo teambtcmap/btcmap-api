@@ -15,6 +15,30 @@ pub async fn insert(
         .await?
 }
 
+#[cfg(test)]
+pub async fn insert_with_import_origins(
+    user_id: i64,
+    name: String,
+    secret: String,
+    roles: Vec<Role>,
+    import_origins: Vec<String>,
+    pool: &Pool,
+) -> Result<AccessToken> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::insert_with_import_origins(
+                user_id,
+                &name,
+                &secret,
+                &roles,
+                &import_origins,
+                conn,
+            )
+        })
+        .await?
+}
+
 pub async fn select_by_secret(secret: String, pool: &Pool) -> Result<AccessToken> {
     pool.get()
         .await?

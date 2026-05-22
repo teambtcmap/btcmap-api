@@ -566,30 +566,22 @@ pub async fn handle(
                 super::import::submit_place::run(params, &pool).await?,
             )
         }
-        RpcMethod::RevokeSubmittedPlace => {
-            let params: super::import::revoke_submitted_place::Params = params(req.params)?;
-            let token = &auth_token.as_ref().unwrap().0;
-            super::import::ensure_can_access_optional_origin(
-                effective_roles,
-                token,
-                params.origin(),
-            )?;
-            RpcResponse::from(
-                req.id.clone(),
-                super::import::revoke_submitted_place::run(params, &pool).await?,
-            )
-        }
         RpcMethod::GetSubmittedPlace => {
             let params: super::import::get_submitted_place::Params = params(req.params)?;
             let token = &auth_token.as_ref().unwrap().0;
-            super::import::ensure_can_access_optional_origin(
-                effective_roles,
-                token,
-                params.origin(),
-            )?;
             RpcResponse::from(
                 req.id.clone(),
-                super::import::get_submitted_place::run(params, &pool).await?,
+                super::import::get_submitted_place::run(params, effective_roles, token, &pool)
+                    .await?,
+            )
+        }
+        RpcMethod::RevokeSubmittedPlace => {
+            let params: super::import::revoke_submitted_place::Params = params(req.params)?;
+            let token = &auth_token.as_ref().unwrap().0;
+            RpcResponse::from(
+                req.id.clone(),
+                super::import::revoke_submitted_place::run(params, effective_roles, token, &pool)
+                    .await?,
             )
         }
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
@@ -836,6 +828,140 @@ mod test {
 
         let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.error, None);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_submitted_place_id_origin_bypass_blocked() -> Result<()> {
+        let pool = pool();
+
+        // Insert a square submission
+        let square_submission = db::main::place_submission::blocking_queries::InsertArgs {
+            origin: "square".to_string(),
+            external_id: "123".to_string(),
+            lat: 1.0,
+            lon: 2.0,
+            category: "test".to_string(),
+            name: "Square Place".to_string(),
+            extra_fields: serde_json::Map::new(),
+        };
+        db::main::place_submission::queries::insert(square_submission, &pool).await?;
+
+        // Create a user with PlacesSource role and a token scoped to coinos
+        let user = db::main::user::queries::insert("source_user", "", &pool).await?;
+        let _token = db::main::access_token::queries::insert_with_import_origins(
+            user.id,
+            "".to_string(),
+            "scoped_secret".to_string(),
+            vec![Role::PlacesSource],
+            vec!["coinos".to_string()],
+            &pool,
+        )
+        .await?;
+
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(conf))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        // Try to access square submission by id, but supply coinos origin to bypass pre-check
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer scoped_secret"))
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "get_submitted_place",
+                "params": {"id": 1, "origin": "coinos"},
+                "id": 1
+            }))
+            .to_request();
+
+        let res = test::call_service(&app, req).await;
+        let body = test::read_body(res).await;
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(
+            body_str.contains("coinos") || body_str.contains("not allowed"),
+            "should have rejected access to square submission with coinos-scoped token; body: {body_str}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn revoke_submitted_place_id_origin_bypass_blocked() -> Result<()> {
+        let pool = pool();
+
+        // Insert a square submission
+        let square_submission = db::main::place_submission::blocking_queries::InsertArgs {
+            origin: "square".to_string(),
+            external_id: "123".to_string(),
+            lat: 1.0,
+            lon: 2.0,
+            category: "test".to_string(),
+            name: "Square Place".to_string(),
+            extra_fields: serde_json::Map::new(),
+        };
+        db::main::place_submission::queries::insert(square_submission, &pool).await?;
+
+        // Create a user with PlacesSource role and a token scoped to coinos
+        let user = db::main::user::queries::insert("source_user", "", &pool).await?;
+        let _token = db::main::access_token::queries::insert_with_import_origins(
+            user.id,
+            "".to_string(),
+            "scoped_secret".to_string(),
+            vec![Role::PlacesSource],
+            vec!["coinos".to_string()],
+            &pool,
+        )
+        .await?;
+
+        let conf = Conf::mock();
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(conf))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        // Try to revoke square submission by id, but supply coinos origin to bypass pre-check
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer scoped_secret"))
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "revoke_submitted_place",
+                "params": {"id": 1, "origin": "coinos"},
+                "id": 1
+            }))
+            .to_request();
+
+        let res = test::call_service(&app, req).await;
+        let body = test::read_body(res).await;
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(
+            body_str.contains("coinos") || body_str.contains("not allowed"),
+            "should have rejected revocation of square submission with coinos-scoped token; body: {body_str}"
+        );
+
+        // Verify the submission was NOT revoked
+        let submission = db::main::place_submission::queries::select_by_id(1, &pool).await?;
+        assert!(
+            !submission.revoked,
+            "submission should not have been revoked"
+        );
+
         Ok(())
     }
 
