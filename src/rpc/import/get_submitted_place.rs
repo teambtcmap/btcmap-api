@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct Params {
-    id: Option<i64>,
+    pub id: Option<i64>,
     pub origin: Option<String>,
-    external_id: Option<String>,
+    pub external_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -30,13 +30,21 @@ pub struct Res {
 pub async fn run(params: Params, roles: &[Role], token: &AccessToken, pool: &Pool) -> Result<Res> {
     let submission = match params.id {
         Some(id) => db::main::place_submission::queries::select_by_id(id, pool).await?,
-        None => db::main::place_submission::queries::select_by_origin_and_external_id(
-            params.origin.unwrap(),
-            params.external_id.unwrap(),
-            pool,
-        )
-        .await?
-        .unwrap(),
+        None => {
+            let Some(origin) = params.origin else {
+                return Err("missing parameter: origin or id".into());
+            };
+            let Some(external_id) = params.external_id else {
+                return Err("missing parameter: external_id or id".into());
+            };
+            db::main::place_submission::queries::select_by_origin_and_external_id(
+                origin,
+                external_id,
+                pool,
+            )
+            .await?
+            .ok_or("can't find place with provided origin and external_id")?
+        }
     };
 
     super::ensure_can_access_origin(roles, token, &submission.origin)?;

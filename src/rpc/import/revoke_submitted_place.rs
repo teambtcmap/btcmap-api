@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct Params {
-    id: Option<i64>,
+    pub id: Option<i64>,
     pub origin: Option<String>,
-    external_id: Option<String>,
+    pub external_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -25,9 +25,15 @@ pub async fn run(params: Params, roles: &[Role], token: &AccessToken, pool: &Poo
     let submission = match params.id {
         Some(id) => Some(db::main::place_submission::queries::select_by_id(id, pool).await?),
         None => {
+            let Some(origin) = params.origin else {
+                return Err("missing parameter: origin or id".into());
+            };
+            let Some(external_id) = params.external_id else {
+                return Err("missing parameter: external_id or id".into());
+            };
             db::main::place_submission::queries::select_by_origin_and_external_id(
-                params.origin.unwrap(),
-                params.external_id.unwrap(),
+                origin,
+                external_id,
                 pool,
             )
             .await?

@@ -408,6 +408,8 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
                     &tag_name, &tag_value,
                 ) {
                     pending_matches.retain(|it| it.origin == origin);
+                } else {
+                    pending_matches.clear();
                 }
             }
         }
