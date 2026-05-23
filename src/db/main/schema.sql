@@ -221,5 +221,4 @@ CREATE INDEX place_submission_lat_lon ON place_submission(lat, lon);
 CREATE INDEX element_deleted_at ON element(deleted_at);
 CREATE INDEX element_event_user_created_type ON element_event(user_id, created_at, type);
 CREATE INDEX area_type ON area(json_extract(tags, '$.type'));
-CREATE UNIQUE INDEX user_npub_unique ON "user"(npub) WHERE npub IS NOT NULL;
 COMMIT;
