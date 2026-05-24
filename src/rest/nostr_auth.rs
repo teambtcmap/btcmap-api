@@ -1,7 +1,3 @@
-// See the note in `src/service/nip98.rs` — this extractor is infrastructure
-// ahead of the endpoints that will consume it in a follow-up PR.
-#![allow(dead_code)]
-
 use actix_web::web::Data;
 use actix_web::{dev::Payload, http::header, FromRequest, HttpRequest};
 use std::future::Future;

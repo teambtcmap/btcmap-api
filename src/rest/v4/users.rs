@@ -204,6 +204,14 @@ pub async fn create_token(
         .await
         .map_err(|_| RestApiError::unauthorized())?;
 
+    // Users provisioned via Nostr (NIP-98) have no password set. Block
+    // password auth for them explicitly so an empty bearer cannot be
+    // mistaken for a credential. PHC parsing of an empty hash already
+    // fails today, but make the intent explicit.
+    if user.password.is_empty() {
+        return Err(RestApiError::unauthorized());
+    }
+
     let password_hash = PasswordHash::new(&user.password)
         .map_err(|_| RestApiError::invalid_input("Invalid password hash"))?;
 
