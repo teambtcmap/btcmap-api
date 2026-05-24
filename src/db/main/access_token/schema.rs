@@ -14,6 +14,7 @@ pub enum Columns {
     Name,
     Secret,
     Roles,
+    ImportOrigins,
     CreatedAt,
     UpdatedAt,
     DeletedAt,
@@ -27,6 +28,7 @@ pub struct AccessToken {
     pub name: Option<String>,
     pub secret: String,
     pub roles: Vec<Role>,
+    pub import_origins: Vec<String>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
@@ -42,6 +44,7 @@ impl AccessToken {
                 Columns::Name,
                 Columns::Secret,
                 Columns::Roles,
+                Columns::ImportOrigins,
                 Columns::CreatedAt,
                 Columns::UpdatedAt,
                 Columns::DeletedAt,
@@ -61,6 +64,9 @@ impl AccessToken {
                 name: row.get(Columns::Name.as_ref())?,
                 secret: row.get(Columns::Secret.as_ref())?,
                 roles: Self::parse_roles(row.get(Columns::Roles.as_ref())?)?,
+                import_origins: Self::parse_import_origins(
+                    row.get(Columns::ImportOrigins.as_ref())?,
+                )?,
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
                 updated_at: row.get(Columns::UpdatedAt.as_ref())?,
                 deleted_at: row.get(Columns::DeletedAt.as_ref())?,
@@ -75,5 +81,10 @@ impl AccessToken {
             .into_iter()
             .filter_map(|s| Role::from_str(&s).ok())
             .collect())
+    }
+
+    fn parse_import_origins(column_value: Value) -> rusqlite::Result<Vec<String>> {
+        serde_json::from_value(column_value)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
     }
 }

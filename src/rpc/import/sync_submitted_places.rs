@@ -16,6 +16,8 @@ pub struct Res {
     issues_closed: i64,
 }
 
+const LOCATION_SUBMISSION_LABEL_ID: i64 = 901;
+
 pub async fn run(pool: &Pool) -> Result<Res> {
     let submissions =
         db::main::place_submission::queries::select_open_and_not_revoked(pool).await?;
@@ -24,12 +26,16 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         "fetched open and non-revoked submissions",
     );
 
-    let enabled_origins = ["square".to_string()];
     let mut issues_created = 0;
     let mut issues_closed = 0;
 
     for submission in &submissions {
-        if !enabled_origins.contains(&submission.origin) {
+        let Some(vendor) = db::main::place_submission::vendor::get(&submission.origin) else {
+            warn!(submission.origin, "unknown origin");
+            continue;
+        };
+
+        if !vendor.sync_enabled {
             warn!(submission.origin, "disabled origin");
             continue;
         }
@@ -75,7 +81,9 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 .map(|line| line.trim())
                 .collect::<Vec<&str>>()
                 .join("\n");
-            let issue = service::gitea::create_issue(title, body, vec![901, 1307], pool).await?;
+            let mut label_ids = vec![LOCATION_SUBMISSION_LABEL_ID];
+            label_ids.extend_from_slice(vendor.gitea_label_ids);
+            let issue = service::gitea::create_issue(title, body, label_ids, pool).await?;
             db::main::place_submission::queries::set_ticket_url(
                 submission.id,
                 issue.url.clone(),
