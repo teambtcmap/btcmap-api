@@ -171,11 +171,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::events::get)
                             .service(rest::v4::events::get_by_id),
                     )
-                    .service(
-                        scope("place-issues")
-                            .service(rest::v4::element_issues::get)
-                            .service(rest::v4::element_issues::get_by_id),
-                    )
+                    .service(scope("place-issues").service(rest::v4::place_issues::get))
                     .service(
                         scope("place-comments")
                             .service(rest::v4::place_comments::get)
