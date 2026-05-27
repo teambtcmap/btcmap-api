@@ -50,33 +50,6 @@ pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<El
         .map_err(Into::into)
 }
 
-pub fn select_updated_since(
-    updated_since: &OffsetDateTime,
-    limit: Option<i64>,
-    conn: &Connection,
-) -> Result<Vec<ElementIssue>> {
-    let sql = format!(
-        r#"
-            SELECT {projection}
-            FROM {table}
-            WHERE {updated_at} > ?1
-            ORDER BY {updated_at}, {id}
-            LIMIT ?2
-        "#,
-        projection = ElementIssue::projection(),
-        table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
-    );
-    conn.prepare(&sql)?
-        .query_map(
-            params![updated_since.format(&Rfc3339)?, limit.unwrap_or(i64::MAX),],
-            ElementIssue::mapper(),
-        )?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(Into::into)
-}
-
 pub fn select_ordered_by_severity(
     area_id: i64,
     limit: i64,
@@ -245,10 +218,11 @@ pub fn set_deleted_at(
 
 #[cfg(test)]
 mod test {
+
     use crate::db::main::area_element::blocking_queries as area_element_queries;
     use crate::db::main::element::blocking_queries as element_queries;
     use crate::{db::main::test::conn, Result};
-    use time::{Duration, OffsetDateTime};
+    use time::OffsetDateTime;
 
     #[test]
     fn insert_and_select_by_id() -> Result<()> {
@@ -257,7 +231,7 @@ mod test {
         conn.pragma_update(None, "foreign_keys", &false)?;
 
         let element_id = 123;
-        let code = "test_code";
+        let code = "not_verified";
         let severity = 5;
 
         // Test insert
@@ -281,44 +255,16 @@ mod test {
         let element_id = 123;
 
         // Insert multiple issues for the same element
-        let issue1 = super::insert(element_id, "code1", 1, &conn)?;
-        let issue2 = super::insert(element_id, "code2", 2, &conn)?;
+        let issue1 = super::insert(element_id, "outdated", 1, &conn)?;
+        let issue2 = super::insert(element_id, "not_verified", 2, &conn)?;
 
         // Insert issue for different element
-        super::insert(456, "code3", 3, &conn)?;
+        super::insert(456, "missing_icon", 3, &conn)?;
 
         let selected = super::select_by_element_id(element_id, &conn)?;
         assert_eq!(selected.len(), 2);
         assert!(selected.contains(&issue1));
         assert!(selected.contains(&issue2));
-        Ok(())
-    }
-
-    #[test]
-    fn select_updated_since() -> Result<()> {
-        let conn = conn();
-        // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
-
-        // Insert issues with different timestamps
-        let _issue1 = super::insert(1, "code1", 1, &conn)?;
-        let _issue2 = super::insert(2, "code2", 2, &conn)?;
-
-        let selected = super::select_updated_since(
-            &OffsetDateTime::now_utc().saturating_add(Duration::minutes(1)),
-            None,
-            &conn,
-        )?;
-        assert!(selected.is_empty());
-
-        // Should return both issues if we query since beginning of time
-        let beginning_of_time = OffsetDateTime::UNIX_EPOCH;
-        let selected = super::select_updated_since(&beginning_of_time, None, &conn)?;
-        assert_eq!(selected.len(), 2);
-
-        // Test limit
-        let selected = super::select_updated_since(&beginning_of_time, Some(1), &conn)?;
-        assert_eq!(selected.len(), 1);
         Ok(())
     }
 
@@ -329,9 +275,9 @@ mod test {
         conn.pragma_update(None, "foreign_keys", &false)?;
 
         // Insert some issues
-        super::insert(1, "code1", 1, &conn)?;
-        super::insert(2, "code2", 2, &conn)?;
-        let deleted_issue = super::insert(3, "code3", 3, &conn)?;
+        super::insert(1, "outdated", 1, &conn)?;
+        super::insert(2, "not_verified", 2, &conn)?;
+        let deleted_issue = super::insert(3, "outdated_soon", 3, &conn)?;
 
         // Delete one issue
         super::set_deleted_at(deleted_issue.id, Some(OffsetDateTime::now_utc()), &conn)?;
@@ -351,7 +297,7 @@ mod test {
         let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
-        let issue = super::insert(1, "code1", 1, &conn)?;
+        let issue = super::insert(1, "missing_icon", 1, &conn)?;
 
         let updated = super::set_severity(issue.id, 5, &conn)?;
         assert_eq!(updated.severity, 5);
@@ -366,7 +312,7 @@ mod test {
         let conn = conn();
         // Disable foreign keys for this test
         conn.pragma_update(None, "foreign_keys", &false)?;
-        let issue = super::insert(1, "code1", 1, &conn).unwrap();
+        let issue = super::insert(1, "outdated_soon", 1, &conn).unwrap();
         let now = OffsetDateTime::now_utc();
 
         // Set deleted_at
@@ -401,11 +347,11 @@ mod test {
         area_element_queries::insert(area_id, e2.id, &conn)?;
 
         super::insert(e1.id, "outdated", 1, &conn)?;
-        super::insert(e2.id, "wrong_location", 3, &conn)?;
+        super::insert(e2.id, "missing_icon", 3, &conn)?;
 
         let issues = super::select_ordered_by_severity(area_id, 10, 0, false, &conn)?;
         assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].issue_code, "wrong_location");
+        assert_eq!(issues[0].issue_code, "missing_icon");
         assert_eq!(issues[0].element_osm_id, element2_id);
 
         Ok(())

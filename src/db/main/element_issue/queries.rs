@@ -25,17 +25,6 @@ pub async fn select_by_element_id(element_id: i64, pool: &Pool) -> Result<Vec<El
         .await?
 }
 
-pub async fn select_updated_since(
-    updated_since: OffsetDateTime,
-    limit: Option<i64>,
-    pool: &Pool,
-) -> Result<Vec<ElementIssue>> {
-    pool.get()
-        .await?
-        .interact(move |conn| blocking_queries::select_updated_since(&updated_since, limit, conn))
-        .await?
-}
-
 pub async fn select_ordered_by_severity(
     area_id: i64,
     limit: i64,
