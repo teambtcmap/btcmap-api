@@ -126,7 +126,7 @@ curl 'https://api.btcmap.org/v4/place-issues/123'
 | Code | Description |
 |------|-------------|
 | `outdated` | The place information is outdated. |
-| `outdated_soon` | The place will be outdated soon (seasonal closure, etc.). |
+| `outdated_soon` | The place will be outdated soon, it's time to bump check date. |
 | `not_verified` | The place has not been verified by an editor. |
 | `missing_icon` | The place is missing an icon in the app. |
 | `invalid_tag_value:survey:date` | The `survey:date` tag is not formatted properly. |
