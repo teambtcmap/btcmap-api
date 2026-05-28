@@ -13,9 +13,9 @@ case "$1" in
     image-db)
         if [ "$#" -eq 1 ]
         then
-            sqlite3 ~/.local/share/btcmap/btcmap.db
+            sqlite3 ~/.local/share/btcmap/images.db
         else
-            sqlite3 ~/.local/share/btcmap/btcmap.db "$2"
+            sqlite3 ~/.local/share/btcmap/images.db "$2"
         fi
         ;;
 
