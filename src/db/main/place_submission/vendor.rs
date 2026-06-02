@@ -32,6 +32,22 @@ const VENDORS: &[Vendor] = &[
         payment_tag_value: Some("yes"),
         gitea_label_ids: &[1538],
     },
+    Vendor {
+        origin: "square-test",
+        sync_enabled: true,
+        payment_provider: Some("square"),
+        payment_tag_name: Some("payment:lightning:operator"),
+        payment_tag_value: Some("square-test"),
+        gitea_label_ids: &[1551],
+    },
+    Vendor {
+        origin: "bitcoin-jungle",
+        sync_enabled: true,
+        payment_provider: Some("bitcoin-jungle"),
+        payment_tag_name: Some("payment:bitcoin-jungle"),
+        payment_tag_value: Some("yes"),
+        gitea_label_ids: &[1552],
+    },
 ];
 
 pub fn get(origin: &str) -> Option<&'static Vendor> {
