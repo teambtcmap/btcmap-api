@@ -96,6 +96,7 @@ pub enum RpcMethod {
     GetRequestLog,
     GetDailyInfraReport,
     GetTopClients,
+    Dashboard,
 }
 
 impl Role {
@@ -161,6 +162,8 @@ impl Role {
         RpcMethod::GetDailyInfraReport,
         // Admins can get top clients report
         RpcMethod::GetTopClients,
+        // Admins can query the analytics dashboard
+        RpcMethod::Dashboard,
     ];
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
@@ -609,6 +612,10 @@ pub async fn handle(
         RpcMethod::GetTopClients => RpcResponse::from(
             req.id.clone(),
             super::analytics::get_top_clients::run(&log_pool).await?,
+        ),
+        RpcMethod::Dashboard => RpcResponse::from(
+            req.id.clone(),
+            super::analytics::dashboard::run(&pool).await?,
         ),
     }?;
 

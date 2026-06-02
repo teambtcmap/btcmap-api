@@ -32,6 +32,18 @@ pub async fn select_created_between(
         .await?
 }
 
+pub async fn select_count_by_type_since(
+    r#type: &str,
+    since: OffsetDateTime,
+    pool: &Pool,
+) -> Result<i64> {
+    let r#type = r#type.to_string();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_count_by_type_since(&r#type, since, conn))
+        .await?
+}
+
 pub async fn select_created_between_for_area(
     area_id: i64,
     period_start: OffsetDateTime,

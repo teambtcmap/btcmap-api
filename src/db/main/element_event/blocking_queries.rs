@@ -132,6 +132,27 @@ pub fn select_updated_since(
         .collect::<Result<Vec<_>, _>>()?)
 }
 
+pub fn select_count_by_type_since(
+    r#type: &str,
+    since: OffsetDateTime,
+    conn: &Connection,
+) -> Result<i64> {
+    let sql = format!(
+        r#"
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE {type} = ?1 AND {created_at} > ?2
+        "#,
+        table = schema::TABLE_NAME,
+        r#type = Columns::Type.as_str(),
+        created_at = Columns::CreatedAt.as_str(),
+    );
+    conn.query_row(&sql, params![r#type, since.format(&Rfc3339)?], |row| {
+        row.get(0)
+    })
+    .map_err(Into::into)
+}
+
 pub fn select_created_between(
     period_start: &OffsetDateTime,
     period_end: &OffsetDateTime,
@@ -506,6 +527,42 @@ mod test {
         assert_eq!(1, result_2.len());
         assert_eq!("create", result_1[0].r#type);
         assert_eq!("update", result_2[0].r#type);
+        Ok(())
+    }
+
+    #[test]
+    fn select_count_by_type_since() -> Result<()> {
+        let conn = conn();
+        let user = db::main::osm_user::blocking_queries::insert(1, &EditingApiUser::mock(), &conn)?;
+        let element_1 =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
+        let element_2 =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(2), &conn)?;
+        let element_3 =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(3), &conn)?;
+        let element_4 =
+            db::main::element::blocking_queries::insert(&OverpassElement::mock(4), &conn)?;
+        let old_create = super::insert(user.id, element_1.id, "create", &conn)?;
+        let _recent_create = super::insert(user.id, element_2.id, "create", &conn)?;
+        let _recent_update = super::insert(user.id, element_3.id, "update", &conn)?;
+        let old_update = super::insert(user.id, element_4.id, "update", &conn)?;
+        conn.execute(
+            "UPDATE element_event SET created_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+            params![old_create.id],
+        )?;
+        conn.execute(
+            "UPDATE element_event SET created_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+            params![old_update.id],
+        )?;
+        let recent =
+            super::select_count_by_type_since("create", datetime!(2026-01-01 00:00 UTC), &conn)?;
+        assert_eq!(1, recent);
+        let old =
+            super::select_count_by_type_since("create", datetime!(2019-01-01 00:00 UTC), &conn)?;
+        assert_eq!(2, old);
+        let none =
+            super::select_count_by_type_since("delete", datetime!(2026-01-01 00:00 UTC), &conn)?;
+        assert_eq!(0, none);
         Ok(())
     }
 }
