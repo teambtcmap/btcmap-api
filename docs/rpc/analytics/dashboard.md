@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns a high-level analytics dashboard snapshot, including the time the report took to generate and counts of places added, updated, and deleted over the last 1, 7, and 30 days. Counts are derived from the `element_event` log (events with type `create`, `update`, and `delete`).
+Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), and log database stats (file size and number of logged requests over the same windows).
 
 ## Params
 
@@ -33,6 +33,14 @@ Returns a high-level analytics dashboard snapshot, including the time the report
       "d7": 5,
       "d30": 20
     }
+  },
+  "logs": {
+    "file_size_bytes": 2230968320,
+    "requests": {
+      "d1": 12000,
+      "d7": 80000,
+      "d30": 320000
+    }
   }
 }
 ```
@@ -45,6 +53,8 @@ Returns a high-level analytics dashboard snapshot, including the time the report
 - `places.added.d1` / `d7` / `d30`: Number of `create` events recorded in the last 1, 7, and 30 days
 - `places.updated.d1` / `d7` / `d30`: Number of `update` events recorded in the last 1, 7, and 30 days
 - `places.deleted.d1` / `d7` / `d30`: Number of `delete` events recorded in the last 1, 7, and 30 days
+- `logs.file_size_bytes`: Size of the `log.db` file on disk in bytes (0 if the file is missing)
+- `logs.requests.d1` / `d7` / `d30`: Number of HTTP requests logged in the last 1, 7, and 30 days
 
 Windows are calculated from "now" at the time of the request. The `d1` window is included in `d7`, and `d7` is included in `d30`.
 

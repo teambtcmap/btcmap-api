@@ -66,6 +66,24 @@ pub fn insert(request: InsertArgs, conn: &Connection) -> Result<()> {
 }
 
 #[allow(dead_code)]
+pub fn select_count_since(since: OffsetDateTime, conn: &Connection) -> Result<i64> {
+    let since = since
+        .format(&time::format_description::well_known::Rfc3339)
+        .map_err(crate::Error::from)?;
+    let sql = format!(
+        r#"
+            SELECT COUNT(*)
+            FROM {table}
+            WHERE {date} > ?1
+        "#,
+        table = schema::TABLE_NAME,
+        date = Columns::Date.as_str(),
+    );
+    conn.query_row(&sql, [&since], |row| row.get(0))
+        .map_err(Into::into)
+}
+
+#[allow(dead_code)]
 pub fn select_latest(minutes: i64, conn: &Connection) -> Result<Vec<schema::Request>> {
     let sql = format!(
         r#"
@@ -572,6 +590,30 @@ mod test {
 
         let requests = super::select_latest(5, &conn)?;
         assert_eq!(requests.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_count_since() -> crate::Result<()> {
+        let conn = conn();
+
+        conn.execute(
+            "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.1', '/api/v1/old', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours'))",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.2', '/api/v1/recent', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            [],
+        )?;
+
+        let now = time::OffsetDateTime::now_utc();
+        let count = super::select_count_since(now - time::Duration::hours(1), &conn)?;
+        assert_eq!(1, count);
+        let count = super::select_count_since(now - time::Duration::hours(3), &conn)?;
+        assert_eq!(2, count);
+        let count = super::select_count_since(now + time::Duration::hours(1), &conn)?;
+        assert_eq!(0, count);
 
         Ok(())
     }

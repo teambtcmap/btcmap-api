@@ -1,3 +1,5 @@
+use crate::db::log::request::queries as log_request_queries;
+use crate::db::log::LogPool;
 use crate::db::main::element_event::queries as element_event_queries;
 use crate::db::main::MainPool;
 use crate::Result;
@@ -16,6 +18,7 @@ pub struct Res {
     pub finished_at: OffsetDateTime,
     pub generation_time_ms: i64,
     pub places: PlaceStats,
+    pub logs: LogStats,
 }
 
 #[derive(Serialize)]
@@ -32,7 +35,13 @@ pub struct PeriodCounts {
     pub d30: i64,
 }
 
-pub async fn run(pool: &MainPool) -> Result<Res> {
+#[derive(Serialize)]
+pub struct LogStats {
+    pub file_size_bytes: u64,
+    pub requests: PeriodCounts,
+}
+
+pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let now = OffsetDateTime::now_utc();
     let d1 = now.saturating_sub(Duration::days(1));
@@ -64,6 +73,14 @@ pub async fn run(pool: &MainPool) -> Result<Res> {
                 .await?,
         },
     };
+    let logs = LogStats {
+        file_size_bytes: log_db_file_size(),
+        requests: PeriodCounts {
+            d1: log_request_queries::select_count_since(d1, log_pool).await?,
+            d7: log_request_queries::select_count_since(d7, log_pool).await?,
+            d30: log_request_queries::select_count_since(d30, log_pool).await?,
+        },
+    };
     let finished_at = OffsetDateTime::now_utc();
     let generation_time_ms = (finished_at - started_at).whole_milliseconds() as i64;
     Ok(Res {
@@ -71,11 +88,21 @@ pub async fn run(pool: &MainPool) -> Result<Res> {
         finished_at,
         generation_time_ms,
         places,
+        logs,
     })
+}
+
+fn log_db_file_size() -> u64 {
+    crate::db::db_file_path("log.db")
+        .ok()
+        .and_then(|path| std::fs::metadata(path).ok())
+        .map(|m| m.len())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
 mod test {
+    use crate::db::log::test::pool as log_pool;
     use crate::db::main::test::pool;
     use crate::Result;
     use actix_web::test;
@@ -83,7 +110,8 @@ mod test {
     #[test]
     async fn empty_database() -> Result<()> {
         let pool = pool();
-        let res = super::run(&pool).await?;
+        let log_pool = log_pool();
+        let res = super::run(&pool, &log_pool).await?;
         assert_eq!(0, res.places.added.d1);
         assert_eq!(0, res.places.added.d7);
         assert_eq!(0, res.places.added.d30);
@@ -93,6 +121,9 @@ mod test {
         assert_eq!(0, res.places.deleted.d1);
         assert_eq!(0, res.places.deleted.d7);
         assert_eq!(0, res.places.deleted.d30);
+        assert_eq!(0, res.logs.requests.d1);
+        assert_eq!(0, res.logs.requests.d7);
+        assert_eq!(0, res.logs.requests.d30);
         assert!(res.finished_at >= res.started_at);
         Ok(())
     }
@@ -100,6 +131,7 @@ mod test {
     #[test]
     async fn counts_events_by_type_and_window() -> Result<()> {
         let pool = pool();
+        let log_pool = log_pool();
         let user = crate::db::main::osm_user::queries::insert(
             1,
             crate::service::osm::EditingApiUser::mock(),
@@ -151,7 +183,7 @@ mod test {
                 )
             })
             .await??;
-        let res = super::run(&pool).await?;
+        let res = super::run(&pool, &log_pool).await?;
         assert_eq!(1, res.places.added.d1);
         assert_eq!(1, res.places.added.d7);
         assert_eq!(1, res.places.added.d30);
@@ -161,6 +193,31 @@ mod test {
         assert_eq!(0, res.places.deleted.d1);
         assert_eq!(0, res.places.deleted.d7);
         assert_eq!(0, res.places.deleted.d30);
+        Ok(())
+    }
+
+    #[test]
+    async fn counts_logged_requests_by_window() -> Result<()> {
+        let pool = pool();
+        let log_pool = log_pool();
+        log_pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                conn.execute(
+                    "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.1', '/api/v1/recent', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.2', '/api/v1/old', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'))",
+                    [],
+                )
+            })
+            .await??;
+        let res = super::run(&pool, &log_pool).await?;
+        assert_eq!(1, res.logs.requests.d1);
+        assert_eq!(2, res.logs.requests.d7);
+        assert_eq!(2, res.logs.requests.d30);
         Ok(())
     }
 }

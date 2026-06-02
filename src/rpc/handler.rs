@@ -615,7 +615,7 @@ pub async fn handle(
         ),
         RpcMethod::Dashboard => RpcResponse::from(
             req.id.clone(),
-            super::analytics::dashboard::run(&pool).await?,
+            super::analytics::dashboard::run(&pool, &log_pool).await?,
         ),
     }?;
 

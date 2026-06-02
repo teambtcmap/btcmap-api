@@ -3,6 +3,7 @@ use super::blocking_queries;
 use super::blocking_queries::{DailyInfraReport, InsertArgs, TopClientsReport, TopUserAgent};
 use crate::db::log::request::schema::Request;
 use crate::Result;
+use time::OffsetDateTime;
 
 pub async fn insert(args: InsertArgs, pool: &LogPool) -> Result<()> {
     pool.get()
@@ -16,6 +17,14 @@ pub async fn select_latest(minutes: i64, pool: &LogPool) -> Result<Vec<Request>>
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::select_latest(minutes, conn))
+        .await?
+}
+
+#[allow(dead_code)]
+pub async fn select_count_since(since: OffsetDateTime, pool: &LogPool) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_count_since(since, conn))
         .await?
 }
 
