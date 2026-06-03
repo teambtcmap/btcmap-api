@@ -10,6 +10,7 @@ This document describes the endpoints for interacting with users in REST API v4.
 - [Change Password](#change-password)
 - [Update Username](#update-username)
 - [Get Linked Nostr Identity](#get-linked-nostr-identity)
+- [Link Nostr Identity](#link-nostr-identity)
 - [Unlink Nostr Identity](#unlink-nostr-identity)
 
 ### Get Authenticated User
@@ -247,6 +248,44 @@ curl https://api.btcmap.org/v4/users/me/nostr \
 | Field | Type | Description |
 |-------|------|-------------|
 | npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
+
+### Link Nostr Identity
+
+Links (or replaces) the Nostr pubkey on the authenticated account. This requires **two** credentials at once:
+
+- `Authorization: Bearer <token>` — identifies the account being modified.
+- `X-Nostr-Authorization: Nostr <base64-event>` — a NIP-98 event proving control of the pubkey being linked.
+
+The two cannot share the `Authorization` header, so the NIP-98 proof is carried on the dedicated `X-Nostr-Authorization` header. The request body is empty. The proof event must sign `u = <api-base-url>/v4/users/me/nostr` with method `PUT` (the `u`/`method` are matched against the server's configured base URL and the actual request method — both are case-sensitive).
+
+#### Example Request
+
+```bash
+curl -X PUT https://api.btcmap.org/v4/users/me/nostr \
+  -H "Authorization: Bearer <your-token>" \
+  -H "X-Nostr-Authorization: Nostr <base64-encoded-nip98-event>"
+```
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Pubkey linked (or already linked to this account) |
+| 400  | Bad Request - The npub is already linked to a different account |
+| 401  | Unauthorized - Missing/invalid Bearer token, or missing/invalid NIP-98 proof |
+| 500  | Internal Server Error - Database error |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "npub": "npub1..."
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| npub  | String | Bech32 npub now linked to the account |
 
 ### Unlink Nostr Identity
 
