@@ -203,10 +203,7 @@ pub struct NostrIdentityResponse {
 /// (or `null`). A thin read of the same `npub` exposed on `GET /me`, kept
 /// as a dedicated sub-resource so a client can poll just the link state.
 #[get("/me/nostr")]
-pub async fn get_nostr(
-    auth: Auth,
-    _pool: Data<MainPool>,
-) -> Result<Json<NostrIdentityResponse>, RestApiError> {
+pub async fn get_nostr(auth: Auth) -> Result<Json<NostrIdentityResponse>, RestApiError> {
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
     Ok(Json(NostrIdentityResponse { npub: user.npub }))
 }
