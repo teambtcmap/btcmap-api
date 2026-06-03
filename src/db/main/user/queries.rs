@@ -106,7 +106,6 @@ pub async fn set_saved_areas(id: i64, saved_areas: &[i64], pool: &Pool) -> Resul
         .await?
 }
 
-#[allow(dead_code)]
 pub async fn set_npub(id: i64, npub: Option<String>, pool: &Pool) -> Result<User> {
     pool.get()
         .await?
