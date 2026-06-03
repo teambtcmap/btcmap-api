@@ -15,6 +15,57 @@ use crate::service::nip98;
 #[derive(Clone)]
 pub struct ApiBaseUrl(pub String);
 
+/// Header carrying the NIP-98 proof on endpoints that ALSO need Bearer
+/// auth (e.g. `PUT /v4/users/me/nostr`, which links a pubkey to an
+/// already-authenticated account). The standard `Authorization` header is
+/// taken by the Bearer token there, so the signed Nostr event rides this
+/// one instead. Endpoints authenticated by Nostr alone (the sign-in
+/// endpoint) keep using `Authorization: Nostr ...` via [`NostrAuth`].
+pub const X_NOSTR_AUTHORIZATION: &str = "x-nostr-authorization";
+
+/// Verify a NIP-98 event carried in `header_name` against the trusted
+/// `ApiBaseUrl` + this request's path/method, returning the bech32 npub on
+/// success. Returns `None` when state is missing, the header is absent or
+/// not a `Nostr ...` value, or verification fails. Shared by [`NostrAuth`]
+/// (reads `Authorization`) and [`NostrProof`] (reads `X-Nostr-Authorization`).
+fn verified_npub(req: &HttpRequest, header_name: impl header::AsHeaderName) -> Option<String> {
+    // Without a trusted base URL we can't safely verify the `u` tag, so
+    // refuse to attempt verification (matches the `Auth` extractor's
+    // fail-closed pattern when state is missing).
+    let base_url = req.app_data::<Data<ApiBaseUrl>>()?;
+
+    let payload = req
+        .headers()
+        .get(header_name)
+        .and_then(|h| h.to_str().ok())
+        .and_then(nip98::extract_nostr_auth)?;
+
+    // Base URL comes from config, never from request headers — path and
+    // query are the only request-derived pieces. An attacker who spoofs
+    // `Host` or `X-Forwarded-*` cannot influence what the signature is
+    // checked against.
+    let path_and_query = req
+        .uri()
+        .path_and_query()
+        .map(|p| p.as_str())
+        .unwrap_or(req.uri().path());
+    let full_url = format!("{}{}", base_url.0.trim_end_matches('/'), path_and_query);
+    let method = req.method().as_str();
+
+    match nip98::verify(payload, &full_url, method) {
+        Ok(event) => Some(event.npub),
+        Err(e) => {
+            tracing::debug!(
+                error = %e,
+                url = %full_url,
+                method = %method,
+                "NIP-98 verification failed"
+            );
+            None
+        }
+    }
+}
+
 /// NIP-98 extractor. Mirrors the `Auth` bearer extractor: never fails the
 /// request, always yields a struct. When `npub` is `None` the handler
 /// decides whether to reject (401) or treat auth as optional.
@@ -27,7 +78,8 @@ pub struct ApiBaseUrl(pub String);
 /// - verified under a valid Schnorr signature
 ///
 /// The `npub` is bech32-encoded (`npub1...`), matching the encoding used by
-/// the `user.npub` DB column.
+/// the `user.npub` DB column. The signed event is read from the standard
+/// `Authorization: Nostr ...` header.
 pub struct NostrAuth {
     pub npub: Option<String>,
 }
@@ -37,55 +89,27 @@ impl FromRequest for NostrAuth {
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let req = req.clone();
-        let base_url = req.app_data::<Data<ApiBaseUrl>>().cloned();
-        Box::pin(async move {
-            // Without a trusted base URL we can't safely verify the `u` tag,
-            // so refuse to attempt verification: yield `npub: None` and let
-            // the handler decide whether to reject (matches the `Auth`
-            // extractor's pattern when state is missing). Whether this ends
-            // up fail-closed or fail-open in practice depends on the
-            // handler — required-auth handlers must treat `None` as 401.
-            let Some(base_url) = base_url else {
-                return Ok(NostrAuth { npub: None });
-            };
+        let npub = verified_npub(req, header::AUTHORIZATION);
+        Box::pin(async move { Ok(NostrAuth { npub }) })
+    }
+}
 
-            let Some(payload) = req
-                .headers()
-                .get(header::AUTHORIZATION)
-                .and_then(|h| h.to_str().ok())
-                .and_then(nip98::extract_nostr_auth)
-            else {
-                return Ok(NostrAuth { npub: None });
-            };
+/// Same NIP-98 guarantees as [`NostrAuth`], but reads the signed event from
+/// the [`X_NOSTR_AUTHORIZATION`] header. Use this on endpoints that need
+/// BOTH a Bearer token (to identify the account, via `Auth`) AND a Nostr
+/// signature (to prove control of the pubkey) — the two can't share the
+/// `Authorization` header.
+pub struct NostrProof {
+    pub npub: Option<String>,
+}
 
-            // Base URL comes from config, never from request headers — path
-            // and query are the only request-derived pieces. An attacker who
-            // spoofs `Host` or `X-Forwarded-*` cannot influence what the
-            // signature is checked against.
-            let path_and_query = req
-                .uri()
-                .path_and_query()
-                .map(|p| p.as_str())
-                .unwrap_or(req.uri().path());
-            let full_url = format!("{}{}", base_url.0.trim_end_matches('/'), path_and_query);
-            let method = req.method().as_str();
+impl FromRequest for NostrProof {
+    type Error = actix_web::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
-            match nip98::verify(payload, &full_url, method) {
-                Ok(event) => Ok(NostrAuth {
-                    npub: Some(event.npub),
-                }),
-                Err(e) => {
-                    tracing::debug!(
-                        error = %e,
-                        url = %full_url,
-                        method = %method,
-                        "NIP-98 verification failed"
-                    );
-                    Ok(NostrAuth { npub: None })
-                }
-            }
-        })
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        let npub = verified_npub(req, X_NOSTR_AUTHORIZATION);
+        Box::pin(async move { Ok(NostrProof { npub }) })
     }
 }
 

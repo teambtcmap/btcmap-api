@@ -3,6 +3,7 @@ use crate::db::main::MainPool;
 use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
+use crate::rest::nostr_auth::NostrProof;
 use actix_web::delete;
 use actix_web::get;
 use actix_web::http::header;
@@ -208,6 +209,55 @@ pub async fn get_nostr(auth: Auth) -> Result<Json<NostrIdentityResponse>, RestAp
     Ok(Json(NostrIdentityResponse { npub: user.npub }))
 }
 
+/// `PUT /v4/users/me/nostr`
+///
+/// Links (or replaces) the Nostr pubkey on the authenticated account.
+/// Requires TWO credentials: a Bearer token (`Authorization`, via [`Auth`])
+/// to say *which account*, and a NIP-98 proof (`X-Nostr-Authorization`, via
+/// [`NostrProof`]) to prove control of the pubkey being linked. The request
+/// body is empty; the proof event must sign `u = <ApiBaseUrl>/v4/users/me/nostr`
+/// with method `PUT`.
+///
+/// Conflict handling is application-level: if the proven npub is already
+/// linked to a *different* account, returns 400. Idempotent: re-linking the
+/// npub already on this account returns 200.
+///
+/// NOTE (concurrency): there is no UNIQUE index on `user.npub` yet, so the
+/// `select_by_npub` check and the `set_npub` write are not atomic — two
+/// concurrent PUTs linking the same npub to two different accounts could
+/// both pass the check and both succeed (TOCTOU). This is accepted for now;
+/// the maintainer-owned partial unique index on `user.npub` is what closes
+/// the window (after which a UNIQUE violation on write could be mapped to
+/// 400). Do not add that index here.
+#[put("/me/nostr")]
+pub async fn put_nostr(
+    auth: Auth,
+    proof: NostrProof,
+    pool: Data<MainPool>,
+) -> Result<Json<NostrIdentityResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    let npub = proof.npub.ok_or_else(RestApiError::unauthorized)?;
+
+    // Refuse to steal a pubkey already linked to someone else. Linking the
+    // npub this account already has is a no-op that still returns 200.
+    if let Some(existing) = db::main::user::queries::select_by_npub(npub.clone(), &pool)
+        .await
+        .map_err(|_| RestApiError::database())?
+    {
+        if existing.id != user.id {
+            return Err(RestApiError::invalid_input(
+                "npub already linked to another account",
+            ));
+        }
+    }
+
+    db::main::user::queries::set_npub(user.id, Some(npub.clone()), &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    Ok(Json(NostrIdentityResponse { npub: Some(npub) }))
+}
+
 /// `DELETE /v4/users/me/nostr`
 ///
 /// Clears the Nostr pubkey linked to the authenticated account. Requires
@@ -308,12 +358,36 @@ mod test {
     use super::*;
     use crate::db::main::test::pool;
     use crate::db::main::user::schema::Role;
+    use crate::rest::nostr_auth::{ApiBaseUrl, X_NOSTR_AUTHORIZATION};
     use crate::{db, Result};
     use actix_web::http::header;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
+    use nostr::event::EventBuilder;
+    use nostr::key::Keys;
+    use nostr::nips::nip19::ToBech32;
+    use nostr::{JsonUtil, Kind, Tag, Timestamp};
+
+    // Trusted base URL the NIP-98 `u` tag must bind to in PUT /me/nostr tests.
+    const BASE: &str = "https://api.example.test";
+
+    // Base64-encoded NIP-98 event signing `url` with `method`, for the
+    // `X-Nostr-Authorization` header. Mirrors the helper in nostr.rs/nostr_auth.rs.
+    fn signed_nip98(keys: &Keys, url: &str, method: &str) -> String {
+        let event = EventBuilder::new(Kind::from_u16(27235), "")
+            .tags(vec![
+                Tag::parse(["u", url]).unwrap(),
+                Tag::parse(["method", method]).unwrap(),
+            ])
+            .custom_created_at(Timestamp::now())
+            .sign_with_keys(keys)
+            .unwrap();
+        BASE64.encode(event.as_json().as_bytes())
+    }
 
     #[test]
     async fn me_unauthenticated_returns_401() -> Result<()> {
@@ -540,6 +614,164 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    // Builds the PUT /me/nostr test app: pool + the ApiBaseUrl the NIP-98
+    // proof binds to, mounted at /users so the signed `u` is BASE/users/me/nostr.
+    fn put_app(
+        pool: crate::db::main::MainPool,
+    ) -> App<
+        impl actix_web::dev::ServiceFactory<
+            actix_web::dev::ServiceRequest,
+            Config = (),
+            Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+            Error = actix_web::Error,
+            InitError = (),
+        >,
+    > {
+        App::new()
+            .app_data(Data::new(pool))
+            .app_data(Data::new(ApiBaseUrl(BASE.to_string())))
+            .service(scope("/users").service(put_nostr))
+    }
+
+    const PUT_URL: &str = "/users/me/nostr";
+
+    #[test]
+    async fn put_nostr_links_pubkey() -> Result<()> {
+        let pool = pool();
+        let user = user_with_token("plain_user", None, &pool).await?;
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
+
+        let app = test::init_service(put_app(pool.clone())).await;
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
+            .uri(PUT_URL)
+            .to_request();
+        let res: NostrIdentityResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.npub, Some(npub.clone()));
+
+        let reloaded = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        assert_eq!(reloaded.npub, Some(npub));
+        Ok(())
+    }
+
+    #[test]
+    async fn put_nostr_replaces_existing_link() -> Result<()> {
+        let pool = pool();
+        let user = user_with_token("nostr_user", Some("npub1old"), &pool).await?;
+        let keys = Keys::generate();
+        let new_npub = keys.public_key().to_bech32().unwrap();
+        let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
+
+        let app = test::init_service(put_app(pool.clone())).await;
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
+            .uri(PUT_URL)
+            .to_request();
+        let res: NostrIdentityResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.npub, Some(new_npub.clone()));
+
+        let reloaded = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        assert_eq!(reloaded.npub, Some(new_npub));
+        Ok(())
+    }
+
+    #[test]
+    async fn put_nostr_idempotent_when_same_user() -> Result<()> {
+        // The account already owns this npub; re-linking it returns 200.
+        let pool = pool();
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        user_with_token("nostr_user", Some(&npub), &pool).await?;
+        let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
+
+        let app = test::init_service(put_app(pool)).await;
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
+            .uri(PUT_URL)
+            .to_request();
+        let res: NostrIdentityResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.npub, Some(npub));
+        Ok(())
+    }
+
+    #[test]
+    async fn put_nostr_conflict_returns_400() -> Result<()> {
+        // npub is already linked to a different account.
+        let pool = pool();
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        // Account A owns the pubkey.
+        db::main::user::queries::insert_with_npub("owner", "", &npub, &[Role::User], &pool).await?;
+        // Account B (the caller) tries to claim it.
+        user_with_token("claimer", None, &pool).await?;
+        let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
+
+        let app = test::init_service(put_app(pool)).await;
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
+            .uri(PUT_URL)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn put_nostr_missing_bearer_returns_401() -> Result<()> {
+        let pool = pool();
+        let keys = Keys::generate();
+        let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
+
+        let app = test::init_service(put_app(pool)).await;
+        let req = TestRequest::put()
+            .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
+            .uri(PUT_URL)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn put_nostr_missing_proof_returns_401() -> Result<()> {
+        let pool = pool();
+        user_with_token("plain_user", None, &pool).await?;
+
+        let app = test::init_service(put_app(pool)).await;
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri(PUT_URL)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn put_nostr_proof_for_wrong_url_returns_401() -> Result<()> {
+        let pool = pool();
+        user_with_token("plain_user", None, &pool).await?;
+        let keys = Keys::generate();
+        // Proof signs a different path than the request targets.
+        let proof = signed_nip98(&keys, &format!("{BASE}/users/me/different"), "PUT");
+
+        let app = test::init_service(put_app(pool)).await;
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
+            .uri(PUT_URL)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
         Ok(())
     }
 
