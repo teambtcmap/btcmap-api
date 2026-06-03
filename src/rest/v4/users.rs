@@ -41,6 +41,9 @@ pub struct MeResponse {
     pub roles: Vec<String>,
     pub saved_places: Vec<SavedPlace>,
     pub saved_areas: Vec<SavedArea>,
+    /// Bech32 npub (`npub1...`) of the Nostr identity linked to this user,
+    /// or `null` when no pubkey is linked.
+    pub npub: Option<String>,
 }
 
 impl From<&User> for MeResponse {
@@ -51,6 +54,7 @@ impl From<&User> for MeResponse {
             roles: user.roles.iter().map(|r| r.to_string()).collect(),
             saved_places: vec![],
             saved_areas: vec![],
+            npub: user.npub.clone(),
         }
     }
 }
@@ -82,6 +86,7 @@ pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, Re
         roles: user.roles.iter().map(|r| r.to_string()).collect(),
         saved_places,
         saved_areas,
+        npub: user.npub,
     }))
 }
 
@@ -257,6 +262,7 @@ pub async fn create_token(
             roles: user.roles.iter().map(|r| r.to_string()).collect(),
             saved_places,
             saved_areas,
+            npub: user.npub,
         },
     }))
 }
@@ -315,6 +321,45 @@ mod test {
         let res: MeResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, user.id);
         assert_eq!(res.name, "test_user");
+        // A password-only user has no linked Nostr identity.
+        assert_eq!(res.npub, None);
+        Ok(())
+    }
+
+    #[test]
+    async fn me_returns_linked_npub() -> Result<()> {
+        let pool = pool();
+        let npub = "npub1example".to_string();
+        let user = db::main::user::queries::insert_with_npub(
+            "nostr_user",
+            "",
+            &npub,
+            &[Role::User],
+            &pool,
+        )
+        .await?;
+        let _token = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(me)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me")
+            .to_request();
+        let res: MeResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.npub, Some(npub));
         Ok(())
     }
 

@@ -36,7 +36,8 @@ curl https://api.btcmap.org/v4/users/me \
   "name": "satoshi",
   "roles": ["user", "admin"],
   "saved_places": [{"id": 1, "name": "Bitcoin Cafe"}],
-  "saved_areas": [{"id": 2, "name": "Downtown District"}]
+  "saved_areas": [{"id": 2, "name": "Downtown District"}],
+  "npub": "npub1..."
 }
 ```
 
@@ -47,6 +48,7 @@ curl https://api.btcmap.org/v4/users/me \
 | roles | Array  | List of user roles (e.g., "user", "admin", "root") |
 | saved_places | Array | List of saved places with `id` and `name` fields |
 | saved_areas | Array | List of saved areas with `id` and `name` fields |
+| npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
 
 ### Create User
 
