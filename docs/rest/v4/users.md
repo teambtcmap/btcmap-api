@@ -9,6 +9,8 @@ This document describes the endpoints for interacting with users in REST API v4.
 - [Create Token](#create-token)
 - [Change Password](#change-password)
 - [Update Username](#update-username)
+- [Get Linked Nostr Identity](#get-linked-nostr-identity)
+- [Unlink Nostr Identity](#unlink-nostr-identity)
 
 ### Get Authenticated User
 
@@ -215,3 +217,64 @@ curl -X PUT https://api.btcmap.org/v4/users/me/username \
 | id    | Number | User ID |
 | name  | String | Updated username |
 | roles | Array  | List of user roles |
+
+### Get Linked Nostr Identity
+
+Returns the Nostr pubkey currently linked to the authenticated account, or `null` if none is linked. Requires a valid Bearer token. This is the same `npub` exposed on [Get Authenticated User](#get-authenticated-user), offered as a dedicated sub-resource so a client can poll just the link state.
+
+#### Example Request
+
+```bash
+curl https://api.btcmap.org/v4/users/me/nostr \
+  -H "Authorization: Bearer <your-token>"
+```
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Returns the linked npub (or null) |
+| 401  | Unauthorized - Missing or invalid token |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "npub": "npub1..."
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
+
+### Unlink Nostr Identity
+
+Clears the Nostr pubkey linked to the authenticated account. Requires a valid Bearer token only — removing your own link needs no NIP-98 proof. Idempotent: succeeds with `npub: null` even if nothing was linked.
+
+#### Example Request
+
+```bash
+curl -X DELETE https://api.btcmap.org/v4/users/me/nostr \
+  -H "Authorization: Bearer <your-token>"
+```
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Link cleared (or already absent) |
+| 401  | Unauthorized - Missing or invalid token |
+| 500  | Internal Server Error - Database error |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "npub": null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| npub  | null | Always `null` after unlinking |
