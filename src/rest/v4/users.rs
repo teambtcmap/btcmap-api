@@ -3,6 +3,7 @@ use crate::db::main::MainPool;
 use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
+use actix_web::delete;
 use actix_web::get;
 use actix_web::http::header;
 use actix_web::post;
@@ -190,6 +191,44 @@ pub async fn update_username(
     Ok(Json(MeResponse::from(&updated_user)))
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct NostrIdentityResponse {
+    /// Bech32 npub (`npub1...`) currently linked to the account, or `null`.
+    pub npub: Option<String>,
+}
+
+/// `GET /v4/users/me/nostr`
+///
+/// Returns the Nostr pubkey currently linked to the authenticated account
+/// (or `null`). A thin read of the same `npub` exposed on `GET /me`, kept
+/// as a dedicated sub-resource so a client can poll just the link state.
+#[get("/me/nostr")]
+pub async fn get_nostr(
+    auth: Auth,
+    _pool: Data<MainPool>,
+) -> Result<Json<NostrIdentityResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    Ok(Json(NostrIdentityResponse { npub: user.npub }))
+}
+
+/// `DELETE /v4/users/me/nostr`
+///
+/// Clears the Nostr pubkey linked to the authenticated account. Requires
+/// only account auth (Bearer) — removing your own link needs no NIP-98
+/// proof. Idempotent: succeeds with `npub: null` even if nothing was
+/// linked.
+#[delete("/me/nostr")]
+pub async fn delete_nostr(
+    auth: Auth,
+    pool: Data<MainPool>,
+) -> Result<Json<NostrIdentityResponse>, RestApiError> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    db::main::user::queries::set_npub(user.id, None, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(NostrIdentityResponse { npub: None }))
+}
+
 #[post("/{username}/tokens")]
 pub async fn create_token(
     req: actix_web::HttpRequest,
@@ -360,6 +399,150 @@ mod test {
             .to_request();
         let res: MeResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.npub, Some(npub));
+        Ok(())
+    }
+
+    // Inserts a user (optionally with an npub) plus an access token "secret"
+    // bound to it, returning the user. Mirrors the inline setup used by the
+    // `me` tests above.
+    async fn user_with_token(
+        name: &str,
+        npub: Option<&str>,
+        pool: &crate::db::main::MainPool,
+    ) -> Result<User> {
+        let user = match npub {
+            Some(npub) => {
+                db::main::user::queries::insert_with_npub(name, "", npub, &[Role::User], pool)
+                    .await?
+            }
+            None => db::main::user::queries::insert(name, "", pool).await?,
+        };
+        db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::User],
+            pool,
+        )
+        .await?;
+        Ok(user)
+    }
+
+    #[test]
+    async fn get_nostr_unauthenticated_returns_401() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(scope("/users").service(get_nostr)),
+        )
+        .await;
+
+        let req = TestRequest::get().uri("/users/me/nostr").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_nostr_returns_null_when_unlinked() -> Result<()> {
+        let pool = pool();
+        user_with_token("plain_user", None, &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get_nostr)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/nostr")
+            .to_request();
+        let res: NostrIdentityResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.npub, None);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_nostr_returns_linked_npub() -> Result<()> {
+        let pool = pool();
+        user_with_token("nostr_user", Some("npub1example"), &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get_nostr)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/nostr")
+            .to_request();
+        let res: NostrIdentityResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.npub, Some("npub1example".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_nostr_unauthenticated_returns_401() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(scope("/users").service(delete_nostr)),
+        )
+        .await;
+
+        let req = TestRequest::delete().uri("/users/me/nostr").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_nostr_clears_link() -> Result<()> {
+        let pool = pool();
+        let user = user_with_token("nostr_user", Some("npub1example"), &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/users").service(delete_nostr)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/nostr")
+            .to_request();
+        let res: NostrIdentityResponse = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.npub, None);
+
+        // The link is actually gone from the database.
+        let reloaded = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        assert_eq!(reloaded.npub, None);
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_nostr_idempotent_when_unlinked() -> Result<()> {
+        let pool = pool();
+        user_with_token("plain_user", None, &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(delete_nostr)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/nostr")
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
         Ok(())
     }
 
