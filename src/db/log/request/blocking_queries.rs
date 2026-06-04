@@ -1,6 +1,8 @@
-use super::schema::{self, Columns};
+use super::schema::{self};
 use crate::Result;
 use rusqlite::{named_params, Connection};
+use schema::Columns::*;
+use schema::TABLE_NAME as TABLE;
 use std::time::Instant;
 use time::{Duration, OffsetDateTime};
 use tracing::info;
@@ -19,35 +21,26 @@ pub struct InsertArgs {
 pub fn insert(request: InsertArgs, conn: &Connection) -> Result<()> {
     let sql = format!(
         r#"
-            INSERT INTO {table} (
-                {col_ip},
-                {col_user_agent},
-                {col_user_id},
-                {col_path}, 
-                {col_query},
-                {col_body},
-                {col_response_code},
-                {col_processing_time_ns}
+            INSERT INTO {TABLE} (
+                {Ip},
+                {UserAgent},
+                {UserId},
+                {Path},
+                {Query},
+                {Body},
+                {ResponseCode},
+                {ProcessingTimeNs}
             ) VALUES (
-                :{col_ip},
-                :{col_user_agent},
-                :{col_user_id},
-                :{col_path},
-                :{col_query},
-                :{col_body},  
-                :{col_response_code},
-                :{col_processing_time_ns}
+                :{Ip},
+                :{UserAgent},
+                :{UserId},
+                :{Path},
+                :{Query},
+                :{Body},
+                :{ResponseCode},
+                :{ProcessingTimeNs}
              );
           "#,
-        table = schema::TABLE_NAME,
-        col_ip = Columns::Ip.as_str(),
-        col_user_agent = Columns::UserAgent.as_str(),
-        col_user_id = Columns::UserId.as_str(),
-        col_path = Columns::Path.as_str(),
-        col_query = Columns::Query.as_str(),
-        col_body = Columns::Body.as_str(),
-        col_response_code = Columns::ResponseCode.as_str(),
-        col_processing_time_ns = Columns::ProcessingTimeNs.as_str(),
     );
     conn.execute(
         &sql,
@@ -73,11 +66,9 @@ pub fn select_count_since(since: OffsetDateTime, conn: &Connection) -> Result<i6
     let sql = format!(
         r#"
             SELECT COUNT(*)
-            FROM {table}
-            WHERE {date} > ?1
+            FROM {TABLE}
+            WHERE {Date} > ?1
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
     );
     conn.query_row(&sql, [&since], |row| row.get(0))
         .map_err(Into::into)
@@ -88,13 +79,11 @@ pub fn select_latest(minutes: i64, conn: &Connection) -> Result<Vec<schema::Requ
     let sql = format!(
         r#"
             SELECT {projection}
-            FROM {table}
-            WHERE {date} > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-{minutes} minutes')
-            ORDER BY {date} DESC
+            FROM {TABLE}
+            WHERE {Date} > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-{minutes} minutes')
+            ORDER BY {Date} DESC
         "#,
         projection = schema::Request::projection(),
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
         minutes = minutes,
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -120,58 +109,43 @@ pub struct DailyInfraReport {
 pub fn select_daily_infra_report(conn: &Connection) -> Result<DailyInfraReport> {
     let sql_total = format!(
         r#"
-            SELECT COUNT(*), COUNT(DISTINCT {ip})
-            FROM {table}
-            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            SELECT COUNT(*), COUNT(DISTINCT {Ip})
+            FROM {TABLE}
+            WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        ip = Columns::Ip.as_str(),
     );
     let (total_requests, unique_ips): (i64, i64) =
         conn.query_row(&sql_total, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
     let sql_web = format!(
         r#"
-            SELECT COUNT(*), COUNT(DISTINCT {ip})
-            FROM {table}
-            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND {user_agent} = 'btcmap.org'
+            SELECT COUNT(*), COUNT(DISTINCT {Ip})
+            FROM {TABLE}
+            WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {UserAgent} = 'btcmap.org'
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        ip = Columns::Ip.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
     );
     let (web_requests, web_unique_ips): (i64, i64) =
         conn.query_row(&sql_web, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
     let sql_android = format!(
         r#"
-            SELECT COUNT(*), COUNT(DISTINCT {ip})
-            FROM {table}
-            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND {user_agent} LIKE 'BTC Map Android%'
+            SELECT COUNT(*), COUNT(DISTINCT {Ip})
+            FROM {TABLE}
+            WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {UserAgent} LIKE 'BTC Map Android%'
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        ip = Columns::Ip.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
     );
     let (android_requests, android_unique_ips): (i64, i64) =
         conn.query_row(&sql_android, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
     let sql_ios = format!(
         r#"
-            SELECT COUNT(*), COUNT(DISTINCT {ip})
-            FROM {table}
-            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND {user_agent} LIKE '%CFNetwork%'
+            SELECT COUNT(*), COUNT(DISTINCT {Ip})
+            FROM {TABLE}
+            WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {UserAgent} LIKE '%CFNetwork%'
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        ip = Columns::Ip.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
     );
     let (ios_requests, ios_unique_ips): (i64, i64) =
         conn.query_row(&sql_ios, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
@@ -221,17 +195,14 @@ pub fn select_top_user_agents(conn: &Connection) -> Result<Vec<TopUserAgent>> {
 
     let sql_top = format!(
         r#"
-            SELECT {user_agent}, COUNT(*) as count
-            FROM {table}
-            WHERE {date} >= ?1
-            AND {user_agent} IS NOT NULL
-            GROUP BY {user_agent}
+            SELECT {UserAgent}, COUNT(*) as count
+            FROM {TABLE}
+            WHERE {Date} >= ?1
+            AND {UserAgent} IS NOT NULL
+            GROUP BY {UserAgent}
             ORDER BY count DESC
             LIMIT 10
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
     );
 
     let top_agents: Vec<(String, i64)> = {
@@ -254,17 +225,13 @@ pub fn select_top_user_agents(conn: &Connection) -> Result<Vec<TopUserAgent>> {
     let placeholders: Vec<String> = top_agents.iter().map(|_| "?".to_string()).collect();
     let sql_unique = format!(
         r#"
-            SELECT {user_agent}, COUNT(DISTINCT {ip}) as unique_ips
-            FROM {table}
-            WHERE {date} >= ?1
-            AND {user_agent} IN ({})
-            GROUP BY {user_agent}
+            SELECT {UserAgent}, COUNT(DISTINCT {Ip}) as unique_ips
+            FROM {TABLE}
+            WHERE {Date} >= ?1
+            AND {UserAgent} IN ({})
+            GROUP BY {UserAgent}
         "#,
         placeholders.join(", "),
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
-        ip = Columns::Ip.as_str(),
     );
 
     let unique_ips: std::collections::HashMap<String, i64> = {
@@ -308,18 +275,14 @@ pub fn select_top_user_agents(conn: &Connection) -> Result<Vec<TopUserAgent>> {
 pub fn select_top_clients(conn: &Connection) -> Result<TopClientsReport> {
     let sql_web = format!(
         r#"
-            SELECT {ip}, COUNT(*) as count
-            FROM {table}
-            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND {user_agent} = 'btcmap.org'
-            GROUP BY {ip}
+            SELECT {Ip}, COUNT(*) as count
+            FROM {TABLE}
+            WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {UserAgent} = 'btcmap.org'
+            GROUP BY {Ip}
             ORDER BY count DESC
             LIMIT 10
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        ip = Columns::Ip.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
     );
     let web_top_ips: Vec<TopIp> = {
         let mut stmt = conn.prepare(&sql_web)?;
@@ -334,15 +297,11 @@ pub fn select_top_clients(conn: &Connection) -> Result<TopClientsReport> {
     let (web_requests, web_unique_ips): (i64, i64) = conn.query_row(
         &format!(
             r#"
-                SELECT COUNT(*), COUNT(DISTINCT {ip})
-                FROM {table}
-                WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-                AND {user_agent} = 'btcmap.org'
+                SELECT COUNT(*), COUNT(DISTINCT {Ip})
+                FROM {TABLE}
+                WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+                AND {UserAgent} = 'btcmap.org'
             "#,
-            table = schema::TABLE_NAME,
-            date = Columns::Date.as_str(),
-            ip = Columns::Ip.as_str(),
-            user_agent = Columns::UserAgent.as_str(),
         ),
         [],
         |row| Ok((row.get(0)?, row.get(1)?)),
@@ -350,18 +309,14 @@ pub fn select_top_clients(conn: &Connection) -> Result<TopClientsReport> {
 
     let sql_android = format!(
         r#"
-            SELECT {ip}, COUNT(*) as count
-            FROM {table}
-            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND {user_agent} LIKE 'BTC Map Android%'
-            GROUP BY {ip}
+            SELECT {Ip}, COUNT(*) as count
+            FROM {TABLE}
+            WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {UserAgent} LIKE 'BTC Map Android%'
+            GROUP BY {Ip}
             ORDER BY count DESC
             LIMIT 10
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        ip = Columns::Ip.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
     );
     let android_top_ips: Vec<TopIp> = {
         let mut stmt = conn.prepare(&sql_android)?;
@@ -376,15 +331,11 @@ pub fn select_top_clients(conn: &Connection) -> Result<TopClientsReport> {
     let (android_requests, android_unique_ips): (i64, i64) = conn.query_row(
         &format!(
             r#"
-                SELECT COUNT(*), COUNT(DISTINCT {ip})
-                FROM {table}
-                WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-                AND {user_agent} LIKE 'BTC Map Android%'
+                SELECT COUNT(*), COUNT(DISTINCT {Ip})
+                FROM {TABLE}
+                WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+                AND {UserAgent} LIKE 'BTC Map Android%'
             "#,
-            table = schema::TABLE_NAME,
-            date = Columns::Date.as_str(),
-            ip = Columns::Ip.as_str(),
-            user_agent = Columns::UserAgent.as_str(),
         ),
         [],
         |row| Ok((row.get(0)?, row.get(1)?)),
@@ -392,18 +343,14 @@ pub fn select_top_clients(conn: &Connection) -> Result<TopClientsReport> {
 
     let sql_ios = format!(
         r#"
-            SELECT {ip}, COUNT(*) as count
-            FROM {table}
-            WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-            AND {user_agent} LIKE '%CFNetwork%'
-            GROUP BY {ip}
+            SELECT {Ip}, COUNT(*) as count
+            FROM {TABLE}
+            WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+            AND {UserAgent} LIKE '%CFNetwork%'
+            GROUP BY {Ip}
             ORDER BY count DESC
             LIMIT 10
         "#,
-        table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        ip = Columns::Ip.as_str(),
-        user_agent = Columns::UserAgent.as_str(),
     );
     let ios_top_ips: Vec<TopIp> = {
         let mut stmt = conn.prepare(&sql_ios)?;
@@ -418,15 +365,11 @@ pub fn select_top_clients(conn: &Connection) -> Result<TopClientsReport> {
     let (ios_requests, ios_unique_ips): (i64, i64) = conn.query_row(
         &format!(
             r#"
-                SELECT COUNT(*), COUNT(DISTINCT {ip})
-                FROM {table}
-                WHERE {date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
-                AND {user_agent} LIKE '%CFNetwork%'
+                SELECT COUNT(*), COUNT(DISTINCT {Ip})
+                FROM {TABLE}
+                WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+                AND {UserAgent} LIKE '%CFNetwork%'
             "#,
-            table = schema::TABLE_NAME,
-            date = Columns::Date.as_str(),
-            ip = Columns::Ip.as_str(),
-            user_agent = Columns::UserAgent.as_str(),
         ),
         [],
         |row| Ok((row.get(0)?, row.get(1)?)),

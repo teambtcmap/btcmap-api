@@ -2,6 +2,8 @@ use std::sync::OnceLock;
 
 pub const TABLE_NAME: &str = "request";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Date,
@@ -13,23 +15,6 @@ pub enum Columns {
     Body,
     ResponseCode,
     ProcessingTimeNs,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Date => "date",
-            Columns::Ip => "ip",
-            Columns::UserAgent => "user_agent",
-            Columns::UserId => "user_id",
-            Columns::Path => "path",
-            Columns::Query => "query",
-            Columns::Body => "body",
-            Columns::ResponseCode => "response_code",
-            Columns::ProcessingTimeNs => "processing_time_ns",
-        }
-    }
 }
 
 pub struct Request {
@@ -63,7 +48,7 @@ impl Request {
                 Columns::ProcessingTimeNs,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -72,16 +57,16 @@ impl Request {
     pub const fn mapper() -> fn(&rusqlite::Row) -> rusqlite::Result<Self> {
         |row: &rusqlite::Row| -> rusqlite::Result<Self> {
             Ok(Request {
-                id: row.get(Columns::Id.as_str())?,
-                date: row.get(Columns::Date.as_str())?,
-                ip: row.get(Columns::Ip.as_str())?,
-                user_agent: row.get(Columns::UserAgent.as_str())?,
-                user_id: row.get(Columns::UserId.as_str())?,
-                path: row.get(Columns::Path.as_str())?,
-                query: row.get(Columns::Query.as_str())?,
-                body: row.get(Columns::Body.as_str())?,
-                response_code: row.get(Columns::ResponseCode.as_str())?,
-                processing_time_ns: row.get(Columns::ProcessingTimeNs.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                date: row.get(Columns::Date.as_ref())?,
+                ip: row.get(Columns::Ip.as_ref())?,
+                user_agent: row.get(Columns::UserAgent.as_ref())?,
+                user_id: row.get(Columns::UserId.as_ref())?,
+                path: row.get(Columns::Path.as_ref())?,
+                query: row.get(Columns::Query.as_ref())?,
+                body: row.get(Columns::Body.as_ref())?,
+                response_code: row.get(Columns::ResponseCode.as_ref())?,
+                processing_time_ns: row.get(Columns::ProcessingTimeNs.as_ref())?,
             })
         }
     }
@@ -93,16 +78,16 @@ mod test {
 
     #[test]
     fn columns_as_str() {
-        assert_eq!(Columns::Id.as_str(), "id");
-        assert_eq!(Columns::Date.as_str(), "date");
-        assert_eq!(Columns::Ip.as_str(), "ip");
-        assert_eq!(Columns::UserAgent.as_str(), "user_agent");
-        assert_eq!(Columns::UserId.as_str(), "user_id");
-        assert_eq!(Columns::Path.as_str(), "path");
-        assert_eq!(Columns::Query.as_str(), "query");
-        assert_eq!(Columns::Body.as_str(), "body");
-        assert_eq!(Columns::ResponseCode.as_str(), "response_code");
-        assert_eq!(Columns::ProcessingTimeNs.as_str(), "processing_time_ns");
+        assert_eq!(Columns::Id.as_ref(), "id");
+        assert_eq!(Columns::Date.as_ref(), "date");
+        assert_eq!(Columns::Ip.as_ref(), "ip");
+        assert_eq!(Columns::UserAgent.as_ref(), "user_agent");
+        assert_eq!(Columns::UserId.as_ref(), "user_id");
+        assert_eq!(Columns::Path.as_ref(), "path");
+        assert_eq!(Columns::Query.as_ref(), "query");
+        assert_eq!(Columns::Body.as_ref(), "body");
+        assert_eq!(Columns::ResponseCode.as_ref(), "response_code");
+        assert_eq!(Columns::ProcessingTimeNs.as_ref(), "processing_time_ns");
     }
 
     #[test]
