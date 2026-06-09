@@ -18,7 +18,7 @@ actix-web = { version = "4.13.0", default-features = false, features = ["macros"
 
 # HTTP types and services for the Actix ecosystem
 # https://github.com/actix/actix-web/blob/main/actix-http/CHANGES.md
-actix-http = { version = "3.12.0", default-features = false }
+actix-http = { version = "3.12.1", default-features = false }
 
 # Actix middleware needs that
 # https://github.com/rust-lang/futures-rs/releases
