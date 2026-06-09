@@ -51,7 +51,7 @@ cargo test           # Run tests
 ```
 
 ### Rust version
-The project pins its Rust version in `rust-toolchain.toml`. Rustup handles this automatically — no manual version management needed. The toolchain file also ensures `rustfmt` and `clippy` components are installed.
+The project does not pin its Rust version. Contributors should use a recent stable Rust toolchain with `rustfmt` and `clippy` components installed.
 
 ## Code Structure
 
