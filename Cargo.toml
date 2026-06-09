@@ -69,7 +69,7 @@ geojson = { version = "1.0.0", default-features = false, features = ["geo-types"
 
 # Used for dealing with area bounds
 # https://github.com/georust/geo/blob/main/geo/CHANGES.md
-geo = { version = "0.33.0", default-features = false }
+geo = { version = "0.33.1", default-features = false }
 
 # Used to handle area icons
 # https://github.com/marshallpierce/rust-base64/blob/master/RELEASE-NOTES.md
@@ -89,7 +89,7 @@ regex = { version = "1.12.3", default-features = false }
 
 # BTC Map Matrix Space bot
 # https://github.com/matrix-org/matrix-rust-sdk/releases
-matrix-sdk = { version = "0.16.0", default-features = false, features = ["rustls-tls"] }
+matrix-sdk = { version = "0.18.0", default-features = false }
 
 # https://github.com/servo/rust-url/releases
 url = { version = "2.5.7", default-features = false }
@@ -98,18 +98,18 @@ url = { version = "2.5.7", default-features = false }
 argon2 = { version = "0.5.3", default-features = false, features = ["password-hash", "alloc"] }
 
 # https://github.com/uuid-rs/uuid/releases
-uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
+uuid = { version = "1.23.3", default-features = false, features = ["v4"] }
 
 # https://github.com/Peternator7/strum/blob/master/CHANGELOG.md
 strum = { version = "0.28.0", features = ["derive"] }
 
 # https://github.com/tokio-rs/tokio/releases
-tokio = "1.52.1"
+tokio = "1.52.3"
 
 # https://github.com/fnichol/names/blob/main/CHANGELOG.md
 names = "0.14.0"
 
 # Nostr protocol types + Schnorr signature verification, used by the NIP-98
 # HTTP auth extractor
-# https://github.com/rust-nostr/nostr/releases
-nostr = { version = "0.44.2", default-features = false, features = ["std"] }
+# https://crates.io/crates/nostr
+nostr = { version = "0.44.3", default-features = false, features = ["std"] }
