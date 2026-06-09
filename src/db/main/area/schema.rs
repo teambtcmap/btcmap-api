@@ -148,7 +148,7 @@ impl Area {
         let mut tags = Map::new();
         tags.insert(
             "geo_json".into(),
-            GeoJson::Feature(geojson::Feature::default()).into(),
+            serde_json::to_value(GeoJson::Feature(geojson::Feature::default())).unwrap(),
         );
         tags.insert("url_alias".into(), Value::String("alias".into()));
         tags

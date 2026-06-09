@@ -103,21 +103,21 @@ pub async fn get_elements_within_geometries(
     {
         for geometry in &geometries {
             match &geometry.value {
-                geojson::Value::MultiPolygon(_) => {
+                geojson::GeometryValue::MultiPolygon { coordinates: _ } => {
                     let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
 
                     if multi_poly.contains(&element.overpass_data.coord()) {
                         area_elements.push(element.clone());
                     }
                 }
-                geojson::Value::Polygon(_) => {
+                geojson::GeometryValue::Polygon { coordinates: _ } => {
                     let poly: Polygon = (&geometry.value).try_into().unwrap();
 
                     if poly.contains(&element.overpass_data.coord()) {
                         area_elements.push(element.clone());
                     }
                 }
-                geojson::Value::LineString(_) => {
+                geojson::GeometryValue::LineString { coordinates: _ } => {
                     let line_string: LineString = (&geometry.value).try_into().unwrap();
 
                     if line_string.contains(&element.overpass_data.coord()) {
@@ -130,4 +130,100 @@ pub async fn get_elements_within_geometries(
     }
 
     Ok(area_elements)
+}
+
+#[cfg(test)]
+mod test {
+    use super::get_elements_within_geometries;
+    use crate::db::main::element::queries as element_queries;
+    use crate::db::main::test::pool;
+    use crate::service::overpass::OverpassElement;
+    use crate::Result;
+    use actix_web::test;
+    use deadpool_sqlite::Pool;
+    use geojson::Geometry;
+
+    async fn insert_element(pool: &Pool, id: i64, lat: f64, lon: f64) -> Result<()> {
+        let element = OverpassElement {
+            lat: Some(lat),
+            lon: Some(lon),
+            ..OverpassElement::mock(id)
+        };
+        element_queries::insert(element, pool).await?;
+        Ok(())
+    }
+
+    #[test]
+    async fn get_elements_within_polygon() -> Result<()> {
+        let pool = pool();
+        insert_element(&pool, 1, 7.979, 98.334).await?;
+        let ring: Vec<[f64; 2]> = vec![
+            [98.21, 8.20],
+            [98.21, 7.74],
+            [98.48, 7.74],
+            [98.48, 8.20],
+            [98.21, 8.20],
+        ];
+        let geometry = Geometry::new_polygon([ring]);
+        let hits = get_elements_within_geometries(vec![geometry], &pool).await?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, 1);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_elements_within_multi_polygon() -> Result<()> {
+        let pool = pool();
+        insert_element(&pool, 1, 10.0, 10.0).await?;
+        let polygons: Vec<Vec<Vec<[f64; 2]>>> = vec![
+            vec![vec![
+                [-1.0, -1.0],
+                [-1.0, 1.0],
+                [1.0, 1.0],
+                [1.0, -1.0],
+                [-1.0, -1.0],
+            ]],
+            vec![vec![
+                [9.0, 9.0],
+                [9.0, 11.0],
+                [11.0, 11.0],
+                [11.0, 9.0],
+                [9.0, 9.0],
+            ]],
+        ];
+        let geometry = Geometry::new_multi_polygon(polygons);
+        let hits = get_elements_within_geometries(vec![geometry], &pool).await?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, 1);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_elements_within_line_string() -> Result<()> {
+        let pool = pool();
+        insert_element(&pool, 1, 2.5, 2.5).await?;
+        let line: Vec<[f64; 2]> = vec![[0.0, 0.0], [5.0, 5.0]];
+        let geometry = Geometry::new_line_string(line);
+        let hits = get_elements_within_geometries(vec![geometry], &pool).await?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, 1);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_elements_excludes_points_outside_geometry() -> Result<()> {
+        let pool = pool();
+        insert_element(&pool, 1, 50.0, 1.0).await?;
+        let ring: Vec<[f64; 2]> = vec![
+            [98.21, 8.20],
+            [98.21, 7.74],
+            [98.48, 7.74],
+            [98.48, 8.20],
+            [98.21, 8.20],
+        ];
+        let geometry = Geometry::new_polygon([ring]);
+        let hits = get_elements_within_geometries(vec![geometry], &pool).await?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
 }

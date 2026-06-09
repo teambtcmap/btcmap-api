@@ -43,21 +43,21 @@ pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a
 
         for geometry in &geometries {
             match &geometry.value {
-                geojson::Value::MultiPolygon(_) => {
+                geojson::GeometryValue::MultiPolygon { coordinates: _ } => {
                     let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
 
                     if multi_poly.contains(&element.overpass_data.coord()) {
                         element_areas.push(area);
                     }
                 }
-                geojson::Value::Polygon(_) => {
+                geojson::GeometryValue::Polygon { coordinates: _ } => {
                     let poly: Polygon = (&geometry.value).try_into().unwrap();
 
                     if poly.contains(&element.overpass_data.coord()) {
                         element_areas.push(area);
                     }
                 }
-                geojson::Value::LineString(_) => {
+                geojson::GeometryValue::LineString { coordinates: _ } => {
                     let line_string: LineString = (&geometry.value).try_into().unwrap();
 
                     if line_string.contains(&element.overpass_data.coord()) {
@@ -557,4 +557,180 @@ pub fn generate_tags(
         }
     }
     res
+}
+
+#[cfg(test)]
+mod test {
+    use super::find_areas;
+    use crate::db::main::area::schema::Area;
+    use crate::db::main::element::schema::Element;
+    use crate::Result;
+    use serde_json::{json, Map, Value};
+    use time::OffsetDateTime;
+
+    fn element_at(lat: f64, lon: f64) -> Element {
+        Element {
+            id: 1,
+            overpass_data: crate::service::overpass::OverpassElement {
+                r#type: "node".into(),
+                id: 1,
+                lat: Some(lat),
+                lon: Some(lon),
+                timestamp: Some("".into()),
+                version: Some(1),
+                changeset: Some(1),
+                user: Some("".into()),
+                uid: Some(1),
+                tags: Some(Map::new()),
+                bounds: None,
+                nodes: None,
+                geometry: None,
+                members: None,
+            },
+            tags: Map::new(),
+            lat: Some(lat),
+            lon: Some(lon),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            deleted_at: None,
+        }
+    }
+
+    fn area(alias: &str, geo_json: Value) -> Area {
+        let mut tags = Map::new();
+        tags.insert("url_alias".into(), Value::String(alias.into()));
+        tags.insert("geo_json".into(), geo_json);
+        Area {
+            id: 1,
+            alias: alias.into(),
+            bbox_west: -180.0,
+            bbox_south: -90.0,
+            bbox_east: 180.0,
+            bbox_north: 90.0,
+            tags,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            deleted_at: None,
+        }
+    }
+
+    fn areas(areas: Vec<Area>) -> Vec<Area> {
+        areas
+    }
+
+    #[test]
+    fn find_areas_matches_polygon() -> Result<()> {
+        let element = element_at(7.979, 98.334);
+        let areas = areas(vec![area(
+            "phuket",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "phuket");
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_excludes_points_outside_polygon() -> Result<()> {
+        let element = element_at(50.0, 1.0);
+        let areas = areas(vec![area(
+            "phuket",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_matches_multi_polygon() -> Result<()> {
+        let element = element_at(10.0, 10.0);
+        let areas = areas(vec![area(
+            "two_polys",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"MultiPolygon",
+                    "coordinates":[
+                        [[[-1.0,-1.0],[-1.0,1.0],[1.0,1.0],[1.0,-1.0],[-1.0,-1.0]]],
+                        [[[9.0,9.0],[9.0,11.0],[11.0,11.0],[11.0,9.0],[9.0,9.0]]]
+                    ]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "two_polys");
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_matches_line_string() -> Result<()> {
+        let element = element_at(2.5, 2.5);
+        let areas = areas(vec![area(
+            "diag",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"LineString",
+                    "coordinates":[[0.0,0.0],[5.0,5.0]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "diag");
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_skips_earth() -> Result<()> {
+        let element = element_at(0.0, 0.0);
+        let areas = areas(vec![area(
+            "earth",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [-180.0,-90.0],[-180.0,90.0],[180.0,90.0],
+                        [180.0,-90.0],[-180.0,-90.0]
+                    ]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
 }

@@ -63,10 +63,9 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 # https://github.com/Michael-F-Bryan/include_dir/tags
 include_dir = { version = "0.7.4", default-features = false }
 
-# TODO test migration to 1.0.0
 # Used for dealing with area bounds
 # https://github.com/georust/geojson/blob/main/CHANGES.md
-geojson = { version = "0.24.2", default-features = false, features = ["geo-types"] }
+geojson = { version = "1.0.0", default-features = false, features = ["geo-types"] }
 
 # Used for dealing with area bounds
 # https://github.com/georust/geo/blob/main/geo/CHANGES.md
