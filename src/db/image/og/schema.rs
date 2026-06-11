@@ -9,6 +9,9 @@ pub enum Columns {
     ElementId,
     Version,
     ImageData,
+    Width,
+    Height,
+    SizeBytes,
     CreatedAt,
 }
 
@@ -18,6 +21,9 @@ pub struct OgImage {
     pub element_id: i64,
     pub version: i64,
     pub image_data: Vec<u8>,
+    pub width: i64,
+    pub height: i64,
+    pub size_bytes: i64,
     pub created_at: time::OffsetDateTime,
 }
 
@@ -29,6 +35,9 @@ impl OgImage {
                 Columns::ElementId,
                 Columns::Version,
                 Columns::ImageData,
+                Columns::Width,
+                Columns::Height,
+                Columns::SizeBytes,
                 Columns::CreatedAt,
             ]
             .iter()
@@ -44,6 +53,9 @@ impl OgImage {
                 element_id: row.get(Columns::ElementId.as_ref())?,
                 version: row.get(Columns::Version.as_ref())?,
                 image_data: row.get(Columns::ImageData.as_ref())?,
+                width: row.get(Columns::Width.as_ref())?,
+                height: row.get(Columns::Height.as_ref())?,
+                size_bytes: row.get(Columns::SizeBytes.as_ref())?,
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
             })
         }

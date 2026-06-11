@@ -7,18 +7,18 @@ case "$1" in
     main-db)
         if [ "$#" -eq 1 ]
         then
-            sqlite3 "$BTCMAP_DATA_DIR/btcmap.db"
+            sqlite3 "$BTCMAP_DATA_DIR/main.db"
         else
-            sqlite3 "$BTCMAP_DATA_DIR/btcmap.db" "$2"
+            sqlite3 "$BTCMAP_DATA_DIR/main.db" "$2"
         fi
         ;;
 
     image-db)
         if [ "$#" -eq 1 ]
         then
-            sqlite3 "$BTCMAP_DATA_DIR/images.db"
+            sqlite3 "$BTCMAP_DATA_DIR/image.db"
         else
-            sqlite3 "$BTCMAP_DATA_DIR/images.db" "$2"
+            sqlite3 "$BTCMAP_DATA_DIR/image.db" "$2"
         fi
         ;;
 
@@ -32,17 +32,17 @@ case "$1" in
         ;;
 
     fetch-db)
-        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/btcmap.db "$BTCMAP_DATA_DIR/btcmap.db"
-        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/images.db "$BTCMAP_DATA_DIR/images.db"
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/main.db "$BTCMAP_DATA_DIR/main.db"
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/image.db "$BTCMAP_DATA_DIR/image.db"
         sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/log.db "$BTCMAP_DATA_DIR/log.db"
         ;;
 
     fetch-main-db)
-        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/btcmap.db "$BTCMAP_DATA_DIR/btcmap.db"
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/main.db "$BTCMAP_DATA_DIR/main.db"
         ;;
 
     fetch-image-db)
-        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/images.db "$BTCMAP_DATA_DIR/images.db"
+        sqlite3_rsync -v --wal-only btcmap-api:.local/share/btcmap/image.db "$BTCMAP_DATA_DIR/image.db"
         ;;
 
     fetch-log-db)

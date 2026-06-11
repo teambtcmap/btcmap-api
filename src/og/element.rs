@@ -26,11 +26,20 @@ pub async fn get_element(
         db::image::og::queries::delete(element.id, &image_pool).await?;
     }
 
-    let image_data = element_og(&id, &pool).await?;
-    db::image::og::queries::insert(element.id, current_version, image_data.clone(), &image_pool)
-        .await?;
+    let payload = element_og(&id, &pool).await?;
+    let size = payload.data.len() as i64;
+    db::image::og::queries::insert(
+        element.id,
+        current_version,
+        payload.data.clone(),
+        payload.width,
+        payload.height,
+        size,
+        &image_pool,
+    )
+    .await?;
 
     Ok(HttpResponse::Ok()
         .content_type("image/jpeg")
-        .body(image_data))
+        .body(payload.data))
 }

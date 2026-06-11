@@ -8,14 +8,24 @@ use staticmap::{tools::IconBuilder, StaticMapBuilder};
 
 static ICONS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/icons");
 
-pub async fn element_og(id: &str, pool: &Pool) -> Result<Vec<u8>> {
+pub const OG_WIDTH: i64 = 600;
+pub const OG_HEIGHT: i64 = 315;
+
+#[derive(Debug)]
+pub struct OgImagePayload {
+    pub width: i64,
+    pub height: i64,
+    pub data: Vec<u8>,
+}
+
+pub async fn element_og(id: &str, pool: &Pool) -> Result<OgImagePayload> {
     let Ok(element) = db::main::element::queries::select_by_id_or_osm_id(id, pool).await else {
         return Err("Element not found".into());
     };
-    let res: Vec<u8> = actix_web::web::block(move || {
+    let res: OgImagePayload = actix_web::web::block(move || {
         let mut map = StaticMapBuilder::default()
-            .width(600)
-            .height(315)
+            .width(OG_WIDTH as u32)
+            .height(OG_HEIGHT as u32)
             .zoom(17)
             .lat_center(element.lat())
             .lon_center(element.lon())
@@ -31,6 +41,7 @@ pub async fn element_og(id: &str, pool: &Pool) -> Result<Vec<u8>> {
         map.add_tool(marker);
         let png_data = map.encode_png()?;
         let img = image::load_from_memory(&png_data)?.to_rgb8();
+        let (width, height) = (img.width() as i64, img.height() as i64);
         let mut jpeg_data = Vec::new();
         let encoder = JpegEncoder::new_with_quality(&mut jpeg_data, 80);
         encoder.write_image(
@@ -39,7 +50,11 @@ pub async fn element_og(id: &str, pool: &Pool) -> Result<Vec<u8>> {
             img.height(),
             image::ExtendedColorType::Rgb8,
         )?;
-        Ok::<Vec<u8>, crate::Error>(jpeg_data)
+        Ok::<OgImagePayload, crate::Error>(OgImagePayload {
+            width,
+            height,
+            data: jpeg_data,
+        })
     })
     .await??;
     Ok(res)

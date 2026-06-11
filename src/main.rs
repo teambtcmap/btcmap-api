@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
         env::var("BTCMAP_API_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
 
     check_areas_without_icon_square(&main_pool).await;
+    backfill_og_image_metadata(&image_pool).await;
 
     service::matrix::init(&main_pool);
 
@@ -233,6 +234,78 @@ fn init_env() {
         .with(EnvFilter::from_default_env())
         .with(Layer::new().json())
         .init();
+}
+
+async fn backfill_og_image_metadata(image_pool: &deadpool_sqlite::Pool) {
+    use crate::db::image::og::queries;
+    use image::ImageReader;
+    use std::io::Cursor;
+
+    let pending = match queries::select_all_with_zero_metadata(image_pool).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!("Failed to load og images for metadata backfill: {}", e);
+            return;
+        }
+    };
+
+    if pending.is_empty() {
+        tracing::info!("All cached og images already have metadata recorded");
+        return;
+    }
+
+    tracing::warn!(
+        count = pending.len(),
+        "Backfilling metadata for cached og images"
+    );
+
+    let mut updated = 0usize;
+    let mut failed = 0usize;
+    for row in pending {
+        let size = row.image_data.len() as i64;
+        let dims = ImageReader::new(Cursor::new(&row.image_data))
+            .with_guessed_format()
+            .ok()
+            .and_then(|reader| reader.into_dimensions().ok());
+
+        let Some((width, height)) = dims else {
+            failed += 1;
+            tracing::error!(
+                element_id = row.element_id,
+                "Failed to parse dimensions of cached og image"
+            );
+            continue;
+        };
+
+        match queries::update_metadata(
+            row.element_id,
+            width as i64,
+            height as i64,
+            size,
+            image_pool,
+        )
+        .await
+        {
+            Ok(1) => updated += 1,
+            Ok(_) => {
+                failed += 1;
+                tracing::warn!(
+                    element_id = row.element_id,
+                    "og image row vanished before metadata backfill"
+                );
+            }
+            Err(e) => {
+                failed += 1;
+                tracing::error!(
+                    element_id = row.element_id,
+                    error = %e,
+                    "Failed to backfill og image metadata"
+                );
+            }
+        }
+    }
+
+    tracing::warn!(updated, failed, "og image metadata backfill finished");
 }
 
 async fn check_areas_without_icon_square(pool: &deadpool_sqlite::Pool) {
