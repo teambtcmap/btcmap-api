@@ -86,19 +86,4 @@ impl Conf {
             })
         }
     }
-
-    #[cfg(test)]
-    pub fn mock() -> Conf {
-        Conf {
-            paywall_add_element_comment_price_sat: 0,
-            paywall_boost_element_30d_price_sat: 0,
-            paywall_boost_element_90d_price_sat: 0,
-            paywall_boost_element_365d_price_sat: 0,
-            lnbits_invoice_key: "".to_string(),
-            gitea_api_key: "".to_string(),
-            matrix_bot_password: "".to_string(),
-            lnd_invoices_macaroon: "".to_string(),
-            ppq_key: "".to_string(),
-        }
-    }
 }

@@ -15,7 +15,9 @@ pub async fn insert(
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::insert(element_id, version, image_data, width, height, size_bytes, conn)
+            blocking_queries::insert(
+                element_id, version, image_data, width, height, size_bytes, conn,
+            )
         })
         .await?
 }
