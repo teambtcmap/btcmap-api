@@ -16,6 +16,13 @@ edition = "2021"
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
 actix-web = { version = "4.13.0", default-features = false, features = ["macros", "compress-brotli"] }
 
+# Cross-Origin Resource Sharing (CORS) middleware, so any browser-based
+# client can call the API from a different origin. The middleware handles
+# the OPTIONS preflight itself; without it browsers reject every cross-origin
+# POST that carries an Authorization header or a JSON content type.
+# https://github.com/actix/actix-extras/blob/master/actix-cors/CHANGES.md
+actix-cors = "0.7.1"
+
 # HTTP types and services for the Actix ecosystem
 # https://github.com/actix/actix-web/blob/main/actix-http/CHANGES.md
 actix-http = { version = "3.12.1", default-features = false }

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "ppq/minimax/minimax-m3",
+  "references": {
+    "cli": {
+      "path": "../btcmap-cli",
+      "description": "command line interface wrapping rpc calls, keep that in sync with rpc changes"
+    },
+    "database": {
+      "path": "~/.local/share/btcmap",
+      "description": "use this to access app databases and benchmark queries",
+    },
+  }
+}
