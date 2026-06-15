@@ -1,14 +1,17 @@
 use crate::db::log::request::queries as log_request_queries;
+use crate::db::log::sync::queries as log_sync_queries;
 use crate::db::log::LogPool;
 use crate::db::main::element_event::queries as element_event_queries;
 use crate::db::main::MainPool;
 use crate::Result;
 use serde::Serialize;
+use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 
 const EVENT_TYPE_CREATE: &str = "create";
 const EVENT_TYPE_UPDATE: &str = "update";
 const EVENT_TYPE_DELETE: &str = "delete";
+const SYNC_RUNS_LIMIT: i64 = 10;
 
 #[derive(Serialize)]
 pub struct Res {
@@ -19,6 +22,7 @@ pub struct Res {
     pub generation_time_ms: i64,
     pub places: PlaceStats,
     pub logs: LogStats,
+    pub sync_runs: Vec<SyncRun>,
 }
 
 #[derive(Serialize)]
@@ -39,6 +43,24 @@ pub struct PeriodCounts {
 pub struct LogStats {
     pub file_size_bytes: u64,
     pub requests: PeriodCounts,
+}
+
+#[derive(Serialize)]
+pub struct SyncRun {
+    pub id: i64,
+    #[serde(with = "time::serde::rfc3339")]
+    pub started_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub finished_at: Option<OffsetDateTime>,
+    pub duration_s: Option<f64>,
+    pub overpass_response_time_s: Option<f64>,
+    pub elements_affected: i64,
+    pub elements_created: i64,
+    pub elements_updated: i64,
+    pub elements_deleted: i64,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub failed_at: Option<OffsetDateTime>,
+    pub fail_reason: Option<String>,
 }
 
 pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
@@ -81,6 +103,31 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
             d30: log_request_queries::select_count_since(d30, log_pool).await?,
         },
     };
+    let raw_sync_runs = log_sync_queries::select_latest(SYNC_RUNS_LIMIT, log_pool).await?;
+    let parse_opt = |value: Option<String>| -> Result<Option<OffsetDateTime>> {
+        match value {
+            Some(s) => Ok(Some(OffsetDateTime::parse(&s, &Rfc3339)?)),
+            None => Ok(None),
+        }
+    };
+    let sync_runs: Vec<SyncRun> = raw_sync_runs
+        .into_iter()
+        .map(|run| {
+            Ok(SyncRun {
+                id: run.id,
+                started_at: OffsetDateTime::parse(&run.started_at, &Rfc3339)?,
+                finished_at: parse_opt(run.finished_at)?,
+                duration_s: run.duration_s,
+                overpass_response_time_s: run.overpass_response_time_s,
+                elements_affected: run.elements_affected,
+                elements_created: run.elements_created,
+                elements_updated: run.elements_updated,
+                elements_deleted: run.elements_deleted,
+                failed_at: parse_opt(run.failed_at)?,
+                fail_reason: run.fail_reason,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
     let finished_at = OffsetDateTime::now_utc();
     let generation_time_ms = (finished_at - started_at).whole_milliseconds() as i64;
     Ok(Res {
@@ -89,6 +136,7 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         generation_time_ms,
         places,
         logs,
+        sync_runs,
     })
 }
 
@@ -124,6 +172,7 @@ mod test {
         assert_eq!(0, res.logs.requests.d1);
         assert_eq!(0, res.logs.requests.d7);
         assert_eq!(0, res.logs.requests.d30);
+        assert!(res.sync_runs.is_empty());
         assert!(res.finished_at >= res.started_at);
         Ok(())
     }
@@ -218,6 +267,63 @@ mod test {
         assert_eq!(1, res.logs.requests.d1);
         assert_eq!(2, res.logs.requests.d7);
         assert_eq!(2, res.logs.requests.d30);
+        Ok(())
+    }
+
+    #[test]
+    async fn returns_latest_sync_runs() -> Result<()> {
+        use time::format_description::well_known::Rfc3339;
+        use time::OffsetDateTime;
+        let pool = pool();
+        let log_pool = log_pool();
+        log_pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                conn.execute(
+                    "INSERT INTO sync (started_at, finished_at, duration_s, overpass_response_time_s, elements_affected, elements_created, elements_updated, elements_deleted) VALUES ('2024-01-01T00:00:00.000Z', '2024-01-01T00:00:10.000Z', 10.0, 1.5, 6, 1, 2, 3)",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO sync (started_at, finished_at, duration_s, overpass_response_time_s, elements_affected, elements_created, elements_updated, elements_deleted) VALUES ('2024-02-01T00:00:00.000Z', '2024-02-01T00:00:20.000Z', 20.0, 2.5, 12, 4, 5, 3)",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO sync (started_at, failed_at, fail_reason) VALUES ('2024-03-01T00:00:00.000Z', '2024-03-01T00:00:05.000Z', 'upstream timeout')",
+                    [],
+                )
+            })
+            .await??;
+        let res = super::run(&pool, &log_pool).await?;
+        assert_eq!(3, res.sync_runs.len());
+        let parse = |s: &str| OffsetDateTime::parse(s, &Rfc3339).unwrap();
+        let latest = &res.sync_runs[0];
+        assert_eq!(parse("2024-03-01T00:00:00Z"), latest.started_at);
+        assert_eq!(None, latest.finished_at);
+        assert_eq!(None, latest.duration_s);
+        assert_eq!(None, latest.overpass_response_time_s);
+        assert_eq!(0, latest.elements_affected);
+        assert_eq!(0, latest.elements_created);
+        assert_eq!(0, latest.elements_updated);
+        assert_eq!(0, latest.elements_deleted);
+        assert!(latest.failed_at.is_some());
+        assert_eq!(Some("upstream timeout"), latest.fail_reason.as_deref());
+        let middle = &res.sync_runs[1];
+        assert_eq!(parse("2024-02-01T00:00:00Z"), middle.started_at);
+        assert!(middle.finished_at.is_some());
+        assert_eq!(Some(20.0), middle.duration_s);
+        assert_eq!(Some(2.5), middle.overpass_response_time_s);
+        assert_eq!(12, middle.elements_affected);
+        assert_eq!(4, middle.elements_created);
+        assert_eq!(5, middle.elements_updated);
+        assert_eq!(3, middle.elements_deleted);
+        assert!(middle.failed_at.is_none());
+        assert!(middle.fail_reason.is_none());
+        let oldest = &res.sync_runs[2];
+        assert_eq!(parse("2024-01-01T00:00:00Z"), oldest.started_at);
+        assert!(oldest.finished_at.is_some());
+        assert_eq!(Some(10.0), oldest.duration_s);
+        assert_eq!(6, oldest.elements_affected);
         Ok(())
     }
 }
