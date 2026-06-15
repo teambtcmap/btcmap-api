@@ -8,7 +8,7 @@
     },
     "database": {
       "path": "~/.local/share/btcmap",
-      "description": "use this to access app databases and benchmark queries",
-    },
+      "description": "use this to access app databases and benchmark queries"
+    }
   }
 }
