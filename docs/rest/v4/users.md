@@ -205,11 +205,16 @@ curl -X PUT https://api.btcmap.org/v4/users/me/username \
 
 ##### Example Response (200 OK)
 
+Returns the authenticated user (same shape as [Get Authenticated User](#get-authenticated-user)). Note that `saved_places` and `saved_areas` are always returned empty here.
+
 ```json
 {
   "id": 124,
   "name": "newSatoshi",
-  "roles": ["user"]
+  "roles": ["user"],
+  "saved_places": [],
+  "saved_areas": [],
+  "npub": null
 }
 ```
 
@@ -218,6 +223,9 @@ curl -X PUT https://api.btcmap.org/v4/users/me/username \
 | id    | Number | User ID |
 | name  | String | Updated username |
 | roles | Array  | List of user roles |
+| saved_places | Array | Always empty on this endpoint |
+| saved_areas | Array | Always empty on this endpoint |
+| npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
 
 ### Get Linked Nostr Identity
 
