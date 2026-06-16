@@ -31,7 +31,7 @@ pub fn pool() -> Result<ImagePool> {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get() * 2)
         .unwrap_or(8);
-    let config = Config::new(super::db_file_path("images.db")?)
+    let config = Config::new(super::db_file_path("image.db")?)
         .builder(Runtime::Tokio1)?
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {

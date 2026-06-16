@@ -44,7 +44,7 @@ pub fn pool() -> Result<MainPool> {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get() * 2)
         .unwrap_or(8);
-    Config::new(super::db_file_path("btcmap.db")?)
+    Config::new(super::db_file_path("main.db")?)
         .builder(Runtime::Tokio1)?
         .max_size(pool_size)
         .post_create(Hook::Fn(Box::new(|conn, _| {

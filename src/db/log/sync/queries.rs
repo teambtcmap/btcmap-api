@@ -1,5 +1,6 @@
 use super::super::LogPool;
 use super::blocking_queries;
+use super::schema::Sync;
 use crate::Result;
 
 pub async fn insert(pool: &LogPool) -> Result<i64> {
@@ -20,5 +21,13 @@ pub async fn update_failed(args: blocking_queries::UpdateFailedArgs, pool: &LogP
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::update_failed(args, conn))
+        .await?
+}
+
+#[allow(dead_code)]
+pub async fn select_latest(limit: i64, pool: &LogPool) -> Result<Vec<Sync>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_latest(limit, conn))
         .await?
 }

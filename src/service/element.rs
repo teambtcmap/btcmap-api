@@ -1,7 +1,6 @@
 use crate::db;
 use crate::db::main::area::schema::Area;
 use crate::db::main::element::schema::Element;
-use crate::db::main::place_submission::schema::PlaceSubmission;
 use crate::Result;
 use deadpool_sqlite::Pool;
 use geo::Contains;
@@ -44,21 +43,21 @@ pub fn find_areas<'a>(element: &Element, areas: &'a Vec<Area>) -> Result<Vec<&'a
 
         for geometry in &geometries {
             match &geometry.value {
-                geojson::Value::MultiPolygon(_) => {
+                geojson::GeometryValue::MultiPolygon { coordinates: _ } => {
                     let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
 
                     if multi_poly.contains(&element.overpass_data.coord()) {
                         element_areas.push(area);
                     }
                 }
-                geojson::Value::Polygon(_) => {
+                geojson::GeometryValue::Polygon { coordinates: _ } => {
                     let poly: Polygon = (&geometry.value).try_into().unwrap();
 
                     if poly.contains(&element.overpass_data.coord()) {
                         element_areas.push(area);
                     }
                 }
-                geojson::Value::LineString(_) => {
+                geojson::GeometryValue::LineString { coordinates: _ } => {
                     let line_string: LineString = (&geometry.value).try_into().unwrap();
 
                     if line_string.contains(&element.overpass_data.coord()) {
@@ -560,146 +559,178 @@ pub fn generate_tags(
     res
 }
 
-pub fn generate_submission_tags(
-    submission: &PlaceSubmission,
-    include_tags: &[&str],
-    prevent_pending_id_clash: bool,
-) -> Map<String, Value> {
-    let mut res = Map::new();
+#[cfg(test)]
+mod test {
+    use super::find_areas;
+    use crate::db::main::area::schema::Area;
+    use crate::db::main::element::schema::Element;
+    use crate::Result;
+    use serde_json::{json, Map, Value};
+    use time::OffsetDateTime;
 
-    let id = if prevent_pending_id_clash {
-        100_000_000 + submission.id
-    } else {
-        submission.id
-    };
-
-    res.insert("id".to_string(), id.into());
-    res.insert("pending".to_string(), true.into());
-
-    let include_tags: Vec<&str> = include_tags
-        .iter()
-        .copied()
-        .filter(|it| TAGS.contains(it))
-        .collect();
-    for tag in &include_tags {
-        match *tag {
-            "icon" => {
-                res.insert("icon".to_string(), submission.icon().into());
-            }
-            "boosted_until" => {
-                // no op
-            }
-            "name" => {
-                res.insert("name".to_string(), submission.name.clone().into());
-            }
-            "opening_hours" => {
-                if let Some(opening_hours) = submission.opening_hours() {
-                    res.insert("opening_hours".to_string(), opening_hours.into());
-                };
-            }
-            "required_app_url" => {
-                // no op
-            }
-            "comments" => {
-                // no op
-            }
-            "phone" => {
-                if let Some(val) = submission.phone() {
-                    res.insert("phone".to_string(), val.into());
-                };
-            }
-            "website" => {
-                if let Some(val) = submission.website() {
-                    res.insert("website".to_string(), val.into());
-                };
-            }
-            "twitter" => {
-                if let Some(val) = submission.twitter() {
-                    res.insert("twitter".to_string(), val.into());
-                };
-            }
-            "facebook" => {
-                if let Some(val) = submission.facebook() {
-                    res.insert("facebook".to_string(), val.into());
-                };
-            }
-            "instagram" => {
-                if let Some(val) = submission.instagram() {
-                    res.insert("instagram".to_string(), val.into());
-                };
-            }
-            "line" => {
-                if let Some(val) = submission.line() {
-                    res.insert("line".to_string(), val.into());
-                };
-            }
-            "email" => {
-                if let Some(email) = submission.email() {
-                    res.insert("email".to_string(), email.into());
-                };
-            }
-            "address" => {
-                if let Some(addr) = submission.address() {
-                    res.insert("address".to_string(), addr.into());
-                };
-            }
-            "osm_id" => {
-                // no op
-            }
-            "osm_url" => {
-                // no op
-            }
-            "created_at" => {
-                res.insert(
-                    "created_at".to_string(),
-                    Value::String(submission.created_at.format(&Rfc3339).unwrap_or_default()),
-                );
-            }
-            "updated_at" => {
-                res.insert(
-                    "updated_at".to_string(),
-                    Value::String(submission.updated_at.format(&Rfc3339).unwrap_or_default()),
-                );
-            }
-            "deleted_at" => {
-                if let Some(deleted_at) = submission.deleted_at {
-                    res.insert(
-                        "deleted_at".to_string(),
-                        Value::String(deleted_at.format(&Rfc3339).unwrap_or_default()),
-                    );
-                }
-            }
-            "lat" => {
-                res.insert("lat".to_string(), json! { submission.lat });
-            }
-            "lon" => {
-                res.insert("lon".to_string(), json! { submission.lon });
-            }
-            "verified_at" => {
-                res.insert(
-                    "verified_at".to_string(),
-                    Value::String(submission.created_at.format(&Rfc3339).unwrap_or_default()),
-                );
-            }
-            "description" => {
-                if let Some(description) = submission.description() {
-                    res.insert("description".to_string(), json! { description });
-                }
-            }
-            "image" => {
-                if let Some(image) = submission.image() {
-                    res.insert("image".to_string(), json! { image });
-                }
-            }
-            "payment_provider" => {
-                if let Some(payment_provider) = submission.payment_provider() {
-                    res.insert("payment_provider".to_string(), json! { payment_provider });
-                }
-            }
-            _ => {
-                // no op
-            }
+    fn element_at(lat: f64, lon: f64) -> Element {
+        Element {
+            id: 1,
+            overpass_data: crate::service::overpass::OverpassElement {
+                r#type: "node".into(),
+                id: 1,
+                lat: Some(lat),
+                lon: Some(lon),
+                timestamp: Some("".into()),
+                version: Some(1),
+                changeset: Some(1),
+                user: Some("".into()),
+                uid: Some(1),
+                tags: Some(Map::new()),
+                bounds: None,
+                nodes: None,
+                geometry: None,
+                members: None,
+            },
+            tags: Map::new(),
+            lat: Some(lat),
+            lon: Some(lon),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            deleted_at: None,
         }
     }
-    res
+
+    fn area(alias: &str, geo_json: Value) -> Area {
+        let mut tags = Map::new();
+        tags.insert("url_alias".into(), Value::String(alias.into()));
+        tags.insert("geo_json".into(), geo_json);
+        Area {
+            id: 1,
+            alias: alias.into(),
+            bbox_west: -180.0,
+            bbox_south: -90.0,
+            bbox_east: 180.0,
+            bbox_north: 90.0,
+            tags,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            deleted_at: None,
+        }
+    }
+
+    fn areas(areas: Vec<Area>) -> Vec<Area> {
+        areas
+    }
+
+    #[test]
+    fn find_areas_matches_polygon() -> Result<()> {
+        let element = element_at(7.979, 98.334);
+        let areas = areas(vec![area(
+            "phuket",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "phuket");
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_excludes_points_outside_polygon() -> Result<()> {
+        let element = element_at(50.0, 1.0);
+        let areas = areas(vec![area(
+            "phuket",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_matches_multi_polygon() -> Result<()> {
+        let element = element_at(10.0, 10.0);
+        let areas = areas(vec![area(
+            "two_polys",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"MultiPolygon",
+                    "coordinates":[
+                        [[[-1.0,-1.0],[-1.0,1.0],[1.0,1.0],[1.0,-1.0],[-1.0,-1.0]]],
+                        [[[9.0,9.0],[9.0,11.0],[11.0,11.0],[11.0,9.0],[9.0,9.0]]]
+                    ]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "two_polys");
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_matches_line_string() -> Result<()> {
+        let element = element_at(2.5, 2.5);
+        let areas = areas(vec![area(
+            "diag",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"LineString",
+                    "coordinates":[[0.0,0.0],[5.0,5.0]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "diag");
+        Ok(())
+    }
+
+    #[test]
+    fn find_areas_skips_earth() -> Result<()> {
+        let element = element_at(0.0, 0.0);
+        let areas = areas(vec![area(
+            "earth",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [-180.0,-90.0],[-180.0,90.0],[180.0,90.0],
+                        [180.0,-90.0],[-180.0,-90.0]
+                    ]]
+                }
+            }),
+        )]);
+        let hits = find_areas(&element, &areas)?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
 }

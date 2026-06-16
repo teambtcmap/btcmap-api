@@ -2,7 +2,6 @@ use crate::db;
 use crate::db::main::element::schema::Element;
 use crate::db::main::element_comment::schema::ElementComment;
 use crate::db::main::element_event::queries::ElementEventWithUser;
-use crate::db::main::place_submission::schema::PlaceSubmission;
 use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
@@ -33,8 +32,6 @@ pub struct GetListArgs {
     updated_since: Option<OffsetDateTime>,
     limit: Option<i64>,
     include_deleted: Option<bool>,
-    include_pending: Option<bool>,
-    prevent_pending_id_clash: Option<bool>,
     lang: Option<String>,
 }
 
@@ -49,14 +46,11 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     let fields: Vec<&str> = args.fields.as_deref().unwrap_or("").split(',').collect();
     let updated_since = args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
     let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
-    let include_pending = args.include_pending.unwrap_or(false);
-    let prevent_pending_id_clash = args.prevent_pending_id_clash.unwrap_or(true);
     let lang = args
         .lang
         .as_deref()
         .map(|l| &l[..2.min(l.len())])
         .unwrap_or("en");
-
     let elements = db::main::element::queries::select_updated_since(
         updated_since,
         args.limit,
@@ -65,172 +59,11 @@ pub async fn get(args: Query<GetListArgs>, pool: Data<MainPool>) -> Res<Vec<Json
     )
     .await
     .map_err(|_| RestApiError::database())?;
-
-    let mut submissions: Vec<PlaceSubmission> = vec![];
-
-    if include_pending {
-        submissions.append(
-            &mut db::main::place_submission::queries::select_updated_since(
-                updated_since,
-                args.limit,
-                include_deleted,
-                &pool,
-            )
-            .await
-            .map_err(|_| RestApiError::database())?,
-        );
-    }
-
-    if submissions.is_empty() {
-        let elements = elements
-            .into_iter()
-            .map(|it| service::element::generate_tags(&it, &fields, Some(lang)))
-            .collect();
-
-        Ok(Json(elements))
-    } else {
-        let mut items: Vec<GetItem> = vec![];
-        let mut elements: Vec<GetItem> = elements
-            .into_iter()
-            .map(|e| GetItem::Element(Box::new(e)))
-            .collect();
-        let mut submissions: Vec<GetItem> = submissions
-            .into_iter()
-            .map(|s| GetItem::PlaceSubmission(Box::new(s)))
-            .collect();
-        items.append(&mut elements);
-        items.append(&mut submissions);
-
-        items.sort_by_key(|a| a.updated_at());
-
-        Ok(Json(
-            items
-                .into_iter()
-                .map(|it| it.to_json(&fields, prevent_pending_id_clash, Some(lang)))
-                .take(args.limit.unwrap_or(i64::MAX) as usize)
-                .collect(),
-        ))
-    }
-}
-
-pub enum GetItem {
-    Element(Box<Element>),
-    PlaceSubmission(Box<PlaceSubmission>),
-}
-
-impl GetItem {
-    fn updated_at(&self) -> OffsetDateTime {
-        match self {
-            GetItem::Element(element) => element.updated_at,
-            GetItem::PlaceSubmission(place_submission) => place_submission.updated_at,
-        }
-    }
-
-    fn to_json(
-        &self,
-        fields: &Vec<&str>,
-        prevent_pending_id_clash: bool,
-        lang: Option<&str>,
-    ) -> JsonObject {
-        match self {
-            GetItem::Element(element) => service::element::generate_tags(element, fields, lang),
-            GetItem::PlaceSubmission(place_submission) => {
-                service::element::generate_submission_tags(
-                    place_submission,
-                    fields,
-                    prevent_pending_id_clash,
-                )
-            }
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct PendingPlace {
-    pub id: i64,
-    pub lat: f64,
-    pub lon: f64,
-    pub icon: String,
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub address: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub opening_hours: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub comments: Option<i64>,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub verified_at: Option<OffsetDateTime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub osm_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub phone: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub website: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub twitter: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub facebook: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub instagram: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub line: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub boosted_until: Option<OffsetDateTime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_app_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub payment_provider: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending: Option<bool>,
-}
-
-#[get("/pending")]
-pub async fn get_pending(pool: Data<MainPool>) -> Res<Vec<PendingPlace>> {
-    let items = db::main::place_submission::queries::select_open_and_not_revoked(&pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
-    let items: Vec<PendingPlace> = items
+    let elements = elements
         .into_iter()
-        .map(|it| PendingPlace {
-            id: it.id,
-            lat: it.lat,
-            lon: it.lon,
-            icon: it.icon(),
-            name: it.name.clone(),
-            address: it.address(),
-            opening_hours: it.opening_hours(),
-            comments: None,
-            created_at: it.created_at,
-            updated_at: it.updated_at,
-            verified_at: Some(it.created_at),
-            osm_id: None,
-            phone: it.phone(),
-            website: it.website(),
-            twitter: it.twitter(),
-            facebook: it.facebook(),
-            instagram: it.instagram(),
-            line: it.line(),
-            email: it.email(),
-            boosted_until: None,
-            required_app_url: None,
-            description: it.description(),
-            image: it.image(),
-            payment_provider: it.payment_provider(),
-            pending: Some(true),
-        })
+        .map(|it| service::element::generate_tags(&it, &fields, Some(lang)))
         .collect();
-    Ok(Json(items))
+    Ok(Json(elements))
 }
 
 #[derive(Deserialize)]
@@ -241,8 +74,6 @@ pub struct SearchArgs {
     name: Option<String>,
     tag_name: Option<String>,
     tag_value: Option<String>,
-    include_pending: Option<bool>,
-    prevent_pending_id_clash: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -292,8 +123,6 @@ pub struct SearchedPlace {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payment_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub localized_name: Option<Map<String, Value>>,
 }
 
@@ -305,7 +134,6 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
     let name = args.name.clone().unwrap_or("".to_string());
     let tag_name = args.tag_name.clone().unwrap_or("".to_string());
     let tag_value = args.tag_value.clone().unwrap_or("".to_string());
-    let include_pending = args.include_pending.unwrap_or(false);
 
     let lat_radius = radius_km / 111.0;
     let lon_radius = radius_km / (111.0 * lat.to_radians().cos());
@@ -335,20 +163,12 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
 
     let mut filters_applied = 0;
     let mut matches = vec![];
-    let mut pending_matches = vec![];
 
     if !global {
         matches =
             db::main::element::queries::select_by_bbox(min_lat, max_lat, min_lon, max_lon, &pool)
                 .await
                 .map_err(|_| RestApiError::database())?;
-        if include_pending {
-            pending_matches = db::main::place_submission::queries::select_pending_by_bbox(
-                min_lat, max_lat, min_lon, max_lon, &pool,
-            )
-            .await
-            .map_err(|_| RestApiError::database())?;
-        }
         filters_applied += 1;
     }
 
@@ -357,18 +177,9 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
             matches = db::main::element::queries::select_by_search_query(&name, false, &pool)
                 .await
                 .map_err(|_| RestApiError::database())?;
-            if include_pending {
-                pending_matches =
-                    db::main::place_submission::queries::select_by_search_query(name, false, &pool)
-                        .await
-                        .map_err(|_| RestApiError::database())?;
-            }
             filters_applied += 1;
         } else {
             matches.retain(|it| it.name(Some("en")).to_lowercase().contains(&name));
-            if include_pending {
-                pending_matches.retain(|it| it.name.to_lowercase().contains(&name));
-            }
         }
 
         filters_applied += 1;
@@ -383,18 +194,6 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
             )
             .await
             .map_err(|_| RestApiError::database())?;
-            if include_pending {
-                if let Some(origin) = db::main::place_submission::vendor::origin_for_payment_tag(
-                    &tag_name, &tag_value,
-                ) {
-                    pending_matches = db::main::place_submission::queries::select_by_origin(
-                        origin.to_string(),
-                        &pool,
-                    )
-                    .await
-                    .map_err(|_| RestApiError::database())?;
-                }
-            }
         } else {
             matches.retain(|it| match &it.overpass_data.tags {
                 Some(tags) => match tags.get(&tag_name) {
@@ -403,63 +202,10 @@ pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<Se
                 },
                 None => false,
             });
-            if include_pending {
-                if let Some(origin) = db::main::place_submission::vendor::origin_for_payment_tag(
-                    &tag_name, &tag_value,
-                ) {
-                    pending_matches.retain(|it| it.origin == origin);
-                } else {
-                    pending_matches.clear();
-                }
-            }
         }
     }
 
-    let mut matches: Vec<SearchedPlace> = matches.into_iter().map(Into::into).collect();
-    let mut pending_matches: Vec<SearchedPlace> = pending_matches
-        .into_iter()
-        .map(|it| {
-            let id = if args.prevent_pending_id_clash.unwrap_or(true) {
-                100_000_000 + it.id
-            } else {
-                it.id
-            };
-            SearchedPlace {
-                id,
-                lat: it.lat,
-                lon: it.lon,
-                icon: it.icon(),
-                name: it.name.clone(),
-                address: it.address(),
-                opening_hours: it.opening_hours(),
-                comments: None,
-                created_at: it.created_at,
-                updated_at: it.updated_at,
-                verified_at: Some(it.created_at),
-                osm_id: None,
-                phone: it.phone(),
-                website: it.website(),
-                twitter: it.twitter(),
-                facebook: it.facebook(),
-                instagram: it.instagram(),
-                line: it.line(),
-                email: it.email(),
-                boosted_until: None,
-                required_app_url: None,
-                description: it.description(),
-                image: it.image(),
-                payment_provider: it.payment_provider(),
-                pending: Some(true),
-                localized_name: None,
-            }
-        })
-        .collect();
-
-    let mut res: Vec<SearchedPlace> = vec![];
-    res.append(&mut matches);
-    res.append(&mut pending_matches);
-
-    Ok(Json(res))
+    Ok(Json(matches.into_iter().map(Into::into).collect()))
 }
 
 impl From<Element> for SearchedPlace {
@@ -507,7 +253,6 @@ impl From<Element> for SearchedPlace {
             description: it.description(),
             image: it.image(),
             payment_provider: it.payment_provider(),
-            pending: None,
             localized_name,
         }
     }

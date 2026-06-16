@@ -51,7 +51,7 @@ cargo test           # Run tests
 ```
 
 ### Rust version
-The project pins its Rust version in `rust-toolchain.toml`. Rustup handles this automatically — no manual version management needed. The toolchain file also ensures `rustfmt` and `clippy` components are installed.
+The project does not pin its Rust version. Contributors should use a recent stable Rust toolchain with `rustfmt` and `clippy` components installed.
 
 ## Code Structure
 
@@ -189,6 +189,8 @@ Use `db::test::pool()` for in-memory SQLite test databases.
 - Server binds to `127.0.0.1:8000` (hardcoded in main.rs)
 - Database stored in data directory (configurable via `data_dir_file_path`)
 - Logging controlled via `RUST_LOG` env var (defaults to "info")
+- `BTCMAP_API_BASE_URL` sets the public base URL of the API (used by the NIP-98 Nostr auth extractor). Defaults to `http://127.0.0.1:8000`.
+- `BTCMAP_API_CORS_ORIGINS` controls the CORS middleware in `main.rs`. Unset or `*` (default) allows any origin. Set to a comma-separated list to restrict. The middleware handles the OPTIONS preflight itself.
 - Release builds use native CPU optimization (via .cargo/config.toml)
 
 ### Key Dependencies

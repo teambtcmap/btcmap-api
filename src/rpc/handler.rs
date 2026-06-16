@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, log::LogPool, main::conf::schema::Conf, main::user::schema::Role, main::MainPool},
+    db::{self, log::LogPool, main::user::schema::Role, main::MainPool},
     Result,
 };
 use actix_web::{
@@ -42,11 +42,7 @@ pub enum RpcMethod {
     SetElementTag,
     RemoveElementTag,
     BoostElement,
-    PaywallGetBoostElementQuote,
-    PaywallBoostElement,
     AddElementComment,
-    PaywallGetAddElementCommentQuote,
-    PaywallAddElementComment,
     GenerateElementIssues,
     SyncElements,
     GenerateElementIcons,
@@ -101,20 +97,9 @@ pub enum RpcMethod {
 
 impl Role {
     const ANON_METHODS: &[RpcMethod] = &[
-        RpcMethod::Search,
         RpcMethod::AddUser,
         RpcMethod::ChangePassword,
         RpcMethod::CreateApiKey,
-        // Anons can use some paid features so they need to be able to check their invoice status
-        RpcMethod::GetInvoice,
-        // TODO consider making private
-        RpcMethod::GetElement,
-        // Android uses that anonymously, we should keep it public
-        RpcMethod::PaywallGetAddElementCommentQuote,
-        RpcMethod::PaywallAddElementComment,
-        // Android uses that anonymously, we should keep it public
-        RpcMethod::PaywallGetBoostElementQuote,
-        RpcMethod::PaywallBoostElement,
         // Used by our website, we need to create website user or stop using those methods
         RpcMethod::GetElementIssues,
         RpcMethod::GetAreaDashboard,
@@ -281,8 +266,7 @@ fn allowed_methods(roles: &[Role]) -> HashSet<RpcMethod> {
 pub async fn handle(
     req: HttpRequest,
     req_body: String,
-    pool: Data<MainPool>,
-    conf: Data<Conf>,
+    main_pool: Data<MainPool>,
     log_pool: Data<LogPool>,
 ) -> Result<Json<RpcResponse>> {
     let headers = req.headers();
@@ -330,8 +314,9 @@ pub async fn handle(
     let auth_token = match bearer_token {
         Some(bearer_token) => {
             let bearer_token =
-                db::main::access_token::queries::select_by_secret(bearer_token, &pool).await?;
-            let user = db::main::user::queries::select_by_id(bearer_token.user_id, &pool).await?;
+                db::main::access_token::queries::select_by_secret(bearer_token, &main_pool).await?;
+            let user =
+                db::main::user::queries::select_by_id(bearer_token.user_id, &main_pool).await?;
             if bearer_token.roles.is_empty() {
                 if !allowed_methods(&user.roles).contains(&req.method) {
                     return Ok(Json(RpcResponse::error(RpcError {
@@ -377,191 +362,177 @@ pub async fn handle(
         // element
         RpcMethod::GetElement => RpcResponse::from(
             req.id.clone(),
-            super::element::get_element::run(params(req.params)?, &pool).await?,
+            super::element::get_element::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SetElementTag => RpcResponse::from(
             req.id.clone(),
-            super::set_element_tag::run(params(req.params)?, &pool).await?,
+            super::set_element_tag::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::RemoveElementTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_element_tag::run(params(req.params)?, &pool).await?,
+            super::remove_element_tag::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::BoostElement => RpcResponse::from(
             req.id.clone(),
-            super::boost_element::run(params(req.params)?, &pool).await?,
-        ),
-        RpcMethod::PaywallGetBoostElementQuote => RpcResponse::from(
-            req.id.clone(),
-            super::paywall_get_boost_element_quote::run(&conf).await?,
-        ),
-        RpcMethod::PaywallBoostElement => RpcResponse::from(
-            req.id.clone(),
-            super::paywall_boost_element::run(params(req.params)?, &pool, &conf).await?,
+            super::boost_element::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::AddElementComment => RpcResponse::from(
             req.id.clone(),
-            super::add_element_comment::run(params(req.params)?, &pool).await?,
-        ),
-        RpcMethod::PaywallGetAddElementCommentQuote => RpcResponse::from(
-            req.id.clone(),
-            super::paywall_get_add_element_comment_quote::run(&conf).await?,
-        ),
-        RpcMethod::PaywallAddElementComment => RpcResponse::from(
-            req.id.clone(),
-            super::paywall_add_element_comment::run(params(req.params)?, &pool, &conf).await?,
+            super::add_element_comment::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GenerateElementIssues => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_issues::run(&pool).await?,
+            super::generate_element_issues::run(&main_pool).await?,
         ),
         RpcMethod::SyncElements => RpcResponse::from(
             req.id.clone(),
-            super::sync_elements::run(&pool, &log_pool).await?,
+            super::sync_elements::run(&main_pool, &log_pool).await?,
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_icons::run(params(req.params)?, &pool).await?,
+            super::generate_element_icons::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_categories::run(params(req.params)?, &pool).await?,
+            super::generate_element_categories::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::HumanizeOpeningHours => RpcResponse::from(
             req.id.clone(),
-            super::humanize_opening_hours::run(params(req.params)?, &pool).await?,
+            super::humanize_opening_hours::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetElementIssues => RpcResponse::from(
             req.id.clone(),
-            super::get_element_issues::run(params(req.params)?, &pool).await?,
+            super::get_element_issues::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GenerateElementCommentCounts => RpcResponse::from(
             req.id.clone(),
-            super::element::generate_element_comment_counts::run(&pool).await?,
+            super::element::generate_element_comment_counts::run(&main_pool).await?,
         ),
         // area
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
-            super::area::add_area::run(params(req.params)?, &pool).await?,
+            super::area::add_area::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetArea => RpcResponse::from(
             req.id.clone(),
-            super::get_area::run(params(req.params)?, &pool).await?,
+            super::get_area::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::set_area_tag::run(params(req.params)?, &pool).await?,
+            super::set_area_tag::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_area_tag::run(params(req.params)?, &pool).await?,
+            super::remove_area_tag::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SetAreaIcon => RpcResponse::from(
             req.id.clone(),
-            super::set_area_icon::run(params(req.params)?, &pool).await?,
+            super::set_area_icon::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
-            super::remove_area::run(params(req.params)?, &pool).await?,
+            super::remove_area::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
-            super::get_trending_countries::run(params(req.params)?, &pool).await?,
+            super::get_trending_countries::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetTrendingCommunities => RpcResponse::from(
             req.id.clone(),
-            super::get_trending_communities::run(params(req.params)?, &pool).await?,
+            super::get_trending_communities::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GenerateAreasElementsMapping => RpcResponse::from(
             req.id.clone(),
-            super::generate_areas_elements_mapping::run(&pool).await?,
+            super::generate_areas_elements_mapping::run(&main_pool).await?,
         ),
-        RpcMethod::GenerateReports => {
-            RpcResponse::from(req.id.clone(), super::generate_reports::run(&pool).await?)
-        }
+        RpcMethod::GenerateReports => RpcResponse::from(
+            req.id.clone(),
+            super::generate_reports::run(&main_pool).await?,
+        ),
         RpcMethod::GetAreaDashboard => RpcResponse::from(
             req.id.clone(),
-            super::get_area_dashboard::run(params(req.params)?, &pool).await?,
+            super::get_area_dashboard::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetUserActivity => RpcResponse::from(
             req.id.clone(),
-            super::get_user_activity::run(params(req.params)?, &pool).await?,
+            super::get_user_activity::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SetUserTag => RpcResponse::from(
             req.id.clone(),
-            super::set_user_tag::run(params(req.params)?, &pool).await?,
+            super::set_user_tag::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_user_tag::run(params(req.params)?, &pool).await?,
+            super::remove_user_tag::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetMostActiveUsers => RpcResponse::from(
             req.id.clone(),
-            super::get_most_active_users::run(params(req.params)?, &pool).await?,
+            super::get_most_active_users::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GenerateAreaBboxes => RpcResponse::from(
             req.id.clone(),
-            super::area::generate_bboxes::run(&pool).await?,
+            super::area::generate_bboxes::run(&main_pool).await?,
         ),
         // auth
         RpcMethod::CreateApiKey => RpcResponse::from(
             req.id.clone(),
-            super::auth::create_api_key::run(params(req.params)?, &pool).await?,
+            super::auth::create_api_key::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::AddUser => RpcResponse::from(
             req.id.clone(),
-            super::auth::add_user::run(params(req.params)?, &pool).await?,
+            super::auth::add_user::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetAdmin => RpcResponse::from(
             req.id.clone(),
-            super::admin::get_admin::run(params(req.params)?, &pool).await?,
+            super::admin::get_admin::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::ChangePassword => RpcResponse::from(
             req.id.clone(),
-            super::auth::change_password::run(params(req.params)?, &pool).await?,
+            super::auth::change_password::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::AddAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::admin::add_admin_action::run(params(req.params)?, &pool).await?,
+            super::admin::add_admin_action::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::RemoveAdminAction => RpcResponse::from(
             req.id.clone(),
-            super::admin::remove_admin_action::run(params(req.params)?, &pool).await?,
+            super::admin::remove_admin_action::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetInvoice => RpcResponse::from(
             req.id.clone(),
-            super::invoice::get_invoice::run(params(req.params)?, &pool).await?,
+            super::invoice::get_invoice::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::CreateInvoice => RpcResponse::from(
             req.id.clone(),
-            super::invoice::create_invoice::run(params(req.params)?, &pool).await?,
+            super::invoice::create_invoice::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SyncUnpaidInvoices => RpcResponse::from(
             req.id.clone(),
-            super::sync_unpaid_invoices::run(&pool).await?,
+            super::sync_unpaid_invoices::run(&main_pool).await?,
         ),
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),
-            super::search::run(params(req.params)?, &pool).await?,
+            super::search::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetReport => RpcResponse::from(
             req.id.clone(),
-            super::analytics::get_report::run(params(req.params)?, &pool).await?,
+            super::analytics::get_report::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::CreateEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::create_event::run(params(req.params)?, &pool).await?,
+            super::event::create_event::run(params(req.params)?, &main_pool).await?,
         ),
-        RpcMethod::GetEvents => {
-            RpcResponse::from(req.id.clone(), super::event::get_events::run(&pool).await?)
-        }
+        RpcMethod::GetEvents => RpcResponse::from(
+            req.id.clone(),
+            super::event::get_events::run(&main_pool).await?,
+        ),
         RpcMethod::GetEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::get_event::run(params(req.params)?, &pool).await?,
+            super::event::get_event::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::DeleteEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::delete_event::run(params(req.params)?, &pool).await?,
+            super::event::delete_event::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SubmitPlace => {
             let params: super::import::submit_place::Params = params(req.params)?;
@@ -569,7 +540,7 @@ pub async fn handle(
             super::import::ensure_can_access_origin(effective_roles, token, &params.origin)?;
             RpcResponse::from(
                 req.id.clone(),
-                super::import::submit_place::run(params, &pool).await?,
+                super::import::submit_place::run(params, &main_pool).await?,
             )
         }
         RpcMethod::GetSubmittedPlace => {
@@ -577,7 +548,7 @@ pub async fn handle(
             let token = &auth_token.as_ref().unwrap().0;
             RpcResponse::from(
                 req.id.clone(),
-                super::import::get_submitted_place::run(params, effective_roles, token, &pool)
+                super::import::get_submitted_place::run(params, effective_roles, token, &main_pool)
                     .await?,
             )
         }
@@ -586,16 +557,21 @@ pub async fn handle(
             let token = &auth_token.as_ref().unwrap().0;
             RpcResponse::from(
                 req.id.clone(),
-                super::import::revoke_submitted_place::run(params, effective_roles, token, &pool)
-                    .await?,
+                super::import::revoke_submitted_place::run(
+                    params,
+                    effective_roles,
+                    token,
+                    &main_pool,
+                )
+                .await?,
             )
         }
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
             req.id.clone(),
-            super::import::sync_submitted_places::run(&pool).await?,
+            super::import::sync_submitted_places::run(&main_pool).await?,
         ),
         RpcMethod::SendMatrixMessage => {
-            super::matrix::send_matrix_message::run(params(req.params)?, &pool).await;
+            super::matrix::send_matrix_message::run(params(req.params)?, &main_pool).await;
             Ok(RpcResponse::success(
                 req.id.clone(),
                 serde_json::Value::Null,
@@ -607,7 +583,7 @@ pub async fn handle(
         ),
         RpcMethod::GetDailyInfraReport => RpcResponse::from(
             req.id.clone(),
-            super::analytics::get_daily_infra_report::run(&log_pool, &pool).await?,
+            super::analytics::get_daily_infra_report::run(&log_pool, &main_pool).await?,
         ),
         RpcMethod::GetTopClients => RpcResponse::from(
             req.id.clone(),
@@ -615,7 +591,7 @@ pub async fn handle(
         ),
         RpcMethod::Dashboard => RpcResponse::from(
             req.id.clone(),
-            super::analytics::dashboard::run(&pool, &log_pool).await?,
+            super::analytics::dashboard::run(&main_pool, &log_pool).await?,
         ),
     }?;
 
@@ -659,13 +635,11 @@ mod test {
     #[test]
     async fn invalid_json() {
         let pool = pool();
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -687,13 +661,11 @@ mod test {
     #[test]
     async fn missing_method() {
         let pool = pool();
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -716,13 +688,11 @@ mod test {
     async fn anonymous_method_allowed() -> Result<()> {
         let pool = pool();
         db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -733,8 +703,8 @@ mod test {
             .uri("/")
             .set_json(&json!({
                 "jsonrpc": "2.0",
-                "method": "get_element",
-                "params": {"id": 1},
+                "method": "add_user",
+                "params": {"name": "satoshi", "password": "ihsotas"},
                 "id": 1
             }))
             .to_request();
@@ -747,13 +717,11 @@ mod test {
     #[test]
     async fn protected_method_without_auth() -> Result<()> {
         let pool = pool();
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -778,13 +746,11 @@ mod test {
     #[test]
     async fn invalid_jsonrpc_version() {
         let pool = pool();
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -795,8 +761,8 @@ mod test {
             .uri("/")
             .set_json(&json!({
                 "jsonrpc": "1.0",
-                "method": "get_element",
-                "params": {"element_id": 1},
+                "method": "add_user",
+                "params": {"name": "satoshi", "password": "ihsotas"},
                 "id": 1
             }))
             .to_request();
@@ -817,13 +783,11 @@ mod test {
             &pool,
         )
         .await?;
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -873,13 +837,11 @@ mod test {
         )
         .await?;
 
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -936,13 +898,11 @@ mod test {
         )
         .await?;
 
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),
@@ -982,13 +942,11 @@ mod test {
     #[test]
     async fn unauthorized_method() {
         let pool = pool();
-        let conf = Conf::mock();
         let client: Option<Client> = None;
         let log_pool = log_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
-                .app_data(Data::new(conf))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
                 .service(scope("/").service(super::handle)),

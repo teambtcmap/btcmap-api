@@ -138,7 +138,7 @@ pub async fn find_areas_by_lat_lon(lat: f64, lon: f64, pool: &Pool) -> Result<Ve
 
         for geometry in &geometries {
             match &geometry.value {
-                geojson::Value::MultiPolygon(_) => {
+                geojson::GeometryValue::MultiPolygon { coordinates: _ } => {
                     let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
 
                     if multi_poly.contains(&coord) {
@@ -147,7 +147,7 @@ pub async fn find_areas_by_lat_lon(lat: f64, lon: f64, pool: &Pool) -> Result<Ve
                         break;
                     }
                 }
-                geojson::Value::Polygon(_) => {
+                geojson::GeometryValue::Polygon { coordinates: _ } => {
                     let poly: Polygon = (&geometry.value).try_into().unwrap();
 
                     if poly.contains(&coord) {
@@ -156,7 +156,7 @@ pub async fn find_areas_by_lat_lon(lat: f64, lon: f64, pool: &Pool) -> Result<Ve
                         break;
                     }
                 }
-                geojson::Value::LineString(_) => {
+                geojson::GeometryValue::LineString { coordinates: _ } => {
                     let line_string: LineString = (&geometry.value).try_into().unwrap();
 
                     if line_string.contains(&coord) {
@@ -352,35 +352,41 @@ impl BboxGenerator for FeatureCollection {
 impl BboxGenerator for Geometry {
     fn bbox(&self) -> Option<Bbox> {
         match &self.value {
-            geojson::Value::Point(coords) => Some(Bbox {
-                west: coords[0],
-                south: coords[1],
-                east: coords[0],
-                north: coords[1],
+            geojson::GeometryValue::Point { coordinates } => Some(Bbox {
+                west: coordinates[0],
+                south: coordinates[1],
+                east: coordinates[0],
+                north: coordinates[1],
             }),
-            geojson::Value::MultiPoint(points) => {
-                coordinates_bbox(points.iter().flatten().cloned())
+            geojson::GeometryValue::MultiPoint { coordinates } => {
+                coordinates_bbox(coordinates.iter().flat_map(|p| p.as_slice()).copied())
             }
-            geojson::Value::LineString(line) => coordinates_bbox(line.iter().flatten().cloned()),
-            geojson::Value::MultiLineString(lines) => {
-                coordinates_bbox(lines.iter().flat_map(|line| line.iter()).flatten().cloned())
+            geojson::GeometryValue::LineString { coordinates } => {
+                coordinates_bbox(coordinates.iter().flat_map(|p| p.as_slice()).copied())
             }
-            geojson::Value::Polygon(polygon) => coordinates_bbox(
-                polygon
+            geojson::GeometryValue::MultiLineString { coordinates } => coordinates_bbox(
+                coordinates
+                    .iter()
+                    .flat_map(|line| line.iter())
+                    .flat_map(|p| p.as_slice())
+                    .copied(),
+            ),
+            geojson::GeometryValue::Polygon { coordinates } => coordinates_bbox(
+                coordinates
                     .iter()
                     .flat_map(|ring| ring.iter())
-                    .flatten()
-                    .cloned(),
+                    .flat_map(|p| p.as_slice())
+                    .copied(),
             ),
-            geojson::Value::MultiPolygon(polygons) => coordinates_bbox(
-                polygons
+            geojson::GeometryValue::MultiPolygon { coordinates } => coordinates_bbox(
+                coordinates
                     .iter()
                     .flat_map(|poly| poly.iter())
                     .flat_map(|ring| ring.iter())
-                    .flatten()
-                    .cloned(),
+                    .flat_map(|p| p.as_slice())
+                    .copied(),
             ),
-            geojson::Value::GeometryCollection(geometries) => geometries
+            geojson::GeometryValue::GeometryCollection { geometries } => geometries
                 .iter()
                 .filter_map(|geom| geom.bbox())
                 .reduce(|acc, bbox| Bbox {
@@ -708,5 +714,327 @@ mod test {
             super::get_comments(&area, false, &pool).await?.first()
         );
         Ok(())
+    }
+
+    async fn area_with_geometry(
+        pool: &deadpool_sqlite::Pool,
+        alias: &str,
+        geo_json: serde_json::Value,
+    ) -> Result<Area> {
+        let mut tags = Area::mock_tags();
+        tags.insert("geo_json".into(), geo_json);
+        tags.insert("url_alias".into(), json!(alias));
+        db::main::area::queries::insert(tags, pool).await
+    }
+
+    #[test]
+    async fn find_areas_by_lat_lon_matches_polygon() -> Result<()> {
+        let pool = pool();
+        area_with_geometry(
+            &pool,
+            "phuket",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        )
+        .await?;
+        let hits = super::find_areas_by_lat_lon(7.979, 98.334, &pool).await?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "phuket");
+        Ok(())
+    }
+
+    #[test]
+    async fn find_areas_by_lat_lon_excludes_points_outside_polygon() -> Result<()> {
+        let pool = pool();
+        area_with_geometry(
+            &pool,
+            "phuket",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        )
+        .await?;
+        let hits = super::find_areas_by_lat_lon(50.0, 1.0, &pool).await?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn find_areas_by_lat_lon_matches_multi_polygon() -> Result<()> {
+        let pool = pool();
+        area_with_geometry(
+            &pool,
+            "two_polys",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"MultiPolygon",
+                    "coordinates":[
+                        [[[-1.0,-1.0],[-1.0,1.0],[1.0,1.0],[1.0,-1.0],[-1.0,-1.0]]],
+                        [[[9.0,9.0],[9.0,11.0],[11.0,11.0],[11.0,9.0],[9.0,9.0]]]
+                    ]
+                }
+            }),
+        )
+        .await?;
+        let hits = super::find_areas_by_lat_lon(10.0, 10.0, &pool).await?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "two_polys");
+        Ok(())
+    }
+
+    #[test]
+    async fn find_areas_by_lat_lon_matches_line_string() -> Result<()> {
+        let pool = pool();
+        area_with_geometry(
+            &pool,
+            "diag",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"LineString",
+                    "coordinates":[[0.0,0.0],[5.0,5.0]]
+                }
+            }),
+        )
+        .await?;
+        let hits = super::find_areas_by_lat_lon(2.5, 2.5, &pool).await?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].alias, "diag");
+        Ok(())
+    }
+
+    #[test]
+    async fn find_areas_by_lat_lon_skips_earth() -> Result<()> {
+        let pool = pool();
+        area_with_geometry(
+            &pool,
+            "earth",
+            json!({
+                "type":"Feature",
+                "properties":{},
+                "geometry":{
+                    "type":"Polygon",
+                    "coordinates":[[
+                        [-180.0,-90.0],[-180.0,90.0],[180.0,90.0],
+                        [180.0,-90.0],[-180.0,-90.0]
+                    ]]
+                }
+            }),
+        )
+        .await?;
+        let hits = super::find_areas_by_lat_lon(0.0, 0.0, &pool).await?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod bbox_test {
+    use super::Bbox;
+    use super::BboxGenerator;
+    use geojson::{Feature, FeatureCollection, GeoJson};
+
+    fn parse(input: &str) -> GeoJson {
+        input.parse().expect("test fixture must parse as GeoJSON")
+    }
+
+    #[test]
+    fn point() {
+        let geo: GeoJson = parse(r#"{"type":"Point","coordinates":[10.0,20.0]}"#);
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: 10.0,
+                south: 20.0,
+                east: 10.0,
+                north: 20.0,
+            })
+        );
+    }
+
+    #[test]
+    fn multi_point() {
+        let geo: GeoJson =
+            parse(r#"{"type":"MultiPoint","coordinates":[[1.0,2.0],[3.0,4.0],[5.0,6.0]]}"#);
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: 1.0,
+                south: 2.0,
+                east: 5.0,
+                north: 6.0,
+            })
+        );
+    }
+
+    #[test]
+    fn line_string() {
+        let geo: GeoJson =
+            parse(r#"{"type":"LineString","coordinates":[[1.0,2.0],[3.0,4.0],[-5.0,8.0]]}"#);
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: -5.0,
+                south: 2.0,
+                east: 3.0,
+                north: 8.0,
+            })
+        );
+    }
+
+    #[test]
+    fn multi_line_string() {
+        let geo: GeoJson = parse(
+            r#"{"type":"MultiLineString","coordinates":[
+                [[1.0,2.0],[3.0,4.0]],
+                [[-10.0,-20.0],[30.0,40.0]]
+            ]}"#,
+        );
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: -10.0,
+                south: -20.0,
+                east: 30.0,
+                north: 40.0,
+            })
+        );
+    }
+
+    #[test]
+    fn polygon() {
+        let geo: GeoJson = parse(
+            r#"{"type":"Polygon","coordinates":[[
+                [1.0,2.0],[1.0,10.0],[5.0,10.0],[5.0,2.0],[1.0,2.0]
+            ]]}"#,
+        );
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: 1.0,
+                south: 2.0,
+                east: 5.0,
+                north: 10.0,
+            })
+        );
+    }
+
+    #[test]
+    fn multi_polygon() {
+        let geo: GeoJson = parse(
+            r#"{"type":"MultiPolygon","coordinates":[
+                [[[1.0,2.0],[1.0,3.0],[4.0,3.0],[4.0,2.0],[1.0,2.0]]],
+                [[[10.0,20.0],[10.0,30.0],[40.0,30.0],[40.0,20.0],[10.0,20.0]]]
+            ]}"#,
+        );
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: 1.0,
+                south: 2.0,
+                east: 40.0,
+                north: 30.0,
+            })
+        );
+    }
+
+    #[test]
+    fn geometry_collection() {
+        let geo: GeoJson = parse(
+            r#"{"type":"GeometryCollection","geometries":[
+                {"type":"Point","coordinates":[-3.0,-4.0]},
+                {"type":"LineString","coordinates":[[1.0,2.0],[7.0,8.0]]}
+            ]}"#,
+        );
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: -3.0,
+                south: -4.0,
+                east: 7.0,
+                north: 8.0,
+            })
+        );
+    }
+
+    #[test]
+    fn feature_with_geometry() {
+        let geo: GeoJson = parse(
+            r#"{"type":"Feature","properties":{},"geometry":{
+                "type":"Point","coordinates":[1.5,2.5]
+            }}"#,
+        );
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: 1.5,
+                south: 2.5,
+                east: 1.5,
+                north: 2.5,
+            })
+        );
+    }
+
+    #[test]
+    fn feature_without_geometry_has_no_bbox() {
+        let feature: Feature =
+            serde_json::from_str(r#"{"type":"Feature","properties":{},"geometry":null}"#).unwrap();
+        assert_eq!(feature.bbox(), None);
+    }
+
+    #[test]
+    fn feature_collection_aggregates_features() {
+        let geo: GeoJson = parse(
+            r#"{"type":"FeatureCollection","features":[
+                {"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[1.0,2.0]}},
+                {"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[3.0,-4.0]}}
+            ]}"#,
+        );
+        assert_eq!(
+            geo.bbox(),
+            Some(Bbox {
+                west: 1.0,
+                south: -4.0,
+                east: 3.0,
+                north: 2.0,
+            })
+        );
+    }
+
+    #[test]
+    fn feature_collection_with_no_geometries_has_no_bbox() {
+        let collection: FeatureCollection = serde_json::from_str(
+            r#"{"type":"FeatureCollection","features":[
+                {"type":"Feature","properties":{},"geometry":null}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(collection.bbox(), None);
     }
 }

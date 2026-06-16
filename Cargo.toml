@@ -16,9 +16,16 @@ edition = "2021"
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
 actix-web = { version = "4.13.0", default-features = false, features = ["macros", "compress-brotli"] }
 
+# Cross-Origin Resource Sharing (CORS) middleware, so any browser-based
+# client can call the API from a different origin. The middleware handles
+# the OPTIONS preflight itself; without it browsers reject every cross-origin
+# POST that carries an Authorization header or a JSON content type.
+# https://github.com/actix/actix-extras/blob/master/actix-cors/CHANGES.md
+actix-cors = "0.7.1"
+
 # HTTP types and services for the Actix ecosystem
 # https://github.com/actix/actix-web/blob/main/actix-http/CHANGES.md
-actix-http = { version = "3.12.0", default-features = false }
+actix-http = { version = "3.12.1", default-features = false }
 
 # Actix middleware needs that
 # https://github.com/rust-lang/futures-rs/releases
@@ -26,6 +33,7 @@ futures-util = { version = "0.3.32", default-features = false }
 
 # We're using SQLite because it's portable and it requires no maintenance
 # SQLite is fast enough for our needs and we aren't aiming for infinite scalability
+# NOTE: 0.38.0 max becasuse deadpool-sqlite 0.13.0 won't work with newer versions
 # https://github.com/rusqlite/rusqlite/releases
 rusqlite = { version = "0.38.0", default-features = false, features = ["bundled", "time", "serde_json", "trace"] }
 
@@ -33,10 +41,9 @@ rusqlite = { version = "0.38.0", default-features = false, features = ["bundled"
 # https://github.com/deadpool-rs/deadpool/blob/main/crates/deadpool-sqlite/CHANGELOG.md
 deadpool-sqlite = { version = "0.13.0", default-features = false, features = ["rt_tokio_1"] }
 
-# TODO bump once rustls migration is working upstream
 # That's an industry standard for making HTTP requests
 # https://github.com/seanmonstar/reqwest/releases
-reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls", "json"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }
 
 # Used for mapping Rust structs to JSON via derive annotation
 # https://github.com/serde-rs/serde/releases
@@ -63,14 +70,13 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 # https://github.com/Michael-F-Bryan/include_dir/tags
 include_dir = { version = "0.7.4", default-features = false }
 
-# TODO test migration to 1.0.0
 # Used for dealing with area bounds
 # https://github.com/georust/geojson/blob/main/CHANGES.md
-geojson = { version = "0.24.2", default-features = false, features = ["geo-types"] }
+geojson = { version = "1.0.0", default-features = false, features = ["geo-types"] }
 
 # Used for dealing with area bounds
 # https://github.com/georust/geo/blob/main/geo/CHANGES.md
-geo = { version = "0.33.0", default-features = false }
+geo = { version = "0.33.1", default-features = false }
 
 # Used to handle area icons
 # https://github.com/marshallpierce/rust-base64/blob/master/RELEASE-NOTES.md
@@ -90,7 +96,7 @@ regex = { version = "1.12.3", default-features = false }
 
 # BTC Map Matrix Space bot
 # https://github.com/matrix-org/matrix-rust-sdk/releases
-matrix-sdk = { version = "0.16.0", default-features = false, features = ["rustls-tls"] }
+matrix-sdk = { version = "0.18.0", default-features = false }
 
 # https://github.com/servo/rust-url/releases
 url = { version = "2.5.7", default-features = false }
@@ -99,18 +105,18 @@ url = { version = "2.5.7", default-features = false }
 argon2 = { version = "0.5.3", default-features = false, features = ["password-hash", "alloc"] }
 
 # https://github.com/uuid-rs/uuid/releases
-uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
+uuid = { version = "1.23.3", default-features = false, features = ["v4"] }
 
 # https://github.com/Peternator7/strum/blob/master/CHANGELOG.md
 strum = { version = "0.28.0", features = ["derive"] }
 
 # https://github.com/tokio-rs/tokio/releases
-tokio = "1.52.1"
+tokio = "1.52.3"
 
 # https://github.com/fnichol/names/blob/main/CHANGELOG.md
 names = "0.14.0"
 
 # Nostr protocol types + Schnorr signature verification, used by the NIP-98
 # HTTP auth extractor
-# https://github.com/rust-nostr/nostr/releases
-nostr = { version = "0.44.2", default-features = false, features = ["std"] }
+# https://crates.io/crates/nostr
+nostr = { version = "0.44.3", default-features = false, features = ["std"] }

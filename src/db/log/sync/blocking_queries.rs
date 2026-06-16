@@ -95,6 +95,28 @@ pub fn update_failed(args: UpdateFailedArgs, conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
+pub fn select_latest(limit: i64, conn: &Connection) -> Result<Vec<schema::Sync>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            ORDER BY {col_started_at} DESC
+            LIMIT ?1
+        "#,
+        projection = schema::Sync::projection(),
+        table = schema::TABLE_NAME,
+        col_started_at = Columns::StartedAt.as_str(),
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([limit], schema::Sync::mapper())?;
+    let mut runs = Vec::new();
+    for row in rows {
+        runs.push(row?);
+    }
+    Ok(runs)
+}
+
 #[cfg(test)]
 mod test {
     use super::super::super::test::conn;
@@ -170,6 +192,54 @@ mod test {
         assert_eq!(sync.elements_created, 5);
         assert_eq!(sync.elements_updated, 3);
         assert_eq!(sync.elements_deleted, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_latest_orders_by_started_at_desc_and_respects_limit() -> crate::Result<()> {
+        let conn = conn();
+
+        let first_id = super::insert(&conn)?;
+        conn.execute(
+            &format!(
+                "UPDATE {} SET started_at = '2024-01-01T00:00:00.000Z' WHERE id = ?1",
+                super::schema::TABLE_NAME
+            ),
+            rusqlite::params![first_id],
+        )?;
+
+        let second_id = super::insert(&conn)?;
+        conn.execute(
+            &format!(
+                "UPDATE {} SET started_at = '2024-02-01T00:00:00.000Z' WHERE id = ?1",
+                super::schema::TABLE_NAME
+            ),
+            rusqlite::params![second_id],
+        )?;
+
+        let third_id = super::insert(&conn)?;
+        conn.execute(
+            &format!(
+                "UPDATE {} SET started_at = '2024-03-01T00:00:00.000Z' WHERE id = ?1",
+                super::schema::TABLE_NAME
+            ),
+            rusqlite::params![third_id],
+        )?;
+
+        let runs = super::select_latest(2, &conn)?;
+        assert_eq!(2, runs.len());
+        assert_eq!(third_id, runs[0].id);
+        assert_eq!(second_id, runs[1].id);
+
+        let runs = super::select_latest(10, &conn)?;
+        assert_eq!(3, runs.len());
+        assert_eq!(third_id, runs[0].id);
+        assert_eq!(second_id, runs[1].id);
+        assert_eq!(first_id, runs[2].id);
+
+        let runs = super::select_latest(0, &conn)?;
+        assert!(runs.is_empty());
 
         Ok(())
     }
