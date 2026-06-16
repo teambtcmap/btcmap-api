@@ -114,7 +114,11 @@ async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiE
 /// `target` (e.g. `"user.npub"`). SQLite's UNIQUE failure message has the
 /// form `UNIQUE constraint failed: <table>.<col>`, so column-level
 /// matching is robust enough without parsing extended error codes.
-fn is_unique_violation_on(err: &crate::Error, target: &str) -> bool {
+///
+/// Shared with `users::put_nostr`, which maps a `user.npub` violation to a
+/// 400 so the identity-link endpoint stays correct if/when a unique index
+/// on `user.npub` is added.
+pub(crate) fn is_unique_violation_on(err: &crate::Error, target: &str) -> bool {
     matches!(
         err,
         crate::Error::Rusqlite(rusqlite::Error::SqliteFailure(e, msg))

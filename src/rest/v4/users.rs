@@ -225,10 +225,14 @@ pub async fn get_nostr(auth: Auth) -> Result<Json<NostrIdentityResponse>, RestAp
 /// NOTE (concurrency): there is no UNIQUE index on `user.npub` yet, so the
 /// `select_by_npub` check and the `set_npub` write are not atomic — two
 /// concurrent PUTs linking the same npub to two different accounts could
-/// both pass the check and both succeed (TOCTOU). This is accepted for now;
-/// the maintainer-owned partial unique index on `user.npub` is what closes
-/// the window (after which a UNIQUE violation on write could be mapped to
-/// 400). Do not add that index here.
+/// both pass the check (TOCTOU). The conflict check is therefore the
+/// best-effort guard for today's schema. The write is *also* wrapped so
+/// that a `user.npub` UNIQUE violation maps to 400 rather than 500: this is
+/// a no-op against the current schema (no index can fire), but means the
+/// endpoint becomes race-safe automatically if the maintainer-owned partial
+/// unique index on `user.npub` is added later — no code change required, and
+/// the race-loser gets the same 400 as the check-rejected path. Do not add
+/// that index here.
 #[put("/me/nostr")]
 pub async fn put_nostr(
     auth: Auth,
@@ -245,17 +249,30 @@ pub async fn put_nostr(
         .map_err(|_| RestApiError::database())?
     {
         if existing.id != user.id {
-            return Err(RestApiError::invalid_input(
-                "npub already linked to another account",
-            ));
+            return Err(npub_conflict());
         }
     }
 
     db::main::user::queries::set_npub(user.id, Some(npub.clone()), &pool)
         .await
-        .map_err(|_| RestApiError::database())?;
+        .map_err(|e| {
+            // Backstop for the TOCTOU window: if a unique index on
+            // `user.npub` exists and the concurrent loser hits it, surface
+            // the documented 400 instead of a generic 500.
+            if crate::rest::v4::nostr::is_unique_violation_on(&e, "user.npub") {
+                npub_conflict()
+            } else {
+                RestApiError::database()
+            }
+        })?;
 
     Ok(Json(NostrIdentityResponse { npub: Some(npub) }))
+}
+
+/// 400 returned when the proven npub is already linked to a different account
+/// (either caught by the pre-check or by a UNIQUE violation on write).
+fn npub_conflict() -> RestApiError {
+    RestApiError::invalid_input("npub already linked to another account")
 }
 
 /// `DELETE /v4/users/me/nostr`
