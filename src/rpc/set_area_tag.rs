@@ -40,7 +40,7 @@ impl From<Area> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
-    let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())].into_iter());
+    let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())]);
     service::area::patch_tags(&params.id, patch_set, pool)
         .await
         .map(Into::into)

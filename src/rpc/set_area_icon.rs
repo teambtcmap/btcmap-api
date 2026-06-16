@@ -55,7 +55,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     file.write_all(&bytes)?;
     file.flush()?;
     let url = format!("https://static.btcmap.org/images/areas/{file_name}");
-    let patch_set = Map::from_iter([("icon:square".into(), url.into())].into_iter());
+    let patch_set = Map::from_iter([("icon:square".into(), url.into())]);
     let area = db::main::area::queries::patch_tags(area.id, patch_set, pool).await?;
     Ok(area.into())
 }
