@@ -680,7 +680,8 @@ mod test {
     #[test]
     async fn put_nostr_replaces_existing_link() -> Result<()> {
         let pool = pool();
-        let user = user_with_token("nostr_user", Some("npub1old"), &pool).await?;
+        let old_npub = Keys::generate().public_key().to_bech32().unwrap();
+        let user = user_with_token("nostr_user", Some(&old_npub), &pool).await?;
         let keys = Keys::generate();
         let new_npub = keys.public_key().to_bech32().unwrap();
         let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
@@ -705,17 +706,21 @@ mod test {
         let pool = pool();
         let keys = Keys::generate();
         let npub = keys.public_key().to_bech32().unwrap();
-        user_with_token("nostr_user", Some(&npub), &pool).await?;
+        let user = user_with_token("nostr_user", Some(&npub), &pool).await?;
         let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
 
-        let app = test::init_service(put_app(pool)).await;
+        let app = test::init_service(put_app(pool.clone())).await;
         let req = TestRequest::put()
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
             .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
             .uri(PUT_URL)
             .to_request();
         let res: NostrIdentityResponse = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.npub, Some(npub));
+        assert_eq!(res.npub, Some(npub.clone()));
+
+        // The link is unchanged, not cleared.
+        let reloaded = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        assert_eq!(reloaded.npub, Some(npub));
         Ok(())
     }
 
@@ -726,12 +731,14 @@ mod test {
         let keys = Keys::generate();
         let npub = keys.public_key().to_bech32().unwrap();
         // Account A owns the pubkey.
-        db::main::user::queries::insert_with_npub("owner", "", &npub, &[Role::User], &pool).await?;
+        let owner =
+            db::main::user::queries::insert_with_npub("owner", "", &npub, &[Role::User], &pool)
+                .await?;
         // Account B (the caller) tries to claim it.
-        user_with_token("claimer", None, &pool).await?;
+        let claimer = user_with_token("claimer", None, &pool).await?;
         let proof = signed_nip98(&keys, &format!("{BASE}{PUT_URL}"), "PUT");
 
-        let app = test::init_service(put_app(pool)).await;
+        let app = test::init_service(put_app(pool.clone())).await;
         let req = TestRequest::put()
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
             .insert_header((X_NOSTR_AUTHORIZATION, format!("Nostr {proof}")))
@@ -739,6 +746,12 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        // The link was not moved: claimer stays unlinked, owner keeps it.
+        let claimer_after = db::main::user::queries::select_by_id(claimer.id, &pool).await?;
+        assert_eq!(claimer_after.npub, None);
+        let owner_after = db::main::user::queries::select_by_id(owner.id, &pool).await?;
+        assert_eq!(owner_after.npub, Some(npub));
         Ok(())
     }
 
