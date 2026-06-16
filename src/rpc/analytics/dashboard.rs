@@ -43,6 +43,13 @@ pub struct PeriodCounts {
 pub struct LogStats {
     pub file_size_bytes: u64,
     pub requests: PeriodCounts,
+    pub top_rpcs: Vec<TopRpc>,
+}
+
+#[derive(Serialize)]
+pub struct TopRpc {
+    pub method: String,
+    pub count: i64,
 }
 
 #[derive(Serialize)]
@@ -102,6 +109,14 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
             d7: log_request_queries::select_count_since(d7, log_pool).await?,
             d30: log_request_queries::select_count_since(d30, log_pool).await?,
         },
+        top_rpcs: log_request_queries::select_top_rpc_methods(d1, log_pool)
+            .await?
+            .into_iter()
+            .map(|it| TopRpc {
+                method: it.method,
+                count: it.count,
+            })
+            .collect(),
     };
     let raw_sync_runs = log_sync_queries::select_latest(SYNC_RUNS_LIMIT, log_pool).await?;
     let parse_opt = |value: Option<String>| -> Result<Option<OffsetDateTime>> {
@@ -172,6 +187,7 @@ mod test {
         assert_eq!(0, res.logs.requests.d1);
         assert_eq!(0, res.logs.requests.d7);
         assert_eq!(0, res.logs.requests.d30);
+        assert!(res.logs.top_rpcs.is_empty());
         assert!(res.sync_runs.is_empty());
         assert!(res.finished_at >= res.started_at);
         Ok(())
@@ -267,6 +283,51 @@ mod test {
         assert_eq!(1, res.logs.requests.d1);
         assert_eq!(2, res.logs.requests.d7);
         assert_eq!(2, res.logs.requests.d30);
+        Ok(())
+    }
+
+    #[test]
+    async fn returns_top_rpc_methods_in_last_24h() -> Result<()> {
+        let pool = pool();
+        let log_pool = log_pool();
+        log_pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                conn.execute(
+                    "INSERT INTO request (ip, path, body, response_code, processing_time_ns, date) VALUES ('10.0.0.1', '/rpc', '{\"jsonrpc\":\"2.0\",\"method\":\"revoke_submitted_place\",\"id\":1,\"params\":{}}', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, body, response_code, processing_time_ns, date) VALUES ('10.0.0.2', '/rpc', '{\"jsonrpc\":\"2.0\",\"method\":\"revoke_submitted_place\",\"id\":1,\"params\":{}}', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, body, response_code, processing_time_ns, date) VALUES ('10.0.0.3', '/rpc', '{\"jsonrpc\":\"2.0\",\"method\":\"get_area_dashboard\",\"id\":1,\"params\":{}}', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, body, response_code, processing_time_ns, date) VALUES ('10.0.0.4', '/rpc', '{\"jsonrpc\":\"2.0\",\"method\":\"revoke_submitted_place\",\"id\":1,\"params\":{}}', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.5', '/v4/places', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )
+            })
+            .await??;
+        let res = super::run(&pool, &log_pool).await?;
+        assert_eq!(
+            vec![
+                ("revoke_submitted_place".to_string(), 2),
+                ("get_area_dashboard".to_string(), 1),
+            ],
+            res.logs
+                .top_rpcs
+                .into_iter()
+                .map(|it| (it.method, it.count))
+                .collect::<Vec<_>>()
+        );
         Ok(())
     }
 

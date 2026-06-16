@@ -168,6 +168,40 @@ pub struct TopUserAgent {
     pub unique_ips: i64,
 }
 
+pub struct TopRpcMethod {
+    pub method: String,
+    pub count: i64,
+}
+
+pub fn select_top_rpc_methods(
+    since: OffsetDateTime,
+    conn: &Connection,
+) -> Result<Vec<TopRpcMethod>> {
+    let since = since
+        .format(&time::format_description::well_known::Rfc3339)
+        .map_err(crate::Error::from)?;
+    let sql = format!(
+        r#"
+            SELECT rpc_method, COUNT(*) AS count
+            FROM {TABLE}
+            WHERE {Date} > ?1
+              AND path = '/rpc'
+              AND rpc_method IS NOT NULL
+            GROUP BY rpc_method
+            ORDER BY count DESC
+            LIMIT 10
+        "#,
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([&since], |row| {
+        Ok(TopRpcMethod {
+            method: row.get(0)?,
+            count: row.get(1)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 pub struct TopClientsReport {
     pub web: PlatformClientStats,
     pub android: PlatformClientStats,

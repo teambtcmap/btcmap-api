@@ -1,6 +1,8 @@
 use super::super::LogPool;
 use super::blocking_queries;
-use super::blocking_queries::{DailyInfraReport, InsertArgs, TopClientsReport, TopUserAgent};
+use super::blocking_queries::{
+    DailyInfraReport, InsertArgs, TopClientsReport, TopRpcMethod, TopUserAgent,
+};
 use crate::db::log::request::schema::Request;
 use crate::Result;
 use time::OffsetDateTime;
@@ -39,6 +41,16 @@ pub async fn select_top_user_agents(pool: &LogPool) -> Result<Vec<TopUserAgent>>
     pool.get()
         .await?
         .interact(|conn| blocking_queries::select_top_user_agents(conn))
+        .await?
+}
+
+pub async fn select_top_rpc_methods(
+    since: OffsetDateTime,
+    pool: &LogPool,
+) -> Result<Vec<TopRpcMethod>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_top_rpc_methods(since, conn))
         .await?
 }
 
