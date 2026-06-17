@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), log database stats (file size, number of logged requests, and the 10 most-called RPC methods over the same windows), disk usage stats for the host's real block devices, and the 10 most recent OSM sync runs recorded in the `sync` log table.
+Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), log database stats (file size, number of logged requests, and the 10 most-called RPC methods over the same windows), disk usage stats for the host's real block devices, on-chain and Lightning channel balances probed from the LND node, and the 10 most recent OSM sync runs recorded in the `sync` log table.
 
 ## Params
 
@@ -72,6 +72,16 @@ Returns a high-level analytics dashboard snapshot, including the time the report
       }
     ]
   },
+  "lnd": {
+    "onchain_total_sat": 1500000,
+    "onchain_confirmed_sat": 1500000,
+    "onchain_unconfirmed_sat": 0,
+    "outbound_liquidity_sat": 2750000,
+    "inbound_liquidity_sat": 3200000,
+    "pending_outbound_liquidity_sat": 0,
+    "pending_inbound_liquidity_sat": 0,
+    "total_balance_sat": 4250000
+  },
   "sync_runs": [
     {
       "id": 42,
@@ -110,6 +120,15 @@ Returns a high-level analytics dashboard snapshot, including the time the report
   - `used_bytes`: Bytes currently in use
   - `available_bytes`: Bytes currently free
   - `used_percent`: Percentage of the device that is in use (0.0–100.0)
+- `lnd`: Balances probed from the LND Lightning node (`https://lnd.btcmap.org`) using the `lnd_readonly_macaroon` from the `conf` table (requires at least `info:read`, `onchain:read`, and `offchain:read` permissions). `null` if the macaroon is unset or the node is unreachable. When present, contains:
+  - `onchain_total_sat`: Total on-chain wallet balance in satoshis (confirmed + unconfirmed)
+  - `onchain_confirmed_sat`: Confirmed on-chain wallet balance in satoshis
+  - `onchain_unconfirmed_sat`: Unconfirmed on-chain wallet balance in satoshis
+  - `outbound_liquidity_sat`: Total local channel balance in satoshis (sendable via Lightning)
+  - `inbound_liquidity_sat`: Total remote channel balance in satoshis (receivable via Lightning)
+  - `pending_outbound_liquidity_sat`: Local balance locked in channels that are still being opened, in satoshis
+  - `pending_inbound_liquidity_sat`: Remote balance in channels that are still being opened, in satoshis
+  - `total_balance_sat`: Total funds the node controls in satoshis (`onchain_confirmed_sat` + `outbound_liquidity_sat` + `pending_outbound_liquidity_sat`)
 - `sync_runs`: Up to 10 most recent OSM sync runs, ordered by `started_at` descending (most recent first). Each entry contains:
   - `id`: Sync run ID
   - `started_at`: UTC timestamp (RFC 3339) when the sync started

@@ -6,6 +6,7 @@ pub mod element;
 pub mod event;
 pub mod gitea;
 pub mod invoice;
+pub mod lnd;
 pub mod log;
 pub mod matrix;
 pub mod nip98;

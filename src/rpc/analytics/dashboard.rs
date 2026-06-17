@@ -3,10 +3,13 @@ use crate::db::log::sync::queries as log_sync_queries;
 use crate::db::log::LogPool;
 use crate::db::main::element_event::queries as element_event_queries;
 use crate::db::main::MainPool;
+use crate::service::lnd;
+use crate::service::lnd::NodeStats;
 use crate::Result;
 use serde::Serialize;
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
+use tracing::warn;
 
 const EVENT_TYPE_CREATE: &str = "create";
 const EVENT_TYPE_UPDATE: &str = "update";
@@ -23,6 +26,7 @@ pub struct Res {
     pub places: PlaceStats,
     pub logs: LogStats,
     pub storage: StorageStats,
+    pub lnd: Option<NodeStats>,
     pub sync_runs: Vec<SyncRun>,
 }
 
@@ -161,6 +165,13 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         .collect::<Result<Vec<_>>>()?;
     let finished_at = OffsetDateTime::now_utc();
     let generation_time_ms = (finished_at - started_at).whole_milliseconds() as i64;
+    let lnd = match lnd::get_node_stats(pool).await {
+        Ok(stats) => Some(stats),
+        Err(err) => {
+            warn!(%err, "failed to fetch lnd node stats");
+            None
+        }
+    };
     Ok(Res {
         started_at,
         finished_at,
@@ -170,6 +181,7 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         storage: StorageStats {
             disks: storage_stats(),
         },
+        lnd,
         sync_runs,
     })
 }
@@ -247,6 +259,7 @@ mod test {
         assert_eq!(0, res.logs.requests.d30);
         assert!(res.logs.top_rpcs.is_empty());
         assert!(res.sync_runs.is_empty());
+        assert!(res.lnd.is_none());
         assert!(res.finished_at >= res.started_at);
         Ok(())
     }

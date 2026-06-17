@@ -12,6 +12,7 @@ pub enum Columns {
     GiteaApiKey,
     MatrixBotPassword,
     LndInvoicesMacaroon,
+    LndReadonlyMacaroon,
     PpqKey,
 }
 
@@ -26,6 +27,7 @@ impl Columns {
             Columns::GiteaApiKey => "gitea_api_key",
             Columns::MatrixBotPassword => "matrix_bot_password",
             Columns::LndInvoicesMacaroon => "lnd_invoices_macaroon",
+            Columns::LndReadonlyMacaroon => "lnd_readonly_macaroon",
             Columns::PpqKey => "ppq_key",
         }
     }
@@ -42,6 +44,7 @@ pub struct Conf {
     pub gitea_api_key: String,
     pub matrix_bot_password: String,
     pub lnd_invoices_macaroon: String,
+    pub lnd_readonly_macaroon: String,
     pub ppq_key: String,
 }
 
@@ -58,6 +61,7 @@ impl Conf {
                 Columns::GiteaApiKey,
                 Columns::MatrixBotPassword,
                 Columns::LndInvoicesMacaroon,
+                Columns::LndReadonlyMacaroon,
                 Columns::PpqKey,
             ]
             .iter()
@@ -82,6 +86,7 @@ impl Conf {
                 gitea_api_key: row.get(Columns::GiteaApiKey.as_str())?,
                 matrix_bot_password: row.get(Columns::MatrixBotPassword.as_str())?,
                 lnd_invoices_macaroon: row.get(Columns::LndInvoicesMacaroon.as_str())?,
+                lnd_readonly_macaroon: row.get(Columns::LndReadonlyMacaroon.as_str())?,
                 ppq_key: row.get(Columns::PpqKey.as_str())?,
             })
         }
