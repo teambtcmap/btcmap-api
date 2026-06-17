@@ -22,6 +22,7 @@ pub struct Res {
     pub generation_time_ms: i64,
     pub places: PlaceStats,
     pub logs: LogStats,
+    pub storage: StorageStats,
     pub sync_runs: Vec<SyncRun>,
 }
 
@@ -68,6 +69,21 @@ pub struct SyncRun {
     #[serde(with = "time::serde::rfc3339::option")]
     pub failed_at: Option<OffsetDateTime>,
     pub fail_reason: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct StorageStats {
+    pub disks: Vec<Disk>,
+}
+
+#[derive(Serialize)]
+pub struct Disk {
+    pub device: String,
+    pub mount_point: String,
+    pub total_bytes: u64,
+    pub used_bytes: u64,
+    pub available_bytes: u64,
+    pub used_percent: f64,
 }
 
 pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
@@ -151,6 +167,9 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         generation_time_ms,
         places,
         logs,
+        storage: StorageStats {
+            disks: storage_stats(),
+        },
         sync_runs,
     })
 }
@@ -161,6 +180,45 @@ fn log_db_file_size() -> u64 {
         .and_then(|path| std::fs::metadata(path).ok())
         .map(|m| m.len())
         .unwrap_or(0)
+}
+
+fn storage_stats() -> Vec<Disk> {
+    let Some(output) = std::process::Command::new("df")
+        .args(["-PB1"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+    else {
+        return vec![];
+    };
+    let mut disks = vec![];
+    for line in output.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 6 {
+            continue;
+        }
+        if !parts[0].starts_with("/dev/") {
+            continue;
+        }
+        let (Ok(total_bytes), Ok(used_bytes), Ok(available_bytes), Ok(used_percent)) = (
+            parts[1].parse::<u64>(),
+            parts[2].parse::<u64>(),
+            parts[3].parse::<u64>(),
+            parts[4].trim_end_matches('%').parse::<f64>(),
+        ) else {
+            continue;
+        };
+        disks.push(Disk {
+            device: parts[0].to_string(),
+            mount_point: parts[5..].join(" "),
+            total_bytes,
+            used_bytes,
+            available_bytes,
+            used_percent,
+        });
+    }
+    disks
 }
 
 #[cfg(test)]
@@ -386,5 +444,22 @@ mod test {
         assert_eq!(Some(10.0), oldest.duration_s);
         assert_eq!(6, oldest.elements_affected);
         Ok(())
+    }
+
+    #[test]
+    async fn storage_stats_only_includes_real_devices() {
+        let disks = super::storage_stats();
+        for disk in &disks {
+            assert!(
+                disk.device.starts_with("/dev/"),
+                "unexpected device: {}",
+                disk.device
+            );
+            assert!(disk.total_bytes > 0);
+            assert!(disk.used_bytes <= disk.total_bytes);
+            assert!(disk.available_bytes <= disk.total_bytes);
+            assert!(disk.used_percent >= 0.0 && disk.used_percent <= 100.0);
+            assert!(!disk.mount_point.is_empty());
+        }
     }
 }

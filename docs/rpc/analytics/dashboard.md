@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), log database stats (file size, number of logged requests, and the 10 most-called RPC methods over the same windows), and the 10 most recent OSM sync runs recorded in the `sync` log table.
+Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), log database stats (file size, number of logged requests, and the 10 most-called RPC methods over the same windows), disk usage stats for the host's real block devices, and the 10 most recent OSM sync runs recorded in the `sync` log table.
 
 ## Params
 
@@ -52,6 +52,26 @@ Returns a high-level analytics dashboard snapshot, including the time the report
       }
     ]
   },
+  "storage": {
+    "disks": [
+      {
+        "device": "/dev/mapper/root",
+        "mount_point": "/",
+        "total_bytes": 982277472256,
+        "used_bytes": 475595489280,
+        "available_bytes": 456709595136,
+        "used_percent": 52.0
+      },
+      {
+        "device": "/dev/nvme1n1p1",
+        "mount_point": "/boot",
+        "total_bytes": 1071628288,
+        "used_bytes": 68329472,
+        "available_bytes": 1003298816,
+        "used_percent": 7.0
+      }
+    ]
+  },
   "sync_runs": [
     {
       "id": 42,
@@ -83,6 +103,13 @@ Returns a high-level analytics dashboard snapshot, including the time the report
 - `logs.top_rpcs`: Up to 10 most-called RPC methods on the `/rpc` endpoint over the last 24 hours, ordered by `count` descending (most-called first). Each entry contains:
   - `method`: Name of the RPC method (e.g. `revoke_submitted_place`, `get_area_dashboard`)
   - `count`: Number of times the method was called in the window
+- `storage.disks`: Disk usage stats for the host's real block devices (e.g. `/dev/sda1`, `/dev/mapper/root`, `/dev/nvme0n1p1`). Virtual filesystems such as `tmpfs`, `devtmpfs`, `sysfs`, `proc`, `overlay`, and `efivarfs` are excluded. Sourced from `df -PB1`. Each entry contains:
+  - `device`: Device file path (always starts with `/dev/`)
+  - `mount_point`: Where the device is mounted
+  - `total_bytes`: Total size of the device in bytes
+  - `used_bytes`: Bytes currently in use
+  - `available_bytes`: Bytes currently free
+  - `used_percent`: Percentage of the device that is in use (0.0–100.0)
 - `sync_runs`: Up to 10 most recent OSM sync runs, ordered by `started_at` descending (most recent first). Each entry contains:
   - `id`: Sync run ID
   - `started_at`: UTC timestamp (RFC 3339) when the sync started
