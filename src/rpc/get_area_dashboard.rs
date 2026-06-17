@@ -28,7 +28,7 @@ pub struct ChartEntry {
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     let area = db::main::area::queries::select_by_id(params.area_id, pool).await?;
     let mut reports = db::main::report::queries::select_by_area_id(area.id, None, pool).await?;
-    reports.sort_by_key(|x| std::cmp::Reverse(x.date));
+    reports.sort_by_key(|b| std::cmp::Reverse(b.date));
     let reports: Vec<Report> = reports.into_iter().take(365).collect();
     let Some(latest_report) = reports.first() else {
         return Err("No data".into());

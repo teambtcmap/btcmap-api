@@ -243,6 +243,9 @@ async fn main() -> Result<()> {
                             .service(rest::v4::users::post)
                             .service(rest::v4::users::change_password)
                             .service(rest::v4::users::update_username)
+                            .service(rest::v4::users::get_nostr)
+                            .service(rest::v4::users::put_nostr)
+                            .service(rest::v4::users::delete_nostr)
                             .service(rest::v4::users::create_token),
                     ),
             )

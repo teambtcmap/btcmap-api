@@ -33,11 +33,13 @@ pub struct AuthNostrResponse {
 /// minted bound to that user and returned alongside `username` and `npub`.
 ///
 /// Concurrency: two simultaneous first-time sign-ins for the same pubkey
-/// race on `INSERT INTO user(... npub)`. The unique partial index from
-/// migration 101 fails the loser with a SQLite ConstraintViolation; this
-/// handler then re-selects by npub and uses the winning row, so exactly
-/// one fully-initialized user exists. Any other database error is
-/// propagated rather than masked as a lost race.
+/// race on `INSERT INTO user(... npub)`. There is no unique index on
+/// `user.npub` yet, so today the loser is recovered by re-selecting on
+/// npub (best-effort — a truly simultaneous race could briefly create two
+/// rows). If the partial unique index on `user.npub` is added later, the
+/// loser fails atomically with a SQLite ConstraintViolation and this handler
+/// re-selects the winning row, so exactly one fully-initialized user exists.
+/// Any other database error is propagated rather than masked as a lost race.
 #[post("/nostr")]
 pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<AuthNostrResponse> {
     let npub = auth.npub.ok_or_else(RestApiError::unauthorized)?;
@@ -114,7 +116,11 @@ async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiE
 /// `target` (e.g. `"user.npub"`). SQLite's UNIQUE failure message has the
 /// form `UNIQUE constraint failed: <table>.<col>`, so column-level
 /// matching is robust enough without parsing extended error codes.
-fn is_unique_violation_on(err: &crate::Error, target: &str) -> bool {
+///
+/// Shared with `users::put_nostr`, which maps a `user.npub` violation to a
+/// 400 so the identity-link endpoint stays correct if/when a unique index
+/// on `user.npub` is added.
+pub(crate) fn is_unique_violation_on(err: &crate::Error, target: &str) -> bool {
     matches!(
         err,
         crate::Error::Rusqlite(rusqlite::Error::SqliteFailure(e, msg))
@@ -255,9 +261,10 @@ mod test {
     #[actix_web::test]
     async fn unknown_npub_concurrent_inserts_create_exactly_one_user() -> Result<()> {
         // Two parallel select_by_npub calls both return None, then both
-        // attempt insert_with_npub. Migration 101's unique partial index
-        // fails the loser; create_or_recover then re-selects the winner.
-        // Net effect: exactly one user row with this npub.
+        // attempt insert_with_npub; create_or_recover re-selects on the npub
+        // so the net effect is one user row. (There is no unique index on
+        // user.npub yet, so this exercises the recovery logic, not a
+        // DB-enforced constraint.)
         let pool = pool();
         let keys = Keys::generate();
         let npub = keys.public_key().to_bech32().unwrap();

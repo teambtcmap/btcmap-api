@@ -67,7 +67,7 @@ pub async fn new_places_for_area(
             db::main::element::queries::select_by_id(element_id, &pool).await?,
         ));
     }
-    events_to_elements.sort_by_key(|x| std::cmp::Reverse(x.0.updated_at));
+    events_to_elements.sort_by_key(|b| std::cmp::Reverse(b.0.updated_at));
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/atom+xml; charset=utf-8"))
         .body(events_to_atom_feed(

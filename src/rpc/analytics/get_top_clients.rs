@@ -39,7 +39,7 @@ pub async fn run(pool: &LogPool) -> Result<Vec<Res>> {
             report.ios.top_ips,
         ),
     ];
-    platforms.sort_by_key(|x| std::cmp::Reverse(x.2));
+    platforms.sort_by_key(|b| std::cmp::Reverse(b.2));
     Ok(platforms
         .into_iter()
         .map(|(name, total_requests, unique_ips, top_ips)| Res {

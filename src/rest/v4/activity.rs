@@ -312,7 +312,7 @@ pub async fn get(
         });
     }
 
-    items.sort_by_key(|x| std::cmp::Reverse(x.created_at));
+    items.sort_by_key(|b| std::cmp::Reverse(b.created_at));
 
     Ok(Json(items))
 }
