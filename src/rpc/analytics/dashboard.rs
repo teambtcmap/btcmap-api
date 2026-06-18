@@ -49,11 +49,19 @@ pub struct LogStats {
     pub file_size_bytes: u64,
     pub requests: PeriodCounts,
     pub top_rpcs: Vec<TopRpc>,
+    pub top_rest_api_calls: Vec<TopRestApiCall>,
 }
 
 #[derive(Serialize)]
 pub struct TopRpc {
     pub method: String,
+    pub count: i64,
+}
+
+#[derive(Serialize)]
+pub struct TopRestApiCall {
+    pub method: String,
+    pub path: String,
     pub count: i64,
 }
 
@@ -134,6 +142,15 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
             .into_iter()
             .map(|it| TopRpc {
                 method: it.method,
+                count: it.count,
+            })
+            .collect(),
+        top_rest_api_calls: log_request_queries::select_top_rest_api_calls(d1, log_pool)
+            .await?
+            .into_iter()
+            .map(|it| TopRestApiCall {
+                method: it.method,
+                path: it.path,
                 count: it.count,
             })
             .collect(),
@@ -258,6 +275,7 @@ mod test {
         assert_eq!(0, res.logs.requests.d7);
         assert_eq!(0, res.logs.requests.d30);
         assert!(res.logs.top_rpcs.is_empty());
+        assert!(res.logs.top_rest_api_calls.is_empty());
         assert!(res.sync_runs.is_empty());
         assert!(res.lnd.is_none());
         assert!(res.finished_at >= res.started_at);
@@ -397,6 +415,64 @@ mod test {
                 .top_rpcs
                 .into_iter()
                 .map(|it| (it.method, it.count))
+                .collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn returns_top_rest_api_calls_in_last_24h() -> Result<()> {
+        let pool = pool();
+        let log_pool = log_pool();
+        log_pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                conn.execute(
+                    "INSERT INTO request (ip, path, method, response_code, processing_time_ns, date) VALUES ('10.0.0.1', '/v2/elements', 'GET', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, method, response_code, processing_time_ns, date) VALUES ('10.0.0.2', '/v2/elements', 'GET', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, method, response_code, processing_time_ns, date) VALUES ('10.0.0.3', '/v2/elements', 'POST', 201, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, method, response_code, processing_time_ns, date) VALUES ('10.0.0.4', '/v4/places/search', 'GET', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, method, response_code, processing_time_ns, date) VALUES ('10.0.0.5', '/v2/elements', 'GET', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, response_code, processing_time_ns, date) VALUES ('10.0.0.6', '/rpc', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, method, response_code, processing_time_ns, date) VALUES ('10.0.0.7', '/og/element/1', 'GET', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO request (ip, path, method, response_code, processing_time_ns, date) VALUES ('10.0.0.8', '/favicon.ico', 'GET', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                    [],
+                )
+            })
+            .await??;
+        let res = super::run(&pool, &log_pool).await?;
+        assert_eq!(
+            vec![
+                ("GET".to_string(), "/v2/elements".to_string(), 2),
+                ("POST".to_string(), "/v2/elements".to_string(), 1),
+                ("GET".to_string(), "/v4/places/search".to_string(), 1),
+            ],
+            res.logs
+                .top_rest_api_calls
+                .into_iter()
+                .map(|it| (it.method, it.path, it.count))
                 .collect::<Vec<_>>()
         );
         Ok(())

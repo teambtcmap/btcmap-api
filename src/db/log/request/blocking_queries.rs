@@ -206,6 +206,41 @@ pub fn select_top_rpc_methods(
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
+pub struct TopRestApiCall {
+    pub method: String,
+    pub path: String,
+    pub count: i64,
+}
+
+pub fn select_top_rest_api_calls(
+    since: OffsetDateTime,
+    conn: &Connection,
+) -> Result<Vec<TopRestApiCall>> {
+    let since = since
+        .format(&time::format_description::well_known::Rfc3339)
+        .map_err(crate::Error::from)?;
+    let sql = format!(
+        r#"
+            SELECT {Method}, {Path}, COUNT(*) AS count
+            FROM {TABLE}
+            WHERE {Date} > ?1
+              AND ({Path} LIKE '/v%' OR {Path} LIKE '/feeds%')
+            GROUP BY {Method}, {Path}
+            ORDER BY count DESC, {Path} ASC, {Method} ASC
+            LIMIT 10
+        "#,
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([&since], |row| {
+        Ok(TopRestApiCall {
+            method: row.get(0)?,
+            path: row.get(1)?,
+            count: row.get(2)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 pub struct TopClientsReport {
     pub web: PlatformClientStats,
     pub android: PlatformClientStats,

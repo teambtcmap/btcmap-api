@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), log database stats (file size, number of logged requests, and the 10 most-called RPC methods over the same windows), disk usage stats for the host's real block devices, on-chain and Lightning channel balances probed from the LND node, and the 10 most recent OSM sync runs recorded in the `sync` log table.
+Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), log database stats (file size, number of logged requests, the 10 most-called RPC methods, and the 10 most-called REST API endpoints over the last 24 hours), disk usage stats for the host's real block devices, on-chain and Lightning channel balances probed from the LND node, and the 10 most recent OSM sync runs recorded in the `sync` log table.
 
 ## Params
 
@@ -49,6 +49,23 @@ Returns a high-level analytics dashboard snapshot, including the time the report
       {
         "method": "get_area_dashboard",
         "count": 2000
+      }
+    ],
+    "top_rest_api_calls": [
+      {
+        "method": "GET",
+        "path": "/v2/elements",
+        "count": 18000
+      },
+      {
+        "method": "GET",
+        "path": "/v4/places/search",
+        "count": 16000
+      },
+      {
+        "method": "POST",
+        "path": "/v4/places",
+        "count": 500
       }
     ]
   },
@@ -113,6 +130,10 @@ Returns a high-level analytics dashboard snapshot, including the time the report
 - `logs.top_rpcs`: Up to 10 most-called RPC methods on the `/rpc` endpoint over the last 24 hours, ordered by `count` descending (most-called first). Each entry contains:
   - `method`: Name of the RPC method (e.g. `revoke_submitted_place`, `get_area_dashboard`)
   - `count`: Number of times the method was called in the window
+- `logs.top_rest_api_calls`: Up to 10 most-called REST API endpoints (paths starting with `/v2`, `/v3`, `/v4`, or `/feeds`) over the last 24 hours, ordered by `count` descending and then by `path` and `method` ascending for deterministic ordering. `/rpc`, `/og/...`, static assets, and other non-REST paths are excluded. Each entry contains:
+  - `method`: HTTP method of the request (e.g. `GET`, `POST`); may be empty for requests logged before the `method` column was added
+  - `path`: Request path (e.g. `/v2/elements`, `/v4/places/search`)
+  - `count`: Number of times this (method, path) combination was called in the window
 - `storage.disks`: Disk usage stats for the host's real block devices (e.g. `/dev/sda1`, `/dev/mapper/root`, `/dev/nvme0n1p1`). Virtual filesystems such as `tmpfs`, `devtmpfs`, `sysfs`, `proc`, `overlay`, and `efivarfs` are excluded. Sourced from `df -PB1`. Each entry contains:
   - `device`: Device file path (always starts with `/dev/`)
   - `mount_point`: Where the device is mounted
