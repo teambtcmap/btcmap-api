@@ -29,6 +29,7 @@ All fields are optional and have defaults:
       "ip": "192.168.1.1",
       "user_agent": "Mozilla/5.0 ...",
       "user_id": 42,
+      "method": "POST",
       "path": "/rpc",
       "query": null,
       "body": "{\"jsonrpc\":\"2.0\",...}",
@@ -46,6 +47,7 @@ All fields are optional and have defaults:
 - `ip`: Client IP address
 - `user_agent`: Client user agent string
 - `user_id`: Authenticated user ID (null if anonymous)
+- `method`: HTTP method (GET, POST, etc.)
 - `path`: Request path
 - `query`: Query string (null if none)
 - `body`: Request body (null if none)

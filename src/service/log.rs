@@ -78,6 +78,7 @@ where
                 .and_then(|h| h.to_str().ok())
                 .map(|s| s.to_owned());
             let path = res.request().path().to_owned();
+            let method = res.request().method().as_str().to_owned();
             let query = res.request().uri().query();
             let response_code = res.status().as_u16() as i64;
             let Some(addr) = addr else {
@@ -88,6 +89,7 @@ where
                     ip: addr,
                     user_agent,
                     user_id: None,
+                    method,
                     path,
                     query: query.map(ToString::to_string),
                     body: body_str.map(ToString::to_string),

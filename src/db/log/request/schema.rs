@@ -10,6 +10,7 @@ pub enum Columns {
     Ip,
     UserAgent,
     UserId,
+    Method,
     Path,
     Query,
     Body,
@@ -23,6 +24,7 @@ pub struct Request {
     pub ip: String,
     pub user_agent: Option<String>,
     pub user_id: Option<i64>,
+    pub method: String,
     pub path: String,
     pub query: Option<String>,
     pub body: Option<String>,
@@ -41,6 +43,7 @@ impl Request {
                 Columns::Ip,
                 Columns::UserAgent,
                 Columns::UserId,
+                Columns::Method,
                 Columns::Path,
                 Columns::Query,
                 Columns::Body,
@@ -62,6 +65,7 @@ impl Request {
                 ip: row.get(Columns::Ip.as_ref())?,
                 user_agent: row.get(Columns::UserAgent.as_ref())?,
                 user_id: row.get(Columns::UserId.as_ref())?,
+                method: row.get(Columns::Method.as_ref())?,
                 path: row.get(Columns::Path.as_ref())?,
                 query: row.get(Columns::Query.as_ref())?,
                 body: row.get(Columns::Body.as_ref())?,
@@ -83,6 +87,7 @@ mod test {
         assert_eq!(Columns::Ip.as_ref(), "ip");
         assert_eq!(Columns::UserAgent.as_ref(), "user_agent");
         assert_eq!(Columns::UserId.as_ref(), "user_id");
+        assert_eq!(Columns::Method.as_ref(), "method");
         assert_eq!(Columns::Path.as_ref(), "path");
         assert_eq!(Columns::Query.as_ref(), "query");
         assert_eq!(Columns::Body.as_ref(), "body");
@@ -98,6 +103,7 @@ mod test {
         assert!(projection.contains("ip"));
         assert!(projection.contains("user_agent"));
         assert!(projection.contains("user_id"));
+        assert!(projection.contains("method"));
         assert!(projection.contains("path"));
         assert!(projection.contains("query"));
         assert!(projection.contains("body"));
