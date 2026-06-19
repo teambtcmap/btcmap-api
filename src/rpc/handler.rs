@@ -100,10 +100,6 @@ impl Role {
         RpcMethod::AddUser,
         RpcMethod::ChangePassword,
         RpcMethod::CreateApiKey,
-        // Used by our website, we need to create website user or stop using those methods
-        RpcMethod::GetElementIssues,
-        RpcMethod::GetAreaDashboard,
-        RpcMethod::GetMostActiveUsers,
     ];
 
     const USER_METHODS: &[RpcMethod] = &[RpcMethod::Whoami, RpcMethod::GetEvent];
