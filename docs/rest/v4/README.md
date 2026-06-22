@@ -5,6 +5,7 @@ The latest and recommended version of the BTCMap API, offering improved performa
 ## Endpoints  
 
 ### Implemented  
+- **[Auth](auth.md)** - Sign in with Nostr (NIP-98) to obtain a Bearer token.
 - **[Places](places.md)** - Fetch places.
 - **[Place Boosts](place-boosts.md)** - Fetch place boost quotes and submit boost intents.
 - **[Place Comments](place-comments.md)** - Fetch place comment quotes and submit comment intents.
