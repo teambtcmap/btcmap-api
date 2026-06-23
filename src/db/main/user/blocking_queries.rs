@@ -80,7 +80,7 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<User> {
             r#"
                 SELECT {projection}
                 FROM {TABLE}
-                WHERE {Name} = ?1
+                WHERE {Name} = ?1 AND {DeletedAt} IS NULL
             "#,
             projection = User::projection(),
         ),

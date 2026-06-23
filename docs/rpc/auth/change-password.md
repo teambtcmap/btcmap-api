@@ -10,7 +10,7 @@ Use this endpoint if you need to update your password. User passwords are encryp
 | -------------- | ------ | -------- | -------------------------------------------------------------------- |
 | `username`     | string | yes      | The account name to update the password for                          |
 | `old_password` | string | yes      | The current account password                                         |
-| `new_password` | string | yes      | The new account password; must be 12 to 64 characters                 |
+| `new_password` | string | yes      | The new account password; must be between 12 and 64 characters        |
 
 ```json
 {
@@ -42,7 +42,7 @@ Use this endpoint if you need to update your password. User passwords are encryp
 ### btcmap-cli
 
 ```bash
-btcmap-cli change-password --user satoshi --old oldpwd --new newpwd
+btcmap-cli auth change-password --user satoshi --old oldpwd --new newpwd
 ```
 
 ### curl

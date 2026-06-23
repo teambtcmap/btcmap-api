@@ -29,7 +29,7 @@ The operation is idempotent: revoking an already-revoked key returns a response 
 ### btcmap-cli
 
 ```bash
-btcmap-cli revoke-api-key 1
+btcmap-cli auth revoke-api-key 1
 ```
 
 ### curl

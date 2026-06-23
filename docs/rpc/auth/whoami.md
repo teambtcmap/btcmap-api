@@ -12,7 +12,7 @@ This method can help you if you forgot your name.
   "roles": [
     "user"
   ],
-  "registration_date": "2024-06-13T10:33:73Z"
+  "registration_date": "2024-06-13T10:33:00Z"
 }
 ```
 
@@ -21,7 +21,7 @@ This method can help you if you forgot your name.
 ### btcmap-cli
 
 ```bash
-btcmap-cli whoami
+btcmap-cli auth whoami
 ```
 
 ### curl

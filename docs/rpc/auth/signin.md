@@ -33,7 +33,7 @@ Use this endpoint to request a new API key. Labels are optional but they will he
 ### btcmap-cli
 
 ```bash
-btcmap-cli signin satoshi qwerty
+btcmap-cli auth signin satoshi qwerty
 ```
 
 ### curl

@@ -32,7 +32,7 @@ Deleted tokens are filtered out of the result.
 ### btcmap-cli
 
 ```bash
-btcmap-cli get-api-keys
+btcmap-cli auth get-api-keys
 ```
 
 ### curl

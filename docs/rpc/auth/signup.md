@@ -37,7 +37,7 @@ Use this endpoint to create a new BTC Map account. It will return an API key whi
 ### btcmap-cli
 
 ```bash
-btcmap-cli signup --user satoshi --password qwerty
+btcmap-cli auth signup --user satoshi --password qwerty
 ```
 
 ### curl
