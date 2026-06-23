@@ -266,6 +266,8 @@ Links (or replaces) the Nostr pubkey on the authenticated account. This requires
 
 The two cannot share the `Authorization` header, so the NIP-98 proof is carried on the dedicated `X-Nostr-Authorization` header. The request body is empty. The proof event must sign `u = <api-base-url>/v4/users/me/nostr` with method `PUT` (the `u`/`method` are matched against the server's configured base URL and the actual request method — both are case-sensitive).
 
+Here `<api-base-url>` is the server's configured `BTCMAP_API_BASE_URL`, not the host from the request headers. See [Server Configuration (NIP-98)](auth.md#server-configuration-nip-98) for why this must match the public origin.
+
 #### Example Request
 
 ```bash
