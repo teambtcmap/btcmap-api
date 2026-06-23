@@ -15,7 +15,7 @@ pub struct Params {
 
 #[derive(Serialize)]
 pub struct Res {
-    pub token: String,
+    pub api_key: String,
 }
 
 pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
@@ -27,14 +27,14 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     Argon2::default()
         .verify_password(params.password.as_bytes(), &password_hash)
         .map_err(|_| error_cause_mask)?;
-    let token = Uuid::new_v4().to_string();
+    let api_key = Uuid::new_v4().to_string();
     db::main::access_token::queries::insert(
         user.id,
         params.label.unwrap_or_default(),
-        token.clone(),
+        api_key.clone(),
         vec![],
         pool,
     )
     .await?;
-    Ok(Res { token })
+    Ok(Res { api_key })
 }
