@@ -1,5 +1,6 @@
 pub mod area;
 pub mod area_element;
+pub mod auth;
 pub mod ban;
 pub mod comment;
 pub mod element;

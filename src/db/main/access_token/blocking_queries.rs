@@ -1,9 +1,11 @@
-use super::schema::{self, AccessToken};
+use super::schema::{self, AccessToken, AccessTokenInfo};
 use crate::db::main::user::schema::Role;
 use crate::Result;
 use rusqlite::{params, Connection};
 use schema::Columns::*;
 use schema::TABLE;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 pub fn insert(
     user_id: i64,
@@ -61,14 +63,13 @@ pub fn select_all(conn: &Connection) -> Result<Vec<AccessToken>> {
         .map_err(Into::into)
 }
 
-#[cfg(test)]
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<AccessToken> {
     let sql = format!(
         r#"
-            SELECT {projection}
-            FROM {TABLE}
-            WHERE {Id} = ?1
-        "#,
+        SELECT {projection}
+        FROM {TABLE}
+        WHERE {Id} = ?1
+    "#,
         projection = AccessToken::projection(),
     );
     conn.query_row(&sql, params![id], AccessToken::mapper())
@@ -78,14 +79,70 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<AccessToken> {
 pub fn select_by_secret(secret: &str, conn: &Connection) -> Result<AccessToken> {
     let sql = format!(
         r#"
-            SELECT {projection}
-            FROM {TABLE}
-            WHERE {Secret} = ?1 AND {DeletedAt} IS NULL
-        "#,
+        SELECT {projection}
+        FROM {TABLE}
+        WHERE {Secret} = ?1 AND {DeletedAt} IS NULL
+    "#,
         projection = AccessToken::projection(),
     );
     conn.query_row(&sql, params![secret], AccessToken::mapper())
         .map_err(Into::into)
+}
+
+pub fn select_by_user_id(user_id: i64, conn: &Connection) -> Result<Vec<AccessTokenInfo>> {
+    let sql = format!(
+        r#"
+        SELECT {projection}
+        FROM {TABLE}
+        WHERE {UserId} = ?1 AND {DeletedAt} IS NULL
+        ORDER BY {Id} ASC
+    "#,
+        projection = AccessTokenInfo::projection(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![user_id], AccessTokenInfo::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn set_deleted_at(
+    id: i64,
+    deleted_at: Option<OffsetDateTime>,
+    conn: &Connection,
+) -> Result<AccessToken> {
+    match deleted_at {
+        Some(deleted_at) => {
+            let sql = format!(
+                r#"
+                    UPDATE {TABLE}
+                    SET {DeletedAt} = ?2
+                    WHERE {Id} = ?1 AND {DeletedAt} IS NULL
+                    RETURNING {projection}
+                "#,
+                projection = AccessToken::projection(),
+            );
+            match conn.query_row(
+                &sql,
+                params![id, deleted_at.format(&Rfc3339)?],
+                AccessToken::mapper(),
+            ) {
+                Ok(token) => Ok(token),
+                Err(rusqlite::Error::QueryReturnedNoRows) => select_by_id(id, conn),
+                Err(err) => Err(err.into()),
+            }
+        }
+        None => {
+            let sql = format!(
+                r#"
+                    UPDATE {TABLE}
+                    SET {DeletedAt} = NULL
+                    WHERE {Id} = ?1
+                "#
+            );
+            conn.execute(&sql, params![id])?;
+            select_by_id(id, conn)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -93,6 +150,7 @@ mod test {
     use crate::db::main::test::conn;
     use crate::db::main::user::schema::Role;
     use crate::Result;
+    use time::OffsetDateTime;
 
     #[test]
     fn insert() -> Result<()> {
@@ -159,6 +217,51 @@ mod test {
         let token = super::insert(1, "", secret, &[], &conn)?;
         let select_res = super::select_by_secret(secret, &conn)?;
         assert_eq!(token, select_res);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_user_id() -> Result<()> {
+        let conn = conn();
+        super::insert(1, "name_1", "secret_1", &[Role::Admin], &conn)?;
+        super::insert(1, "name_2", "secret_2", &[], &conn)?;
+        super::insert(2, "name_3", "secret_3", &[Role::User], &conn)?;
+
+        let tokens_for_user_1 = super::select_by_user_id(1, &conn)?;
+        assert_eq!(2, tokens_for_user_1.len());
+        assert_eq!(1, tokens_for_user_1[0].id);
+        assert_eq!(2, tokens_for_user_1[1].id);
+        assert_eq!(Some("name_1"), tokens_for_user_1[0].label.as_deref());
+        assert_eq!(Some("name_2"), tokens_for_user_1[1].label.as_deref());
+        assert_eq!(vec![Role::Admin], tokens_for_user_1[0].roles);
+
+        let tokens_for_user_2 = super::select_by_user_id(2, &conn)?;
+        assert_eq!(1, tokens_for_user_2.len());
+        assert_eq!(3, tokens_for_user_2[0].id);
+
+        let tokens_for_missing_user = super::select_by_user_id(999, &conn)?;
+        assert!(tokens_for_missing_user.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn set_deleted_at_soft_deletes_token() -> Result<()> {
+        let conn = conn();
+        let token = super::insert(1, "name", "secret", &[], &conn)?;
+        let updated = super::set_deleted_at(token.id, Some(OffsetDateTime::now_utc()), &conn)?;
+        assert_eq!(token.id, updated.id);
+        assert!(updated.deleted_at.is_some());
+        assert_eq!(token.secret, updated.secret);
+        Ok(())
+    }
+
+    #[test]
+    fn set_deleted_at_to_none_clears_deleted_at() -> Result<()> {
+        let conn = conn();
+        let token = super::insert(1, "name", "secret", &[], &conn)?;
+        super::set_deleted_at(token.id, Some(OffsetDateTime::now_utc()), &conn)?;
+        let restored = super::set_deleted_at(token.id, None, &conn)?;
+        assert!(restored.deleted_at.is_none());
         Ok(())
     }
 }

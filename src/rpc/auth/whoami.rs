@@ -8,12 +8,8 @@ use time::OffsetDateTime;
 pub struct Res {
     pub name: String,
     pub roles: Vec<String>,
-    /// Bech32 npub (`npub1...`) of the Nostr identity linked to this user,
-    /// or `null` when no pubkey is linked. Mirrors the field on the REST
-    /// `GET /v4/users/me` response so both whoami surfaces stay in sync.
-    pub npub: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
+    pub registration_date: OffsetDateTime,
 }
 
 pub async fn run(user: &User) -> Result<Res> {
@@ -21,8 +17,7 @@ pub async fn run(user: &User) -> Result<Res> {
     Ok(Res {
         name: user.name.clone(),
         roles,
-        npub: user.npub.clone(),
-        created_at: OffsetDateTime::parse(&user.created_at, &Rfc3339)?,
+        registration_date: OffsetDateTime::parse(&user.created_at, &Rfc3339)?,
     })
 }
 
@@ -52,31 +47,10 @@ mod test {
 
         assert_eq!(result.name, "Test User");
         assert_eq!(result.roles, vec!["admin".to_string(), "user".to_string()]);
-        assert_eq!(result.npub, None);
         assert_eq!(
-            result.created_at,
+            result.registration_date,
             OffsetDateTime::parse("2023-01-01T00:00:00Z", &Rfc3339).unwrap()
         );
-    }
-
-    #[test]
-    async fn passes_through_linked_npub() {
-        let user = User {
-            id: 1,
-            name: "Nostr User".to_string(),
-            password: "".to_string(),
-            roles: vec![Role::User],
-            saved_places: vec![],
-            saved_areas: vec![],
-            npub: Some("npub1example".to_string()),
-            created_at: "2023-01-01T00:00:00Z".to_string(),
-            updated_at: "2023-01-01T00:00:00Z".to_string(),
-            deleted_at: None,
-        };
-
-        let result = super::run(&user).await.unwrap();
-
-        assert_eq!(result.npub, Some("npub1example".to_string()));
     }
 
     #[test]
@@ -157,7 +131,7 @@ mod test {
         };
 
         let result = super::run(&user).await?;
-        assert_eq!(result.created_at, future_date);
+        assert_eq!(result.registration_date, future_date);
         Ok(())
     }
 }

@@ -1,4 +1,6 @@
-pub mod add_user;
 pub mod change_password;
-pub mod create_api_key;
+pub mod get_api_keys;
+pub mod revoke_api_key;
+pub mod signin;
+pub mod signup;
 pub mod whoami;

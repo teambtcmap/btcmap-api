@@ -1,6 +1,7 @@
-use super::{blocking_queries, schema::AccessToken};
+use super::{blocking_queries, schema::AccessToken, schema::AccessTokenInfo};
 use crate::{db::main::user::schema::Role, Result};
 use deadpool_sqlite::Pool;
+use time::OffsetDateTime;
 
 pub async fn insert(
     user_id: i64,
@@ -43,5 +44,30 @@ pub async fn select_by_secret(secret: String, pool: &Pool) -> Result<AccessToken
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::select_by_secret(&secret, conn))
+        .await?
+}
+
+pub async fn select_by_user_id(user_id: i64, pool: &Pool) -> Result<Vec<AccessTokenInfo>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_user_id(user_id, conn))
+        .await?
+}
+
+pub async fn select_by_id(id: i64, pool: &Pool) -> Result<AccessToken> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_id(id, conn))
+        .await?
+}
+
+pub async fn set_deleted_at(
+    id: i64,
+    deleted_at: Option<OffsetDateTime>,
+    pool: &Pool,
+) -> Result<AccessToken> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_deleted_at(id, deleted_at, conn))
         .await?
 }

@@ -30,13 +30,15 @@ pub struct RpcRequest {
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
     // auth
-    AddUser,
+    Signup,
     GetAdmin,
     ChangePassword,
-    CreateApiKey,
+    Signin,
     AddAdminAction,
     RemoveAdminAction,
     Whoami,
+    GetApiKeys,
+    RevokeApiKey,
     // element
     GetElement,
     SetElementTag,
@@ -97,12 +99,17 @@ pub enum RpcMethod {
 
 impl Role {
     const ANON_METHODS: &[RpcMethod] = &[
-        RpcMethod::AddUser,
+        RpcMethod::Signup,
         RpcMethod::ChangePassword,
-        RpcMethod::CreateApiKey,
+        RpcMethod::Signin,
     ];
 
-    const USER_METHODS: &[RpcMethod] = &[RpcMethod::Whoami, RpcMethod::GetEvent];
+    const USER_METHODS: &[RpcMethod] = &[
+        RpcMethod::Whoami,
+        RpcMethod::GetEvent,
+        RpcMethod::GetApiKeys,
+        RpcMethod::RevokeApiKey,
+    ];
 
     const ADMIN_METHODS: &[RpcMethod] = &[
         // Admins can set and override custom place tags
@@ -355,6 +362,15 @@ pub async fn handle(
             req.id.clone(),
             super::auth::whoami::run(user.unwrap()).await?,
         ),
+        RpcMethod::GetApiKeys => RpcResponse::from(
+            req.id.clone(),
+            super::auth::get_api_keys::run(user.unwrap(), &main_pool).await?,
+        ),
+        RpcMethod::RevokeApiKey => RpcResponse::from(
+            req.id.clone(),
+            super::auth::revoke_api_key::run(params(req.params)?, user.unwrap(), &main_pool)
+                .await?,
+        ),
         // element
         RpcMethod::GetElement => RpcResponse::from(
             req.id.clone(),
@@ -470,13 +486,13 @@ pub async fn handle(
             super::area::generate_bboxes::run(&main_pool).await?,
         ),
         // auth
-        RpcMethod::CreateApiKey => RpcResponse::from(
+        RpcMethod::Signin => RpcResponse::from(
             req.id.clone(),
-            super::auth::create_api_key::run(params(req.params)?, &main_pool).await?,
+            super::auth::signin::run(params(req.params)?, &main_pool).await?,
         ),
-        RpcMethod::AddUser => RpcResponse::from(
+        RpcMethod::Signup => RpcResponse::from(
             req.id.clone(),
-            super::auth::add_user::run(params(req.params)?, &main_pool).await?,
+            super::auth::signup::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetAdmin => RpcResponse::from(
             req.id.clone(),
@@ -699,8 +715,8 @@ mod test {
             .uri("/")
             .set_json(&json!({
                 "jsonrpc": "2.0",
-                "method": "add_user",
-                "params": {"name": "satoshi", "password": "ihsotas"},
+                "method": "signup",
+                "params": {"username": "satoshi", "password": "ihsotasatoshi123"},
                 "id": 1
             }))
             .to_request();
@@ -757,8 +773,8 @@ mod test {
             .uri("/")
             .set_json(&json!({
                 "jsonrpc": "1.0",
-                "method": "add_user",
-                "params": {"name": "satoshi", "password": "ihsotas"},
+                "method": "signup",
+                "params": {"username": "satoshi", "password": "ihsotasatoshi123"},
                 "id": 1
             }))
             .to_request();
