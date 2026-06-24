@@ -4,7 +4,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 
 ## Methods
 
-- [submit_place](submit_place.md): Adds new places to the map.
+- [submit_place](submit_place.md): Adds new places to the map, or patches an existing one if `(origin, external_id)` is resubmitted.
 - [get_submitted_place](get_submitted_place.md): Fetch previous submission details.
 - [revoke_submitted_place](revoke_submitted_place.md): Cancels a pending import or reports that a place no longer accepts Bitcoin.
 
