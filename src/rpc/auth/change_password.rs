@@ -161,6 +161,7 @@ mod test {
                     username: "satoshi".into(),
                     password: "ihsotasatoshi123".into(),
                     label: None,
+                    roles: vec![],
                 },
                 &pool,
             )
@@ -173,6 +174,7 @@ mod test {
                     username: "satoshi".into(),
                     password: "newpassfoobarbaz".into(),
                     label: None,
+                    roles: vec![],
                 },
                 &pool,
             )

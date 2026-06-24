@@ -158,7 +158,7 @@ btcmap-cli auth revoke-api-key 1
 
 ## signin
 
-To enhance security and performance, the BTC Map API avoids requiring your real password for most interactions. Password validation is computationally expensive, and we discourage client applications from caching user credentials. Instead, API calls expect an API key, which you can generate using this method. See [signin.md](auth/signin.md) for details.
+To enhance security and performance, the BTC Map API avoids requiring your real password for most interactions. Password validation is computationally expensive, and we discourage client applications from caching user credentials. Instead, API calls expect an API key, which you can generate using this method. By default the issued token inherits the signing-in user's full role set; pass an optional `roles` array to mint a token with a narrower scope (e.g. `["dashboard"]` for a read-only analytics token). The requested roles must be a subset of the methods already granted to the user — the API rejects requests that would grant broader access than the user record allows. See [signin.md](auth/signin.md) for details.
 
 ### Request
 
@@ -175,13 +175,28 @@ To enhance security and performance, the BTC Map API avoids requiring your real 
 }
 ```
 
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "signin",
+  "params": {
+    "username": "satoshi",
+    "password": "qwerty",
+    "label": "dashboard-app",
+    "roles": ["dashboard"]
+  },
+  "id": 1
+}
+```
+
 ### Response
 
 ```json
 {
   "jsonrpc": "2.0",
   "result": {
-    "api_key": "6162641d-c327-4512-811e-1cb08413ab96"
+    "api_key": "6162641d-c327-4512-811e-1cb08413ab96",
+    "roles": []
   },
   "id": 1
 }

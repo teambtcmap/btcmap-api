@@ -167,6 +167,11 @@ impl Role {
         RpcMethod::Search,
     ];
 
+    const DASHBOARD_METHODS: &[RpcMethod] = &[
+        // Dashboard tokens are scoped to the read-only analytics dashboard
+        RpcMethod::Dashboard,
+    ];
+
     const fn allowed_methods(&self) -> &[RpcMethod] {
         match self {
             Role::User => Self::USER_METHODS,
@@ -174,6 +179,7 @@ impl Role {
             Role::Root => RpcMethod::VARIANTS,
             Role::PlacesSource => Self::PLACES_SOURCE_METHODS,
             Role::EventManager => Self::EVENT_MANAGER_METHODS,
+            Role::Dashboard => Self::DASHBOARD_METHODS,
         }
     }
 }
@@ -251,7 +257,7 @@ impl RpcResponse {
     }
 }
 
-fn allowed_methods(roles: &[Role]) -> HashSet<RpcMethod> {
+pub(crate) fn allowed_methods(roles: &[Role]) -> HashSet<RpcMethod> {
     let mut res = HashSet::new();
     // All anonymous methods are also acessible to authorized users
     for method in Role::ANON_METHODS {

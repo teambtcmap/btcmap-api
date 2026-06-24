@@ -43,6 +43,7 @@ pub enum Role {
     Root,
     PlacesSource,
     EventManager,
+    Dashboard,
 }
 
 impl fmt::Display for Role {
@@ -53,6 +54,7 @@ impl fmt::Display for Role {
             Role::Root => write!(f, "root"),
             Role::PlacesSource => write!(f, "places_source"),
             Role::EventManager => write!(f, "event_manager"),
+            Role::Dashboard => write!(f, "dashboard"),
         }
     }
 }
@@ -130,6 +132,7 @@ impl FromStr for Role {
             "root" => Ok(Role::Root),
             "places_source" => Ok(Role::PlacesSource),
             "event_manager" => Ok(Role::EventManager),
+            "dashboard" => Ok(Role::Dashboard),
             _ => Err(format!("'{}' is not a valid Role", s)),
         }
     }
