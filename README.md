@@ -69,6 +69,16 @@ The server binds to `http://127.0.0.1:8000`. Test it with:
 curl http://localhost:8000/v2/areas
 ```
 
+### Configuration
+
+Behavior is controlled by environment variables (all optional in local dev):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RUST_LOG` | `info` | Log level. |
+| `BTCMAP_API_BASE_URL` | `http://127.0.0.1:8000` | Public base URL of the API. NIP-98 Nostr auth verifies the signed event's `u` tag against this value, **not** the request `Host`/`X-Forwarded-*` headers. **In production this must be set to the public origin** (e.g. `https://api.btcmap.org`) or all Nostr auth fails with `401`. See [Server Configuration (NIP-98)](docs/rest/v4/auth.md#server-configuration-nip-98). |
+| `BTCMAP_API_CORS_ORIGINS` | `*` | Comma-separated allowlist of CORS origins. `*` (or unset) allows any origin. |
+
 ### devtools
 
 The `devtools` script provides helper commands for development:
