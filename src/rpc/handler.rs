@@ -34,6 +34,7 @@ pub enum RpcMethod {
     GetAdmin,
     ChangePassword,
     Signin,
+    Signout,
     AddAdminAction,
     RemoveAdminAction,
     Whoami,
@@ -98,18 +99,23 @@ pub enum RpcMethod {
 }
 
 impl Role {
+    // no auth header needed
     const ANON_METHODS: &[RpcMethod] = &[
         RpcMethod::Signup,
-        RpcMethod::ChangePassword,
         RpcMethod::Signin,
+        RpcMethod::ChangePassword,
     ];
 
-    const USER_METHODS: &[RpcMethod] = &[
+    // all authorized users can call those methods
+    const AUTHORIZED_METHODS: &[RpcMethod] = &[
         RpcMethod::Whoami,
-        RpcMethod::GetEvent,
+        RpcMethod::ChangePassword,
         RpcMethod::GetApiKeys,
         RpcMethod::RevokeApiKey,
+        RpcMethod::Signout,
     ];
+
+    const USER_METHODS: &[RpcMethod] = &[RpcMethod::GetEvent];
 
     const ADMIN_METHODS: &[RpcMethod] = &[
         // Admins can set and override custom place tags
@@ -167,19 +173,36 @@ impl Role {
         RpcMethod::Search,
     ];
 
-    const DASHBOARD_METHODS: &[RpcMethod] = &[
-        // Dashboard tokens are scoped to the read-only analytics dashboard
-        RpcMethod::Dashboard,
-    ];
+    const DASHBOARD_METHODS: &[RpcMethod] = &[RpcMethod::Dashboard];
 
-    const fn allowed_methods(&self) -> &[RpcMethod] {
+    fn allowed_methods(&self) -> Vec<RpcMethod> {
         match self {
-            Role::User => Self::USER_METHODS,
-            Role::Admin => Self::ADMIN_METHODS,
-            Role::Root => RpcMethod::VARIANTS,
-            Role::PlacesSource => Self::PLACES_SOURCE_METHODS,
-            Role::EventManager => Self::EVENT_MANAGER_METHODS,
-            Role::Dashboard => Self::DASHBOARD_METHODS,
+            Role::User => Self::AUTHORIZED_METHODS
+                .iter()
+                .chain(Self::USER_METHODS.iter())
+                .cloned()
+                .collect(),
+            Role::Admin => Self::AUTHORIZED_METHODS
+                .iter()
+                .chain(Self::ADMIN_METHODS.iter())
+                .cloned()
+                .collect(),
+            Role::Root => RpcMethod::VARIANTS.to_vec(),
+            Role::PlacesSource => Self::AUTHORIZED_METHODS
+                .iter()
+                .chain(Self::PLACES_SOURCE_METHODS.iter())
+                .cloned()
+                .collect(),
+            Role::EventManager => Self::AUTHORIZED_METHODS
+                .iter()
+                .chain(Self::EVENT_MANAGER_METHODS.iter())
+                .cloned()
+                .collect(),
+            Role::Dashboard => Self::AUTHORIZED_METHODS
+                .iter()
+                .chain(Self::DASHBOARD_METHODS.iter())
+                .cloned()
+                .collect(),
         }
     }
 }
@@ -376,6 +399,10 @@ pub async fn handle(
             req.id.clone(),
             super::auth::revoke_api_key::run(params(req.params)?, user.unwrap(), &main_pool)
                 .await?,
+        ),
+        RpcMethod::Signout => RpcResponse::from(
+            req.id.clone(),
+            super::auth::signout::run(&auth_token.as_ref().unwrap().0, &main_pool).await?,
         ),
         // element
         RpcMethod::GetElement => RpcResponse::from(
@@ -643,6 +670,7 @@ mod test {
     };
     use actix_web::{
         http::{header, StatusCode},
+        middleware::ErrorHandlers,
         test,
         web::scope,
         App,
@@ -787,6 +815,64 @@ mod test {
 
         let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.error.unwrap().code, -32600); // Invalid Request
+    }
+
+    #[test]
+    async fn signout_revokes_token_then_rejects_same_bearer() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("root", "", &pool).await?;
+        db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .wrap(ErrorHandlers::new().default_handler(super::handle_rpc_error))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let first_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "signout",
+                "id": 1
+            }))
+            .to_request();
+
+        let first_res: RpcResponse = test::call_and_read_body_json(&app, first_req).await;
+        let first_result = first_res
+            .result
+            .expect("first signout should succeed and return a result");
+        assert!(first_result["revoked_at"].as_str().is_some());
+
+        let second_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(&json!({
+                "jsonrpc": "2.0",
+                "method": "signout",
+                "id": 2
+            }))
+            .to_request();
+
+        let second_res: RpcResponse = test::call_and_read_body_json(&app, second_req).await;
+        let err = second_res
+            .error
+            .expect("second signout with revoked token should fail");
+        assert_eq!(err.code, -32000);
+        Ok(())
     }
 
     #[test]

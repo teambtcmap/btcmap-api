@@ -6,6 +6,7 @@
 - [get_api_keys](#get_api_keys)
 - [revoke_api_key](#revoke_api_key)
 - [signin](#signin)
+- [signout](#signout)
 - [signup](#signup)
 - [whoami](#whoami)
 
@@ -217,6 +218,52 @@ curl --header "Content-Type: application/json" \
 
 ```bash
 btcmap-cli auth signin satoshi qwerty
+```
+
+## signout
+
+Revokes the API key used to call this method. The bearer token is taken from the `Authorization` header, so the caller does not need to know its own key id. After revocation, the token can no longer authenticate any RPC call and is rejected as a `Server error` (the same response given to a non-existent token). See [signout.md](auth/signout.md) for details.
+
+### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "signout",
+  "id": 1
+}
+```
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "id": 1,
+    "label": "my laptop",
+    "revoked_at": "2025-06-19T12:00:00Z"
+  },
+  "id": 1
+}
+```
+
+### Examples
+
+#### curl
+
+```bash
+curl --header 'Content-Type: application/json' \
+  --header "Authorization: Bearer $API_KEY" \
+  --request POST \
+  --data '{"jsonrpc":"2.0","method":"signout","id":1}' \
+  https://api.btcmap.org/rpc
+```
+
+#### btcmap-cli
+
+```bash
+btcmap-cli auth signout
 ```
 
 ## signup
