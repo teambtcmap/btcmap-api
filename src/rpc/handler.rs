@@ -89,6 +89,7 @@ pub enum RpcMethod {
     GetSubmittedPlace,
     RevokeSubmittedPlace,
     SyncSubmittedPlaces,
+    GetPlaceImportOrigins,
     // Matrix
     SendMatrixMessage,
     // Debug
@@ -152,6 +153,8 @@ impl Role {
         RpcMethod::RevokeSubmittedPlace,
         // Admins can query place submissions by id
         RpcMethod::GetSubmittedPlace,
+        // Admins can list configured import origins
+        RpcMethod::GetPlaceImportOrigins,
         // Admins can get daily infrastructure report
         RpcMethod::GetDailyInfraReport,
         // Admins can get top clients report
@@ -614,6 +617,10 @@ pub async fn handle(
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
             req.id.clone(),
             super::import::sync_submitted_places::run(&main_pool).await?,
+        ),
+        RpcMethod::GetPlaceImportOrigins => RpcResponse::from(
+            req.id.clone(),
+            super::import::get_place_import_origins::run(&main_pool).await?,
         ),
         RpcMethod::SendMatrixMessage => {
             super::matrix::send_matrix_message::run(params(req.params)?, &main_pool).await;

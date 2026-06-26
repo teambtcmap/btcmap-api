@@ -30,12 +30,15 @@ pub async fn run(pool: &Pool) -> Result<Res> {
     let mut issues_closed = 0;
 
     for submission in &submissions {
-        let Some(vendor) = db::main::place_submission::vendor::get(&submission.origin) else {
+        let Some(import_origin) =
+            db::main::place_import_origin::queries::select_by_name(submission.origin.clone(), pool)
+                .await?
+        else {
             warn!(submission.origin, "unknown origin");
             continue;
         };
 
-        if !vendor.sync_enabled {
+        if !import_origin.gitea_sync_enabled {
             warn!(submission.origin, "disabled origin");
             continue;
         }
@@ -82,7 +85,9 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 .collect::<Vec<&str>>()
                 .join("\n");
             let mut label_ids = vec![LOCATION_SUBMISSION_LABEL_ID];
-            label_ids.extend_from_slice(vendor.gitea_label_ids);
+            if let Some(gitea_label_id) = import_origin.gitea_label_id {
+                label_ids.push(gitea_label_id);
+            }
             let issue = service::gitea::create_issue(title, body, label_ids, pool).await?;
             db::main::place_submission::queries::set_ticket_url(
                 submission.id,
