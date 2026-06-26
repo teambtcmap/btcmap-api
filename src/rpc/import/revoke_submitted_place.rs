@@ -70,7 +70,7 @@ mod test {
     use geojson::JsonObject;
 
     #[test]
-    async fn submit_place() -> Result<()> {
+    async fn revoke_submitted_place() -> Result<()> {
         let origin = "foo";
         let external_id = "bar";
         let lat = 1.23;
@@ -92,7 +92,7 @@ mod test {
         };
         let submission = db::main::place_submission::queries::insert(args, &pool).await?;
 
-        assert_eq!(false, submission.revoked);
+        assert!(!submission.revoked);
 
         let admin_token = AccessToken {
             id: 1,
@@ -121,10 +121,11 @@ mod test {
         assert_eq!(1, res.id);
         assert_eq!(origin, res.origin);
         assert_eq!(external_id, res.external_id);
+        assert!(res.revoked);
 
         let submission = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
 
-        assert_eq!(true, submission.revoked);
+        assert!(submission.revoked);
 
         Ok(())
     }
