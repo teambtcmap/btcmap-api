@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), log database stats (file size, number of logged requests, the 10 most-called RPC methods, and the 10 most-called REST API endpoints over the last 24 hours), disk usage stats for the host's real block devices, on-chain and Lightning channel balances probed from the LND node, and the 10 most recent OSM sync runs recorded in the `sync` log table.
+Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), counts of imported places grouped by import origin over the same windows (from the `place_submission` table), log database stats (file size, number of logged requests, the 10 most-called RPC methods, and the 10 most-called REST API endpoints over the last 24 hours), disk usage stats for the host's real block devices, on-chain and Lightning channel balances probed from the LND node, and the 10 most recent OSM sync runs recorded in the `sync` log table.
 
 ## Params
 
@@ -34,6 +34,44 @@ Returns a high-level analytics dashboard snapshot, including the time the report
       "d30": 20
     }
   },
+  "imports": [
+    {
+      "origin": "square",
+      "total": {
+        "d1": 50,
+        "d7": 300,
+        "d30": 1200
+      },
+      "pending": {
+        "d1": 10,
+        "d7": 40,
+        "d30": 80
+      },
+      "revoked": {
+        "d1": 1,
+        "d7": 4,
+        "d30": 15
+      }
+    },
+    {
+      "origin": "coinos",
+      "total": {
+        "d1": 20,
+        "d7": 120,
+        "d30": 500
+      },
+      "pending": {
+        "d1": 5,
+        "d7": 25,
+        "d30": 60
+      },
+      "revoked": {
+        "d1": 0,
+        "d7": 2,
+        "d30": 6
+      }
+    }
+  ],
   "logs": {
     "file_size_bytes": 2230968320,
     "requests": {
@@ -125,6 +163,11 @@ Returns a high-level analytics dashboard snapshot, including the time the report
 - `places.added.d1` / `d7` / `d30`: Number of `create` events recorded in the last 1, 7, and 30 days
 - `places.updated.d1` / `d7` / `d30`: Number of `update` events recorded in the last 1, 7, and 30 days
 - `places.deleted.d1` / `d7` / `d30`: Number of `delete` events recorded in the last 1, 7, and 30 days
+- `imports`: Imported places grouped by `origin` (e.g. `square`, `coinos`, `btcpayserver`), ordered alphabetically by `origin`. Only origins that had at least one submission created within the largest window (`d30`) are included. Each entry contains:
+  - `origin`: Name of the import origin (matches `place_submission.origin`)
+  - `total.d1` / `d7` / `d30`: Number of submissions created in the last 1, 7, and 30 days, regardless of state
+  - `pending.d1` / `d7` / `d30`: Number of submissions created in the last 1, 7, and 30 days that are still open (`closed_at IS NULL AND revoked = 0`)
+  - `revoked.d1` / `d7` / `d30`: Number of submissions created in the last 1, 7, and 30 days that have been explicitly revoked (`revoked = 1`)
 - `logs.file_size_bytes`: Size of the `log.db` file on disk in bytes (0 if the file is missing)
 - `logs.requests.d1` / `d7` / `d30`: Number of HTTP requests logged in the last 1, 7, and 30 days
 - `logs.top_rpcs`: Up to 10 most-called RPC methods on the `/rpc` endpoint over the last 24 hours, ordered by `count` descending (most-called first). Each entry contains:

@@ -2,11 +2,14 @@ use crate::db::log::request::queries as log_request_queries;
 use crate::db::log::sync::queries as log_sync_queries;
 use crate::db::log::LogPool;
 use crate::db::main::element_event::queries as element_event_queries;
+use crate::db::main::place_submission::queries as place_submission_queries;
+use crate::db::main::place_submission::schema::OriginSubmissionCounts;
 use crate::db::main::MainPool;
 use crate::service::lnd;
 use crate::service::lnd::NodeStats;
 use crate::Result;
 use serde::Serialize;
+use std::collections::HashMap;
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 use tracing::warn;
@@ -24,6 +27,7 @@ pub struct Res {
     pub finished_at: OffsetDateTime,
     pub generation_time_ms: i64,
     pub places: PlaceStats,
+    pub imports: Vec<ImportOriginStats>,
     pub logs: LogStats,
     pub storage: StorageStats,
     pub lnd: Option<NodeStats>,
@@ -37,7 +41,15 @@ pub struct PlaceStats {
     pub deleted: PeriodCounts,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug, PartialEq)]
+pub struct ImportOriginStats {
+    pub origin: String,
+    pub total: PeriodCounts,
+    pub pending: PeriodCounts,
+    pub revoked: PeriodCounts,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
 pub struct PeriodCounts {
     pub d1: i64,
     pub d7: i64,
@@ -130,6 +142,7 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
                 .await?,
         },
     };
+    let imports = collect_imports(pool, d1, d7, d30).await?;
     let logs = LogStats {
         file_size_bytes: log_db_file_size(),
         requests: PeriodCounts {
@@ -194,6 +207,7 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         finished_at,
         generation_time_ms,
         places,
+        imports,
         logs,
         storage: StorageStats {
             disks: storage_stats(),
@@ -201,6 +215,64 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         lnd,
         sync_runs,
     })
+}
+
+async fn collect_imports(
+    pool: &MainPool,
+    d1: OffsetDateTime,
+    d7: OffsetDateTime,
+    d30: OffsetDateTime,
+) -> Result<Vec<ImportOriginStats>> {
+    let d1_counts = place_submission_queries::select_origin_counts_since(d1, pool).await?;
+    let d7_counts = place_submission_queries::select_origin_counts_since(d7, pool).await?;
+    let d30_counts = place_submission_queries::select_origin_counts_since(d30, pool).await?;
+    let mut by_origin: HashMap<String, ImportOriginStats> = HashMap::new();
+    let mut ingest =
+        |counts: Vec<OriginSubmissionCounts>,
+         apply: &dyn Fn(&mut ImportOriginStats, &OriginSubmissionCounts)| {
+            for c in counts {
+                let entry =
+                    by_origin
+                        .entry(c.origin.clone())
+                        .or_insert_with(|| ImportOriginStats {
+                            origin: c.origin.clone(),
+                            total: PeriodCounts {
+                                d1: 0,
+                                d7: 0,
+                                d30: 0,
+                            },
+                            pending: PeriodCounts {
+                                d1: 0,
+                                d7: 0,
+                                d30: 0,
+                            },
+                            revoked: PeriodCounts {
+                                d1: 0,
+                                d7: 0,
+                                d30: 0,
+                            },
+                        });
+                apply(entry, &c);
+            }
+        };
+    ingest(d1_counts, &|entry, c| {
+        entry.total.d1 = c.total;
+        entry.pending.d1 = c.pending;
+        entry.revoked.d1 = c.revoked;
+    });
+    ingest(d7_counts, &|entry, c| {
+        entry.total.d7 = c.total;
+        entry.pending.d7 = c.pending;
+        entry.revoked.d7 = c.revoked;
+    });
+    ingest(d30_counts, &|entry, c| {
+        entry.total.d30 = c.total;
+        entry.pending.d30 = c.pending;
+        entry.revoked.d30 = c.revoked;
+    });
+    let mut imports: Vec<ImportOriginStats> = by_origin.into_values().collect();
+    imports.sort_by(|a, b| a.origin.cmp(&b.origin));
+    Ok(imports)
 }
 
 fn log_db_file_size() -> u64 {
@@ -271,6 +343,7 @@ mod test {
         assert_eq!(0, res.places.deleted.d1);
         assert_eq!(0, res.places.deleted.d7);
         assert_eq!(0, res.places.deleted.d30);
+        assert!(res.imports.is_empty());
         assert_eq!(0, res.logs.requests.d1);
         assert_eq!(0, res.logs.requests.d7);
         assert_eq!(0, res.logs.requests.d30);
@@ -347,6 +420,105 @@ mod test {
         assert_eq!(0, res.places.deleted.d1);
         assert_eq!(0, res.places.deleted.d7);
         assert_eq!(0, res.places.deleted.d30);
+        Ok(())
+    }
+
+    #[test]
+    async fn counts_imports_by_origin_and_window() -> Result<()> {
+        let pool = pool();
+        let log_pool = log_pool();
+
+        let insert = |origin: &str, external_id: &str| {
+            crate::db::main::place_submission::queries::insert(
+                crate::db::main::place_submission::blocking_queries::InsertArgs {
+                    origin: origin.to_string(),
+                    external_id: external_id.to_string(),
+                    lat: 1.0,
+                    lon: 2.0,
+                    category: "cafe".to_string(),
+                    name: "Place".to_string(),
+                    extra_fields: serde_json::Map::new(),
+                },
+                &pool,
+            )
+        };
+
+        let square_recent_1 = insert("square", "1").await?;
+        let square_recent_2 = insert("square", "2").await?;
+        let square_old = insert("square", "3").await?;
+        let coinos_recent = insert("coinos", "1").await?;
+        let coinos_closed = insert("coinos", "2").await?;
+        let coinos_revoked = insert("coinos", "3").await?;
+        let coinos_old = insert("coinos", "4").await?;
+
+        pool.get()
+            .await?
+            .interact(move |conn| {
+                conn.execute(
+                    "UPDATE place_submission SET created_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+                    rusqlite::params![square_old.id],
+                )?;
+                conn.execute(
+                    "UPDATE place_submission SET created_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+                    rusqlite::params![coinos_old.id],
+                )?;
+                conn.execute(
+                    "UPDATE place_submission SET closed_at = '2024-06-01T00:00:00Z' WHERE id = ?1",
+                    rusqlite::params![coinos_closed.id],
+                )?;
+                conn.execute(
+                    "UPDATE place_submission SET revoked = 1 WHERE id = ?1",
+                    rusqlite::params![coinos_revoked.id],
+                )
+            })
+            .await??;
+
+        let _ = square_recent_1;
+        let _ = square_recent_2;
+        let _ = coinos_recent;
+
+        let res = super::run(&pool, &log_pool).await?;
+        assert_eq!(
+            vec![
+                super::ImportOriginStats {
+                    origin: "coinos".to_string(),
+                    total: super::PeriodCounts {
+                        d1: 3,
+                        d7: 3,
+                        d30: 3
+                    },
+                    pending: super::PeriodCounts {
+                        d1: 1,
+                        d7: 1,
+                        d30: 1
+                    },
+                    revoked: super::PeriodCounts {
+                        d1: 1,
+                        d7: 1,
+                        d30: 1
+                    },
+                },
+                super::ImportOriginStats {
+                    origin: "square".to_string(),
+                    total: super::PeriodCounts {
+                        d1: 2,
+                        d7: 2,
+                        d30: 2
+                    },
+                    pending: super::PeriodCounts {
+                        d1: 2,
+                        d7: 2,
+                        d30: 2
+                    },
+                    revoked: super::PeriodCounts {
+                        d1: 0,
+                        d7: 0,
+                        d30: 0
+                    },
+                },
+            ],
+            res.imports
+        );
         Ok(())
     }
 

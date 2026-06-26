@@ -1,4 +1,4 @@
-use super::schema::{self, Columns, PlaceSubmission};
+use super::schema::{self, Columns, OriginSubmissionCounts, PlaceSubmission};
 use crate::Result;
 use geojson::JsonObject;
 use rusqlite::{named_params, params, Connection, OptionalExtension};
@@ -68,6 +68,44 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         .query_map(params![], PlaceSubmission::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
+}
+
+pub fn select_origin_counts_since(
+    since: OffsetDateTime,
+    conn: &Connection,
+) -> Result<Vec<OriginSubmissionCounts>> {
+    let sql = format!(
+        r#"
+            SELECT
+                {origin} AS origin,
+                COUNT(*) AS total,
+                SUM(CASE WHEN {closed_at} IS NULL AND {revoked} = 0 THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN {revoked} = 1 THEN 1 ELSE 0 END) AS revoked
+            FROM {table}
+            WHERE {created_at} >= ?1
+            GROUP BY {origin}
+            ORDER BY {origin}
+        "#,
+        table = schema::TABLE_NAME,
+        origin = Columns::Origin.as_str(),
+        closed_at = Columns::ClosedAt.as_str(),
+        revoked = Columns::Revoked.as_str(),
+        created_at = Columns::CreatedAt.as_str(),
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![since.format(&Rfc3339)?], |row| {
+        Ok(OriginSubmissionCounts {
+            origin: row.get("origin")?,
+            total: row.get("total")?,
+            pending: row.get("pending")?,
+            revoked: row.get("revoked")?,
+        })
+    })?;
+    let mut res = vec![];
+    for row in rows {
+        res.push(row?);
+    }
+    Ok(res)
 }
 
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<PlaceSubmission> {
@@ -248,6 +286,7 @@ mod test {
     use crate::Result;
     use geojson::JsonObject;
     use serde_json::Map;
+    use time::macros::datetime;
     use time::OffsetDateTime;
 
     #[test]
@@ -431,6 +470,89 @@ mod test {
             updated_at,
             super::select_by_id(submission.id, &conn)?.updated_at,
         );
+        Ok(())
+    }
+
+    #[test]
+    fn select_origin_counts_since_groups_by_origin() -> Result<()> {
+        let conn = conn();
+
+        let insert = |origin: &str, external_id: &str| -> Result<i64> {
+            let args = InsertArgs {
+                origin: origin.to_string(),
+                external_id: external_id.to_string(),
+                lat: 1.0,
+                lon: 2.0,
+                category: "cafe".to_string(),
+                name: "Place".to_string(),
+                extra_fields: Map::new(),
+            };
+            Ok(super::insert(&args, &conn)?.id)
+        };
+
+        let square_recent_1 = insert("square", "1")?;
+        let square_recent_2 = insert("square", "2")?;
+        let square_old = insert("square", "3")?;
+        let coinos_recent = insert("coinos", "1")?;
+        let coinos_closed = insert("coinos", "2")?;
+        let coinos_revoked = insert("coinos", "3")?;
+        let coinos_old = insert("coinos", "4")?;
+
+        for id in [square_old, coinos_old] {
+            conn.execute(
+                "UPDATE place_submission SET created_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+                rusqlite::params![id],
+            )?;
+        }
+
+        super::set_closed_at(coinos_closed, Some(datetime!(2024-06-01 00:00 UTC)), &conn)?;
+        super::set_revoked(coinos_revoked, true, &conn)?;
+
+        let _ = square_recent_1;
+        let _ = square_recent_2;
+        let _ = coinos_recent;
+
+        let counts = super::select_origin_counts_since(datetime!(2024-01-01 00:00 UTC), &conn)?;
+        assert_eq!(
+            vec![
+                super::schema::OriginSubmissionCounts {
+                    origin: "coinos".to_string(),
+                    total: 3,
+                    pending: 1,
+                    revoked: 1,
+                },
+                super::schema::OriginSubmissionCounts {
+                    origin: "square".to_string(),
+                    total: 2,
+                    pending: 2,
+                    revoked: 0,
+                },
+            ],
+            counts
+        );
+
+        let counts = super::select_origin_counts_since(datetime!(2019-01-01 00:00 UTC), &conn)?;
+        assert_eq!(
+            vec![
+                super::schema::OriginSubmissionCounts {
+                    origin: "coinos".to_string(),
+                    total: 4,
+                    pending: 2,
+                    revoked: 1,
+                },
+                super::schema::OriginSubmissionCounts {
+                    origin: "square".to_string(),
+                    total: 3,
+                    pending: 3,
+                    revoked: 0,
+                },
+            ],
+            counts
+        );
+
+        let counts = super::select_origin_counts_since(datetime!(2030-01-01 00:00 UTC), &conn)?;
+        assert!(counts.is_empty());
+
         Ok(())
     }
 }

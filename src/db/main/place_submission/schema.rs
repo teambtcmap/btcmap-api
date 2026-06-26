@@ -61,6 +61,14 @@ pub struct PlaceSubmission {
     pub deleted_at: Option<OffsetDateTime>,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct OriginSubmissionCounts {
+    pub origin: String,
+    pub total: i64,
+    pub pending: i64,
+    pub revoked: i64,
+}
+
 impl PlaceSubmission {
     pub fn projection() -> &'static str {
         static PROJECTION: OnceLock<String> = OnceLock::new();

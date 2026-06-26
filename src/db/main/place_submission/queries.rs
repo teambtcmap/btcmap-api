@@ -1,6 +1,8 @@
 use crate::{
     db::main::place_submission::{
-        blocking_queries, blocking_queries::InsertArgs, schema::PlaceSubmission,
+        blocking_queries,
+        blocking_queries::InsertArgs,
+        schema::{OriginSubmissionCounts, PlaceSubmission},
     },
     Result,
 };
@@ -19,6 +21,16 @@ pub async fn select_open_and_not_revoked(pool: &Pool) -> Result<Vec<PlaceSubmiss
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::select_open_and_not_revoked(conn))
+        .await?
+}
+
+pub async fn select_origin_counts_since(
+    since: OffsetDateTime,
+    pool: &Pool,
+) -> Result<Vec<OriginSubmissionCounts>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_origin_counts_since(since, conn))
         .await?
 }
 
