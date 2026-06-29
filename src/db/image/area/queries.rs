@@ -23,10 +23,15 @@ pub async fn insert(
         .await?
 }
 
-pub async fn select_by_area_id(area_id: i64, pool: &Pool) -> Result<Option<AreaImage>> {
+pub async fn select_by_area_id_and_type(
+    area_id: i64,
+    r#type: &str,
+    pool: &Pool,
+) -> Result<Option<AreaImage>> {
+    let r#type = r#type.to_owned();
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_area_id(area_id, conn))
+        .interact(move |conn| blocking_queries::select_by_area_id_and_type(area_id, &r#type, conn))
         .await?
 }
 

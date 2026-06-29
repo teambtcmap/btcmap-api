@@ -362,6 +362,27 @@ pub fn select_without_icon_square(conn: &Connection) -> Result<Vec<Area>> {
         .map_err(Into::into)
 }
 
+pub fn select_with_icon_square(conn: &Connection) -> Result<Vec<Area>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {deleted_at} IS NULL
+            AND json_extract({tags}, '$.icon:square') IS NOT NULL
+            ORDER BY {id}
+        "#,
+        projection = Area::projection(),
+        table = schema::TABLE_NAME,
+        deleted_at = Columns::DeletedAt.as_str(),
+        tags = Columns::Tags.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map({}, Area::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 #[derive(Debug)]
 pub struct CommunityStats {
     pub id: i64,

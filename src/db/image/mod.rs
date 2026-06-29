@@ -117,6 +117,26 @@ pub mod test {
         conn
     }
 
+    pub fn pool() -> super::ImagePool {
+        use deadpool_sqlite::{Config, Hook, Runtime};
+        let pool_size = std::thread::available_parallelism()
+            .map(|n| n.get() * 2)
+            .unwrap_or(8);
+        let inner = Config::new(":memory:")
+            .builder(Runtime::Tokio1)
+            .unwrap()
+            .max_size(pool_size)
+            .post_create(Hook::Fn(Box::new(|conn, _| {
+                let mut conn = conn.lock().unwrap();
+                super::super::configure_connection(&mut conn);
+                super::run_migrations(&mut conn).unwrap();
+                Ok(())
+            })))
+            .build()
+            .unwrap();
+        super::ImagePool::new(inner)
+    }
+
     #[test]
     fn migrations() {
         let mut conn = Connection::open_in_memory().unwrap();

@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, log::LogPool, main::user::schema::Role, main::MainPool},
+    db::{self, image::ImagePool, log::LogPool, main::user::schema::Role, main::MainPool},
     Result,
 };
 use actix_web::{
@@ -66,6 +66,7 @@ pub enum RpcMethod {
     GenerateReports,
     GetAreaDashboard,
     GenerateAreaBboxes,
+    GenerateAreaIcons,
     // user
     GetUserActivity,
     SetUserTag,
@@ -302,6 +303,7 @@ pub async fn handle(
     req: HttpRequest,
     req_body: String,
     main_pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
     log_pool: Data<LogPool>,
 ) -> Result<Json<RpcResponse>> {
     let headers = req.headers();
@@ -521,6 +523,10 @@ pub async fn handle(
             req.id.clone(),
             super::area::generate_bboxes::run(&main_pool).await?,
         ),
+        RpcMethod::GenerateAreaIcons => RpcResponse::from(
+            req.id.clone(),
+            super::generate_area_icons::run(&main_pool, &image_pool).await?,
+        ),
         // auth
         RpcMethod::Signin => RpcResponse::from(
             req.id.clone(),
@@ -673,7 +679,8 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
 mod test {
     use super::*;
     use crate::{
-        db::log::test::pool as log_pool, db::main::test::pool, service::overpass::OverpassElement,
+        db::{image::test::pool as image_pool, log::test::pool as log_pool, main::test::pool},
+        service::overpass::OverpassElement,
     };
     use actix_web::{
         http::{header, StatusCode},
@@ -690,11 +697,13 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -716,11 +725,13 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -743,11 +754,13 @@ mod test {
         db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -772,11 +785,13 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -801,11 +816,13 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -838,11 +855,13 @@ mod test {
         .await?;
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .wrap(ErrorHandlers::new().default_handler(super::handle_rpc_error))
                 .service(scope("/").service(super::handle)),
         )
@@ -896,11 +915,13 @@ mod test {
         .await?;
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -950,11 +971,13 @@ mod test {
 
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -1011,11 +1034,13 @@ mod test {
 
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -1055,11 +1080,13 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;

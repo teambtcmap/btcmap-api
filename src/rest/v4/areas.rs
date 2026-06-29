@@ -1,4 +1,5 @@
 use crate::db;
+use crate::db::image::ImagePool;
 use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
@@ -8,7 +9,9 @@ use crate::rest::v4::top_editors::{
 };
 use crate::service;
 use crate::Error;
-use actix_web::{delete, get, post, put, web::Data, web::Json, web::Path, web::Query};
+use actix_web::{
+    delete, get, post, put, web::Data, web::Json, web::Path, web::Query, HttpResponse,
+};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -288,6 +291,68 @@ pub async fn get_by_id_top_editors(
     Ok(Json(editors))
 }
 
+#[derive(Deserialize)]
+pub struct GetImageArgs {
+    pub r#type: String,
+}
+
+#[get("{id}/image")]
+pub async fn get_by_id_image(
+    id: Path<String>,
+    args: Query<GetImageArgs>,
+    pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
+) -> Result<HttpResponse, RestApiError> {
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
+    let area = db::main::area::queries::select_by_id_or_alias(id.into_inner(), &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+
+    let image =
+        db::image::area::queries::select_by_area_id_and_type(area.id, &args.r#type, &image_pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+            .ok_or(RestApiError::not_found())?;
+
+    let content_type = content_type_for(&image.image_data)
+        .unwrap_or_else(|| "application/octet-stream".to_string());
+
+    Ok(HttpResponse::Ok()
+        .content_type(content_type)
+        .body(image.image_data))
+}
+
+fn content_type_for(bytes: &[u8]) -> Option<String> {
+    if looks_like_svg(bytes) {
+        return Some("image/svg+xml".to_string());
+    }
+    let format = image::guess_format(bytes).ok()?;
+    Some(
+        match format {
+            image::ImageFormat::Png => "image/png",
+            image::ImageFormat::Jpeg => "image/jpeg",
+            image::ImageFormat::WebP => "image/webp",
+            image::ImageFormat::Bmp => "image/bmp",
+            _ => "application/octet-stream",
+        }
+        .to_string(),
+    )
+}
+
+fn looks_like_svg(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(512)];
+    let Ok(head) = std::str::from_utf8(head) else {
+        return false;
+    };
+    let trimmed = head.trim_start();
+    trimmed.starts_with("<?xml") || trimmed.starts_with("<svg")
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -529,5 +594,210 @@ mod test {
         let res: Vec<TopEditor> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(2, res.len());
         Ok(())
+    }
+
+    #[test]
+    async fn image_returns_404_for_unknown_area() -> Result<()> {
+        let image_pool = crate::db::image::test::pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .app_data(Data::new(image_pool))
+                .service(scope("/areas").service(super::get_by_id_image)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/areas/9999/image?type=square")
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 404);
+        Ok(())
+    }
+
+    #[test]
+    async fn image_returns_404_when_no_cached_image() -> Result<()> {
+        let main_pool = pool();
+        let area = db::main::area::queries::insert(Area::mock_tags(), &main_pool).await?;
+        let image_pool = crate::db::image::test::pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/areas").service(super::get_by_id_image)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}/image?type=square", area.id))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 404);
+        Ok(())
+    }
+
+    #[test]
+    async fn image_returns_cached_png_with_correct_content_type() -> Result<()> {
+        let main_pool = pool();
+        let area = db::main::area::queries::insert(Area::mock_tags(), &main_pool).await?;
+        let image_pool = crate::db::image::test::pool();
+        let png_bytes: Vec<u8> = vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52,
+        ];
+        db::image::area::queries::insert(
+            area.id,
+            "square",
+            png_bytes.clone(),
+            1,
+            1,
+            png_bytes.len() as i64,
+            &image_pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/areas").service(super::get_by_id_image)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}/image?type=square", area.id))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(
+            res.headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok()),
+            Some("image/png")
+        );
+        let body = test::read_body(res).await.to_vec();
+        assert_eq!(body, png_bytes);
+        Ok(())
+    }
+
+    #[test]
+    async fn image_returns_cached_svg_with_correct_content_type() -> Result<()> {
+        let main_pool = pool();
+        let area = db::main::area::queries::insert(Area::mock_tags(), &main_pool).await?;
+        let image_pool = crate::db::image::test::pool();
+        let svg_bytes = br#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"></svg>"#;
+        db::image::area::queries::insert(
+            area.id,
+            "square",
+            svg_bytes.to_vec(),
+            32,
+            32,
+            svg_bytes.len() as i64,
+            &image_pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/areas").service(super::get_by_id_image)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}/image?type=square", area.id))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(
+            res.headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok()),
+            Some("image/svg+xml")
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn image_selects_by_requested_type() -> Result<()> {
+        let main_pool = pool();
+        let area = db::main::area::queries::insert(Area::mock_tags(), &main_pool).await?;
+        let image_pool = crate::db::image::test::pool();
+        let square_bytes: Vec<u8> = vec![1, 2, 3, 4];
+        let wide_bytes: Vec<u8> = vec![5, 6, 7, 8, 9, 10];
+        db::image::area::queries::insert(
+            area.id,
+            "square",
+            square_bytes.clone(),
+            32,
+            32,
+            square_bytes.len() as i64,
+            &image_pool,
+        )
+        .await?;
+        db::image::area::queries::insert(
+            area.id,
+            "wide",
+            wide_bytes.clone(),
+            256,
+            64,
+            wide_bytes.len() as i64,
+            &image_pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/areas").service(super::get_by_id_image)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}/image?type=square", area.id))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(test::read_body(res).await.to_vec(), square_bytes);
+
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}/image?type=wide", area.id))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(test::read_body(res).await.to_vec(), wide_bytes);
+
+        Ok(())
+    }
+
+    #[::core::prelude::v1::test]
+    fn content_type_for_detects_png() {
+        let png_bytes: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        assert_eq!(
+            Some("image/png".to_string()),
+            super::content_type_for(&png_bytes)
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn content_type_for_detects_jpeg() {
+        let jpeg_bytes: Vec<u8> = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        assert_eq!(
+            Some("image/jpeg".to_string()),
+            super::content_type_for(&jpeg_bytes)
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn content_type_for_detects_svg() {
+        let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>";
+        assert_eq!(
+            Some("image/svg+xml".to_string()),
+            super::content_type_for(svg)
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn content_type_for_returns_none_for_unknown() {
+        let bytes = b"definitely not an image";
+        assert_eq!(None, super::content_type_for(bytes));
     }
 }
