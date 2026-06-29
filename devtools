@@ -66,6 +66,16 @@ case "$1" in
         rm -f /tmp/schema_gen.db
         ;;
 
+    gen-image-schema)
+        # Generate schema.sql from migrations using temporary SQLite database
+        rm -f /tmp/schema_gen.db
+        for f in $(ls -1 src/db/image/migrations/*.sql | sort -V); do
+            sqlite3 /tmp/schema_gen.db < "$f" 2>/dev/null
+        done
+        sqlite3 /tmp/schema_gen.db ".dump" > src/db/image/schema.sql
+        rm -f /tmp/schema_gen.db
+        ;;
+
     install-completions)
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         

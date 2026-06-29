@@ -1,3 +1,4 @@
+pub mod area;
 pub mod og;
 
 use super::Migration;
