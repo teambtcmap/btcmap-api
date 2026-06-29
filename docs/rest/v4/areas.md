@@ -8,6 +8,7 @@ This document describes the endpoints for interacting with areas in REST API v4.
 - [Set Saved Areas](#set-saved-areas)
 - [Add Saved Area](#add-saved-area)
 - [Delete Saved Area](#delete-saved-area)
+- [Get Area Image](#get-area-image)
 
 ### Get Saved Areas
 
@@ -239,3 +240,90 @@ curl 'https://api.btcmap.org/v4/areas/grand-paris'
 | `icon` | String or null | `https://static.btcmap.org/images/communities/grand-paris.jpg` | Square icon URL for the area, if set. |
 | `website_url` | String | `https://btcmap.org/community/grand-paris` | URL to the BTC Map page for this area. |
 | `description` | String | `Grand Paris area...` | Area description, if available. |
+
+### Get Area Image
+
+Supports on-the-fly raster resizing so clients can request exactly the
+dimensions they need without downloading a multi-megabyte master asset.
+
+```bash
+curl -o area.png 'https://api.btcmap.org/v4/areas/grand-paris/image?type=square'
+```
+
+#### Path Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `id` | String | `123` or `grand-paris` | **Required**. Area ID (numeric) or alias (url slug). |
+
+#### Query Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `type` | String | `square` | - | **Required**. Which icon variant to fetch (e.g. `square`, `wide`). |
+| `w` | Integer | `256` | source width | Maximum output width in pixels. See [Resizing](#resizing) below. |
+| `h` | Integer | `256` | source height | Maximum output height in pixels. See [Resizing](#resizing) below. |
+
+`w` and `h` must each be greater than `0` when provided; a value of `0`
+returns `400 invalid_input`.
+
+#### Resizing
+
+Both `w` and `h` are optional. They are interpreted as maximum bounds — the
+endpoint never upscales a smaller image.
+
+- Both omitted → original bytes returned unchanged.
+- Only `w` provided → scales `w` to the requested value, `h` derived from the
+  source aspect ratio. Returns the original if the source is already narrower.
+- Only `h` provided → mirror of the above.
+- Both provided → fits the source into the `w`×`h` box, preserving the aspect
+  ratio (smaller of the two ratios wins). If the source already fits, it is
+  returned unchanged.
+
+When the source and target dimensions match, the original bytes are returned
+verbatim — no re-encoding is performed.
+
+Only raster formats that can be both decoded and re-encoded are resized
+(PNG, JPEG, WebP). Other formats are returned as-is:
+
+- **SVG** (vector) → always returned as-is regardless of `w`/`h`, since
+  raster resizing would defeat the point of vector data.
+- **BMP or unknown** → returned as-is; the server cannot re-encode them.
+
+The response `Content-Type` is set from the stored bytes (e.g. `image/png`,
+`image/jpeg`, `image/svg+xml`), so clients can pipe the body straight to
+disk or an `<img>` tag.
+
+#### Examples
+
+##### Fetch an area icon at its native size
+
+```bash
+curl -o square.png 'https://api.btcmap.org/v4/areas/grand-paris/image?type=square'
+```
+
+##### Resize to a thumbnail
+
+```bash
+curl -o thumb.png 'https://api.btcmap.org/v4/areas/grand-paris/image?type=square&w=128&h=128'
+```
+
+This fits the source into a 128×128 box while preserving the aspect ratio.
+
+##### Resize by width only
+
+```bash
+curl -o banner.png 'https://api.btcmap.org/v4/areas/grand-paris/image?type=wide&w=600'
+```
+
+The height is derived from the source aspect ratio; the image is never
+stretched vertically.
+
+##### Upsize requests return the original
+
+```bash
+curl -o big.png 'https://api.btcmap.org/v4/areas/grand-paris/image?type=square&w=4000&h=4000'
+```
+
+If the stored image is smaller than 4000×4000, the original bytes are
+returned unchanged.
