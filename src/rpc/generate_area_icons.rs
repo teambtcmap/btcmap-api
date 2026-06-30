@@ -166,6 +166,17 @@ pub fn decode_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
         .and_then(|reader| reader.into_dimensions().ok())
 }
 
+pub fn detect_ext(bytes: &[u8]) -> Option<&'static str> {
+    if looks_like_svg(bytes) {
+        return Some("svg");
+    }
+    ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()
+        .and_then(|reader| reader.format())
+        .and_then(|fmt| fmt.extensions_str().first().copied())
+}
+
 fn looks_like_svg(bytes: &[u8]) -> bool {
     let head = &bytes[..bytes.len().min(512)];
     let head = match std::str::from_utf8(head) {

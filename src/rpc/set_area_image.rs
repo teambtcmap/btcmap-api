@@ -1,6 +1,6 @@
 use crate::{
     db::{self, image::ImagePool, main::area::schema::Area},
-    Result,
+    Error, Result,
 };
 use base64::prelude::*;
 use deadpool_sqlite::Pool;
@@ -12,9 +12,10 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 pub struct Params {
-    pub id: String,
-    pub icon_base64: String,
-    pub icon_ext: String,
+    pub area_id: String,
+    pub image_base64: String,
+    #[serde(default)]
+    pub image_type: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
@@ -42,9 +43,12 @@ impl From<Area> for Res {
 }
 
 pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
-    let area = db::main::area::queries::select_by_id_or_alias(&params.id, pool).await?;
-    let file_name = format!("{}.{}", area.id, params.icon_ext);
-    let bytes = BASE64_STANDARD.decode(params.icon_base64)?;
+    let area = db::main::area::queries::select_by_id_or_alias(&params.area_id, pool).await?;
+    let image_type = params.image_type.as_deref().unwrap_or("square");
+    let bytes = BASE64_STANDARD.decode(params.image_base64)?;
+    let ext = super::generate_area_icons::detect_ext(&bytes)
+        .ok_or(Error::Other("unsupported image format".into()))?;
+    let file_name = format!("{}_{}.{}", area.id, image_type, ext);
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
@@ -64,7 +68,7 @@ pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<
     if let Some((width, height)) = dims {
         let bytes_len = bytes.len() as i64;
         let existing =
-            db::image::area::queries::select_by_area_id_and_type(area.id, "square", image_pool)
+            db::image::area::queries::select_by_area_id_and_type(area.id, image_type, image_pool)
                 .await?;
 
         if let Some(existing) = &existing {
@@ -74,7 +78,7 @@ pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<
                 db::image::area::queries::delete(existing.id, image_pool).await?;
                 db::image::area::queries::insert(
                     area.id,
-                    "square",
+                    image_type,
                     bytes,
                     width as i64,
                     height as i64,
@@ -86,7 +90,7 @@ pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<
         } else {
             db::image::area::queries::insert(
                 area.id,
-                "square",
+                image_type,
                 bytes,
                 width as i64,
                 height as i64,
@@ -98,7 +102,8 @@ pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<
     }
 
     let url = format!("https://static.btcmap.org/images/areas/{file_name}");
-    let patch_set = Map::from_iter([("icon:square".into(), url.into())]);
+    let tag_key = format!("icon:{image_type}");
+    let patch_set = Map::from_iter([(tag_key, url.into())]);
     let area = db::main::area::queries::patch_tags(area.id, patch_set, pool).await?;
     Ok(area.into())
 }

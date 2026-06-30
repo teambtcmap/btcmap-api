@@ -60,7 +60,13 @@ where
 
         Box::pin(async move {
             let started_at = Instant::now();
-            let body = req.extract::<Bytes>().await.unwrap();
+            let body = match req.extract::<Bytes>().await {
+                Ok(body) => body,
+                Err(err) => {
+                    tracing::warn!(error = %err, "log middleware failed to extract request body");
+                    return Err(err);
+                }
+            };
             let body_str = body.clone();
             let body_str = str::from_utf8(&body_str).ok();
             req.set_payload(bytes_to_payload(body));

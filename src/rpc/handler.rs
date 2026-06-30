@@ -58,7 +58,7 @@ pub enum RpcMethod {
     GetArea,
     SetAreaTag,
     RemoveAreaTag,
-    SetAreaIcon,
+    SetAreaImage,
     RemoveArea,
     GetTrendingCountries,
     GetTrendingCommunities,
@@ -132,8 +132,8 @@ impl Role {
         RpcMethod::SetAreaTag,
         // Admins can remove custom area tags
         RpcMethod::RemoveAreaTag,
-        // Admins can set and override area icons
-        RpcMethod::SetAreaIcon,
+        // Admins can set and override area images
+        RpcMethod::SetAreaImage,
         // Admins can remove any area
         RpcMethod::RemoveArea,
         // Admins can set and override custom user tags
@@ -475,9 +475,9 @@ pub async fn handle(
             req.id.clone(),
             super::remove_area_tag::run(params(req.params)?, &main_pool).await?,
         ),
-        RpcMethod::SetAreaIcon => RpcResponse::from(
+        RpcMethod::SetAreaImage => RpcResponse::from(
             req.id.clone(),
-            super::set_area_icon::run(params(req.params)?, &main_pool, &image_pool).await?,
+            super::set_area_image::run(params(req.params)?, &main_pool, &image_pool).await?,
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),

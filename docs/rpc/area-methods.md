@@ -9,7 +9,7 @@ This document describes the available RPC methods for interacting with geographi
 - [get_area](#get_area) - Retrieve a specific area by ID
 - [set_area_tag](#set_area_tag) - Set a tag on an area
 - [remove_area_tag](#remove_area_tag) - Remove a tag from an area
-- [set_area_icon](#set_area_icon) - Set an icon for an area
+- [set_area_image](#set_area_image) - Set an image for an area
 - [remove_area](#remove_area) - Remove an area
 - [get_trending_countries](#get_trending_countries) - Get trending countries
 - [get_most_commented_countries](#get_most_commented_countries) - Get most commented countries
@@ -164,17 +164,19 @@ Removes a tag from an area.
 }
 ```
 
-### set_area_icon
+### set_area_image
 
-Sets the square icon for an area. The `id` parameter accepts either the numeric area id or its alias.
+Sets an image for an area. The `area_id` parameter accepts either the numeric area id or its alias. The image format is detected from the payload bytes (supports SVG, PNG, WebP, and JPEG).
+
+The optional `image_type` parameter selects which image slot to update; it defaults to `square`. The legacy tag key is `icon:{image_type}` (e.g. `icon:square`, `icon:wide`).
 
 #### Example
 
 ```json
 {
-  "id": 123,
-  "icon_base64": "iVBORw0KGgoAAAANSUhEUgAA...<truncated base64 payload>...AAAElFTkSuQmCC",
-  "icon_ext": "png"
+  "area_id": 123,
+  "image_base64": "iVBORw0KGgoAAAANSUhEUgAA...<truncated base64 payload>...AAAElFTkSuQmCC",
+  "image_type": "wide"
 }
 ```
 
@@ -182,9 +184,9 @@ Sets the square icon for an area. The `id` parameter accepts either the numeric 
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | integer \| string | Area id or alias |
-| `icon_base64` | string | Standard base64 encoding of the icon bytes |
-| `icon_ext` | string | File extension without the leading dot (e.g. `png`, `svg`) |
+| `area_id` | integer \| string | Area id or alias |
+| `image_base64` | string | Standard base64 encoding of the image bytes |
+| `image_type` | string | Optional. Image slot to update; defaults to `square`. Maps to the `icon:{image_type}` legacy tag. |
 
 #### Result
 

@@ -86,6 +86,7 @@ async fn main() -> Result<()> {
             .app_data(Data::new(image_pool.clone()))
             .app_data(Data::new(log_pool.clone()))
             .app_data(Data::new(conf.clone()))
+            .app_data(web::PayloadConfig::new(64 * 1024 * 1024))
             .app_data(Data::new(rest::nostr_auth::ApiBaseUrl(
                 api_base_url.clone(),
             )))
