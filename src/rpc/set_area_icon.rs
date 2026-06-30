@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, main::area::schema::Area},
+    db::{self, image::ImagePool, main::area::schema::Area},
     Result,
 };
 use base64::prelude::*;
@@ -41,7 +41,7 @@ impl From<Area> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
     let area = db::main::area::queries::select_by_id_or_alias(&params.id, pool).await?;
     let file_name = format!("{}.{}", area.id, params.icon_ext);
     let bytes = BASE64_STANDARD.decode(params.icon_base64)?;
@@ -54,6 +54,49 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         ))?;
     file.write_all(&bytes)?;
     file.flush()?;
+
+    let dims = actix_web::web::block({
+        let bytes = bytes.clone();
+        move || super::generate_area_icons::decode_dimensions(&bytes)
+    })
+    .await?;
+
+    if let Some((width, height)) = dims {
+        let bytes_len = bytes.len() as i64;
+        let existing =
+            db::image::area::queries::select_by_area_id_and_type(area.id, "square", image_pool)
+                .await?;
+
+        if let Some(existing) = &existing {
+            if existing.image_data == bytes {
+                // already in sync, skip DB write
+            } else {
+                db::image::area::queries::delete(existing.id, image_pool).await?;
+                db::image::area::queries::insert(
+                    area.id,
+                    "square",
+                    bytes,
+                    width as i64,
+                    height as i64,
+                    bytes_len,
+                    image_pool,
+                )
+                .await?;
+            }
+        } else {
+            db::image::area::queries::insert(
+                area.id,
+                "square",
+                bytes,
+                width as i64,
+                height as i64,
+                bytes_len,
+                image_pool,
+            )
+            .await?;
+        }
+    }
+
     let url = format!("https://static.btcmap.org/images/areas/{file_name}");
     let patch_set = Map::from_iter([("icon:square".into(), url.into())]);
     let area = db::main::area::queries::patch_tags(area.id, patch_set, pool).await?;

@@ -156,7 +156,7 @@ pub async fn run(main_pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
     })
 }
 
-fn decode_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+pub fn decode_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     if looks_like_svg(bytes) {
         return svg_dimensions(bytes);
     }

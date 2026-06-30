@@ -166,33 +166,38 @@ Removes a tag from an area.
 
 ### set_area_icon
 
-Sets an icon for an area.
+Sets the square icon for an area. The `id` parameter accepts either the numeric area id or its alias.
 
-**Required Admin Action**: `area_admin`
-
-#### Request
+#### Example
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "set_area_icon",
-  "params": {
-    "area_id": 123,
-    "icon_url": "https://example.com/icon.png"
-  },
-  "id": 1
+  "id": 123,
+  "icon_base64": "iVBORw0KGgoAAAANSUhEUgAA...<truncated base64 payload>...AAAElFTkSuQmCC",
+  "icon_ext": "png"
 }
 ```
 
-#### Response
+##### Params
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | integer \| string | Area id or alias |
+| `icon_base64` | string | Standard base64 encoding of the icon bytes |
+| `icon_ext` | string | File extension without the leading dot (e.g. `png`, `svg`) |
+
+#### Result
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "result": {
-    "success": true
+  "id": 123,
+  "tags": {
+    "icon:square": "https://static.btcmap.org/images/areas/123.png",
+    "name": "City Center"
   },
-  "id": 1
+  "created_at": "2024-01-15T12:34:56Z",
+  "updated_at": "2024-06-30T08:00:00Z",
+  "deleted_at": null
 }
 ```
 
