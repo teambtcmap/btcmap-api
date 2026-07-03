@@ -241,6 +241,83 @@ pub fn select_top_rest_api_calls(
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
+pub struct PlatformUniqueIps24h {
+    pub web: i64,
+    pub android: i64,
+    pub ios: i64,
+    pub other_humans: i64,
+    pub bots: i64,
+}
+
+pub fn select_platform_unique_ips_24h(conn: &Connection) -> Result<PlatformUniqueIps24h> {
+    // Assign each distinct IP a single platform based on its User-Agent(s) seen in the window:
+    //   1. bot            if any request from the IP matched a known bot signature
+    //   2. android        if any request matched an official Android client UA (current or old fork)
+    //   3. ios            if any request matched an official iOS client UA
+    //   4. web            if any request matched the official web client UA
+    //   5. other_humans   otherwise (regular browsers, curl/scripts with no bot signature,
+    //                      or clients whose UA is missing/empty)
+    // The bucketing is mutually exclusive per IP and prefers the most specific platform match.
+    let sql = format!(
+        r#"
+            WITH ip_ua AS (
+                SELECT DISTINCT {Ip} AS ip,
+                    group_concat(DISTINCT {UserAgent}) AS uas
+                FROM {TABLE}
+                WHERE {Date} >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')
+                GROUP BY {Ip}
+            )
+            SELECT
+                COALESCE(SUM(CASE WHEN classify = 'web' THEN 1 ELSE 0 END), 0) AS web,
+                COALESCE(SUM(CASE WHEN classify = 'android' THEN 1 ELSE 0 END), 0) AS android,
+                COALESCE(SUM(CASE WHEN classify = 'ios' THEN 1 ELSE 0 END), 0) AS ios,
+                COALESCE(SUM(CASE WHEN classify = 'other_humans' THEN 1 ELSE 0 END), 0) AS other_humans,
+                COALESCE(SUM(CASE WHEN classify = 'bots' THEN 1 ELSE 0 END), 0) AS bots
+            FROM (
+                SELECT
+                    CASE
+                        WHEN uas LIKE '%bot%' COLLATE NOCASE
+                          OR uas LIKE '%spider%' COLLATE NOCASE
+                          OR uas LIKE '%crawler%' COLLATE NOCASE
+                          OR uas LIKE 'Zapier%' COLLATE NOCASE
+                          OR uas LIKE 'Twitterbot%' COLLATE NOCASE
+                          OR uas LIKE 'facebookexternalhit%' COLLATE NOCASE
+                          OR uas LIKE 'meta-externalagent%' COLLATE NOCASE
+                          OR uas LIKE 'Applebot%' COLLATE NOCASE
+                          OR uas LIKE 'AhrefsBot%' COLLATE NOCASE
+                          OR uas LIKE 'SemrushBot%' COLLATE NOCASE
+                          OR uas LIKE 'DuckDuckBot%' COLLATE NOCASE
+                          OR uas LIKE 'Bytespider%' COLLATE NOCASE
+                          OR uas LIKE 'btcmap-e2e-tests%' COLLATE NOCASE
+                        THEN 'bots'
+                        WHEN uas LIKE 'BTC Map Android%' OR uas LIKE 'okhttp/5.0.0-alpha.14' THEN 'android'
+                        WHEN uas LIKE '%CFNetwork%' THEN 'ios'
+                        WHEN uas LIKE 'btcmap.org' THEN 'web'
+                        ELSE 'other_humans'
+                    END AS classify
+                FROM ip_ua
+            )
+        "#,
+    );
+    let (web, android, ios, other_humans, bots): (i64, i64, i64, i64, i64) =
+        conn.query_row(&sql, [], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })?;
+    Ok(PlatformUniqueIps24h {
+        web,
+        android,
+        ios,
+        other_humans,
+        bots,
+    })
+}
+
 pub struct TopClientsReport {
     pub web: PlatformClientStats,
     pub android: PlatformClientStats,
@@ -635,6 +712,97 @@ mod test {
         let count = super::select_count_since(now + time::Duration::hours(1), &conn)?;
         assert_eq!(0, count);
 
+        Ok(())
+    }
+
+    #[test]
+    fn select_platform_unique_ips_24h_empty() -> crate::Result<()> {
+        let conn = conn();
+        let report = super::select_platform_unique_ips_24h(&conn)?;
+        assert_eq!(0, report.web);
+        assert_eq!(0, report.android);
+        assert_eq!(0, report.ios);
+        assert_eq!(0, report.other_humans);
+        assert_eq!(0, report.bots);
+        Ok(())
+    }
+
+    #[test]
+    fn select_platform_unique_ips_24h() -> crate::Result<()> {
+        let conn = conn();
+
+        let insert = |ip: &str, ua: Option<&str>| {
+            conn.execute(
+                "INSERT INTO request (ip, user_agent, path, response_code, processing_time_ns, date) VALUES (?1, ?2, '/v4/places', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                rusqlite::params![ip, ua],
+            )
+        };
+
+        // web
+        insert("10.0.0.1", Some("btcmap.org"))?;
+        insert("10.0.0.2", Some("btcmap.org"))?;
+        insert("10.0.0.3", Some("btcmap.org"))?;
+        // android (current)
+        insert("10.0.0.4", Some("BTC Map Android 56"))?;
+        insert("10.0.0.5", Some("BTC Map Android 57"))?;
+        insert("10.0.0.5", Some("BTC Map Android 57"))?;
+        // android (old fork)
+        insert("10.0.0.20", Some("okhttp/5.0.0-alpha.14"))?;
+        insert("10.0.0.21", Some("okhttp/5.0.0-alpha.14"))?;
+        // ios
+        insert(
+            "10.0.0.6",
+            Some("BTCMap/19 CFNetwork/1494.0.7 Darwin/23.4.0"),
+        )?;
+        // other_humans: cli, mobile Safari, NULL UA, browsers
+        insert("10.0.0.7", Some("curl/8.5.0"))?;
+        insert(
+            "10.0.0.8",
+            Some("Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X)"),
+        )?;
+        insert("10.0.0.9", None)?;
+        // bots
+        insert("10.0.0.10", Some("Amazonbot/0.1"))?;
+        insert("10.0.0.11", Some("Mozilla/5.0 (compatible; Googlebot/2.1)"))?;
+        insert("10.0.0.12", Some("Baiduspider-render/2.0"))?;
+        insert("10.0.0.13", Some("btcmap-e2e-tests/1.0"))?;
+        // mixed IP: bot UA once and human UA another time -> bots wins (priority)
+        insert(
+            "10.0.0.14",
+            Some("Mozilla/5.0 (Windows NT 10.0; Chrome/149)"),
+        )?;
+        insert("10.0.0.14", Some("Applebot/0.1"))?;
+        // dedup web IP
+        insert("10.0.0.3", Some("btcmap.org"))?;
+
+        // out-of-window: should not count
+        conn.execute(
+            "INSERT INTO request (ip, user_agent, path, response_code, processing_time_ns, date) VALUES ('10.0.0.99', 'btcmap.org', '/v4/places', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'))",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO request (ip, user_agent, path, response_code, processing_time_ns, date) VALUES ('10.0.0.98', 'okhttp/5.0.0-alpha.14', '/v4/places', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'))",
+            [],
+        )?;
+
+        let report = super::select_platform_unique_ips_24h(&conn)?;
+        assert_eq!(
+            3, report.web,
+            "web counts distinct btcmap.org IPs in the last 24h"
+        );
+        assert_eq!(
+            4, report.android,
+            "android counts distinct IPs across current and old-fork clients (2 + 2)"
+        );
+        assert_eq!(1, report.ios, "ios counts distinct CFNetwork IPs");
+        assert_eq!(
+            3, report.other_humans,
+            "other_humans: curl, mobile Safari, NULL UA"
+        );
+        assert_eq!(
+            5, report.bots,
+            "bots: dedicated bot IPs (4) plus the mixed IP (1) that also did a human request"
+        );
         Ok(())
     }
 }

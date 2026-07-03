@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), counts of imported places grouped by import origin over the same windows (from the `place_submission` table), log database stats (file size, number of logged requests, the 10 most-called RPC methods, and the 10 most-called REST API endpoints over the last 24 hours), disk usage stats for the host's real block devices, on-chain and Lightning channel balances probed from the LND node, and the 10 most recent OSM sync runs recorded in the `sync` log table.
+Returns a high-level analytics dashboard snapshot, including the time the report took to generate, counts of places added, updated, and deleted over the last 1, 7, and 30 days (from the `element_event` log), counts of imported places grouped by import origin over the same windows (from the `place_submission` table), log database stats (file size, number of logged requests, the 10 most-called RPC methods, and the 10 most-called REST API endpoints over the last 24 hours), the number of unique client IP addresses seen in the last 24 hours bucketed by platform (Web, Android, iOS, Other-humans, Bots) detected from the request's `User-Agent` header, disk usage stats for the host's real block devices, on-chain and Lightning channel balances probed from the LND node, and the 10 most recent OSM sync runs recorded in the `sync` log table.
 
 ## Params
 
@@ -107,6 +107,13 @@ Returns a high-level analytics dashboard snapshot, including the time the report
       }
     ]
   },
+  "unique_ips_24h": {
+    "web": 238,
+    "android": 214,
+    "ios": 89,
+    "other_humans": 1668,
+    "bots": 854
+  },
   "storage": {
     "disks": [
       {
@@ -177,6 +184,12 @@ Returns a high-level analytics dashboard snapshot, including the time the report
   - `method`: HTTP method of the request (e.g. `GET`, `POST`); may be empty for requests logged before the `method` column was added
   - `path`: Request path (e.g. `/v2/elements`, `/v4/places/search`)
   - `count`: Number of times this (method, path) combination was called in the window
+- `unique_ips_24h`: Number of unique client IP addresses seen in the last 24 hours, bucketed by the platform inferred from the request's `User-Agent` header. Each IP is counted exactly once, assigned to the most specific bucket it matches. Order of precedence (first match wins): `bots`, `android`, `ios`, `web`, `other_humans`. Contains:
+  - `web`: Distinct IPs whose `User-Agent` is exactly `btcmap.org` (the official web client)
+  - `android`: Distinct IPs whose `User-Agent` starts with `BTC Map Android` (official Android client) or is exactly `okhttp/5.0.0-alpha.14` (an older build of the same client that hasn't been updated to set a custom `User-Agent`)
+  - `ios`: Distinct IPs whose `User-Agent` contains `CFNetwork` (the official iOS client, which identifies as `BTCMap/<version> CFNetwork/...`)
+  - `other_humans`: Distinct IPs whose requests don't match any of the four platform signatures or bot signatures — typically humans browsing btcmap.org in a regular browser (desktop or mobile Safari/Chrome), people using `curl` / `node` / scripts without a bot-like UA, or clients that send no `User-Agent` at all. This is the best proxy for "human traffic that isn't using one of the official apps"
+  - `bots`: Distinct IPs whose requests match a known bot, crawler, link-preview, or test signature. Includes any UA containing `bot`, `spider`, or `crawler` (case-insensitive), plus `Zapier`, `Twitterbot`, `facebookexternalhit`, `meta-externalagent`, `Applebot`, `AhrefsBot`, `SemrushBot`, `DuckDuckBot`, `Bytespider`, and `btcmap-e2e-tests`. Search-engine crawlers (Googlebot, Bingbot, Baiduspider, Sogou, DuckDuckBot, Amazonbot, etc.) fall in this bucket. An IP that sends a mix of bot and non-bot requests in the window is classified as a bot (bots take precedence)
 - `storage.disks`: Disk usage stats for the host's real block devices (e.g. `/dev/sda1`, `/dev/mapper/root`, `/dev/nvme0n1p1`). Virtual filesystems such as `tmpfs`, `devtmpfs`, `sysfs`, `proc`, `overlay`, and `efivarfs` are excluded. Sourced from `df -PB1`. Each entry contains:
   - `device`: Device file path (always starts with `/dev/`)
   - `mount_point`: Where the device is mounted

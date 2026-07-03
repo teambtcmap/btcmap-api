@@ -29,6 +29,7 @@ pub struct Res {
     pub places: PlaceStats,
     pub imports: Vec<ImportOriginStats>,
     pub logs: LogStats,
+    pub unique_ips_24h: PlatformUniqueIps24h,
     pub storage: StorageStats,
     pub lnd: Option<NodeStats>,
     pub sync_runs: Vec<SyncRun>,
@@ -93,6 +94,15 @@ pub struct SyncRun {
     #[serde(with = "time::serde::rfc3339::option")]
     pub failed_at: Option<OffsetDateTime>,
     pub fail_reason: Option<String>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct PlatformUniqueIps24h {
+    pub web: i64,
+    pub android: i64,
+    pub ios: i64,
+    pub other_humans: i64,
+    pub bots: i64,
 }
 
 #[derive(Serialize)]
@@ -202,6 +212,14 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
             None
         }
     };
+    let raw_unique_ips = log_request_queries::select_platform_unique_ips_24h(log_pool).await?;
+    let unique_ips_24h = PlatformUniqueIps24h {
+        web: raw_unique_ips.web,
+        android: raw_unique_ips.android,
+        ios: raw_unique_ips.ios,
+        other_humans: raw_unique_ips.other_humans,
+        bots: raw_unique_ips.bots,
+    };
     Ok(Res {
         started_at,
         finished_at,
@@ -209,6 +227,7 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         places,
         imports,
         logs,
+        unique_ips_24h,
         storage: StorageStats {
             disks: storage_stats(),
         },
@@ -351,7 +370,150 @@ mod test {
         assert!(res.logs.top_rest_api_calls.is_empty());
         assert!(res.sync_runs.is_empty());
         assert!(res.lnd.is_none());
+        assert_eq!(0, res.unique_ips_24h.web);
+        assert_eq!(0, res.unique_ips_24h.android);
+        assert_eq!(0, res.unique_ips_24h.ios);
+        assert_eq!(0, res.unique_ips_24h.other_humans);
+        assert_eq!(0, res.unique_ips_24h.bots);
         assert!(res.finished_at >= res.started_at);
+        Ok(())
+    }
+
+    #[test]
+    async fn counts_unique_ips_per_platform_in_last_24h() -> Result<()> {
+        let pool = pool();
+        let log_pool = log_pool();
+
+        async fn insert_now(
+            log_pool: &crate::db::log::LogPool,
+            ip: String,
+            ua: Option<String>,
+            path: String,
+        ) -> Result<()> {
+            log_pool
+                .get()
+                .await?
+                .interact(move |conn| {
+                    conn.execute(
+                        "INSERT INTO request (ip, user_agent, path, response_code, processing_time_ns, date) VALUES (?1, ?2, ?3, 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+                        rusqlite::params![ip, ua, path],
+                    )?;
+                    Ok::<(), crate::Error>(())
+                })
+                .await??;
+            Ok(())
+        }
+
+        async fn insert_offset(
+            log_pool: &crate::db::log::LogPool,
+            ip: String,
+            ua: Option<String>,
+            path: String,
+            offset: String,
+        ) -> Result<()> {
+            log_pool
+                .get()
+                .await?
+                .interact(move |conn| {
+                    conn.execute(
+                        "INSERT INTO request (ip, user_agent, path, response_code, processing_time_ns, date) VALUES (?1, ?2, ?3, 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?4))",
+                        rusqlite::params![ip, ua, path, offset],
+                    )?;
+                    Ok::<(), crate::Error>(())
+                })
+                .await??;
+            Ok(())
+        }
+
+        insert_now(
+            &log_pool,
+            "10.0.0.1".to_string(),
+            Some("btcmap.org".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        insert_now(
+            &log_pool,
+            "10.0.0.2".to_string(),
+            Some("btcmap.org".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        insert_now(
+            &log_pool,
+            "10.0.0.2".to_string(),
+            Some("btcmap.org".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        insert_now(
+            &log_pool,
+            "10.0.0.3".to_string(),
+            Some("BTC Map Android 56".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        // Old android fork is still classified as android
+        insert_now(
+            &log_pool,
+            "10.0.0.30".to_string(),
+            Some("okhttp/5.0.0-alpha.14".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        insert_now(
+            &log_pool,
+            "10.0.0.4".to_string(),
+            Some("BTCMap/19 CFNetwork/1494.0.7 Darwin/23.4.0".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        // other_humans: cli + NULL UA
+        insert_now(
+            &log_pool,
+            "10.0.0.5".to_string(),
+            Some("curl/8.5.0".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        insert_now(
+            &log_pool,
+            "10.0.0.6".to_string(),
+            None,
+            "/v4/places".to_string(),
+        )
+        .await?;
+        // bots
+        insert_now(
+            &log_pool,
+            "10.0.0.7".to_string(),
+            Some("Amazonbot/0.1".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        insert_now(
+            &log_pool,
+            "10.0.0.8".to_string(),
+            Some("Mozilla/5.0 (compatible; Googlebot/2.1)".to_string()),
+            "/v4/places".to_string(),
+        )
+        .await?;
+        // out-of-window: should be ignored
+        insert_offset(
+            &log_pool,
+            "10.0.0.99".to_string(),
+            Some("btcmap.org".to_string()),
+            "/v4/places".to_string(),
+            "-2 days".to_string(),
+        )
+        .await?;
+
+        let res = super::run(&pool, &log_pool).await?;
+        assert_eq!(2, res.unique_ips_24h.web);
+        assert_eq!(2, res.unique_ips_24h.android, "current + old fork");
+        assert_eq!(1, res.unique_ips_24h.ios);
+        assert_eq!(2, res.unique_ips_24h.other_humans);
+        assert_eq!(2, res.unique_ips_24h.bots);
         Ok(())
     }
 
