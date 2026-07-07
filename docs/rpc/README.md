@@ -15,6 +15,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 - [Log Methods](log/README.md) - Methods for log analysis and infrastructure reporting
 - [Invoice Methods](invoice-methods.md) - Methods for handling payments
 - [Search Methods](search-methods.md) - Methods for searching
+- [get_wallets](get_wallets.md) - Aggregate on-chain balance for the project wallets
 
 ## Authentication
 

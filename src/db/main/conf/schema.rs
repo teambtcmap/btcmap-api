@@ -14,6 +14,9 @@ pub enum Columns {
     LndInvoicesMacaroon,
     LndReadonlyMacaroon,
     PpqKey,
+    XpubSpending,
+    XpubDonations,
+    XpubTreasury,
 }
 
 impl Columns {
@@ -29,6 +32,9 @@ impl Columns {
             Columns::LndInvoicesMacaroon => "lnd_invoices_macaroon",
             Columns::LndReadonlyMacaroon => "lnd_readonly_macaroon",
             Columns::PpqKey => "ppq_key",
+            Columns::XpubSpending => "xpub_spending",
+            Columns::XpubDonations => "xpub_donations",
+            Columns::XpubTreasury => "xpub_treasury",
         }
     }
 }
@@ -46,6 +52,9 @@ pub struct Conf {
     pub lnd_invoices_macaroon: String,
     pub lnd_readonly_macaroon: String,
     pub ppq_key: String,
+    pub xpub_spending: String,
+    pub xpub_donations: String,
+    pub xpub_treasury: String,
 }
 
 impl Conf {
@@ -63,6 +72,9 @@ impl Conf {
                 Columns::LndInvoicesMacaroon,
                 Columns::LndReadonlyMacaroon,
                 Columns::PpqKey,
+                Columns::XpubSpending,
+                Columns::XpubDonations,
+                Columns::XpubTreasury,
             ]
             .iter()
             .map(Columns::as_str)
@@ -88,6 +100,9 @@ impl Conf {
                 lnd_invoices_macaroon: row.get(Columns::LndInvoicesMacaroon.as_str())?,
                 lnd_readonly_macaroon: row.get(Columns::LndReadonlyMacaroon.as_str())?,
                 ppq_key: row.get(Columns::PpqKey.as_str())?,
+                xpub_spending: row.get(Columns::XpubSpending.as_str())?,
+                xpub_donations: row.get(Columns::XpubDonations.as_str())?,
+                xpub_treasury: row.get(Columns::XpubTreasury.as_str())?,
             })
         }
     }

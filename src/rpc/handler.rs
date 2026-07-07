@@ -98,6 +98,7 @@ pub enum RpcMethod {
     GetDailyInfraReport,
     GetTopClients,
     Dashboard,
+    GetWallets,
 }
 
 impl Role {
@@ -162,6 +163,8 @@ impl Role {
         RpcMethod::GetTopClients,
         // Admins can query the analytics dashboard
         RpcMethod::Dashboard,
+        // Admins can query wallet balances for the xpubs configured in the conf table
+        RpcMethod::GetWallets,
     ];
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
@@ -651,6 +654,9 @@ pub async fn handle(
             req.id.clone(),
             super::analytics::dashboard::run(&main_pool, &log_pool).await?,
         ),
+        RpcMethod::GetWallets => {
+            RpcResponse::from(req.id.clone(), super::get_wallets::run(&main_pool).await?)
+        }
     }?;
 
     Ok(Json(res))

@@ -19,6 +19,7 @@ pub mod get_most_active_users;
 pub mod get_trending_communities;
 pub mod get_trending_countries;
 pub mod get_user_activity;
+pub mod get_wallets;
 pub mod handler;
 pub mod humanize_opening_hours;
 pub mod import;

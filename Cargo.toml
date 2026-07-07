@@ -120,3 +120,7 @@ names = "0.14.0"
 # HTTP auth extractor
 # https://crates.io/crates/nostr
 nostr = { version = "0.44.3", default-features = false, features = ["std"] }
+
+# Used to query Bitcoin wallet balances from xpubs via a public Electrum server
+# https://github.com/bitcoindevkit/rust-electrum-client/releases
+electrum-client = { version = "0.25.0", default-features = false, features = ["use-rustls"] }
