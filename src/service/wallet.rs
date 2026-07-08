@@ -76,7 +76,8 @@ fn sum_xpubs(client: &mut Client, xpubs: &str) -> Result<i64> {
 fn xpub_balance(client: &mut Client, xpub: &str) -> Result<i64> {
     let (kind, xpub) = parse_xpub(xpub)?;
     let secp = Secp256k1::new();
-    let mut total: i64 = 0;
+    let mut scripts: Vec<electrum_client::bitcoin::ScriptBuf> =
+        Vec::with_capacity((GAP_LIMIT as usize) * 2);
 
     for chain in 0..2 {
         for index in 0..GAP_LIMIT {
@@ -90,15 +91,23 @@ fn xpub_balance(client: &mut Client, xpub: &str) -> Result<i64> {
                 .derive_pub(&secp, &path)
                 .map_err(|e| crate::Error::Other(format!("xpub derivation failed: {}", e)))?;
             let compressed = child.to_pub();
-            let script = script_for_kind(kind, &compressed);
-            let balance = client.script_get_balance(&script)?;
-            let sat = (balance.confirmed as i64)
-                .checked_add(balance.unconfirmed)
-                .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
-            total = total
-                .checked_add(sat)
-                .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
+            scripts.push(script_for_kind(kind, &compressed));
         }
+    }
+
+    let refs: Vec<&electrum_client::bitcoin::Script> = scripts
+        .iter()
+        .map(|s| s.as_ref())
+        .collect();
+    let balances = client.batch_script_get_balance(&refs)?;
+    let mut total: i64 = 0;
+    for balance in balances {
+        let sat = (balance.confirmed as i64)
+            .checked_add(balance.unconfirmed)
+            .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
+        total = total
+            .checked_add(sat)
+            .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
     }
     Ok(total)
 }
