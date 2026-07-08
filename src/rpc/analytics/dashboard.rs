@@ -7,6 +7,7 @@ use crate::db::main::place_submission::schema::OriginSubmissionCounts;
 use crate::db::main::MainPool;
 use crate::service::lnd;
 use crate::service::lnd::NodeStats;
+use crate::service::wallet;
 use crate::Result;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -33,6 +34,7 @@ pub struct Res {
     pub storage: StorageStats,
     pub lnd: Option<NodeStats>,
     pub sync_runs: Vec<SyncRun>,
+    pub wallets: Wallets,
 }
 
 #[derive(Serialize)]
@@ -94,6 +96,13 @@ pub struct SyncRun {
     #[serde(with = "time::serde::rfc3339::option")]
     pub failed_at: Option<OffsetDateTime>,
     pub fail_reason: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct Wallets {
+    pub spending: i64,
+    pub donations: i64,
+    pub treasury: i64,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -212,6 +221,21 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
             None
         }
     };
+    let wallets = match wallet::run(pool).await {
+        Ok(stats) => Wallets {
+            spending: stats.spending,
+            donations: stats.donations,
+            treasury: stats.treasury,
+        },
+        Err(err) => {
+            warn!(%err, "failed to fetch wallet stats");
+            Wallets {
+                spending: 0,
+                donations: 0,
+                treasury: 0,
+            }
+        }
+    };
     let raw_unique_ips = log_request_queries::select_platform_unique_ips_24h(log_pool).await?;
     let unique_ips_24h = PlatformUniqueIps24h {
         web: raw_unique_ips.web,
@@ -233,6 +257,7 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         },
         lnd,
         sync_runs,
+        wallets,
     })
 }
 
@@ -370,6 +395,9 @@ mod test {
         assert!(res.logs.top_rest_api_calls.is_empty());
         assert!(res.sync_runs.is_empty());
         assert!(res.lnd.is_none());
+        assert_eq!(0, res.wallets.spending);
+        assert_eq!(0, res.wallets.donations);
+        assert_eq!(0, res.wallets.treasury);
         assert_eq!(0, res.unique_ips_24h.web);
         assert_eq!(0, res.unique_ips_24h.android);
         assert_eq!(0, res.unique_ips_24h.ios);
