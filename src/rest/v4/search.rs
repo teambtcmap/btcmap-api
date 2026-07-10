@@ -220,7 +220,9 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
         .map(|it| it.result)
         .collect();
 
-    let total = total.max(0) as u32;
+    // Saturating conversion: `total` is bounded by the table size in practice, but
+    // clamp rather than let `as u32` silently wrap if a count ever exceeds u32::MAX.
+    let total = total.clamp(0, u32::MAX as i64) as u32;
 
     Ok(Json(SearchResponse {
         results,
