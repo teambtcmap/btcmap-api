@@ -508,9 +508,15 @@ pub fn select_by_tag_value_search(
     conn: &Connection,
 ) -> Result<Vec<RankedElement>> {
     let words = split_words(query);
+    // Rank and order on the same name the response shows — `name(Some("en"))`,
+    // i.e. name:en when present, else the raw name. Ranking on the raw name while
+    // displaying name:en both mis-ranks localized matches and, because the DB
+    // order must equal the in-memory merge order for the reslice to be correct,
+    // could drop a row at a page boundary. The `IS NOT NULL` gate in the
+    // predicate stays on the raw name, so this COALESCE is never null.
     let name = format!(
-        "json_extract({}, '$.tags.name')",
-        Columns::OverpassData.as_str()
+        r#"COALESCE(NULLIF(json_extract({od}, '$.tags."name:en"'), ''), json_extract({od}, '$.tags.name'))"#,
+        od = Columns::OverpassData.as_str(),
     );
     let sql = format!(
         r#"
@@ -1095,6 +1101,30 @@ mod test {
             2,
             super::select_by_tag_value_search("hamburg", None, 2, &conn)?.len()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_ranks_by_localized_name() -> Result<()> {
+        let conn = conn();
+        // Raw name doesn't match "cafe", but the displayed name (name:en) is an
+        // exact match. It must rank as exact (0), above a prefix hit, not be
+        // demoted to an other-tag hit (3) because the raw name was consulted.
+        let localized_exact = insert_place(
+            1,
+            &[("name", "Kaffee"), ("name:en", "Cafe")],
+            53.5,
+            9.9,
+            &conn,
+        );
+        let prefix = insert_place(2, &[("name", "Cafe Central")], 53.6, 9.8, &conn);
+        let ranked = super::select_by_tag_value_search("cafe", None, 100, &conn)?;
+        let by_id: std::collections::HashMap<i64, i64> =
+            ranked.iter().map(|r| (r.element.id, r.rank)).collect();
+        assert_eq!(Some(&0), by_id.get(&localized_exact.id));
+        assert_eq!(Some(&1), by_id.get(&prefix.id));
+        // Exact localized match sorts first.
+        assert_eq!(localized_exact.id, ranked[0].element.id);
         Ok(())
     }
 
