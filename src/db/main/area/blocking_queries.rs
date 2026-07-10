@@ -1,9 +1,12 @@
 use super::schema;
 use super::schema::Area;
 use super::schema::Columns;
+use crate::service::search::{escape_like, split_words};
 use crate::Result;
 use geojson::GeoJson;
 use rusqlite::params;
+use rusqlite::params_from_iter;
+use rusqlite::types::Value as SqlValue;
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 use time::format_description::well_known::Rfc3339;
@@ -498,6 +501,114 @@ pub fn select_top_areas_by_type(conn: &Connection, area_type: &str) -> Result<Ve
     Ok(results)
 }
 
+/// The `bbox_*` columns default to the whole world, which is indistinguishable
+/// from "never set". Reported as `None` rather than inviting a client to fly the
+/// map to the entire planet.
+const WORLD_BBOX: [f64; 4] = [-180.0, -90.0, 180.0, 90.0];
+
+#[derive(Debug, PartialEq)]
+pub struct RankedArea {
+    pub id: i64,
+    pub name: String,
+    pub alias: Option<String>,
+    pub bbox: Option<[f64; 4]>,
+    pub rank: i64,
+}
+
+/// Matches name and alias only. An area's `tags` hold its full `geo_json`
+/// polygon, so matching tag values here would substring-match coordinate digits.
+fn search_predicate(word_count: usize, first_word_param: usize) -> String {
+    let name = format!("json_extract({}, '$.name')", Columns::Tags.as_str());
+    let alias = Columns::Alias.as_str();
+    let mut words = String::new();
+    for i in 0..word_count {
+        let param = first_word_param + i;
+        words.push_str(&format!(
+            r#"
+            AND ({name} LIKE ?{param} ESCAPE '\' OR {alias} LIKE ?{param} ESCAPE '\')"#
+        ));
+    }
+    format!(
+        "{deleted_at} IS NULL AND {name} IS NOT NULL{words}",
+        deleted_at = Columns::DeletedAt.as_str(),
+    )
+}
+
+fn word_patterns(words: &[String]) -> impl Iterator<Item = SqlValue> + '_ {
+    words
+        .iter()
+        .map(|word| SqlValue::Text(format!("%{}%", escape_like(word))))
+}
+
+pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Result<Vec<RankedArea>> {
+    let words = split_words(query);
+    let name = format!("json_extract({}, '$.name')", Columns::Tags.as_str());
+    let sql = format!(
+        r#"
+            SELECT {id}, {alias}, {bbox_west}, {bbox_south}, {bbox_east}, {bbox_north},
+                   {name} AS name,
+              CASE
+                WHEN {name} = ?1 COLLATE NOCASE THEN 0
+                WHEN {name} LIKE ?2 ESCAPE '\' THEN 1
+                WHEN {name} LIKE ?3 ESCAPE '\' THEN 2
+                ELSE 3
+              END AS search_rank
+            FROM {table}
+            WHERE {predicate}
+            ORDER BY search_rank, LENGTH(name), name
+            LIMIT ?4
+        "#,
+        id = Columns::Id.as_str(),
+        alias = Columns::Alias.as_str(),
+        bbox_west = Columns::BboxWest.as_str(),
+        bbox_south = Columns::BboxSouth.as_str(),
+        bbox_east = Columns::BboxEast.as_str(),
+        bbox_north = Columns::BboxNorth.as_str(),
+        table = schema::TABLE_NAME,
+        predicate = search_predicate(words.len(), 5),
+    );
+
+    let escaped = escape_like(query);
+    let mut values = vec![
+        SqlValue::Text(query.to_string()),
+        SqlValue::Text(format!("{escaped}%")),
+        SqlValue::Text(format!("%{escaped}%")),
+        SqlValue::Integer(row_limit),
+    ];
+    values.extend(word_patterns(&words));
+
+    conn.prepare(&sql)?
+        .query_map(params_from_iter(values), |row| {
+            let bbox = [
+                row.get::<_, f64>(Columns::BboxWest.as_str())?,
+                row.get::<_, f64>(Columns::BboxSouth.as_str())?,
+                row.get::<_, f64>(Columns::BboxEast.as_str())?,
+                row.get::<_, f64>(Columns::BboxNorth.as_str())?,
+            ];
+            Ok(RankedArea {
+                id: row.get(Columns::Id.as_str())?,
+                name: row.get("name")?,
+                alias: row.get(Columns::Alias.as_str())?,
+                bbox: (bbox != WORLD_BBOX).then_some(bbox),
+                rank: row.get("search_rank")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn count_by_search(query: &str, conn: &Connection) -> Result<i64> {
+    let words = split_words(query);
+    let sql = format!(
+        "SELECT COUNT(*) FROM {table} WHERE {predicate}",
+        table = schema::TABLE_NAME,
+        predicate = search_predicate(words.len(), 1),
+    );
+    let values: Vec<SqlValue> = word_patterns(&words).collect();
+    conn.query_row(&sql, params_from_iter(values), |row| row.get(0))
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use super::schema::Area;
@@ -718,6 +829,119 @@ mod test {
         let conn = conn();
         let area = super::insert(Area::mock_tags(), &conn)?;
         assert_eq!(area.tags["url_alias"], area.alias());
+        Ok(())
+    }
+
+    fn insert_named_area(
+        name: &str,
+        alias: &str,
+        geo_json: serde_json::Value,
+        conn: &rusqlite::Connection,
+    ) -> Area {
+        let mut tags = Map::new();
+        tags.insert("name".into(), serde_json::Value::String(name.into()));
+        tags.insert("url_alias".into(), serde_json::Value::String(alias.into()));
+        tags.insert("geo_json".into(), geo_json);
+        super::insert(tags, conn).unwrap()
+    }
+
+    fn point_geo_json(lon: f64, lat: f64) -> serde_json::Value {
+        json!({
+            "type": "Feature",
+            "properties": {},
+            "geometry": { "type": "Point", "coordinates": [lon, lat] }
+        })
+    }
+
+    fn area_search(query: &str, conn: &rusqlite::Connection) -> Vec<i64> {
+        super::select_by_search(query, 100, conn)
+            .unwrap()
+            .into_iter()
+            .map(|it| it.id)
+            .collect()
+    }
+
+    #[test]
+    fn area_search_matches_name() -> Result<()> {
+        let conn = conn();
+        let hit = insert_named_area("Hamburg", "hamburg", point_geo_json(9.99, 53.55), &conn);
+        insert_named_area("Berlin", "berlin", point_geo_json(13.4, 52.5), &conn);
+        assert_eq!(vec![hit.id], area_search("hamburg", &conn));
+        Ok(())
+    }
+
+    #[test]
+    fn area_search_matches_alias() -> Result<()> {
+        let conn = conn();
+        let hit = insert_named_area(
+            "Grand Paris",
+            "grand-paris",
+            point_geo_json(2.35, 48.85),
+            &conn,
+        );
+        assert_eq!(vec![hit.id], area_search("grand-paris", &conn));
+        Ok(())
+    }
+
+    #[test]
+    fn area_search_never_matches_geo_json() -> Result<()> {
+        let conn = conn();
+        insert_named_area("Hamburg", "hamburg", point_geo_json(9.99, 53.55), &conn);
+        // "9.9" appears in the polygon coordinates but nowhere in name or alias.
+        assert!(area_search("9.9", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn area_search_requires_all_words() -> Result<()> {
+        let conn = conn();
+        let hit = insert_named_area(
+            "Grand Paris",
+            "grand-paris",
+            point_geo_json(2.35, 48.85),
+            &conn,
+        );
+        assert_eq!(vec![hit.id], area_search("grand paris", &conn));
+        assert!(area_search("grand tokyo", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn area_search_reports_world_bbox_as_none() -> Result<()> {
+        let conn = conn();
+        insert_named_area("Hamburg", "hamburg", point_geo_json(9.99, 53.55), &conn);
+        let ranked = super::select_by_search("hamburg", 100, &conn)?;
+        // `insert` does not populate bbox columns, so they keep the world defaults.
+        assert_eq!(None, ranked[0].bbox);
+        assert_eq!(Some("hamburg".to_string()), ranked[0].alias);
+        Ok(())
+    }
+
+    #[test]
+    fn area_search_ranks_exact_name_first() -> Result<()> {
+        let conn = conn();
+        let exact = insert_named_area("Hamburg", "hamburg", point_geo_json(9.99, 53.55), &conn);
+        let prefix = insert_named_area(
+            "Hamburg Nord",
+            "hamburg-nord",
+            point_geo_json(9.99, 53.6),
+            &conn,
+        );
+        assert_eq!(vec![exact.id, prefix.id], area_search("hamburg", &conn));
+        Ok(())
+    }
+
+    #[test]
+    fn count_by_search_counts_all_matches() -> Result<()> {
+        let conn = conn();
+        insert_named_area("Hamburg", "hamburg", point_geo_json(9.99, 53.55), &conn);
+        insert_named_area(
+            "Hamburg Nord",
+            "hamburg-nord",
+            point_geo_json(9.99, 53.6),
+            &conn,
+        );
+        assert_eq!(2, super::count_by_search("hamburg", &conn)?);
         Ok(())
     }
 }

@@ -1,7 +1,9 @@
 use super::schema::{self, Columns, Element};
 use crate::db::main::area_element::schema::{self as area_element_schema};
+use crate::service::search::{escape_like, split_words};
 use crate::{service::overpass::OverpassElement, Result};
-use rusqlite::{named_params, params, Connection};
+use rusqlite::types::Value as SqlValue;
+use rusqlite::{named_params, params, params_from_iter, Connection};
 use serde_json::{Map, Value};
 use time::{format_description::well_known::Rfc3339, Date, OffsetDateTime};
 
@@ -450,8 +452,134 @@ pub fn set_deleted_at(
     select_by_id(id, conn)
 }
 
+#[derive(Debug, PartialEq)]
+pub struct RankedElement {
+    pub element: Element,
+    pub rank: i64,
+}
+
+/// Shared predicate for both the select and the count. `first_word_param` is the
+/// 1-based index of the first `?N` placeholder that holds a word pattern, so the
+/// two callers can bind different numbers of leading parameters.
+///
+/// `json_type(...) = 'object'` guards `json_each` against a NULL argument for
+/// elements with no tags: SQLite does not promise `WHERE`-clause evaluation
+/// order, so the `name IS NOT NULL` check cannot be relied on to shield it.
+fn tag_value_predicate(word_count: usize, first_word_param: usize) -> String {
+    let mut words = String::new();
+    for i in 0..word_count {
+        words.push_str(&format!(
+            r#"
+            AND EXISTS (
+                SELECT 1 FROM json_each(json_extract({table}.{overpass_data}, '$.tags')) t
+                WHERE t.type = 'text' AND t.value LIKE ?{param} ESCAPE '\'
+            )"#,
+            table = schema::TABLE_NAME,
+            overpass_data = Columns::OverpassData.as_str(),
+            param = first_word_param + i,
+        ));
+    }
+    format!(
+        r#"{deleted_at} IS NULL
+            AND {lat} IS NOT NULL
+            AND {lon} IS NOT NULL
+            AND json_type({overpass_data}, '$.tags') = 'object'
+            AND json_extract({overpass_data}, '$.tags.name') IS NOT NULL{words}"#,
+        deleted_at = Columns::DeletedAt.as_str(),
+        lat = Columns::Lat.as_str(),
+        lon = Columns::Lon.as_str(),
+        overpass_data = Columns::OverpassData.as_str(),
+    )
+}
+
+fn word_patterns(words: &[String]) -> impl Iterator<Item = SqlValue> + '_ {
+    words
+        .iter()
+        .map(|word| SqlValue::Text(format!("%{}%", escape_like(word))))
+}
+
+/// Matches `query` against every OSM tag **value** (never a key), requiring every
+/// word to match some value. Ranks exact name hits above prefix, above infix,
+/// above a hit on any other tag. `location` breaks rank ties by proximity.
+pub fn select_by_tag_value_search(
+    query: &str,
+    location: Option<(f64, f64)>,
+    row_limit: i64,
+    conn: &Connection,
+) -> Result<Vec<RankedElement>> {
+    let words = split_words(query);
+    let name = format!(
+        "json_extract({}, '$.tags.name')",
+        Columns::OverpassData.as_str()
+    );
+    let sql = format!(
+        r#"
+            SELECT {projection},
+              CASE
+                WHEN {name} = ?1 COLLATE NOCASE THEN 0
+                WHEN {name} LIKE ?2 ESCAPE '\' THEN 1
+                WHEN {name} LIKE ?3 ESCAPE '\' THEN 2
+                ELSE 3
+              END AS search_rank
+            FROM {table}
+            WHERE {predicate}
+            ORDER BY search_rank,
+                     CASE WHEN ?6 = 1
+                          THEN ({lat} - ?4) * ({lat} - ?4) + ({lon} - ?5) * ({lon} - ?5)
+                          ELSE 0 END,
+                     LENGTH({name}),
+                     {name}
+            LIMIT ?7
+        "#,
+        projection = Element::projection(),
+        table = schema::TABLE_NAME,
+        predicate = tag_value_predicate(words.len(), 8),
+        lat = Columns::Lat.as_str(),
+        lon = Columns::Lon.as_str(),
+    );
+
+    let escaped = escape_like(query);
+    let (lat, lon, has_location) = match location {
+        Some((lat, lon)) => (lat, lon, 1),
+        None => (0.0, 0.0, 0),
+    };
+    let mut values = vec![
+        SqlValue::Text(query.to_string()),
+        SqlValue::Text(format!("{escaped}%")),
+        SqlValue::Text(format!("%{escaped}%")),
+        SqlValue::Real(lat),
+        SqlValue::Real(lon),
+        SqlValue::Integer(has_location),
+        SqlValue::Integer(row_limit),
+    ];
+    values.extend(word_patterns(&words));
+
+    conn.prepare(&sql)?
+        .query_map(params_from_iter(values), |row| {
+            Ok(RankedElement {
+                element: Element::mapper()(row)?,
+                rank: row.get("search_rank")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn count_by_tag_value_search(query: &str, conn: &Connection) -> Result<i64> {
+    let words = split_words(query);
+    let sql = format!(
+        "SELECT COUNT(*) FROM {table} WHERE {predicate}",
+        table = schema::TABLE_NAME,
+        predicate = tag_value_predicate(words.len(), 1),
+    );
+    let values: Vec<SqlValue> = word_patterns(&words).collect();
+    conn.query_row(&sql, params_from_iter(values), |row| row.get(0))
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
+    use super::schema::Element;
     use crate::db::main::test::conn;
     use crate::service::overpass::OverpassElement;
     use crate::Error;
@@ -768,5 +896,213 @@ mod test {
         let element2 = super::insert(&OverpassElement::mock(2), &conn).unwrap();
         let result = super::select_by_ids(&[element1.id, element2.id], &conn).unwrap();
         assert_eq!(2, result.len());
+    }
+
+    fn insert_place(
+        id: i64,
+        tags: &[(&str, &str)],
+        lat: f64,
+        lon: f64,
+        conn: &rusqlite::Connection,
+    ) -> Element {
+        let element = super::insert(&OverpassElement::mock_with_tags(id, tags), conn).unwrap();
+        super::set_lat_lon(element.id, lat, lon, conn).unwrap()
+    }
+
+    fn search(query: &str, conn: &rusqlite::Connection) -> Vec<Element> {
+        super::select_by_tag_value_search(query, None, 100, conn)
+            .unwrap()
+            .into_iter()
+            .map(|it| it.element)
+            .collect()
+    }
+
+    #[test]
+    fn tag_value_search_matches_address_city() -> Result<()> {
+        let conn = conn();
+        let hit = insert_place(
+            1,
+            &[("name", "Kaffeeklatsch"), ("addr:city", "Hamburg")],
+            53.5,
+            9.9,
+            &conn,
+        );
+        insert_place(
+            2,
+            &[("name", "Elsewhere"), ("addr:city", "Berlin")],
+            52.5,
+            13.4,
+            &conn,
+        );
+        assert_eq!(vec![hit], search("hamburg", &conn));
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_matches_localized_name() -> Result<()> {
+        let conn = conn();
+        let hit = insert_place(
+            1,
+            &[("name", "Kaffeeklatsch"), ("name:ja", "カフェ")],
+            53.5,
+            9.9,
+            &conn,
+        );
+        assert_eq!(vec![hit], search("カフェ", &conn));
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_never_matches_tag_keys() -> Result<()> {
+        let conn = conn();
+        insert_place(
+            1,
+            &[("name", "Kaffeeklatsch"), ("addr:city", "Hamburg")],
+            53.5,
+            9.9,
+            &conn,
+        );
+        assert!(search("addr", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_skips_unnamed_elements() -> Result<()> {
+        let conn = conn();
+        insert_place(1, &[("addr:city", "Hamburg")], 53.5, 9.9, &conn);
+        assert!(search("hamburg", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_skips_elements_without_coordinates() -> Result<()> {
+        let conn = conn();
+        // Inserted but never given lat/lon: `SearchedPlace::from` would panic on it.
+        super::insert(
+            &OverpassElement::mock_with_tags(1, &[("name", "Hamburg Cafe")]),
+            &conn,
+        )?;
+        assert!(search("hamburg", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_skips_elements_without_tags() -> Result<()> {
+        let conn = conn();
+        let element = super::insert(&OverpassElement::mock(1), &conn)?;
+        super::set_lat_lon(element.id, 53.5, 9.9, &conn)?;
+        // `mock` has an empty tag map; must not blow up json_each.
+        assert!(search("hamburg", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_requires_all_words() -> Result<()> {
+        let conn = conn();
+        let hit = insert_place(
+            1,
+            &[
+                ("name", "Kaffeeklatsch"),
+                ("addr:city", "Hamburg"),
+                ("cuisine", "cafe"),
+            ],
+            53.5,
+            9.9,
+            &conn,
+        );
+        insert_place(
+            2,
+            &[("name", "Nordsee"), ("addr:city", "Hamburg")],
+            53.6,
+            9.8,
+            &conn,
+        );
+        // Words may match different tags on the same element.
+        assert_eq!(vec![hit], search("hamburg cafe", &conn));
+        // A word that matches nothing kills the whole row.
+        assert!(search("hamburg sushi", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_escapes_like_wildcards() -> Result<()> {
+        let conn = conn();
+        let hit = insert_place(1, &[("name", "100% Coffee")], 53.5, 9.9, &conn);
+        insert_place(2, &[("name", "Nordsee")], 53.6, 9.8, &conn);
+        // Unescaped, '%100%%' would match every row.
+        assert_eq!(vec![hit], search("100%", &conn));
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_excludes_deleted() -> Result<()> {
+        let conn = conn();
+        let element = insert_place(1, &[("name", "Hamburg Cafe")], 53.5, 9.9, &conn);
+        super::set_deleted_at(element.id, Some(OffsetDateTime::now_utc()), &conn)?;
+        assert!(search("hamburg", &conn).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_ranks_name_above_other_tags() -> Result<()> {
+        let conn = conn();
+        let exact = insert_place(1, &[("name", "Hamburg")], 53.5, 9.9, &conn);
+        let prefix = insert_place(2, &[("name", "Hamburger Grill")], 53.5, 9.9, &conn);
+        let infix = insert_place(3, &[("name", "Cafe Hamburg Nord")], 53.5, 9.9, &conn);
+        let other = insert_place(
+            4,
+            &[("name", "Nordsee"), ("addr:city", "Hamburg")],
+            53.5,
+            9.9,
+            &conn,
+        );
+        assert_eq!(vec![exact, prefix, infix, other], search("hamburg", &conn));
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_breaks_rank_ties_by_distance() -> Result<()> {
+        let conn = conn();
+        let far = insert_place(
+            1,
+            &[("name", "Nordsee"), ("addr:city", "Hamburg")],
+            60.0,
+            9.9,
+            &conn,
+        );
+        let near = insert_place(
+            2,
+            &[("name", "Kaffeeklatsch"), ("addr:city", "Hamburg")],
+            53.6,
+            9.9,
+            &conn,
+        );
+        let ranked = super::select_by_tag_value_search("hamburg", Some((53.5, 9.9)), 100, &conn)?;
+        let ids: Vec<i64> = ranked.into_iter().map(|it| it.element.id).collect();
+        assert_eq!(vec![near.id, far.id], ids);
+        Ok(())
+    }
+
+    #[test]
+    fn tag_value_search_honours_row_limit() -> Result<()> {
+        let conn = conn();
+        for id in 1..=5 {
+            insert_place(id, &[("name", &format!("Hamburg {id}"))], 53.5, 9.9, &conn);
+        }
+        assert_eq!(
+            2,
+            super::select_by_tag_value_search("hamburg", None, 2, &conn)?.len()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn count_by_tag_value_search_counts_all_matches() -> Result<()> {
+        let conn = conn();
+        for id in 1..=5 {
+            insert_place(id, &[("name", &format!("Hamburg {id}"))], 53.5, 9.9, &conn);
+        }
+        assert_eq!(5, super::count_by_tag_value_search("hamburg", &conn)?);
+        Ok(())
     }
 }

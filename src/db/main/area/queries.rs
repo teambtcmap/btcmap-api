@@ -163,3 +163,23 @@ pub async fn select_top_areas_by_type(pool: &Pool, area_type: &str) -> Result<Ve
         .interact(move |conn| blocking_queries::select_top_areas_by_type(conn, &area_type))
         .await?
 }
+
+pub use super::blocking_queries::RankedArea;
+
+pub async fn select_by_search(
+    query: String,
+    row_limit: i64,
+    pool: &Pool,
+) -> Result<Vec<RankedArea>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_search(&query, row_limit, conn))
+        .await?
+}
+
+pub async fn count_by_search(query: String, pool: &Pool) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::count_by_search(&query, conn))
+        .await?
+}

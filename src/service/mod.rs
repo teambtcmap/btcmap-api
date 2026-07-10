@@ -15,6 +15,7 @@ pub mod og;
 pub mod osm;
 pub mod overpass;
 pub mod ppq;
+pub mod search;
 pub mod sync;
 pub mod user;
 pub mod wallet;

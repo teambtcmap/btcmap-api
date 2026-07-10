@@ -1,9 +1,16 @@
 use crate::db;
+use crate::db::main::area::queries::RankedArea;
+use crate::db::main::element::queries::RankedElement;
 use crate::db::main::MainPool;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
+use crate::rest::v4::places::SearchedPlace;
 use actix_web::{get, web::Data, web::Json, web::Query};
 use serde::{Deserialize, Serialize};
+
+const MIN_QUERY_LEN: usize = 3;
+const MAX_LIMIT: i64 = 100;
+const MAX_OFFSET: i64 = 10_000;
 
 #[derive(Deserialize)]
 pub struct SearchArgs {
@@ -12,21 +19,37 @@ pub struct SearchArgs {
     pub limit: i64,
     #[serde(default)]
     pub offset: i64,
-    pub type_filter: Option<String>, // "area", "element", or none
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    /// `area` or `place`. Omit for both.
+    pub type_filter: Option<String>,
 }
 
 fn default_limit() -> i64 {
     20
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SearchResult {
-    pub name: String,
-    pub r#type: String,
+#[derive(Serialize)]
+pub struct SearchedArea {
     pub id: i64,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
+    /// `[west, south, east, north]`. Absent when the area has no bbox of its own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bbox: Option<[f64; 4]>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+/// `SearchedPlace` is boxed because it is an order of magnitude larger than
+/// `SearchedArea`, and clippy's `large_enum_variant` would otherwise fire.
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SearchResult {
+    Area(SearchedArea),
+    Place(Box<SearchedPlace>),
+}
+
+#[derive(Serialize)]
 pub struct SearchResponse {
     pub results: Vec<SearchResult>,
     pub total_count: u32,
@@ -35,199 +58,408 @@ pub struct SearchResponse {
     pub pagination: PaginationInfo,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize)]
 pub struct PaginationInfo {
     pub offset: i64,
     pub limit: i64,
     pub total: u32,
 }
 
-// GET /search?q=query&limit=10&offset=0&type_filter=area
+/// One candidate row plus its global sort key. Areas carry `kind = 0` so they
+/// precede places at equal rank; `distance` only ever applies to places.
+struct Ranked {
+    rank: i64,
+    kind: u8,
+    distance: f64,
+    name_len: usize,
+    name: String,
+    result: SearchResult,
+}
+
+// GET /v4/search?q=hamburg&lat=53.5&lon=9.9&limit=20&offset=0&type_filter=place
 #[get("")]
 pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchResponse> {
-    // query validation
-    let query = args.q.trim();
-    if query.is_empty() {
+    let query = args.q.trim().to_string();
+    if query.chars().count() < MIN_QUERY_LEN {
         return Err(RestApiError::new(
             RestApiErrorCode::InvalidInput,
-            "Search query cannot be empty",
+            "Search query must be at least 3 characters long",
         ));
     }
 
-    // minimal query length
-    if query.len() < 2 {
-        return Err(RestApiError::new(
-            RestApiErrorCode::InvalidInput,
-            "Search query must be at least 2 characters long",
-        ));
-    }
-
-    // maximal length
-    let limit = args.limit.min(100);
-    let offset = args.offset.max(0);
-
-    let mut results = Vec::new();
-
-    // search areas by default or if specified
-    if args.type_filter.is_none() || args.type_filter.as_deref() == Some("area") {
-        let areas = db::main::area::queries::select_by_search_query(query, &pool)
-            .await
-            .map_err(|_| RestApiError::database())?;
-
-        for area in areas {
-            results.push(SearchResult {
-                name: area.name(),
-                r#type: "area".to_string(),
-                id: area.id,
-            });
+    let (want_area, want_place) = match args.type_filter.as_deref() {
+        None => (true, true),
+        Some("area") => (true, false),
+        Some("place") => (false, true),
+        Some(_) => {
+            return Err(RestApiError::new(
+                RestApiErrorCode::InvalidInput,
+                "type_filter must be 'area' or 'place'",
+            ))
         }
-    }
-
-    // search elements by default or if specified
-    if args.type_filter.is_none() || args.type_filter.as_deref() == Some("element") {
-        let elements = db::main::element::queries::select_by_search_query(query, false, &pool)
-            .await
-            .map_err(|_| RestApiError::database())?;
-
-        for element in elements {
-            results.push(SearchResult {
-                name: element.name(None),
-                r#type: "element".to_string(),
-                id: element.id,
-            });
-        }
-    }
-
-    // relevance sort
-    results.sort_by(|a, b| {
-        let a_exact = a.name.to_lowercase().starts_with(&query.to_lowercase());
-        let b_exact = b.name.to_lowercase().starts_with(&query.to_lowercase());
-        match (a_exact, b_exact) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.cmp(&b.name),
-        }
-    });
-
-    // pagination
-    let total = results.len() as u32;
-    let start = offset as usize;
-    let end = (start + limit as usize).min(results.len());
-    let paginated_results = if start < results.len() {
-        results[start..end].to_vec()
-    } else {
-        Vec::new()
     };
 
-    let response = SearchResponse {
-        results: paginated_results,
+    let location = match (args.lat, args.lon) {
+        (Some(lat), Some(lon)) => Some((lat, lon)),
+        (None, None) => None,
+        _ => {
+            return Err(RestApiError::new(
+                RestApiErrorCode::InvalidInput,
+                "lat and lon must be provided together",
+            ))
+        }
+    };
+
+    let limit = args.limit.clamp(1, MAX_LIMIT);
+    let offset = args.offset.clamp(0, MAX_OFFSET);
+    // Each side returns its own top `offset + limit`. Merging two lists sorted by
+    // the same key and re-slicing yields exactly the global page.
+    let row_limit = offset + limit;
+
+    let mut ranked: Vec<Ranked> = Vec::new();
+    let mut total: i64 = 0;
+
+    if want_area {
+        let areas = db::main::area::queries::select_by_search(query.clone(), row_limit, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+        total += db::main::area::queries::count_by_search(query.clone(), &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+        for area in areas {
+            let RankedArea {
+                id,
+                name,
+                alias,
+                bbox,
+                rank,
+            } = area;
+            ranked.push(Ranked {
+                rank,
+                kind: 0,
+                distance: 0.0,
+                name_len: name.chars().count(),
+                name: name.clone(),
+                result: SearchResult::Area(SearchedArea {
+                    id,
+                    name,
+                    alias,
+                    bbox,
+                }),
+            });
+        }
+    }
+
+    if want_place {
+        let elements = db::main::element::queries::select_by_tag_value_search(
+            query.clone(),
+            location,
+            row_limit,
+            &pool,
+        )
+        .await
+        .map_err(|_| RestApiError::database())?;
+        total += db::main::element::queries::count_by_tag_value_search(query.clone(), &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+        for ranked_element in elements {
+            let RankedElement { element, rank } = ranked_element;
+            // The query filters NULL coordinates, so these defaults never apply.
+            let distance = match location {
+                Some((lat, lon)) => {
+                    let place_lat = element.lat.unwrap_or(0.0);
+                    let place_lon = element.lon.unwrap_or(0.0);
+                    (place_lat - lat).powi(2) + (place_lon - lon).powi(2)
+                }
+                None => 0.0,
+            };
+            let place: SearchedPlace = element.into();
+            let name = place.name.clone();
+            ranked.push(Ranked {
+                rank,
+                kind: 1,
+                distance,
+                name_len: name.chars().count(),
+                name,
+                result: SearchResult::Place(Box::new(place)),
+            });
+        }
+    }
+
+    ranked.sort_by(|a, b| {
+        a.rank
+            .cmp(&b.rank)
+            .then(a.kind.cmp(&b.kind))
+            .then(a.distance.total_cmp(&b.distance))
+            .then(a.name_len.cmp(&b.name_len))
+            .then(a.name.cmp(&b.name))
+    });
+
+    let results: Vec<SearchResult> = ranked
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .map(|it| it.result)
+        .collect();
+
+    let total = total.max(0) as u32;
+
+    Ok(Json(SearchResponse {
+        results,
         total_count: total,
         has_more: (offset + limit) < total as i64,
-        query: query.to_string(),
+        query,
         pagination: PaginationInfo {
             offset,
             limit,
             total,
         },
-    };
-
-    Ok(Json(response))
+    }))
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::db;
     use crate::db::main::test::pool;
+    use crate::db::main::MainPool;
     use crate::service::overpass::OverpassElement;
-    use crate::{db, Result};
+    use crate::Result;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use serde_json::{json, Map, Value};
+
+    macro_rules! app {
+        ($pool:expr) => {
+            test::init_service(
+                App::new()
+                    .app_data(Data::new($pool))
+                    .service(scope("/search").service(super::get)),
+            )
+            .await
+        };
+    }
+
+    async fn insert_place(id: i64, tags: &[(&str, &str)], lat: f64, lon: f64, pool: &MainPool) {
+        let element =
+            db::main::element::queries::insert(OverpassElement::mock_with_tags(id, tags), pool)
+                .await
+                .unwrap();
+        db::main::element::queries::set_lat_lon(element.id, lat, lon, pool)
+            .await
+            .unwrap();
+    }
+
+    async fn insert_area(name: &str, alias: &str, pool: &MainPool) {
+        let mut tags = Map::new();
+        tags.insert("name".into(), Value::String(name.into()));
+        tags.insert("url_alias".into(), Value::String(alias.into()));
+        tags.insert(
+            "geo_json".into(),
+            json!({"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[9.99,53.55]}}),
+        );
+        db::main::area::queries::insert(tags, pool).await.unwrap();
+    }
+
+    async fn status(uri: &str, pool: MainPool) -> u16 {
+        let app = app!(pool);
+        let res = test::call_service(&app, TestRequest::get().uri(uri).to_request()).await;
+        res.status().as_u16()
+    }
 
     #[test]
-    async fn search_empty_query_returns_400() -> Result<()> {
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(pool()))
-                .service(scope("/search").service(super::get)),
-        )
-        .await;
-        let req = TestRequest::get().uri("/search?q=").to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), 400);
+    async fn rejects_short_query() -> Result<()> {
+        assert_eq!(400, status("/search?q=ab", pool()).await);
         Ok(())
     }
 
     #[test]
-    async fn search_too_short_returns_400() -> Result<()> {
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(pool()))
-                .service(scope("/search").service(super::get)),
-        )
-        .await;
-        let req = TestRequest::get().uri("/search?q=a").to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), 400);
+    async fn rejects_empty_query() -> Result<()> {
+        assert_eq!(400, status("/search?q=", pool()).await);
         Ok(())
     }
 
     #[test]
-    async fn search_valid_query_returns_results() -> Result<()> {
+    async fn rejects_unknown_type_filter() -> Result<()> {
+        assert_eq!(
+            400,
+            status("/search?q=hamburg&type_filter=element", pool()).await
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn rejects_lat_without_lon() -> Result<()> {
+        assert_eq!(400, status("/search?q=hamburg&lat=53.5", pool()).await);
+        Ok(())
+    }
+
+    #[test]
+    async fn finds_places_by_address() -> Result<()> {
         let pool = pool();
-        let _element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(pool))
-                .service(scope("/search").service(super::get)),
+        insert_place(
+            1,
+            &[("name", "Kaffeeklatsch"), ("addr:city", "Hamburg")],
+            53.5,
+            9.9,
+            &pool,
         )
         .await;
-        let req = TestRequest::get().uri("/search?q=cuba").to_request();
-        let res: SearchResponse = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.query, "cuba");
-        assert!(res.results.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    async fn search_with_pagination_works() -> Result<()> {
-        let pool = pool();
-        for i in 1..=5 {
-            let _element =
-                db::main::element::queries::insert(OverpassElement::mock(i), &pool).await?;
-        }
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(pool))
-                .service(scope("/search").service(super::get)),
+        insert_place(
+            2,
+            &[("name", "Nordsee"), ("addr:city", "Berlin")],
+            52.5,
+            13.4,
+            &pool,
         )
         .await;
+        let app = app!(pool);
         let req = TestRequest::get()
-            .uri("/search?q=test&limit=2&offset=0")
+            .uri("/search?q=hamburg&type_filter=place")
             .to_request();
-        let res: SearchResponse = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.pagination.limit, 2);
-        assert_eq!(res.pagination.offset, 0);
-        assert!(res.results.len() <= 2);
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res["results"].as_array().unwrap().len());
+        assert_eq!("place", res["results"][0]["type"]);
+        assert_eq!("Kaffeeklatsch", res["results"][0]["name"]);
+        assert_eq!(1, res["total_count"]);
         Ok(())
     }
 
     #[test]
-    async fn search_with_type_filter_element_only() -> Result<()> {
+    async fn place_rows_carry_coordinates_and_icon() -> Result<()> {
         let pool = pool();
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(pool))
-                .service(scope("/search").service(super::get)),
+        insert_place(
+            1,
+            &[("name", "Kaffeeklatsch"), ("addr:city", "Hamburg")],
+            53.5,
+            9.9,
+            &pool,
         )
         .await;
+        let app = app!(pool);
         let req = TestRequest::get()
-            .uri("/search?q=test&type_filter=element")
+            .uri("/search?q=hamburg&type_filter=place")
             .to_request();
-        let res: SearchResponse = test::call_and_read_body_json(&app, req).await;
-        for result in res.results {
-            assert_eq!(result.r#type, "element");
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        let row = &res["results"][0];
+        assert_eq!(53.5, row["lat"]);
+        assert_eq!(9.9, row["lon"]);
+        assert!(row["icon"].is_string());
+        Ok(())
+    }
+
+    #[test]
+    async fn areas_precede_places_at_equal_rank() -> Result<()> {
+        let pool = pool();
+        insert_area("Hamburg", "hamburg", &pool).await;
+        insert_place(1, &[("name", "Hamburg")], 53.5, 9.9, &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get().uri("/search?q=hamburg").to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!("area", res["results"][0]["type"]);
+        assert_eq!("place", res["results"][1]["type"]);
+        assert_eq!(2, res["total_count"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn area_rows_carry_alias() -> Result<()> {
+        let pool = pool();
+        insert_area("Hamburg", "hamburg", &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&type_filter=area")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!("hamburg", res["results"][0]["alias"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn type_filter_area_excludes_places() -> Result<()> {
+        let pool = pool();
+        insert_area("Hamburg", "hamburg", &pool).await;
+        insert_place(
+            1,
+            &[("name", "Kaffeeklatsch"), ("addr:city", "Hamburg")],
+            53.5,
+            9.9,
+            &pool,
+        )
+        .await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&type_filter=area")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        for row in res["results"].as_array().unwrap() {
+            assert_eq!("area", row["type"]);
         }
+        assert_eq!(1, res["total_count"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn paginates_over_a_stable_order() -> Result<()> {
+        let pool = pool();
+        for id in 1..=5 {
+            insert_place(
+                id,
+                &[
+                    ("name", "Hamburg"),
+                    ("addr:street", &format!("Street {id}")),
+                ],
+                53.5,
+                9.9,
+                &pool,
+            )
+            .await;
+        }
+        let app = app!(pool);
+
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&limit=2&offset=0")
+            .to_request();
+        let first: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, first["results"].as_array().unwrap().len());
+        assert_eq!(5, first["total_count"]);
+        assert_eq!(true, first["has_more"]);
+
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&limit=2&offset=4")
+            .to_request();
+        let last: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, last["results"].as_array().unwrap().len());
+        assert_eq!(false, last["has_more"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn nearer_place_wins_a_rank_tie() -> Result<()> {
+        let pool = pool();
+        insert_place(
+            1,
+            &[("name", "Far"), ("addr:city", "Hamburg")],
+            60.0,
+            9.9,
+            &pool,
+        )
+        .await;
+        insert_place(
+            2,
+            &[("name", "Near"), ("addr:city", "Hamburg")],
+            53.6,
+            9.9,
+            &pool,
+        )
+        .await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&lat=53.5&lon=9.9")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!("Near", res["results"][0]["name"]);
+        assert_eq!("Far", res["results"][1]["name"]);
         Ok(())
     }
 }
