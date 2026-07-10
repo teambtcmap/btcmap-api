@@ -95,10 +95,7 @@ fn xpub_balance(client: &mut Client, xpub: &str) -> Result<i64> {
         }
     }
 
-    let refs: Vec<&electrum_client::bitcoin::Script> = scripts
-        .iter()
-        .map(|s| s.as_ref())
-        .collect();
+    let refs: Vec<&electrum_client::bitcoin::Script> = scripts.iter().map(|s| s.as_ref()).collect();
     let balances = client.batch_script_get_balance(&refs)?;
     let mut total: i64 = 0;
     for balance in balances {
