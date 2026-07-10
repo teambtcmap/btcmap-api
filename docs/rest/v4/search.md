@@ -1,7 +1,7 @@
 # Search
 
 ```
-curl 'https://api.btcmap.org/v4/search/?q=hamburg'
+curl 'https://api.btcmap.org/v4/search/?q=prague'
 ```
 
 Searches areas and places in one call. Places match against **every OSM tag value**, so a
@@ -9,7 +9,7 @@ query for a city name finds the places whose address is in that city, and locali
 tags are searched for free. Areas match on their name and URL alias.
 
 Every whitespace-separated word must match, though different words may match different tags:
-`q=hamburg cafe` finds a place with `addr:city=Hamburg` and `cuisine=cafe`.
+`q=prague cafe` finds a place with `addr:city=Prague` and `cuisine=cafe`.
 
 ## Parameters
 
@@ -28,8 +28,8 @@ Results are ranked by an exact name match, then a name prefix match, then a name
 match, then a match on any other tag. At equal rank, areas precede places, and — when `lat`
 and `lon` are supplied — nearer places precede farther ones.
 
-Supplying `lat` and `lon` matters more than it looks. A query like `hamburg` matches thousands
-of places that no place is actually *named*, so they all share the lowest rank. Without a
+Supplying `lat` and `lon` matters more than it looks. A query like `prague` matches many
+places that no place is actually *named*, so they all share the lowest rank. Without a
 location to break the tie, the `limit` selects among them by name length.
 
 ## Examples
@@ -37,7 +37,7 @@ location to break the tie, the `limit` selects among them by name length.
 ### Find a city and the places in it
 
 ```bash
-curl 'https://api.btcmap.org/v4/search/?q=hamburg&lat=53.55&lon=9.99&limit=2'
+curl 'https://api.btcmap.org/v4/search/?q=prague&lat=50.08&lon=14.43&limit=2'
 ```
 
 ```json
@@ -46,35 +46,35 @@ curl 'https://api.btcmap.org/v4/search/?q=hamburg&lat=53.55&lon=9.99&limit=2'
     {
       "type": "area",
       "id": 123,
-      "name": "Hamburg",
-      "alias": "hamburg",
-      "bbox": [9.73, 53.39, 10.32, 53.74]
+      "name": "Prague",
+      "alias": "prague",
+      "bbox": [14.22, 49.94, 14.71, 50.18]
     },
     {
       "type": "place",
       "id": 28779,
-      "name": "Kaffeeklatsch",
-      "lat": 53.5601,
-      "lon": 9.9722,
+      "name": "Bitcoin Coffee",
+      "lat": 50.0810,
+      "lon": 14.4270,
       "icon": "local_cafe",
-      "address": "Lange Reihe 12 Hamburg 20099",
+      "address": "5 Wenceslas Square Prague 110 00",
       "created_at": "2025-09-17T08:22:03.855Z",
       "updated_at": "2025-09-18T13:12:31.723Z",
       "verified_at": "2025-09-18T00:00:00Z",
       "osm_id": "node:13149030952"
     }
   ],
-  "total_count": 1284,
+  "total_count": 512,
   "has_more": true,
-  "query": "hamburg",
-  "pagination": { "offset": 0, "limit": 2, "total": 1284 }
+  "query": "prague",
+  "pagination": { "offset": 0, "limit": 2, "total": 512 }
 }
 ```
 
 ### Restrict to places
 
 ```bash
-curl 'https://api.btcmap.org/v4/search/?q=hamburg&type_filter=place'
+curl 'https://api.btcmap.org/v4/search/?q=prague&type_filter=place'
 ```
 
 ## Result types
