@@ -555,7 +555,7 @@ pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Resul
               END AS search_rank
             FROM {table}
             WHERE {predicate}
-            ORDER BY search_rank, LENGTH(name), name
+            ORDER BY search_rank, LENGTH(name), name, {id}
             LIMIT ?4
         "#,
         id = Columns::Id.as_str(),

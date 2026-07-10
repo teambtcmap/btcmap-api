@@ -528,7 +528,8 @@ pub fn select_by_tag_value_search(
                           THEN ({lat} - ?4) * ({lat} - ?4) + ({lon} - ?5) * ({lon} - ?5)
                           ELSE 0 END,
                      LENGTH({name}),
-                     {name}
+                     {name},
+                     {id}
             LIMIT ?7
         "#,
         projection = Element::projection(),
@@ -536,6 +537,7 @@ pub fn select_by_tag_value_search(
         predicate = tag_value_predicate(words.len(), 8),
         lat = Columns::Lat.as_str(),
         lon = Columns::Lon.as_str(),
+        id = Columns::Id.as_str(),
     );
 
     let escaped = escape_like(query);

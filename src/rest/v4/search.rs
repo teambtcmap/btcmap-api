@@ -66,13 +66,18 @@ pub struct PaginationInfo {
 }
 
 /// One candidate row plus its global sort key. Areas carry `kind = 0` so they
-/// precede places at equal rank; `distance` only ever applies to places.
+/// precede places at equal rank; `distance` only ever applies to places. `id` is
+/// the final, unique tiebreaker so the merged order is total and identical
+/// between the independent SQL runs that serve consecutive pages — without it,
+/// rows tied on every other key can shuffle and be skipped or duplicated across
+/// page boundaries. It mirrors the `id` term each side's SQL `ORDER BY` ends on.
 struct Ranked {
     rank: i64,
     kind: u8,
     distance: f64,
     name_len: usize,
     name: String,
+    id: i64,
     result: SearchResult,
 }
 
@@ -140,6 +145,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
                 distance: 0.0,
                 name_len: name.chars().count(),
                 name: name.clone(),
+                id,
                 result: SearchResult::Area(SearchedArea {
                     id,
                     name,
@@ -175,12 +181,14 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
             };
             let place: SearchedPlace = element.into();
             let name = place.name.clone();
+            let id = place.id;
             ranked.push(Ranked {
                 rank,
                 kind: 1,
                 distance,
                 name_len: name.chars().count(),
                 name,
+                id,
                 result: SearchResult::Place(Box::new(place)),
             });
         }
@@ -193,6 +201,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
             .then(a.distance.total_cmp(&b.distance))
             .then(a.name_len.cmp(&b.name_len))
             .then(a.name.cmp(&b.name))
+            .then(a.id.cmp(&b.id))
     });
 
     let results: Vec<SearchResult> = ranked
@@ -431,6 +440,36 @@ mod test {
         let last: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(1, last["results"].as_array().unwrap().len());
         assert_eq!(false, last["has_more"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn pagination_covers_every_row_exactly_once() -> Result<()> {
+        let pool = pool();
+        // Every place shares name, rank and distance, so only the `id` tiebreaker
+        // makes the order total. Without it, consecutive pages are independent SQL
+        // runs whose tied rows can reshuffle, skipping or duplicating a row.
+        for id in 1..=5 {
+            insert_place(id, &[("name", "Hamburg")], 53.5, 9.9, &pool).await;
+        }
+        let app = app!(pool);
+
+        let mut seen = Vec::new();
+        for offset in 0..5 {
+            let req = TestRequest::get()
+                .uri(&format!(
+                    "/search?q=hamburg&type_filter=place&limit=1&offset={offset}"
+                ))
+                .to_request();
+            let page: Value = test::call_and_read_body_json(&app, req).await;
+            let rows = page["results"].as_array().unwrap();
+            assert_eq!(1, rows.len(), "page at offset {offset}");
+            seen.push(rows[0]["id"].as_i64().unwrap());
+        }
+
+        seen.sort_unstable();
+        // Every id 1..=5, each exactly once — no skips, no duplicates.
+        assert_eq!(vec![1, 2, 3, 4, 5], seen);
         Ok(())
     }
 
