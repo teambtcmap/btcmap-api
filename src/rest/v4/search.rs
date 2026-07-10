@@ -29,6 +29,15 @@ fn default_limit() -> i64 {
     20
 }
 
+/// Whether a reachable next page exists. `offset` is clamped to `MAX_OFFSET`, so
+/// the next page (`offset + limit`) is only reachable when it, too, is within the
+/// cap. Without the cap check, `has_more` stays `true` past the cap while the
+/// clamp keeps returning the same page — an infinite pagination loop.
+fn has_next_page(offset: i64, limit: i64, total: i64) -> bool {
+    let next_offset = offset + limit;
+    next_offset < total && next_offset <= MAX_OFFSET
+}
+
 #[derive(Serialize)]
 pub struct SearchedArea {
     pub id: i64,
@@ -216,7 +225,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
     Ok(Json(SearchResponse {
         results,
         total_count: total,
-        has_more: (offset + limit) < total as i64,
+        has_more: has_next_page(offset, limit, total as i64),
         query,
         pagination: PaginationInfo {
             offset,
@@ -228,6 +237,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
 
 #[cfg(test)]
 mod test {
+    use super::{has_next_page, MAX_OFFSET};
     use crate::db;
     use crate::db::main::test::pool;
     use crate::db::main::MainPool;
@@ -237,6 +247,19 @@ mod test {
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use serde_json::{json, Map, Value};
+
+    #[test]
+    async fn has_next_page_stops_at_the_offset_cap() {
+        // Plenty of rows remain, but the next page would be past the cap, where
+        // the clamp would just re-serve the current page. Must report no more.
+        assert!(!has_next_page(MAX_OFFSET, 20, 25_000));
+        assert!(!has_next_page(MAX_OFFSET - 10, 20, 25_000));
+        // Next page lands exactly on the cap — still reachable.
+        assert!(has_next_page(MAX_OFFSET - 20, 20, 25_000));
+        // Ordinary cases well within the cap.
+        assert!(has_next_page(0, 20, 25_000));
+        assert!(!has_next_page(0, 20, 15));
+    }
 
     macro_rules! app {
         ($pool:expr) => {
