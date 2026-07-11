@@ -206,3 +206,26 @@ pub async fn set_deleted_at(
         .interact(move |conn| blocking_queries::set_deleted_at(id, deleted_at, conn))
         .await?
 }
+
+pub use super::blocking_queries::RankedElement;
+
+pub async fn select_by_tag_value_search(
+    query: String,
+    location: Option<(f64, f64)>,
+    row_limit: i64,
+    pool: &Pool,
+) -> Result<Vec<RankedElement>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_by_tag_value_search(&query, location, row_limit, conn)
+        })
+        .await?
+}
+
+pub async fn count_by_tag_value_search(query: String, pool: &Pool) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::count_by_tag_value_search(&query, conn))
+        .await?
+}

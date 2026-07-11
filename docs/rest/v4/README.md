@@ -15,6 +15,7 @@ The latest and recommended version of the BTCMap API, offering improved performa
 - **[Invoices](invoices.md)** - Check invoice status for boosts, comments and other paywalled features.
 - **[Users](users.md)** - Get authenticated user information.  
 - **[Areas](areas.md)** - Fetch areas and manage saved areas.
+- **[Search](search.md)** - Search areas and places by name, address and any other OSM tag.
 ### Proposed
 - Need something extra? Let us know!
 
