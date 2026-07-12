@@ -22,6 +22,7 @@ pub struct Res {
     starts_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
+    cron_schedule: Option<String>,
 }
 
 impl From<Event> for Res {
@@ -34,6 +35,7 @@ impl From<Event> for Res {
             website: event.website,
             starts_at: event.starts_at,
             ends_at: event.ends_at,
+            cron_schedule: event.cron_schedule,
         }
     }
 }

@@ -16,12 +16,13 @@ pub fn insert(
     website: &str,
     starts_at: Option<OffsetDateTime>,
     ends_at: Option<OffsetDateTime>,
+    cron_schedule: Option<&str>,
     conn: &Connection,
 ) -> Result<Event> {
     let sql = format!(
         r#"
-            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt})
-            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at)
+            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt}, {CronSchedule})
+            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at, :cron_schedule)
             RETURNING {projection}
         "#,
         projection = Event::projection(),
@@ -34,6 +35,7 @@ pub fn insert(
         ":website": website,
         ":starts_at": starts_at,
         ":ends_at": ends_at,
+        ":cron_schedule": cron_schedule,
     };
     conn.query_row(&sql, params, Event::mapper())
         .map_err(Into::into)
@@ -121,6 +123,7 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
+            Some("0 0 * * * *"),
             &conn,
         )?;
         assert_eq!(Some(&event), super::select_all(&conn)?.first());
@@ -130,7 +133,7 @@ mod test {
     #[test]
     fn insert_null_started_at() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
+        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, None, &conn)?;
         assert_eq!(Some(&event), super::select_all(&conn)?.first());
         Ok(())
     }
@@ -146,6 +149,7 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
+            None,
             &conn,
         )?;
         let event_2 = super::insert(
@@ -156,6 +160,7 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
+            None,
             &conn,
         )?;
         let event_3 = super::insert(
@@ -165,6 +170,7 @@ mod test {
             "name",
             "website",
             Some(OffsetDateTime::now_utc()),
+            None,
             None,
             &conn,
         )?;
@@ -182,6 +188,7 @@ mod test {
             "name",
             "website",
             Some(OffsetDateTime::now_utc()),
+            None,
             None,
             &conn,
         )?;

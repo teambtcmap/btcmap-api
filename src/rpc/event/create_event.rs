@@ -17,6 +17,7 @@ pub struct Params {
     starts_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
+    cron_schedule: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -39,6 +40,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         params.website,
         params.starts_at,
         params.ends_at,
+        params.cron_schedule,
         pool,
     )
     .await

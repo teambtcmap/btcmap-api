@@ -104,6 +104,7 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
+            None,
             &pool,
         )
         .await?;
@@ -131,6 +132,7 @@ mod test {
             "name".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
+            None,
             None,
             &pool,
         )
@@ -160,6 +162,7 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2020-01-01 0:00 UTC)),
             None,
+            None,
             &pool,
         )
         .await?;
@@ -170,6 +173,7 @@ mod test {
             "future_event".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
+            None,
             None,
             &pool,
         )
@@ -200,6 +204,7 @@ mod test {
             "name".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
+            None,
             None,
             &pool,
         )

@@ -14,12 +14,23 @@ pub async fn insert(
     website: String,
     starts_at: Option<OffsetDateTime>,
     ends_at: Option<OffsetDateTime>,
+    cron_schedule: Option<String>,
     pool: &Pool,
 ) -> Result<Event> {
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::insert(area_id, lat, lon, &name, &website, starts_at, ends_at, conn)
+            blocking_queries::insert(
+                area_id,
+                lat,
+                lon,
+                &name,
+                &website,
+                starts_at,
+                ends_at,
+                cron_schedule.as_deref(),
+                conn,
+            )
         })
         .await?
 }
