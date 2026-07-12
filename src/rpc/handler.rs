@@ -147,6 +147,8 @@ impl Role {
         RpcMethod::GetUserActivity,
         // Admins can create events
         RpcMethod::CreateEvent,
+        // Admins can list all events
+        RpcMethod::GetEvents,
         // Admins can retreive events
         RpcMethod::GetEvent,
         // Admins can import places
@@ -175,6 +177,7 @@ impl Role {
 
     const EVENT_MANAGER_METHODS: &[RpcMethod] = &[
         RpcMethod::CreateEvent,
+        RpcMethod::GetEvents,
         RpcMethod::GetEvent,
         RpcMethod::DeleteEvent,
         RpcMethod::Search,
