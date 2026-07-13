@@ -572,7 +572,7 @@ pub async fn handle(
         ),
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),
-            super::search::run(params(req.params)?, &main_pool).await?,
+            super::analytics::search::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetReport => RpcResponse::from(
             req.id.clone(),
