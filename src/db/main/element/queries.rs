@@ -96,17 +96,6 @@ pub async fn select_with_opening_hours_without_humanization_by_area(
         .await?
 }
 
-pub async fn select_by_osm_type_and_id(
-    osm_type: String,
-    osm_id: i64,
-    pool: &Pool,
-) -> Result<Element> {
-    pool.get()
-        .await?
-        .interact(move |conn| blocking_queries::select_by_osm_type_and_id(&osm_type, osm_id, conn))
-        .await?
-}
-
 pub async fn select_by_id_or_osm_id(id: impl Into<String>, pool: &Pool) -> Result<Element> {
     let id = id.into();
     pool.get()

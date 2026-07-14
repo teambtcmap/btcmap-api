@@ -50,6 +50,102 @@ cargo clippy -- -D warnings  # Lint (must pass with zero warnings)
 cargo test           # Run tests
 ```
 
+## Local Server Workflow
+
+Use this when you need a running server to exercise admin-only RPC methods (e.g. `get_wallets`, `dashboard`, `sync_elements`) end-to-end instead of through unit tests.
+
+### Databases
+The running server uses the real local DBs at `$HOME/.local/share/btcmap/` (configured by `data_dir_file_path`): `main.db`, `log.db`, `image.db`. Unit tests use in-memory pools and never touch them.
+
+### Build once
+```bash
+cargo build
+```
+Debug build is enough for local poking. Release only if you're measuring performance or timing RPC calls (a debug build of `get_wallets` is ~5x slower because of unoptimized serde and crypto paths).
+
+### Start the server in the background
+The server blocks on stdin/stdout when run in the foreground, which hangs the shell. Detach it with `setsid` and redirect all streams:
+```bash
+setsid bash -c 'ELECTRUM_URL=ssl://electrum.blockstream.info:50002 \
+                RUST_LOG=info \
+                ./target/debug/btcmap-api \
+                > /tmp/btcmap-server.log 2>&1 & \
+                echo $! > /tmp/btcmap-server.pid; disown' \
+  < /dev/null > /dev/null 2>&1 &
+
+sleep 3
+kill -0 "$(cat /tmp/btcmap-server.pid)" && echo "alive" || echo "dead"
+```
+- `setsid` + `disown` + redirected streams = the process survives the parent shell exiting.
+- `/tmp/btcmap-server.pid` lets you `kill` it later.
+- `/tmp/btcmap-server.log` captures startup logs and runtime errors.
+- `ELECTRUM_URL` is **required** at runtime — if unset, `get_wallets` returns a JSON-RPC error (HTTP 200, `error.data: "ELECTRUM_URL env var must be set"`). The server still starts; other endpoints are unaffected.
+- `ELECTRUM_INSECURE_TLS=1` (optional): disable TLS certificate validation for the Electrum connection. Accepts `1`/`true`/`yes`. Required for self-signed backends like `electrs.day.ag:50002`. A `WARN` log fires every RPC when set.
+
+### Stop the server
+```bash
+kill "$(cat /tmp/btcmap-server.pid)"
+sleep 1
+ps -eo pid,cmd | awk '/target\/.*\/btcmap-api/ && !/awk/'
+```
+The second line is a sanity check — `ps` shouldn't show any `btcmap-api` process. If one is still there, `kill -9` it.
+
+### Create a temporary admin token
+Most admin RPCs (`get_wallets`, `dashboard`, etc.) require `Bearer` auth with a token that has the `admin` or `root` role. Don't reuse real production tokens. Mint a throwaway one against the local `main.db`:
+
+```bash
+sqlite3 $HOME/.local/share/btcmap/main.db <<'SQL'
+INSERT INTO access_token (user_id, name, secret, roles)
+VALUES (
+  (SELECT id FROM user WHERE roles LIKE '%root%' LIMIT 1),
+  'agent-probe',
+  'probe-secret-CHANGE-ME-random-hex-here',
+  '["root"]'
+);
+SQL
+```
+Pick a user with the `root` role (e.g. user id 3 if that's your local root account) and a `secret` string that's long and unique. The `secret` becomes the bearer token.
+
+### Call an admin RPC
+```bash
+curl -sS \
+  -X POST http://127.0.0.1:8000/rpc \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer probe-secret-CHANGE-ME-random-hex-here' \
+  -d '{"jsonrpc":"2.0","id":"1","method":"get_wallets"}' \
+  | python3 -m json.tool
+```
+- Endpoint: `POST /rpc` (not `/v2/rpc` or `/v3/rpc` — there's no version prefix).
+- Method names are `snake_case` (e.g. `get_wallets`, `get_element`, `dashboard`).
+- Response is JSON-RPC 2.0: `result` on success, `error` with `code`/`message`/`data` on failure.
+- For slow calls, add `--max-time 180` to `curl`.
+
+### Tear down the probe token
+Always delete the throwaway token when you're done:
+```bash
+sqlite3 $HOME/.local/share/btcmap/main.db \
+  "DELETE FROM access_token WHERE name='agent-probe';"
+```
+The token is in plain text in the DB, so leaving it around is the same as leaving a password in a config file. If you used a unique `name` (e.g. `agent-probe-1`, `agent-probe-2`), filter on that.
+
+### Verifying changes against the real DB
+Useful when you want to see if a patch actually works on production-shaped data (real element counts, real wallet history, etc.) rather than the empty in-memory test DB. The pattern is:
+1. Make the code change.
+2. `cargo build` (debug is faster).
+3. Restart the server (kill + relaunch as above).
+4. Hit the endpoint with `curl`, read the response.
+5. Tail `/tmp/btcmap-server.log` for warnings/errors.
+6. Iterate.
+
+For wallet/sync RPCs especially, prefer this over adding unit tests — those endpoints talk to external services (Electrum, Overpass, OSM, LND) that aren't reachable from `cargo test`.
+
+### Endpoints cheat sheet
+- `POST /rpc` — JSON-RPC, the main admin/control surface.
+- `GET /v2/elements`, `/v2/elements/{id}`, `/v2/areas`, `/v2/areas/{id}`, `/v2/reports`, `/v2/users` — read-only public API.
+- `GET /v3/...` and `GET /v4/...` — same data, newer shape; see `docs/rest/v3/` and `docs/rest/v4/`.
+- `GET /feeds/...` — Atom/RSS feeds.
+- `GET /og/element/{id}` — OpenGraph image for a place.
+
 ### Rust version
 The project does not pin its Rust version. Contributors should use a recent stable Rust toolchain with `rustfmt` and `clippy` components installed.
 

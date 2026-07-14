@@ -62,6 +62,17 @@ async fn main() -> Result<()> {
 
     let conf = db::main::conf::queries::select(&main_pool).await?;
 
+    if env::var("ELECTRUM_URL").is_err()
+        && (!conf.xpub_spending.trim().is_empty()
+            || !conf.xpub_donations.trim().is_empty()
+            || !conf.xpub_treasury.trim().is_empty())
+    {
+        tracing::warn!(
+            "ELECTRUM_URL env var is not set but at least one xpub is configured. \
+             The get_wallets RPC will return an error until ELECTRUM_URL is set."
+        );
+    }
+
     // Trusted external base URL of this API. Used by the NIP-98 NostrAuth
     // extractor to reconstruct the URL the signed event must bind to.
     // Per-deployment infrastructure value, so it lives in env, not in Conf

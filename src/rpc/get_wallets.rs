@@ -1,12 +1,24 @@
-use crate::{service, Result};
+use crate::service;
+use crate::Result;
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+pub struct TxSummary {
+    pub id: String,
+    pub received: i64,
+    pub sent: i64,
+    pub delta: i64,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Res {
     pub spending: i64,
     pub donations: i64,
     pub treasury: i64,
+    pub spending_tx: Vec<TxSummary>,
+    pub donations_tx: Vec<TxSummary>,
+    pub treasury_tx: Vec<TxSummary>,
 }
 
 pub async fn run(pool: &Pool) -> Result<Res> {
@@ -15,6 +27,36 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         spending: wallet.spending,
         donations: wallet.donations,
         treasury: wallet.treasury,
+        spending_tx: wallet
+            .spending_tx
+            .into_iter()
+            .map(|t| TxSummary {
+                id: t.id,
+                received: t.received,
+                sent: t.sent,
+                delta: t.delta,
+            })
+            .collect(),
+        donations_tx: wallet
+            .donations_tx
+            .into_iter()
+            .map(|t| TxSummary {
+                id: t.id,
+                received: t.received,
+                sent: t.sent,
+                delta: t.delta,
+            })
+            .collect(),
+        treasury_tx: wallet
+            .treasury_tx
+            .into_iter()
+            .map(|t| TxSummary {
+                id: t.id,
+                received: t.received,
+                sent: t.sent,
+                delta: t.delta,
+            })
+            .collect(),
     })
 }
 

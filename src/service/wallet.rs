@@ -2,24 +2,29 @@ use crate::{db, Result};
 use deadpool_sqlite::Pool;
 use electrum_client::bitcoin::base58;
 use electrum_client::bitcoin::bip32::{ChildNumber, Xpub};
+use electrum_client::bitcoin::hashes::Hash;
 use electrum_client::bitcoin::secp256k1::Secp256k1;
-use electrum_client::bitcoin::{CompressedPublicKey, Network};
+use electrum_client::bitcoin::taproot::TapTweakHash;
+use electrum_client::bitcoin::XOnlyPublicKey;
+use electrum_client::bitcoin::{Network, ScriptBuf, Transaction, Txid};
 use electrum_client::{Client, ElectrumApi};
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use tokio::task;
 
-const GAP_LIMIT: u32 = 20;
+const GAP_LIMIT: u32 = 100;
 
-const DEFAULT_ELECTRUM_URL: &str = "ssl://electrum.blockstream.info:50002";
+const RECENT_TX_LIMIT: usize = 10;
 
 const XPUB_MAINNET: [u8; 4] = [0x04, 0x88, 0xB2, 0x1E];
 const XPUB_TESTNET: [u8; 4] = [0x04, 0x35, 0x87, 0xCF];
 
-#[derive(Clone, Copy, Debug)]
-enum XpubKind {
-    LegacyP2pkh,
-    NestedSegwitP2shwpkh,
-    NativeSegwitP2wpkh,
+#[derive(Clone, Debug, Serialize)]
+pub struct TxSummary {
+    pub id: String,
+    pub received: i64,
+    pub sent: i64,
+    pub delta: i64,
 }
 
 #[derive(Serialize)]
@@ -27,14 +32,28 @@ pub struct Res {
     pub spending: i64,
     pub donations: i64,
     pub treasury: i64,
+    pub spending_tx: Vec<TxSummary>,
+    pub donations_tx: Vec<TxSummary>,
+    pub treasury_tx: Vec<TxSummary>,
+}
+
+impl Res {
+    fn empty() -> Self {
+        Self {
+            spending: 0,
+            donations: 0,
+            treasury: 0,
+            spending_tx: Vec::new(),
+            donations_tx: Vec::new(),
+            treasury_tx: Vec::new(),
+        }
+    }
 }
 
 pub async fn run(pool: &Pool) -> Result<Res> {
     let conf = db::main::conf::queries::select(pool).await?;
-    let url = std::env::var("ELECTRUM_URL").unwrap_or_else(|_| DEFAULT_ELECTRUM_URL.to_string());
     let res = task::spawn_blocking(move || {
         aggregate(
-            &url,
             &conf.xpub_spending,
             &conf.xpub_donations,
             &conf.xpub_treasury,
@@ -45,41 +64,72 @@ pub async fn run(pool: &Pool) -> Result<Res> {
     Ok(res)
 }
 
-fn aggregate(electrum_url: &str, spending: &str, donations: &str, treasury: &str) -> Result<Res> {
+fn aggregate(spending: &str, donations: &str, treasury: &str) -> Result<Res> {
     let has_any_xpub =
         !spending.trim().is_empty() || !donations.trim().is_empty() || !treasury.trim().is_empty();
     if !has_any_xpub {
-        return Ok(Res {
-            spending: 0,
-            donations: 0,
-            treasury: 0,
-        });
+        return Ok(Res::empty());
     }
-    let mut client = Client::new(electrum_url)?;
+    let url = std::env::var("ELECTRUM_URL")
+        .map_err(|_| crate::Error::Other("ELECTRUM_URL env var must be set".into()))?;
+    let insecure_tls = matches!(
+        std::env::var("ELECTRUM_INSECURE_TLS").ok().as_deref(),
+        Some("1") | Some("true") | Some("yes")
+    );
+    if insecure_tls {
+        tracing::warn!(
+            "ELECTRUM_INSECURE_TLS is set: TLS certificate validation is disabled for Electrum calls. \
+             This is unsafe on untrusted networks."
+        );
+    }
+    let config = electrum_client::Config::builder()
+        .validate_domain(!insecure_tls)
+        .build();
+    let mut client = Client::from_config(&url, config)?;
+    let (spending_bal, spending_tx) = scan_xpubs(&mut client, spending)?;
+    let (donations_bal, donations_tx) = scan_xpubs(&mut client, donations)?;
+    let (treasury_bal, treasury_tx) = scan_xpubs(&mut client, treasury)?;
     Ok(Res {
-        spending: sum_xpubs(&mut client, spending)?,
-        donations: sum_xpubs(&mut client, donations)?,
-        treasury: sum_xpubs(&mut client, treasury)?,
+        spending: spending_bal,
+        donations: donations_bal,
+        treasury: treasury_bal,
+        spending_tx,
+        donations_tx,
+        treasury_tx,
     })
 }
 
-fn sum_xpubs(client: &mut Client, xpubs: &str) -> Result<i64> {
+fn scan_xpubs(client: &mut Client, xpubs: &str) -> Result<(i64, Vec<TxSummary>)> {
     let mut total: i64 = 0;
+    let mut all_recent: Vec<TxSummary> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
     for xpub in xpubs.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let (balance, recent) = xpub_scan(client, xpub)?;
         total = total
-            .checked_add(xpub_balance(client, xpub)?)
+            .checked_add(balance)
             .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
+        for tx in recent {
+            if seen.insert(tx.id.clone()) {
+                all_recent.push(tx);
+            }
+        }
     }
-    Ok(total)
+    all_recent.truncate(RECENT_TX_LIMIT);
+    Ok((total, all_recent))
 }
 
-fn xpub_balance(client: &mut Client, xpub: &str) -> Result<i64> {
-    let (kind, xpub) = parse_xpub(xpub)?;
+fn derive_scripts(xpub: &Xpub) -> Result<[Vec<electrum_client::bitcoin::ScriptBuf>; 4]> {
     let secp = Secp256k1::new();
-    let mut scripts: Vec<electrum_client::bitcoin::ScriptBuf> =
+    let mut legacy: Vec<electrum_client::bitcoin::ScriptBuf> =
         Vec::with_capacity((GAP_LIMIT as usize) * 2);
-
-    for chain in 0..2 {
+    let mut nested: Vec<electrum_client::bitcoin::ScriptBuf> =
+        Vec::with_capacity((GAP_LIMIT as usize) * 2);
+    let mut native: Vec<electrum_client::bitcoin::ScriptBuf> =
+        Vec::with_capacity((GAP_LIMIT as usize) * 2);
+    let mut taproot: Vec<electrum_client::bitcoin::ScriptBuf> =
+        Vec::with_capacity((GAP_LIMIT as usize) * 2);
+    let verify = Secp256k1::verification_only();
+    for chain in 0..2u32 {
         for index in 0..GAP_LIMIT {
             let path = [
                 ChildNumber::from_normal_idx(chain)
@@ -91,13 +141,38 @@ fn xpub_balance(client: &mut Client, xpub: &str) -> Result<i64> {
                 .derive_pub(&secp, &path)
                 .map_err(|e| crate::Error::Other(format!("xpub derivation failed: {}", e)))?;
             let compressed = child.to_pub();
-            scripts.push(script_for_kind(kind, &compressed));
+            legacy.push(ScriptBuf::new_p2pkh(&compressed.pubkey_hash()));
+            nested.push(ScriptBuf::new_p2sh(
+                &ScriptBuf::p2wpkh_script_code(compressed.wpubkey_hash()).script_hash(),
+            ));
+            native.push(ScriptBuf::new_p2wpkh(&compressed.wpubkey_hash()));
+            let xonly = XOnlyPublicKey::from(compressed.0);
+            let tweak = TapTweakHash::from_key_and_tweak(xonly, None).to_scalar();
+            let (tweaked, _parity) = xonly
+                .add_tweak(&verify, &tweak)
+                .map_err(|e| crate::Error::Other(format!("taproot tweak failed: {}", e)))?;
+            taproot.push(
+                electrum_client::bitcoin::script::Builder::new()
+                    .push_opcode(electrum_client::bitcoin::opcodes::all::OP_PUSHNUM_1)
+                    .push_slice(tweaked.serialize())
+                    .into_script(),
+            );
         }
     }
+    Ok([legacy, nested, native, taproot])
+}
 
-    let refs: Vec<&electrum_client::bitcoin::Script> = scripts.iter().map(|s| s.as_ref()).collect();
-    let balances = client.batch_script_get_balance(&refs)?;
+fn xpub_scan(client: &mut Client, xpub: &str) -> Result<(i64, Vec<TxSummary>)> {
+    let xpub = parse_xpub(xpub)?;
+    let script_sets = derive_scripts(&xpub)?;
     let mut total: i64 = 0;
+    let mut all_scripts: Vec<electrum_client::bitcoin::ScriptBuf> = Vec::new();
+    for set in &script_sets {
+        all_scripts.extend(set.iter().cloned());
+    }
+    let refs: Vec<&electrum_client::bitcoin::Script> =
+        all_scripts.iter().map(|s| s.as_ref()).collect();
+    let balances = client.batch_script_get_balance(&refs)?;
     for balance in balances {
         let sat = (balance.confirmed as i64)
             .checked_add(balance.unconfirmed)
@@ -106,24 +181,123 @@ fn xpub_balance(client: &mut Client, xpub: &str) -> Result<i64> {
             .checked_add(sat)
             .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
     }
-    Ok(total)
+
+    let recent = recent_txs_for_scripts(client, &refs)?;
+    Ok((total, recent))
 }
 
-fn script_for_kind(
-    kind: XpubKind,
-    pubkey: &CompressedPublicKey,
-) -> electrum_client::bitcoin::ScriptBuf {
-    use electrum_client::bitcoin::ScriptBuf;
-    match kind {
-        XpubKind::LegacyP2pkh => ScriptBuf::new_p2pkh(&pubkey.pubkey_hash()),
-        XpubKind::NestedSegwitP2shwpkh => {
-            ScriptBuf::new_p2sh(&ScriptBuf::p2wpkh_script_code(pubkey.wpubkey_hash()).script_hash())
+fn recent_txs_for_scripts(
+    client: &mut Client,
+    scripts: &[&electrum_client::bitcoin::Script],
+) -> Result<Vec<TxSummary>> {
+    let histories = client.batch_script_get_history(scripts)?;
+    let mut candidates: Vec<(i32, [u8; 32])> = Vec::new();
+    let mut seen: HashSet<[u8; 32]> = HashSet::new();
+    for h in histories {
+        for entry in h {
+            let raw: [u8; 32] = *entry.tx_hash.as_ref();
+            if seen.insert(raw) {
+                candidates.push((entry.height, raw));
+            }
         }
-        XpubKind::NativeSegwitP2wpkh => ScriptBuf::new_p2wpkh(&pubkey.wpubkey_hash()),
     }
+    candidates.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    let selected: Vec<Txid> = candidates
+        .into_iter()
+        .take(RECENT_TX_LIMIT)
+        .map(|(_, raw)| Txid::from_byte_array(raw))
+        .collect();
+    if selected.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let txs: Vec<Transaction> = client.batch_transaction_get(&selected)?;
+
+    let script_set: HashSet<&electrum_client::bitcoin::Script> = scripts.iter().copied().collect();
+
+    let mut prev_needed: HashSet<Txid> = HashSet::new();
+    for tx in &txs {
+        for input in &tx.input {
+            prev_needed.insert(input.previous_output.txid);
+        }
+    }
+    let prev_needed: Vec<Txid> = prev_needed.into_iter().collect();
+    let prev_txs: Vec<Transaction> = if prev_needed.is_empty() {
+        Vec::new()
+    } else {
+        client.batch_transaction_get(&prev_needed)?
+    };
+    let mut prev_value: HashMap<(Txid, u32), i64> = HashMap::new();
+    let mut prev_script: HashMap<(Txid, u32), &electrum_client::bitcoin::Script> = HashMap::new();
+    for tx in &prev_txs {
+        let txid = tx.compute_txid();
+        for (vout, out) in tx.output.iter().enumerate() {
+            let vout = vout as u32;
+            prev_value.insert((txid, vout), out.value.to_sat() as i64);
+            prev_script.insert((txid, vout), out.script_pubkey.as_script());
+        }
+    }
+
+    let mut summaries = Vec::with_capacity(txs.len());
+    for tx in &txs {
+        let received = sum_outputs_to_xpub(tx, &script_set);
+        let sent = sum_inputs_from_xpub(tx, &script_set, &prev_value, &prev_script);
+        let delta = match received.checked_sub(sent) {
+            Some(v) => v,
+            None => return Err(crate::Error::Other("delta overflow".into())),
+        };
+        summaries.push(TxSummary {
+            id: tx.compute_txid().to_string(),
+            received,
+            sent,
+            delta,
+        });
+    }
+    Ok(summaries)
 }
 
-fn parse_xpub(s: &str) -> Result<(XpubKind, Xpub)> {
+fn sum_outputs_to_xpub(
+    tx: &Transaction,
+    xpub_scripts: &HashSet<&electrum_client::bitcoin::Script>,
+) -> i64 {
+    let mut total: i64 = 0;
+    for output in &tx.output {
+        if xpub_scripts.contains(output.script_pubkey.as_script()) {
+            total = match total.checked_add(output.value.to_sat() as i64) {
+                Some(v) => v,
+                None => return i64::MAX,
+            };
+        }
+    }
+    total
+}
+
+fn sum_inputs_from_xpub(
+    tx: &Transaction,
+    xpub_scripts: &HashSet<&electrum_client::bitcoin::Script>,
+    prev_value: &HashMap<(Txid, u32), i64>,
+    prev_script: &HashMap<(Txid, u32), &electrum_client::bitcoin::Script>,
+) -> i64 {
+    let mut total: i64 = 0;
+    for input in &tx.input {
+        let key = (input.previous_output.txid, input.previous_output.vout);
+        let Some(script) = prev_script.get(&key) else {
+            continue;
+        };
+        if !xpub_scripts.contains(*script) {
+            continue;
+        }
+        if let Some(value) = prev_value.get(&key) {
+            total = match total.checked_add(*value) {
+                Some(v) => v,
+                None => return i64::MAX,
+            };
+        }
+    }
+    total
+}
+
+fn parse_xpub(s: &str) -> Result<Xpub> {
     let mut data = base58::decode_check(s)
         .map_err(|e| crate::Error::Other(format!("invalid base58 xpub: {}", e)))?;
     if data.len() != 78 {
@@ -135,25 +309,6 @@ fn parse_xpub(s: &str) -> Result<(XpubKind, Xpub)> {
 
     let mut version = [0u8; 4];
     version.copy_from_slice(&data[..4]);
-
-    let kind = match version {
-        [0x04, 0x88, _, _] => XpubKind::LegacyP2pkh,
-        [0x04, 0x9D, _, _] => XpubKind::NestedSegwitP2shwpkh,
-        [0x04, 0xB2, _, _] => XpubKind::NativeSegwitP2wpkh,
-        [0x04, 0x35, _, _] => XpubKind::LegacyP2pkh,
-        [0x04, 0x4A, _, _] => XpubKind::NestedSegwitP2shwpkh,
-        [0x04, 0x5F, _, _] => {
-            return Err(crate::Error::Other(
-                "taproot (vpub) xpubs are not yet supported".into(),
-            ));
-        }
-        _ => {
-            return Err(crate::Error::Other(format!(
-                "unknown xpub version magic bytes: {:?}",
-                version
-            )));
-        }
-    };
 
     let is_mainnet = matches!(
         version,
@@ -171,9 +326,7 @@ fn parse_xpub(s: &str) -> Result<(XpubKind, Xpub)> {
     } else {
         &XPUB_TESTNET
     });
-    let xpub =
-        Xpub::decode(&data).map_err(|e| crate::Error::Other(format!("invalid xpub: {}", e)))?;
-    Ok((kind, xpub))
+    Xpub::decode(&data).map_err(|e| crate::Error::Other(format!("invalid xpub: {}", e)))
 }
 
 #[cfg(test)]
@@ -187,7 +340,6 @@ mod test {
 
     const ZPUB_MAINNET_VERSION: [u8; 4] = [0x04, 0xB2, 0x47, 0x0F];
     const YPUB_MAINNET_VERSION: [u8; 4] = [0x04, 0x9D, 0x7C, 0xB2];
-
     // Derives a mainnet xpub at `path` from `seed` and returns its base58 form.
     // Used to build ad-hoc xpubs at test time so no real wallet material ends
     // up in the source tree.
@@ -236,6 +388,9 @@ mod test {
         assert_eq!(res.spending, 0);
         assert_eq!(res.donations, 0);
         assert_eq!(res.treasury, 0);
+        assert!(res.spending_tx.is_empty());
+        assert!(res.donations_tx.is_empty());
+        assert!(res.treasury_tx.is_empty());
         Ok(())
     }
 
@@ -249,8 +404,7 @@ mod test {
                 ChildNumber::Hardened { index: 0 },
             ],
         );
-        let (kind, _xpub) = super::parse_xpub(&xpub)?;
-        assert!(matches!(kind, super::XpubKind::LegacyP2pkh));
+        super::parse_xpub(&xpub)?;
         Ok(())
     }
 
@@ -265,8 +419,7 @@ mod test {
             ],
         );
         let zpub = with_version(&xpub, ZPUB_MAINNET_VERSION);
-        let (kind, _xpub) = super::parse_xpub(&zpub)?;
-        assert!(matches!(kind, super::XpubKind::NativeSegwitP2wpkh));
+        super::parse_xpub(&zpub)?;
         Ok(())
     }
 
@@ -281,13 +434,12 @@ mod test {
             ],
         );
         let ypub = with_version(&xpub, YPUB_MAINNET_VERSION);
-        let (kind, _xpub) = super::parse_xpub(&ypub)?;
-        assert!(matches!(kind, super::XpubKind::NestedSegwitP2shwpkh));
+        super::parse_xpub(&ypub)?;
         Ok(())
     }
 
     #[test]
-    fn parse_unknown_version_rejected() {
+    fn parse_unknown_version_normalizes() -> Result<()> {
         let xpub = fresh_xpub(
             &[10u8; 32],
             &[
@@ -297,11 +449,49 @@ mod test {
             ],
         );
         let bogus = with_version(&xpub, [0xFF, 0xFF, 0xFF, 0xFF]);
-        let err = super::parse_xpub(&bogus).unwrap_err();
-        assert!(
-            format!("{}", err).contains("unknown xpub version magic bytes"),
-            "got: {}",
-            err
+        super::parse_xpub(&bogus)?;
+        Ok(())
+    }
+
+    #[test]
+    fn net_value_sums_outputs_to_xpub_scripts() {
+        use electrum_client::bitcoin::hashes::Hash;
+        use electrum_client::bitcoin::Transaction;
+        let script_a = electrum_client::bitcoin::ScriptBuf::new_p2pkh(
+            &electrum_client::bitcoin::PubkeyHash::from_byte_array([0x11; 20]),
         );
+        let script_b = electrum_client::bitcoin::ScriptBuf::new_p2wpkh(
+            &electrum_client::bitcoin::WPubkeyHash::from_byte_array([0x22; 20]),
+        );
+        let other = electrum_client::bitcoin::ScriptBuf::new_p2pkh(
+            &electrum_client::bitcoin::PubkeyHash::from_byte_array([0x33; 20]),
+        );
+
+        let tx = electrum_client::bitcoin::Transaction {
+            version: electrum_client::bitcoin::transaction::Version::TWO,
+            lock_time: electrum_client::bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![
+                electrum_client::bitcoin::TxOut {
+                    value: electrum_client::bitcoin::Amount::from_sat(50_000),
+                    script_pubkey: script_a.clone(),
+                },
+                electrum_client::bitcoin::TxOut {
+                    value: electrum_client::bitcoin::Amount::from_sat(75_000),
+                    script_pubkey: other,
+                },
+                electrum_client::bitcoin::TxOut {
+                    value: electrum_client::bitcoin::Amount::from_sat(12_345),
+                    script_pubkey: script_b.clone(),
+                },
+            ],
+        };
+        let mut set: std::collections::HashSet<&electrum_client::bitcoin::Script> =
+            std::collections::HashSet::new();
+        set.insert(script_a.as_script());
+        set.insert(script_b.as_script());
+        let net = super::sum_outputs_to_xpub(&tx, &set);
+        assert_eq!(net, 50_000 + 12_345);
+        let _: Transaction = tx;
     }
 }

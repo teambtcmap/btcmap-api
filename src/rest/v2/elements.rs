@@ -4,9 +4,9 @@ use crate::db::main::MainPool;
 use crate::service::overpass::OverpassElement;
 use crate::Error;
 use actix_web::get;
+use actix_web::web;
 use actix_web::web::Data;
 use actix_web::web::Json;
-use actix_web::web::Path;
 use actix_web::web::Query;
 use serde::Deserialize;
 use serde::Serialize;
@@ -83,12 +83,11 @@ pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> Result<Json<Vec<
 }
 
 #[get("{id}")]
-pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Result<Json<GetItem>, Error> {
-    let id = id.into_inner();
-    let id_parts: Vec<String> = id.split(":").map(|it| it.into()).collect();
-    let r#type = id_parts[0].clone();
-    let id = id_parts[1].parse::<i64>().map_err(|_| "Invalid ID")?;
-    db::main::element::queries::select_by_osm_type_and_id(r#type, id, &pool)
+pub async fn get_by_id(
+    id: web::Path<String>,
+    pool: Data<MainPool>,
+) -> Result<Json<GetItem>, Error> {
+    db::main::element::queries::select_by_id_or_osm_id(id.into_inner(), &pool)
         .await
         .map(Into::into)
 }
@@ -199,6 +198,21 @@ mod test {
             .to_request();
         let res: GetItem = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res, element.into());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_invalid_format_does_not_panic() -> Result<()> {
+        let pool = pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_id),
+        )
+        .await;
+        let req = TestRequest::get().uri("/foo").to_request();
+        let res = test::call_service(&app, req).await;
+        assert!(res.status().is_client_error() || res.status().is_server_error());
         Ok(())
     }
 }
