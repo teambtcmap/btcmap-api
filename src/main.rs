@@ -82,6 +82,7 @@ async fn main() -> Result<()> {
         env::var("BTCMAP_API_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
 
     service::matrix::init(&main_pool);
+    service::wallet_cache::init(&main_pool);
 
     HttpServer::new(move || {
         App::new()

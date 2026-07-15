@@ -84,6 +84,10 @@ CREATE TABLE conf(
     paywall_boost_element_365d_price_sat INTEGER NOT NULL
 , lnbits_invoice_key TEXT NOT NULL DEFAULT '', gitea_api_key TEXT NOT NULL DEFAULT '', matrix_bot_password TEXT NOT NULL DEFAULT '', lnd_invoices_macaroon TEXT NOT NULL DEFAULT '', ppq_key TEXT NOT NULL DEFAULT '', lnd_readonly_macaroon TEXT NOT NULL DEFAULT '', xpub_spending TEXT NOT NULL DEFAULT '', xpub_donations TEXT NOT NULL DEFAULT '', xpub_treasury TEXT NOT NULL DEFAULT '', electrum_url TEXT NOT NULL DEFAULT '') STRICT;
 INSERT INTO conf VALUES(1,500,5000,10000,30000,'','','','','','','','','','');
+CREATE TABLE cache(
+    key TEXT NOT NULL UNIQUE,
+    value TEXT NOT NULL
+) STRICT;
 CREATE TABLE element_issue(
     id INTEGER PRIMARY KEY NOT NULL,
     element_id INTEGER NOT NULL REFERENCES element(id),

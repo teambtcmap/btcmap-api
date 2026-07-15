@@ -19,3 +19,4 @@ pub mod search;
 pub mod sync;
 pub mod user;
 pub mod wallet;
+pub mod wallet_cache;

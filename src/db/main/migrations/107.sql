@@ -1,0 +1,4 @@
+CREATE TABLE cache(
+    key TEXT NOT NULL UNIQUE,
+    value TEXT NOT NULL
+) STRICT;

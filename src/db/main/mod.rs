@@ -2,6 +2,7 @@ pub mod access_token;
 pub mod area;
 pub mod area_element;
 pub mod ban;
+pub mod cache;
 pub mod conf;
 pub mod element;
 pub mod element_comment;

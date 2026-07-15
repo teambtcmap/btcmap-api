@@ -8,7 +8,7 @@ use electrum_client::bitcoin::taproot::TapTweakHash;
 use electrum_client::bitcoin::XOnlyPublicKey;
 use electrum_client::bitcoin::{ScriptBuf, Transaction, Txid};
 use electrum_client::{Client, ElectrumApi};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tokio::task;
 
@@ -25,7 +25,7 @@ const VPUB_VERSION: [u8; 4] = [0x04, 0x5F, 0x1C, 0xF6];
 
 const TAPROOT_XPUB_PREFIX: &str = "taproot:";
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxSummary {
     pub id: String,
     pub received: i64,
@@ -33,7 +33,7 @@ pub struct TxSummary {
     pub delta: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Res {
     pub spending: i64,
     pub donations: i64,
