@@ -62,14 +62,14 @@ async fn main() -> Result<()> {
 
     let conf = db::main::conf::queries::select(&main_pool).await?;
 
-    if env::var("ELECTRUM_URL").is_err()
+    if conf.electrum_url.trim().is_empty()
         && (!conf.xpub_spending.trim().is_empty()
             || !conf.xpub_donations.trim().is_empty()
             || !conf.xpub_treasury.trim().is_empty())
     {
         tracing::warn!(
-            "ELECTRUM_URL env var is not set but at least one xpub is configured. \
-             The get_wallets RPC will return an error until ELECTRUM_URL is set."
+            "electrum_url is not configured in the conf table but at least one xpub is set. \
+             The get_wallets RPC will return an error until electrum_url is configured."
         );
     }
 

@@ -57,6 +57,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
             &conf.xpub_spending,
             &conf.xpub_donations,
             &conf.xpub_treasury,
+            &conf.electrum_url,
         )
     })
     .await
@@ -64,39 +65,81 @@ pub async fn run(pool: &Pool) -> Result<Res> {
     Ok(res)
 }
 
-fn aggregate(spending: &str, donations: &str, treasury: &str) -> Result<Res> {
+fn aggregate(spending: &str, donations: &str, treasury: &str, electrum_url: &str) -> Result<Res> {
     let has_any_xpub =
         !spending.trim().is_empty() || !donations.trim().is_empty() || !treasury.trim().is_empty();
     if !has_any_xpub {
         return Ok(Res::empty());
     }
-    let url = std::env::var("ELECTRUM_URL")
-        .map_err(|_| crate::Error::Other("ELECTRUM_URL env var must be set".into()))?;
-    let insecure_tls = matches!(
-        std::env::var("ELECTRUM_INSECURE_TLS").ok().as_deref(),
-        Some("1") | Some("true") | Some("yes")
-    );
-    if insecure_tls {
-        tracing::warn!(
-            "ELECTRUM_INSECURE_TLS is set: TLS certificate validation is disabled for Electrum calls. \
-             This is unsafe on untrusted networks."
-        );
+    let endpoints = parse_electrum_endpoints(electrum_url)?;
+    if endpoints.is_empty() {
+        return Err(crate::Error::Other(
+            "electrum_url is empty but at least one xpub is configured".into(),
+        ));
     }
-    let config = electrum_client::Config::builder()
-        .validate_domain(!insecure_tls)
-        .build();
-    let mut client = Client::from_config(&url, config)?;
-    let (spending_bal, spending_tx) = scan_xpubs(&mut client, spending)?;
-    let (donations_bal, donations_tx) = scan_xpubs(&mut client, donations)?;
-    let (treasury_bal, treasury_tx) = scan_xpubs(&mut client, treasury)?;
-    Ok(Res {
-        spending: spending_bal,
-        donations: donations_bal,
-        treasury: treasury_bal,
-        spending_tx,
-        donations_tx,
-        treasury_tx,
-    })
+    let mut last_err: Option<crate::Error> = None;
+    for (url, insecure_tls) in &endpoints {
+        if *insecure_tls {
+            tracing::warn!(
+                "Electrum endpoint {} uses the insecure- prefix: TLS certificate validation \
+                 is disabled for this endpoint. This is unsafe on untrusted networks.",
+                url
+            );
+        }
+        let config = electrum_client::Config::builder()
+            .validate_domain(!*insecure_tls)
+            .build();
+        let mut client = match Client::from_config(url, config) {
+            Ok(client) => client,
+            Err(e) => {
+                last_err = Some(crate::Error::Other(format!(
+                    "electrum client connect failed for {}: {}",
+                    url, e
+                )));
+                continue;
+            }
+        };
+        match (
+            scan_xpubs(&mut client, spending),
+            scan_xpubs(&mut client, donations),
+            scan_xpubs(&mut client, treasury),
+        ) {
+            (
+                Ok((spending_bal, spending_tx)),
+                Ok((donations_bal, donations_tx)),
+                Ok((treasury_bal, treasury_tx)),
+            ) => {
+                return Ok(Res {
+                    spending: spending_bal,
+                    donations: donations_bal,
+                    treasury: treasury_bal,
+                    spending_tx,
+                    donations_tx,
+                    treasury_tx,
+                });
+            }
+            (a, b, c) => {
+                let err = a.err().or(b.err()).or(c.err()).unwrap_or_else(|| {
+                    crate::Error::Other(format!("electrum scan failed for {}", url))
+                });
+                last_err = Some(err);
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| crate::Error::Other("no electrum endpoints succeeded".into())))
+}
+
+fn parse_electrum_endpoints(raw: &str) -> Result<Vec<(String, bool)>> {
+    let mut out = Vec::new();
+    for entry in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let (url, insecure_tls) = if let Some(stripped) = entry.strip_prefix("insecure-") {
+            (stripped.to_string(), true)
+        } else {
+            (entry.to_string(), false)
+        };
+        out.push((url, insecure_tls));
+    }
+    Ok(out)
 }
 
 fn scan_xpubs(client: &mut Client, xpubs: &str) -> Result<(i64, Vec<TxSummary>)> {
@@ -368,6 +411,52 @@ mod test {
             .filter(|s| !s.is_empty())
             .collect();
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn parse_electrum_endpoints_single_plain() {
+        let endpoints = super::parse_electrum_endpoints("ssl://electrum.foo.bar:50002").unwrap();
+        assert_eq!(
+            endpoints,
+            vec![("ssl://electrum.foo.bar:50002".to_string(), false)]
+        );
+    }
+
+    #[test]
+    fn parse_electrum_endpoints_mixed_with_insecure_prefix() {
+        let endpoints = super::parse_electrum_endpoints(
+            "insecure-ssl://electrs.com.au:50002,ssl://electrum.foo.bar:50002",
+        )
+        .unwrap();
+        assert_eq!(
+            endpoints,
+            vec![
+                ("ssl://electrs.com.au:50002".to_string(), true),
+                ("ssl://electrum.foo.bar:50002".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_electrum_endpoints_trims_whitespace_and_skips_empty() {
+        let endpoints = super::parse_electrum_endpoints(
+            "  tcp://a:50001 , , insecure-tcp://b:50001  ,,tcp://c:50001",
+        )
+        .unwrap();
+        assert_eq!(
+            endpoints,
+            vec![
+                ("tcp://a:50001".to_string(), false),
+                ("tcp://b:50001".to_string(), true),
+                ("tcp://c:50001".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_electrum_endpoints_empty_string_yields_empty_vec() {
+        let endpoints = super::parse_electrum_endpoints("").unwrap();
+        assert!(endpoints.is_empty());
     }
 
     #[test]

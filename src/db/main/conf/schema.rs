@@ -17,6 +17,7 @@ pub enum Columns {
     XpubSpending,
     XpubDonations,
     XpubTreasury,
+    ElectrumUrl,
 }
 
 impl Columns {
@@ -35,6 +36,7 @@ impl Columns {
             Columns::XpubSpending => "xpub_spending",
             Columns::XpubDonations => "xpub_donations",
             Columns::XpubTreasury => "xpub_treasury",
+            Columns::ElectrumUrl => "electrum_url",
         }
     }
 }
@@ -55,6 +57,7 @@ pub struct Conf {
     pub xpub_spending: String,
     pub xpub_donations: String,
     pub xpub_treasury: String,
+    pub electrum_url: String,
 }
 
 impl Conf {
@@ -75,6 +78,7 @@ impl Conf {
                 Columns::XpubSpending,
                 Columns::XpubDonations,
                 Columns::XpubTreasury,
+                Columns::ElectrumUrl,
             ]
             .iter()
             .map(Columns::as_str)
@@ -103,6 +107,7 @@ impl Conf {
                 xpub_spending: row.get(Columns::XpubSpending.as_str())?,
                 xpub_donations: row.get(Columns::XpubDonations.as_str())?,
                 xpub_treasury: row.get(Columns::XpubTreasury.as_str())?,
+                electrum_url: row.get(Columns::ElectrumUrl.as_str())?,
             })
         }
     }
