@@ -163,6 +163,23 @@ Returns a high-level analytics dashboard snapshot, including the time the report
     "spending": 125000,
     "donations": 84000,
     "treasury": 2100000,
+    "spending_tx": [
+      {
+        "id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "received": 100000,
+        "sent": 0,
+        "delta": 100000
+      }
+    ],
+    "donations_tx": [
+      {
+        "id": "0000000000000000000000000000000000000000000000000000000000000002",
+        "received": 0,
+        "sent": 50000,
+        "delta": -50000
+      }
+    ],
+    "treasury_tx": [],
     "fetched_at": "2024-12-31T23:55:00Z"
   }
 }
@@ -224,10 +241,17 @@ Returns a high-level analytics dashboard snapshot, including the time the report
   - `elements_deleted`: Number of elements marked as deleted by the run
   - `failed_at`: UTC timestamp (RFC 3339) when the sync failed, or `null` on success
   - `fail_reason`: Human-readable failure reason, or `null` on success
-- `wallets`: BTC Map on-chain wallet balances in satoshis, derived by summing the script getBalance response from Electrum for every script derived from each configured xpub (gap limit 20). Balances are served from an in-memory cache that is warmed once at server startup and refreshed every 5 minutes by a background task, so values may be up to ~5 minutes stale. When no xpubs are configured all three balances are `0`. If the Electrum probe fails and there is no cached snapshot, all three balances fall back to `0` and `fetched_at` is `null`. Contains:
+- `wallets`: BTC Map on-chain wallet balances in satoshis, derived by summing the script getBalance response from Electrum for every script derived from each configured xpub (gap limit 100). Balances are served from an in-memory cache that is warmed once at server startup and refreshed every 5 minutes by a background task, so values may be up to ~5 minutes stale. When no xpubs are configured all three balances are `0`. If the Electrum probe fails and there is no cached snapshot, all three balances fall back to `0` and `fetched_at` is `null`. Contains:
   - `spending`: Balance of the spending wallet, derived from `conf.xpub_spending`
   - `donations`: Balance of the donations wallet, derived from `conf.xpub_donations`
   - `treasury`: Balance of the treasury wallet, derived from `conf.xpub_treasury`
+  - `spending_tx`: Up to 10 most recent transactions affecting the spending wallet, ordered by block height descending (most recent first). Each entry contains:
+    - `id`: Transaction ID (hex, big-endian, as returned by Electrum)
+    - `received`: Satoshis paid to this wallet's scripts by this transaction
+    - `sent`: Satoshis spent from this wallet's scripts by this transaction
+    - `delta`: `received - sent` for this wallet
+  - `donations_tx`: Same shape as `spending_tx`, for the donations wallet
+  - `treasury_tx`: Same shape as `spending_tx`, for the treasury wallet
   - `fetched_at`: UTC timestamp (RFC 3339) when these balances were last probed against Electrum, or `null` if the probe failed and no cached snapshot exists
 
 Windows are calculated from "now" at the time of the request. The `d1` window is included in `d7`, and `d7` is included in `d30`.

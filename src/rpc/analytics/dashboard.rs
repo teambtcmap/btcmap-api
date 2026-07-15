@@ -103,8 +103,19 @@ pub struct Wallets {
     pub spending: i64,
     pub donations: i64,
     pub treasury: i64,
+    pub spending_tx: Vec<TxSummary>,
+    pub donations_tx: Vec<TxSummary>,
+    pub treasury_tx: Vec<TxSummary>,
     #[serde(with = "time::serde::rfc3339::option")]
     pub fetched_at: Option<OffsetDateTime>,
+}
+
+#[derive(Serialize)]
+pub struct TxSummary {
+    pub id: String,
+    pub received: i64,
+    pub sent: i64,
+    pub delta: i64,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -228,6 +239,39 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
             spending: snapshot.res.spending,
             donations: snapshot.res.donations,
             treasury: snapshot.res.treasury,
+            spending_tx: snapshot
+                .res
+                .spending_tx
+                .into_iter()
+                .map(|t| TxSummary {
+                    id: t.id,
+                    received: t.received,
+                    sent: t.sent,
+                    delta: t.delta,
+                })
+                .collect(),
+            donations_tx: snapshot
+                .res
+                .donations_tx
+                .into_iter()
+                .map(|t| TxSummary {
+                    id: t.id,
+                    received: t.received,
+                    sent: t.sent,
+                    delta: t.delta,
+                })
+                .collect(),
+            treasury_tx: snapshot
+                .res
+                .treasury_tx
+                .into_iter()
+                .map(|t| TxSummary {
+                    id: t.id,
+                    received: t.received,
+                    sent: t.sent,
+                    delta: t.delta,
+                })
+                .collect(),
             fetched_at: Some(snapshot.fetched_at),
         },
         Err(err) => {
@@ -236,6 +280,9 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
                 spending: 0,
                 donations: 0,
                 treasury: 0,
+                spending_tx: Vec::new(),
+                donations_tx: Vec::new(),
+                treasury_tx: Vec::new(),
                 fetched_at: None,
             }
         }
@@ -402,6 +449,9 @@ mod test {
         assert_eq!(0, res.wallets.spending);
         assert_eq!(0, res.wallets.donations);
         assert_eq!(0, res.wallets.treasury);
+        assert!(res.wallets.spending_tx.is_empty());
+        assert!(res.wallets.donations_tx.is_empty());
+        assert!(res.wallets.treasury_tx.is_empty());
         assert!(res.wallets.fetched_at.is_some());
         assert_eq!(0, res.unique_ips_24h.web);
         assert_eq!(0, res.unique_ips_24h.android);
