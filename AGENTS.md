@@ -289,6 +289,9 @@ Use `db::test::pool()` for in-memory SQLite test databases.
 - `BTCMAP_API_CORS_ORIGINS` controls the CORS middleware in `main.rs`. Unset or `*` (default) allows any origin. Set to a comma-separated list to restrict. The middleware handles the OPTIONS preflight itself.
 - Release builds use native CPU optimization (via .cargo/config.toml)
 
+### Temporary Files
+For scratch files, logs, PIDs, or any other transient artifacts outside the workspace, always use `/tmp/opencode` — this path is pre-approved and won't trigger permission prompts. Do NOT use bare `/tmp/...` paths. Examples: `/tmp/opencode/btcmap-server.log`, `/tmp/opencode/btcmap-server.pid`.
+
 ### Key Dependencies
 - **actix-web**: HTTP server
 - **rusqlite + deadpool-sqlite**: SQLite database with async pool
