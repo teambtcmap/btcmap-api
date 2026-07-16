@@ -6,6 +6,8 @@ use std::sync::OnceLock;
 
 pub const TABLE_NAME: &str = "invoice";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Uuid,
@@ -18,24 +20,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Uuid => "uuid",
-            Columns::Source => "source",
-            Columns::Description => "description",
-            Columns::AmountSats => "amount_sats",
-            Columns::PaymentHash => "payment_hash",
-            Columns::PaymentRequest => "payment_request",
-            Columns::Status => "status",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -118,7 +102,7 @@ impl Invoice {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -127,17 +111,17 @@ impl Invoice {
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Invoice> {
         |row: &_| {
             Ok(Invoice {
-                id: row.get(Columns::Id.as_str())?,
-                uuid: row.get(Columns::Uuid.as_str())?,
-                source: row.get(Columns::Source.as_str())?,
-                description: row.get(Columns::Description.as_str())?,
-                amount_sats: row.get(Columns::AmountSats.as_str())?,
-                payment_hash: row.get(Columns::PaymentHash.as_str())?,
-                payment_request: row.get(Columns::PaymentRequest.as_str())?,
-                status: row.get(Columns::Status.as_str())?,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                uuid: row.get(Columns::Uuid.as_ref())?,
+                source: row.get(Columns::Source.as_ref())?,
+                description: row.get(Columns::Description.as_ref())?,
+                amount_sats: row.get(Columns::AmountSats.as_ref())?,
+                payment_hash: row.get(Columns::PaymentHash.as_ref())?,
+                payment_request: row.get(Columns::PaymentRequest.as_ref())?,
+                status: row.get(Columns::Status.as_ref())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }
