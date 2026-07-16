@@ -223,9 +223,9 @@ pub fn select_most_active_for_area(
         type = db::main::element_event::schema::Columns::Type.as_str(),
         e_element_id = db::main::element_event::schema::Columns::ElementId.as_str(),
         area_element_table = db::main::area_element::schema::TABLE_NAME,
-        ae_element_id = db::main::area_element::schema::Columns::ElementId.as_str(),
-        ae_area_id = db::main::area_element::schema::Columns::AreaId.as_str(),
-        ae_deleted_at = db::main::area_element::schema::Columns::DeletedAt.as_str(),
+        ae_element_id = db::main::area_element::schema::Columns::ElementId.as_ref(),
+        ae_area_id = db::main::area_element::schema::Columns::AreaId.as_ref(),
+        ae_deleted_at = db::main::area_element::schema::Columns::DeletedAt.as_ref(),
     );
     let refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
     conn.prepare(&sql)?
