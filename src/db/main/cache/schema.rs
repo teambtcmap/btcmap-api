@@ -1,15 +1,8 @@
 pub const TABLE_NAME: &str = "cache";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Key,
     Value,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Key => "key",
-            Columns::Value => "value",
-        }
-    }
 }

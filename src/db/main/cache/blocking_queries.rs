@@ -9,9 +9,9 @@ pub fn select(key: &str, conn: &Connection) -> Result<Option<String>> {
             FROM {table}
             WHERE {key} = ?1
         "#,
-        value = Columns::Value.as_str(),
+        value = Columns::Value.as_ref(),
         table = super::schema::TABLE_NAME,
-        key = Columns::Key.as_str(),
+        key = Columns::Key.as_ref(),
     );
     conn.prepare(&sql)?
         .query_row(params![key], |row| row.get(0))
@@ -27,8 +27,8 @@ pub fn upsert(key: &str, value: &str, conn: &Connection) -> Result<()> {
             ON CONFLICT ({key}) DO UPDATE SET {value} = excluded.{value}
         "#,
         table = super::schema::TABLE_NAME,
-        key = Columns::Key.as_str(),
-        value = Columns::Value.as_str(),
+        key = Columns::Key.as_ref(),
+        value = Columns::Value.as_ref(),
     );
     conn.execute(&sql, params![key, value])?;
     Ok(())
