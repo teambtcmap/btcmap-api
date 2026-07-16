@@ -16,9 +16,9 @@ pub fn insert(
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        code = Columns::Code.as_str(),
-        severity = Columns::Severity.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        code = Columns::Code.as_ref(),
+        severity = Columns::Severity.as_ref(),
         projection = ElementIssue::projection(),
     );
     let params = named_params! {
@@ -40,9 +40,9 @@ pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<El
         "#,
         projection = ElementIssue::projection(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![element_id], ElementIssue::mapper())?
@@ -77,11 +77,11 @@ pub fn select_ordered_by_severity(
                 LIMIT :limit
                 OFFSET :offset;
             "#,
-        code = Columns::Code.as_str(),
+        code = Columns::Code.as_ref(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        deleted_at = Columns::DeletedAt.as_str(),
-        severity = Columns::Severity.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        severity = Columns::Severity.as_ref(),
         element_table = db::main::element::schema::TABLE_NAME,
         include_outdated = if include_outdated {
             ""
@@ -110,7 +110,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementIssue> {
         "#,
         projection = ElementIssue::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], ElementIssue::mapper())
         .map_err(Into::into)
@@ -136,7 +136,7 @@ pub fn select_count(
                 FROM {table} ei {area_join}
                 {include_outdated}
             "#,
-            id = Columns::Id.as_str(),
+            id = Columns::Id.as_ref(),
             table = schema::TABLE_NAME,
             include_outdated = if include_outdated {
                 ""
@@ -151,9 +151,9 @@ pub fn select_count(
                 FROM {table} ei {area_join}
                 WHERE ei.{deleted_at} IS NULL {include_outdated}
             "#,
-            id = Columns::Id.as_str(),
+            id = Columns::Id.as_ref(),
             table = schema::TABLE_NAME,
-            deleted_at = Columns::DeletedAt.as_str(),
+            deleted_at = Columns::DeletedAt.as_ref(),
             include_outdated = if include_outdated {
                 ""
             } else {
@@ -173,8 +173,8 @@ pub fn set_severity(id: i64, severity: i64, conn: &Connection) -> Result<Element
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        severity = Columns::Severity.as_str(),
-        id = Columns::Id.as_str(),
+        severity = Columns::Severity.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, severity,])?;
     select_by_id(id, conn)
@@ -194,8 +194,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?,])?;
         }
@@ -207,8 +207,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }
