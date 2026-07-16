@@ -489,7 +489,7 @@ mod test {
             db::main::element::blocking_queries::insert(&OverpassElement::mock(1), &conn)?;
         let _event = super::insert(user.id, element.id, "create", &conn)?;
         let deleted_event = super::insert(user.id, element.id, "delete", &conn)?;
-        let sql = format!("UPDATE element_event SET deleted_at = datetime('now') WHERE id = ?1");
+        let sql = "UPDATE element_event SET deleted_at = datetime('now') WHERE id = ?1".to_string();
         conn.execute(&sql, params![deleted_event.id])?;
         let result = super::select_by_element_id(element.id, &conn)?;
         assert_eq!(1, result.len());

@@ -717,14 +717,14 @@ mod test {
     #[test]
     fn select_by_search_query() -> Result<()> {
         let conn = conn();
-        let areas = vec![
+        let areas = [
             super::insert(Area::mock_tags(), &conn)?,
             super::insert(Area::mock_tags(), &conn)?,
             super::insert(Area::mock_tags(), &conn)?,
         ];
         super::patch_tags(
             areas[1].id,
-            Map::from_iter([("name".into(), "sushi".into())].into_iter()),
+            Map::from_iter([("name".into(), "sushi".into())]),
             &conn,
         )?;
         assert_eq!(1, super::select_by_search_query("sus", &conn)?.len());
@@ -817,7 +817,7 @@ mod test {
         let name = "foo";
         let area = super::patch_tags(
             area.id,
-            Map::from_iter([("name".into(), name.into())].into_iter()),
+            Map::from_iter([("name".into(), name.into())]),
             &conn,
         )?;
         assert_eq!(name, area.name());

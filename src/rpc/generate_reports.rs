@@ -337,7 +337,7 @@ mod test {
             updated_at: OffsetDateTime::now_utc(),
             deleted_at: None,
         };
-        let report_tags = super::generate_report_tags(&vec![element_1, element_2], "")?;
+        let report_tags = super::generate_report_tags(&[element_1, element_2], "")?;
 
         assert_eq!(
             2,

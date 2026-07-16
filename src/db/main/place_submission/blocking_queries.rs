@@ -352,11 +352,11 @@ mod test {
 
         assert_eq!(
             Some(submission),
-            super::select_by_origin_and_external_id(origin.into(), external_id.into(), &conn)?
+            super::select_by_origin_and_external_id(origin, external_id, &conn)?
         );
         assert_eq!(
             None,
-            super::select_by_origin_and_external_id(external_id.into(), origin.into(), &conn)?
+            super::select_by_origin_and_external_id(external_id, origin, &conn)?
         );
 
         Ok(())
@@ -426,15 +426,15 @@ mod test {
         };
         let submission = super::insert(&args, &conn)?;
 
-        assert_eq!(false, submission.revoked);
+        assert!(!submission.revoked);
 
         let submission = super::set_revoked(submission.id, true, &conn)?;
 
-        assert_eq!(true, submission.revoked);
+        assert!(submission.revoked);
 
         let submission = super::set_revoked(submission.id, false, &conn)?;
 
-        assert_eq!(false, submission.revoked);
+        assert!(!submission.revoked);
 
         Ok(())
     }

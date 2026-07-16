@@ -197,7 +197,7 @@ mod test {
         let date = date!(2023 - 01 - 01);
         let mut tags = Map::new();
         tags.insert("key".to_string(), Value::String("value".to_string()));
-        let report = super::insert(area.id, date.clone(), &tags, &conn)?;
+        let report = super::insert(area.id, date, &tags, &conn)?;
         assert_eq!(report.area_id, area.id);
         assert_eq!(report.date, date);
         assert_eq!(report.tags, tags);

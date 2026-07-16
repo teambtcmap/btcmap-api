@@ -228,7 +228,7 @@ mod test {
     fn insert_and_select_by_id() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let element_id = 123;
         let code = "not_verified";
@@ -250,7 +250,7 @@ mod test {
     fn select_by_element_id() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let element_id = 123;
 
@@ -272,7 +272,7 @@ mod test {
     fn select_count() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Insert some issues
         super::insert(1, "outdated", 1, &conn)?;
@@ -296,7 +296,7 @@ mod test {
     fn set_severity() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let issue = super::insert(1, "missing_icon", 1, &conn)?;
 
         let updated = super::set_severity(issue.id, 5, &conn)?;
@@ -311,7 +311,7 @@ mod test {
     fn set_deleted_at() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let issue = super::insert(1, "outdated_soon", 1, &conn).unwrap();
         let now = OffsetDateTime::now_utc();
 
@@ -328,7 +328,7 @@ mod test {
     #[test]
     fn select_ordered_by_severity() -> Result<()> {
         let conn = conn();
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let element1_id = 100;
         let element2_id = 200;

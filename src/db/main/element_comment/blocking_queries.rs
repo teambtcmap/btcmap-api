@@ -311,7 +311,7 @@ mod test {
     fn select_updated_since() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let time1 = OffsetDateTime::now_utc().saturating_add(Duration::hours(-1));
         let comment1 = super::insert(1, "First", &conn)?;
@@ -333,7 +333,7 @@ mod test {
     fn select_latest() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let time1 = OffsetDateTime::now_utc().saturating_sub(Duration::hours(1));
         let comment1 = super::insert(1, "First", &conn)?;
         let _comment1 = super::set_updated_at(comment1.id, time1, &conn)?;
@@ -354,7 +354,7 @@ mod test {
     fn select_created_between() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let time1 = OffsetDateTime::now_utc().saturating_sub(Duration::hours(1));
         let comment1 = super::insert(1, "First", &conn)?;
@@ -380,7 +380,7 @@ mod test {
     fn select_by_element_id() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let comment = super::insert(1, "First", &conn)?;
 
         // Test select_by_element_id
@@ -395,7 +395,7 @@ mod test {
     fn set_deleted_at() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let comment = super::insert(1, "Test", &conn)?;
 

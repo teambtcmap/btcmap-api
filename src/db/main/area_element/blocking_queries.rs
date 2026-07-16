@@ -191,7 +191,7 @@ mod tests {
     fn select_updated_since() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Create test timestamps
         let base_time = OffsetDateTime::now_utc();
@@ -248,7 +248,7 @@ mod tests {
     fn select_updated_since_ordering() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let time = OffsetDateTime::now_utc();
 
         // Insert records with same updated_at but different ids
@@ -273,7 +273,7 @@ mod tests {
     fn select_by_area_id_basic() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert test data for multiple areas
@@ -309,7 +309,7 @@ mod tests {
     fn select_by_area_id_ordering() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert records with same area_id and same updated_at but different ids
@@ -342,7 +342,7 @@ mod tests {
     fn select_by_element_id_basic() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert test data for multiple elements
@@ -378,7 +378,7 @@ mod tests {
     fn select_by_element_id_ordering() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert records with same element_id and same updated_at but different ids
@@ -412,7 +412,7 @@ mod tests {
         // Setup in-memory database
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Insert test data
         let test_id = 1;
@@ -440,7 +440,7 @@ mod tests {
         // Setup test database
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Insert test data
         let test_id = 1;
@@ -479,7 +479,7 @@ mod tests {
         // Setup test database
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Insert test data
         let item = super::insert(1, 1, &conn)?;
@@ -503,7 +503,7 @@ mod tests {
     fn set_deleted_at_with_null() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let deleted_time = OffsetDateTime::now_utc();
 
         // Insert with deleted_at already set

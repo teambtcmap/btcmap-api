@@ -747,7 +747,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "id": 1
             }))
@@ -776,7 +776,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "signup",
                 "params": {"username": "satoshi", "password": "ihsotasatoshi123"},
@@ -807,7 +807,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "add_area",
                 "params": {"name": "test"},
@@ -838,7 +838,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "1.0",
                 "method": "signup",
                 "params": {"username": "satoshi", "password": "ihsotasatoshi123"},
@@ -879,7 +879,7 @@ mod test {
         let first_req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "signout",
                 "id": 1
@@ -895,7 +895,7 @@ mod test {
         let second_req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "signout",
                 "id": 2
@@ -938,7 +938,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "whoami",
                 "id": 1
@@ -995,7 +995,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer scoped_secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "get_submitted_place",
                 "params": {"id": 1, "origin": "coinos"},
@@ -1058,7 +1058,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer scoped_secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "revoke_submitted_place",
                 "params": {"id": 1, "origin": "coinos"},
@@ -1102,7 +1102,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "add_area",  // Requires admin role
                 "params": {"name": "test"},

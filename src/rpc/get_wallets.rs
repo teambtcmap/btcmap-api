@@ -110,7 +110,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "get_wallets",
                 "id": 1
@@ -140,7 +140,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer alice-secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "get_wallets",
                 "id": 1
@@ -173,7 +173,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer bob-secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "get_wallets",
                 "id": 1
@@ -206,7 +206,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "get_wallets",
                 "id": 1

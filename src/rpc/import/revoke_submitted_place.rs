@@ -92,7 +92,7 @@ mod test {
         };
         let submission = db::main::place_submission::queries::insert(args, &pool).await?;
 
-        assert_eq!(false, submission.revoked);
+        assert!(!submission.revoked);
 
         let admin_token = AccessToken {
             id: 1,
@@ -124,7 +124,7 @@ mod test {
 
         let submission = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
 
-        assert_eq!(true, submission.revoked);
+        assert!(submission.revoked);
 
         Ok(())
     }
