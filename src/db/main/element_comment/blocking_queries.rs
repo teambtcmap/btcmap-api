@@ -20,8 +20,8 @@ pub fn insert(
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        comment = Columns::Comment.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        comment = Columns::Comment.as_ref(),
         projection = ElementComment::projection(),
     );
     conn.query_row(
@@ -53,8 +53,8 @@ pub fn select_updated_since(
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -78,8 +78,8 @@ pub fn select_latest(limit: i64, conn: &Connection) -> Result<Vec<ElementComment
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     let res = conn
         .prepare(&sql)?
@@ -102,9 +102,9 @@ pub fn select_created_between(
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        created_at = Columns::CreatedAt.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        created_at = Columns::CreatedAt.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -135,9 +135,9 @@ pub fn select_created_between_for_area(
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
-        deleted_at = Columns::DeletedAt.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
+        deleted_at = Columns::DeletedAt.as_ref(),
         area_element_table = crate::db::main::area_element::schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
@@ -174,9 +174,9 @@ pub fn select_by_element_id(
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -199,7 +199,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementComment> {
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], ElementComment::mapper())
         .map_err(Into::into)
@@ -218,8 +218,8 @@ pub fn set_created_at(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        created_at = Columns::CreatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        created_at = Columns::CreatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, created_at.format(&Rfc3339)?])?;
     select_by_id(id, conn)
@@ -238,8 +238,8 @@ pub fn set_updated_at(
                     WHERE {id} = ?1
                 "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, updated_at.format(&Rfc3339)?])?;
     select_by_id(id, conn)
@@ -259,8 +259,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?])?;
         }
@@ -272,8 +272,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }
