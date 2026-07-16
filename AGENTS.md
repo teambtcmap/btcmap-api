@@ -6,6 +6,10 @@ This document provides guidelines for agents working on the btcmap-api codebase.
 
 BTC Map API is a Rust web service built with actix-web that provides a REST and RPC APIs for managing Bitcoin adoption data in meatspace. It uses SQLite for persistence.
 
+## Commit and Push Policy
+
+**Never commit or push unless the user explicitly instructs it in their most recent prompt.** Even when changes look complete, lint passes, and tests are green, do not run `git commit`, `git push`, `git commit --amend`, or any force-push/rebase on the user's behalf without a direct instruction in the last message. If a commit or push seems like the obvious next step, surface the suggestion in the response and wait for confirmation — do not execute it preemptively.
+
 ## Build & Test Commands
 
 ### Building
