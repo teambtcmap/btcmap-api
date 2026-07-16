@@ -7,6 +7,8 @@ use time::OffsetDateTime;
 
 pub const TABLE_NAME: &str = "area";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Alias,
@@ -18,23 +20,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Alias => "alias",
-            Columns::BboxWest => "bbox_west",
-            Columns::BboxSouth => "bbox_south",
-            Columns::BboxEast => "bbox_east",
-            Columns::BboxNorth => "bbox_north",
-            Columns::Tags => "tags",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[derive(PartialEq)]
@@ -68,7 +53,7 @@ impl Area {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -76,7 +61,7 @@ impl Area {
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Area> {
         |row: &Row| -> rusqlite::Result<Area> {
-            let tags: String = row.get(Columns::Tags.as_str())?;
+            let tags: String = row.get(Columns::Tags.as_ref())?;
             let tags = serde_json::from_str(&tags).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     6,
@@ -85,16 +70,16 @@ impl Area {
                 )
             })?;
             Ok(Area {
-                id: row.get(Columns::Id.as_str())?,
-                alias: row.get(Columns::Alias.as_str())?,
-                bbox_west: row.get(Columns::BboxWest.as_str())?,
-                bbox_south: row.get(Columns::BboxSouth.as_str())?,
-                bbox_east: row.get(Columns::BboxEast.as_str())?,
-                bbox_north: row.get(Columns::BboxNorth.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                alias: row.get(Columns::Alias.as_ref())?,
+                bbox_west: row.get(Columns::BboxWest.as_ref())?,
+                bbox_south: row.get(Columns::BboxSouth.as_ref())?,
+                bbox_east: row.get(Columns::BboxEast.as_ref())?,
+                bbox_north: row.get(Columns::BboxNorth.as_ref())?,
                 tags,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }
@@ -152,5 +137,39 @@ impl Area {
         );
         tags.insert("url_alias".into(), Value::String("alias".into()));
         tags
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Area, Columns};
+
+    #[test]
+    fn columns_as_ref() {
+        assert_eq!(Columns::Id.as_ref(), "id");
+        assert_eq!(Columns::Alias.as_ref(), "alias");
+        assert_eq!(Columns::BboxWest.as_ref(), "bbox_west");
+        assert_eq!(Columns::BboxSouth.as_ref(), "bbox_south");
+        assert_eq!(Columns::BboxEast.as_ref(), "bbox_east");
+        assert_eq!(Columns::BboxNorth.as_ref(), "bbox_north");
+        assert_eq!(Columns::Tags.as_ref(), "tags");
+        assert_eq!(Columns::CreatedAt.as_ref(), "created_at");
+        assert_eq!(Columns::UpdatedAt.as_ref(), "updated_at");
+        assert_eq!(Columns::DeletedAt.as_ref(), "deleted_at");
+    }
+
+    #[test]
+    fn projection_contains_all_columns() {
+        let projection = Area::projection();
+        assert!(projection.contains("id"));
+        assert!(projection.contains("alias"));
+        assert!(projection.contains("bbox_west"));
+        assert!(projection.contains("bbox_south"));
+        assert!(projection.contains("bbox_east"));
+        assert!(projection.contains("bbox_north"));
+        assert!(projection.contains("tags"));
+        assert!(projection.contains("created_at"));
+        assert!(projection.contains("updated_at"));
+        assert!(projection.contains("deleted_at"));
     }
 }

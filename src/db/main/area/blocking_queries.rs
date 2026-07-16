@@ -30,8 +30,8 @@ pub fn insert(tags: Map<String, Value>, conn: &Connection) -> Result<Area> {
                 RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        alias = Columns::Alias.as_str(),
+        tags = Columns::Tags.as_ref(),
+        alias = Columns::Alias.as_ref(),
         projection = Area::projection(),
     );
     conn.query_row(&sql, params![alias, Value::from(tags)], Area::mapper())
@@ -47,7 +47,7 @@ pub fn select(
     let updated_since_sql = match updated_since {
         Some(updated_since) => format!(
             "AND {updated_at} > '{updated_since}'",
-            updated_at = Columns::UpdatedAt.as_str(),
+            updated_at = Columns::UpdatedAt.as_ref(),
             updated_since = updated_since.format(&Rfc3339)?
         ),
         None => String::new(),
@@ -57,7 +57,7 @@ pub fn select(
     } else {
         format!(
             "AND {deleted_at} IS NULL",
-            deleted_at = Columns::DeletedAt.as_str()
+            deleted_at = Columns::DeletedAt.as_ref()
         )
     };
     let sql = format!(
@@ -72,8 +72,8 @@ pub fn select(
         "#,
         projection = Area::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
         limit = limit.unwrap_or(i64::MAX)
     );
     conn.prepare(&sql)?
@@ -95,9 +95,9 @@ pub fn select_by_search_query(
         "#,
         projection = Area::projection(),
         table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![search_query.into()], Area::mapper())?
@@ -132,11 +132,11 @@ pub fn select_by_bbox(
         "#,
         projection = Area::projection(),
         table = schema::TABLE_NAME,
-        deleted_at = Columns::DeletedAt.as_str(),
-        bbox_west = Columns::BboxWest.as_str(),
-        bbox_south = Columns::BboxSouth.as_str(),
-        bbox_east = Columns::BboxEast.as_str(),
-        bbox_north = Columns::BboxNorth.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        bbox_west = Columns::BboxWest.as_ref(),
+        bbox_south = Columns::BboxSouth.as_ref(),
+        bbox_east = Columns::BboxEast.as_ref(),
+        bbox_north = Columns::BboxNorth.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![west, south, east, north], Area::mapper())?
@@ -153,7 +153,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Area> {
         "#,
         projection = Area::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], Area::mapper())
         .map_err(Into::into)
@@ -173,7 +173,7 @@ pub fn select_by_ids(ids: &[i64], conn: &Connection) -> Result<Vec<Area>> {
         "#,
         projection = Area::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
         placeholders = placeholders.join(", "),
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -196,7 +196,7 @@ pub fn select_by_alias(alias: impl Into<String>, conn: &Connection) -> Result<Ar
         "#,
         projection = Area::projection(),
         table = schema::TABLE_NAME,
-        alias = Columns::Alias.as_str(),
+        alias = Columns::Alias.as_ref(),
     );
     conn.query_row(&sql, params![alias.into()], Area::mapper())
         .map_err(Into::into)
@@ -210,8 +210,8 @@ pub fn patch_tags(area_id: i64, tags: Map<String, Value>, conn: &Connection) -> 
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(
         &sql,
@@ -232,8 +232,8 @@ pub fn remove_tag(area_id: i64, tag_name: impl Into<String>, conn: &Connection) 
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![area_id, format!("$.{tag_name}")])?;
     select_by_id(area_id, conn)
@@ -248,8 +248,8 @@ pub fn set_updated_at(id: i64, updated_at: &OffsetDateTime, conn: &Connection) -
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, updated_at.format(&Rfc3339)?,])?;
     select_by_id(id, conn)
@@ -270,11 +270,11 @@ pub fn set_bbox(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        bbox_west = Columns::BboxWest.as_str(),
-        bbox_south = Columns::BboxSouth.as_str(),
-        bbox_east = Columns::BboxEast.as_str(),
-        bbox_north = Columns::BboxNorth.as_str(),
-        id = Columns::Id.as_str(),
+        bbox_west = Columns::BboxWest.as_ref(),
+        bbox_south = Columns::BboxSouth.as_ref(),
+        bbox_east = Columns::BboxEast.as_ref(),
+        bbox_north = Columns::BboxNorth.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, west, south, east, north])?;
     select_by_id(id, conn)
@@ -294,8 +294,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?,])?;
         }
@@ -307,8 +307,8 @@ pub fn set_deleted_at(
                         WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }
@@ -324,7 +324,7 @@ pub fn select_areas_count(conn: &Connection) -> Result<i64> {
             WHERE {deleted_at} IS NULL
         "#,
         table = schema::TABLE_NAME,
-        deleted_at = Columns::DeletedAt.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
     );
     Ok(conn.query_row(&sql, [], |row| row.get::<_, i64>(0))?)
 }
@@ -338,8 +338,8 @@ pub fn select_verified_areas_count(conn: &Connection, verified_since: &str) -> R
             AND json_extract({tags}, '$.verified:date') > ?1
         "#,
         table = schema::TABLE_NAME,
-        deleted_at = Columns::DeletedAt.as_str(),
-        tags = Columns::Tags.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        tags = Columns::Tags.as_ref(),
     );
     Ok(conn.query_row(&sql, params![verified_since], |row| row.get::<_, i64>(0))?)
 }
@@ -355,9 +355,9 @@ pub fn select_with_icon_square(conn: &Connection) -> Result<Vec<Area>> {
         "#,
         projection = Area::projection(),
         table = schema::TABLE_NAME,
-        deleted_at = Columns::DeletedAt.as_str(),
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map({}, Area::mapper())?
@@ -518,8 +518,8 @@ pub struct RankedArea {
 /// Matches name and alias only. An area's `tags` hold its full `geo_json`
 /// polygon, so matching tag values here would substring-match coordinate digits.
 fn search_predicate(word_count: usize, first_word_param: usize) -> String {
-    let name = format!("json_extract({}, '$.name')", Columns::Tags.as_str());
-    let alias = Columns::Alias.as_str();
+    let name = format!("json_extract({}, '$.name')", Columns::Tags.as_ref());
+    let alias = Columns::Alias.as_ref();
     let mut words = String::new();
     for i in 0..word_count {
         let param = first_word_param + i;
@@ -530,7 +530,7 @@ fn search_predicate(word_count: usize, first_word_param: usize) -> String {
     }
     format!(
         "{deleted_at} IS NULL AND {name} IS NOT NULL{words}",
-        deleted_at = Columns::DeletedAt.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
     )
 }
 
@@ -542,7 +542,7 @@ fn word_patterns(words: &[String]) -> impl Iterator<Item = SqlValue> + '_ {
 
 pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Result<Vec<RankedArea>> {
     let words = split_words(query);
-    let name = format!("json_extract({}, '$.name')", Columns::Tags.as_str());
+    let name = format!("json_extract({}, '$.name')", Columns::Tags.as_ref());
     let sql = format!(
         r#"
             SELECT {id}, {alias}, {bbox_west}, {bbox_south}, {bbox_east}, {bbox_north},
@@ -558,12 +558,12 @@ pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Resul
             ORDER BY search_rank, LENGTH(name), name, {id}
             LIMIT ?4
         "#,
-        id = Columns::Id.as_str(),
-        alias = Columns::Alias.as_str(),
-        bbox_west = Columns::BboxWest.as_str(),
-        bbox_south = Columns::BboxSouth.as_str(),
-        bbox_east = Columns::BboxEast.as_str(),
-        bbox_north = Columns::BboxNorth.as_str(),
+        id = Columns::Id.as_ref(),
+        alias = Columns::Alias.as_ref(),
+        bbox_west = Columns::BboxWest.as_ref(),
+        bbox_south = Columns::BboxSouth.as_ref(),
+        bbox_east = Columns::BboxEast.as_ref(),
+        bbox_north = Columns::BboxNorth.as_ref(),
         table = schema::TABLE_NAME,
         predicate = search_predicate(words.len(), 5),
     );
@@ -580,15 +580,15 @@ pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Resul
     conn.prepare(&sql)?
         .query_map(params_from_iter(values), |row| {
             let bbox = [
-                row.get::<_, f64>(Columns::BboxWest.as_str())?,
-                row.get::<_, f64>(Columns::BboxSouth.as_str())?,
-                row.get::<_, f64>(Columns::BboxEast.as_str())?,
-                row.get::<_, f64>(Columns::BboxNorth.as_str())?,
+                row.get::<_, f64>(Columns::BboxWest.as_ref())?,
+                row.get::<_, f64>(Columns::BboxSouth.as_ref())?,
+                row.get::<_, f64>(Columns::BboxEast.as_ref())?,
+                row.get::<_, f64>(Columns::BboxNorth.as_ref())?,
             ];
             Ok(RankedArea {
-                id: row.get(Columns::Id.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
                 name: row.get("name")?,
-                alias: row.get(Columns::Alias.as_str())?,
+                alias: row.get(Columns::Alias.as_ref())?,
                 bbox: (bbox != WORLD_BBOX).then_some(bbox),
                 rank: row.get("search_rank")?,
             })
