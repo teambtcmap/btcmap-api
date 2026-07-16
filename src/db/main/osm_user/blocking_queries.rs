@@ -23,8 +23,8 @@ pub fn insert(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Result<O
             )
             RETURNING {projection}
         "#,
-        id = Columns::Id.as_str(),
-        osm_data = Columns::OsmData.as_str(),
+        id = Columns::Id.as_ref(),
+        osm_data = Columns::OsmData.as_ref(),
         table = schema::NAME,
         projection = OsmUser::projection(),
     );
@@ -46,8 +46,8 @@ pub fn select_all(limit: Option<i64>, conn: &Connection) -> Result<Vec<OsmUser>>
         "#,
         projection = OsmUser::projection(),
         table = schema::NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     Ok(conn
         .prepare(&sql)?
@@ -70,8 +70,8 @@ pub fn select_updated_since(
         "#,
         projection = OsmUser::projection(),
         table = schema::NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     Ok(conn
         .prepare(&sql)?
@@ -154,8 +154,8 @@ pub fn select_most_active(
             ORDER BY edits DESC
             LIMIT ?3
         "#,
-        u_id = Columns::Id.as_str(),
-        u_osm_data = Columns::OsmData.as_str(),
+        u_id = Columns::Id.as_ref(),
+        u_osm_data = Columns::OsmData.as_ref(),
         table = schema::NAME,
         event_table = db::main::element_event::schema::TABLE_NAME,
         type = db::main::element_event::schema::Columns::Type.as_str(),
@@ -216,8 +216,8 @@ pub fn select_most_active_for_area(
             ORDER BY edits DESC
             LIMIT ?4
         "#,
-        u_id = Columns::Id.as_str(),
-        u_osm_data = Columns::OsmData.as_str(),
+        u_id = Columns::Id.as_ref(),
+        u_osm_data = Columns::OsmData.as_ref(),
         table = schema::NAME,
         event_table = db::main::element_event::schema::TABLE_NAME,
         type = db::main::element_event::schema::Columns::Type.as_str(),
@@ -250,7 +250,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<OsmUser> {
         "#,
         projection = OsmUser::projection(),
         table = schema::NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], OsmUser::mapper())
         .map_err(Into::into)
@@ -265,7 +265,7 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<OsmUser> {
         "#,
         projection = OsmUser::projection(),
         table = schema::NAME,
-        osm_data = Columns::OsmData.as_str(),
+        osm_data = Columns::OsmData.as_ref(),
     );
     conn.query_row(&sql, params![name], OsmUser::mapper())
         .map_err(Into::into)
@@ -279,8 +279,8 @@ pub fn set_osm_data(id: i64, osm_data: &EditingApiUser, conn: &Connection) -> Re
             WHERE {id} = ?2
         "#,
         table = schema::NAME,
-        osm_data = Columns::OsmData.as_str(),
-        id = Columns::Id.as_str(),
+        osm_data = Columns::OsmData.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![serde_json::to_string(osm_data)?, id,])?;
     Ok(())
@@ -300,8 +300,8 @@ pub fn patch_tags(id: i64, tags: &HashMap<String, Value>, conn: &Connection) -> 
                 WHERE {id} = ?2
         "#,
         table = schema::NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![&serde_json::to_string(tags)?, id])?;
     select_by_id(id, conn)
@@ -315,8 +315,8 @@ pub fn remove_tag(id: i64, name: &str, conn: &Connection) -> Result<OsmUser> {
                 WHERE {id} = ?2
         "#,
         table = schema::NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![format!("$.{name}"), id,])?;
     select_by_id(id, conn)
@@ -331,8 +331,8 @@ pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) ->
             WHERE {id} = ?2
         "#,
         table = schema::NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![updated_at.format(&Rfc3339)?, id,])?;
     select_by_id(id, conn)

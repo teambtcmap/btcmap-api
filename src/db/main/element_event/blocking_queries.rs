@@ -275,7 +275,7 @@ pub fn select_by_element_id(
         user_table = crate::db::main::osm_user::schema::NAME,
         id = Columns::Id.as_str(),
         user_id = Columns::UserId.as_str(),
-        user_id_col = crate::db::main::osm_user::schema::Columns::Id.as_str(),
+        user_id_col = crate::db::main::osm_user::schema::Columns::Id.as_ref(),
         type = Columns::Type.as_str(),
         created_at = Columns::CreatedAt.as_str(),
         updated_at = Columns::UpdatedAt.as_str(),
