@@ -1,4 +1,5 @@
 use crate::db;
+use crate::db::main::conf::schema::BoostPrice;
 use crate::db::main::conf::schema::Conf;
 use crate::db::main::MainPool;
 use crate::rest::error::RestApiError;
@@ -22,10 +23,17 @@ pub struct Quote {
 
 #[get("/quote")]
 pub async fn get_quote(conf: Data<Conf>) -> RestResult<Quote> {
+    let price = |days: i64| -> i64 {
+        conf.boost_element_prices
+            .iter()
+            .find(|p| p.days == days)
+            .map(|p: &BoostPrice| p.sats)
+            .unwrap_or_default()
+    };
     Ok(Json(Quote {
-        quote_30d_sat: conf.paywall_boost_element_30d_price_sat,
-        quote_90d_sat: conf.paywall_boost_element_90d_price_sat,
-        quote_365d_sat: conf.paywall_boost_element_365d_price_sat,
+        quote_30d_sat: price(30),
+        quote_90d_sat: price(90),
+        quote_365d_sat: price(365),
     }))
 }
 
@@ -71,14 +79,18 @@ pub async fn post(
             _ => RestApiError::database(),
         })?;
     let sats = match args.days {
-        30 => conf.paywall_boost_element_30d_price_sat,
-        90 => conf.paywall_boost_element_90d_price_sat,
-        365 => conf.paywall_boost_element_365d_price_sat,
-        _ => Err(RestApiError::new(
+        30 => conf.boost_element_prices.iter().find(|p| p.days == 30),
+        90 => conf.boost_element_prices.iter().find(|p| p.days == 90),
+        365 => conf.boost_element_prices.iter().find(|p| p.days == 365),
+        _ => None,
+    }
+    .ok_or_else(|| {
+        RestApiError::new(
             crate::rest::error::RestApiErrorCode::InvalidInput,
             "invalid duration",
-        ))?,
-    };
+        )
+    })?
+    .sats;
     let invoice = service::invoice::create(
         "lnd",
         format!("element_boost:{}:{}", element.id, args.days),
