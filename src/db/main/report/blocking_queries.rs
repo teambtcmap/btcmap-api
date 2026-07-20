@@ -19,9 +19,9 @@ pub fn insert(area_id: i64, date: Date, tags: &JsonObject, conn: &Connection) ->
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        area_id = Columns::AreaId.as_str(),
-        date = Columns::Date.as_str(),
-        tags = Columns::Tags.as_str(),
+        area_id = Columns::AreaId.as_ref(),
+        date = Columns::Date.as_ref(),
+        tags = Columns::Tags.as_ref(),
         projection = Report::projection(),
     );
     let params = named_params! {
@@ -48,8 +48,8 @@ pub fn select_updated_since(
         "#,
         projection = Report::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -71,9 +71,9 @@ pub fn select_by_date(date: Date, limit: Option<i64>, conn: &Connection) -> Resu
         "#,
         projection = Report::projection(),
         table = schema::TABLE_NAME,
-        date = Columns::Date.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        date = Columns::Date.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -99,9 +99,9 @@ pub fn select_by_area_id(
         "#,
         projection = Report::projection(),
         table = schema::TABLE_NAME,
-        area_id = Columns::AreaId.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        area_id = Columns::AreaId.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -121,7 +121,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Report> {
         "#,
         projection = Report::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], Report::mapper())
         .map_err(Into::into)
@@ -138,9 +138,9 @@ pub fn select_latest_by_area_id(area_id: i64, conn: &Connection) -> Result<Repor
         "#,
         projection = Report::projection(),
         table = schema::TABLE_NAME,
-        area_id = Columns::AreaId.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        area_id = Columns::AreaId.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![area_id], Report::mapper())
         .map_err(Into::into)
@@ -155,8 +155,8 @@ pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) ->
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, updated_at.format(&Rfc3339)?,])?;
     select_by_id(id, conn)
@@ -171,8 +171,8 @@ pub fn set_deleted_at(id: i64, deleted_at: OffsetDateTime, conn: &Connection) ->
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        deleted_at = Columns::DeletedAt.as_str(),
-        id = Columns::Id.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?])?;
     select_by_id(id, conn)
