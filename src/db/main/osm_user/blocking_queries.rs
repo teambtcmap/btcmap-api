@@ -158,7 +158,7 @@ pub fn select_most_active(
         u_osm_data = Columns::OsmData.as_ref(),
         table = schema::NAME,
         event_table = db::main::element_event::schema::TABLE_NAME,
-        type = db::main::element_event::schema::Columns::Type.as_str(),
+        type = db::main::element_event::schema::Columns::Type.as_ref(),
     );
     let refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
     conn.prepare(&sql)?
@@ -220,8 +220,8 @@ pub fn select_most_active_for_area(
         u_osm_data = Columns::OsmData.as_ref(),
         table = schema::NAME,
         event_table = db::main::element_event::schema::TABLE_NAME,
-        type = db::main::element_event::schema::Columns::Type.as_str(),
-        e_element_id = db::main::element_event::schema::Columns::ElementId.as_str(),
+        type = db::main::element_event::schema::Columns::Type.as_ref(),
+        e_element_id = db::main::element_event::schema::Columns::ElementId.as_ref(),
         area_element_table = db::main::area_element::schema::TABLE_NAME,
         ae_element_id = db::main::area_element::schema::Columns::ElementId.as_ref(),
         ae_area_id = db::main::area_element::schema::Columns::AreaId.as_ref(),

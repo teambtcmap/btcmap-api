@@ -37,9 +37,9 @@ pub fn insert(
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        user_id = Columns::UserId.as_str(),
-        element_id = Columns::ElementId.as_str(),
-        r#type = Columns::Type.as_str(),
+        user_id = Columns::UserId.as_ref(),
+        element_id = Columns::ElementId.as_ref(),
+        r#type = Columns::Type.as_ref(),
         projection = ElementEvent::projection(),
     );
     let params = named_params! {
@@ -66,8 +66,8 @@ pub fn select_all(
         "#,
         projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     Ok(conn
         .prepare(&sql)?
@@ -92,9 +92,9 @@ pub fn select_by_type(
         "#,
         projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
-        r#type = Columns::Type.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        r#type = Columns::Type.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     Ok(conn
         .prepare(&sql)?
@@ -120,8 +120,8 @@ pub fn select_updated_since(
         "#,
         projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     Ok(conn
         .prepare(&sql)?
@@ -144,8 +144,8 @@ pub fn select_count_by_type_since(
             WHERE {type} = ?1 AND {created_at} > ?2
         "#,
         table = schema::TABLE_NAME,
-        r#type = Columns::Type.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
+        r#type = Columns::Type.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
     );
     conn.query_row(&sql, params![r#type, since.format(&Rfc3339)?], |row| {
         row.get(0)
@@ -167,9 +167,9 @@ pub fn select_created_between(
         "#,
         projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
-        created_at = Columns::CreatedAt.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        created_at = Columns::CreatedAt.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     let res = conn
         .prepare(&sql)?
@@ -200,8 +200,8 @@ pub fn select_created_between_for_area(
         "#,
         projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
         area_element_table = crate::db::main::area_element::schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
@@ -228,8 +228,8 @@ pub fn select_by_user(id: i64, limit: i64, conn: &Connection) -> Result<Vec<Elem
         "#,
         projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
-        user_id = Columns::UserId.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
+        user_id = Columns::UserId.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![id, limit], ElementEvent::mapper())?
@@ -246,7 +246,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementEvent> {
         "#,
         projection = ElementEvent::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], ElementEvent::mapper())
         .map_err(Into::into)
@@ -273,14 +273,14 @@ pub fn select_by_element_id(
         "#,
         event_table = schema::TABLE_NAME,
         user_table = crate::db::main::osm_user::schema::NAME,
-        id = Columns::Id.as_str(),
-        user_id = Columns::UserId.as_str(),
+        id = Columns::Id.as_ref(),
+        user_id = Columns::UserId.as_ref(),
         user_id_col = crate::db::main::osm_user::schema::Columns::Id.as_ref(),
-        type = Columns::Type.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        element_id = Columns::ElementId.as_str(),
-        deleted_at = Columns::DeletedAt.as_str(),
+        type = Columns::Type.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        element_id = Columns::ElementId.as_ref(),
+        deleted_at = Columns::DeletedAt.as_ref(),
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![element_id], |row| {
@@ -309,8 +309,8 @@ pub fn patch_tags(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, &serde_json::to_string(tags)?])?;
     select_by_id(id, conn)
@@ -329,8 +329,8 @@ pub fn set_updated_at(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, updated_at.format(&Rfc3339)?,])?;
     select_by_id(id, conn)
