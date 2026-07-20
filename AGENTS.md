@@ -6,16 +6,11 @@ This document provides guidelines for agents working on the btcmap-api codebase.
 
 BTC Map API is a Rust web service built with actix-web that provides a REST and RPC APIs for managing Bitcoin adoption data in meatspace. It uses SQLite for persistence.
 
-## Commit and Push Policy
-
-**Never commit or push unless the user explicitly instructs it in their most recent prompt.** Even when changes look complete, lint passes, and tests are green, do not run `git commit`, `git push`, `git commit --amend`, or any force-push/rebase on the user's behalf without a direct instruction in the last message. If a commit or push seems like the obvious next step, surface the suggestion in the response and wait for confirmation — do not execute it preemptively.
-
 ## Build & Test Commands
 
 ### Building
 ```bash
-cargo build --release # Production build
-cargo build # Debug build
+cargo build
 ```
 
 ### Running
@@ -31,12 +26,14 @@ cargo test <test_name> # Run a single test by name
 cargo test -- --nocapture # Run tests with stdout/stderr output
 ```
 
-### Linting & Formatting
+### Linting
 ```bash
-cargo clippy # Run linter (includes many warnings)
-cargo clippy -- -D warnings # Treat warnings as errors
-cargo fmt # Format code
-cargo fmt --check # Check formatting without modifying
+cargo clippy -- -D warnings
+```
+
+### Formatting
+```bash
+cargo fmt
 ```
 
 ### Running a Specific Test
@@ -56,46 +53,100 @@ cargo test           # Run tests
 
 ## Local Server Workflow
 
-Use this when you need a running server to exercise admin-only RPC methods (e.g. `get_wallets`, `dashboard`, `sync_elements`) end-to-end instead of through unit tests.
+When working on REST or RPC endpoints, test them locally to validate changes. Some endpoints require auth token.
 
 ### Databases
-The running server uses the real local DBs at `$HOME/.local/share/btcmap/` (configured by `data_dir_file_path`): `main.db`, `log.db`, `image.db`. Unit tests use in-memory pools and never touch them.
+The running server uses the real local DBs at `$HOME/.local/share/btcmap/`: `main.db`, `log.db`, `image.db`. Unit tests use in-memory pools and never touch them.
 
 ### Build once
 ```bash
 cargo build
 ```
-Debug build is enough for local poking. Release only if you're measuring performance or timing RPC calls (a debug build of `get_wallets` is ~5x slower because of unoptimized serde and crypto paths).
+Debug build is enough for local poking.
 
 ### Start the server in the background
-The server blocks on stdin/stdout when run in the foreground, which hangs the shell. Detach it with `setsid` and redirect all streams:
-```bash
-setsid bash -c 'ELECTRUM_URL=ssl://electrum.blockstream.info:50002 \
-                RUST_LOG=info \
-                ./target/debug/btcmap-api \
-                > /tmp/btcmap-server.log 2>&1 & \
-                echo $! > /tmp/btcmap-server.pid; disown' \
-  < /dev/null > /dev/null 2>&1 &
+Run the compiled binary directly so the recorded PID belongs to the server rather than to `cargo`:
 
-sleep 3
-kill -0 "$(cat /tmp/btcmap-server.pid)" && echo "alive" || echo "dead"
+```bash
+(
+  set -eu
+  pid_file=/tmp/opencode/btcmap-server.pid
+  log_file=/tmp/opencode/btcmap-server.log
+
+  if [ -s "$pid_file" ]; then
+    old_pid="$(cat "$pid_file")"
+    if [[ "$old_pid" =~ ^[1-9][0-9]*$ ]] &&
+      kill -0 "$old_pid" 2>/dev/null &&
+      [[ "$(ps -p "$old_pid" -o comm=)" == *btcmap-api* ]]; then
+      printf 'Server already running (PID %s)\n' "$old_pid"
+      exit 0
+    fi
+    rm -f "$pid_file"
+  fi
+
+  nohup env RUST_LOG="${RUST_LOG:-info}" ./target/debug/btcmap-api \
+    >"$log_file" 2>&1 </dev/null &
+  pid=$!
+  printf '%s\n' "$pid" >"$pid_file"
+
+  for _ in {1..60}; do
+    if curl -fsS --max-time 1 \
+      'http://127.0.0.1:8000/v2/elements?limit=1' >/dev/null; then
+      printf 'Server ready (PID %s)\n' "$pid"
+      exit 0
+    fi
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.5
+  done
+
+  kill -TERM "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  rm -f "$pid_file"
+  tail -n 50 "$log_file" >&2
+  exit 1
+)
 ```
-- `setsid` + `disown` + redirected streams = the process survives the parent shell exiting.
-- `/tmp/btcmap-server.pid` lets you `kill` it later.
-- `/tmp/btcmap-server.log` captures startup logs and runtime errors.
-- `ELECTRUM_URL` is **required** at runtime — if unset, `get_wallets` returns a JSON-RPC error (HTTP 200, `error.data: "ELECTRUM_URL env var must be set"`). The server still starts; other endpoints are unaffected.
-- `ELECTRUM_INSECURE_TLS=1` (optional): disable TLS certificate validation for the Electrum connection. Accepts `1`/`true`/`yes`. Required for self-signed backends like `electrs.day.ag:50002`. A `WARN` log fires every RPC when set.
+
+The readiness probe verifies that the HTTP server and database are usable. If startup fails or times out, the command stops the process, removes the PID file, and prints the latest log output.
 
 ### Stop the server
+Send `SIGTERM` first so Actix can shut down gracefully. After ten seconds, force termination if needed:
+
 ```bash
-kill "$(cat /tmp/btcmap-server.pid)"
-sleep 1
-ps -eo pid,cmd | awk '/target\/.*\/btcmap-api/ && !/awk/'
+(
+  set -eu
+  pid_file=/tmp/opencode/btcmap-server.pid
+
+  if [ ! -s "$pid_file" ]; then
+    printf 'Server is not running\n'
+    exit 0
+  fi
+
+  pid="$(cat "$pid_file")"
+  if ! [[ "$pid" =~ ^[1-9][0-9]*$ ]] ||
+    ! kill -0 "$pid" 2>/dev/null ||
+    [[ "$(ps -p "$pid" -o comm=)" != *btcmap-api* ]]; then
+    rm -f "$pid_file"
+    printf 'Removed stale PID file\n'
+    exit 0
+  fi
+
+  kill -TERM "$pid"
+  for _ in {1..100}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$pid_file"
+      exit 0
+    fi
+    sleep 0.1
+  done
+
+  kill -KILL "$pid"
+  rm -f "$pid_file"
+)
 ```
-The second line is a sanity check — `ps` shouldn't show any `btcmap-api` process. If one is still there, `kill -9` it.
 
 ### Create a temporary admin token
-Most admin RPCs (`get_wallets`, `dashboard`, etc.) require `Bearer` auth with a token that has the `admin` or `root` role. Don't reuse real production tokens. Mint a throwaway one against the local `main.db`:
+Some endpoints require `Bearer` auth with a token that has a priviledged role. Mint a test token if not present in the local `main.db`:
 
 ```bash
 sqlite3 $HOME/.local/share/btcmap/main.db <<'SQL'
@@ -103,34 +154,25 @@ INSERT INTO access_token (user_id, name, secret, roles)
 VALUES (
   (SELECT id FROM user WHERE roles LIKE '%root%' LIMIT 1),
   'agent-probe',
-  'probe-secret-CHANGE-ME-random-hex-here',
+  'opencode',
   '["root"]'
 );
 SQL
 ```
-Pick a user with the `root` role (e.g. user id 3 if that's your local root account) and a `secret` string that's long and unique. The `secret` becomes the bearer token.
+Pick a user with the `root` role and a `secret` string that is static and set to "opencode". The `secret` becomes the bearer token.
 
-### Call an admin RPC
+### Call an RPC which requires auth
 ```bash
 curl -sS \
   -X POST http://127.0.0.1:8000/rpc \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer probe-secret-CHANGE-ME-random-hex-here' \
-  -d '{"jsonrpc":"2.0","id":"1","method":"get_wallets"}' \
-  | python3 -m json.tool
+  -H 'Authorization: Bearer opencode' \
+  -d '{"jsonrpc":"2.0","id":"1","method":"get_wallets"}'
 ```
 - Endpoint: `POST /rpc` (not `/v2/rpc` or `/v3/rpc` — there's no version prefix).
 - Method names are `snake_case` (e.g. `get_wallets`, `get_element`, `dashboard`).
 - Response is JSON-RPC 2.0: `result` on success, `error` with `code`/`message`/`data` on failure.
 - For slow calls, add `--max-time 180` to `curl`.
-
-### Tear down the probe token
-Always delete the throwaway token when you're done:
-```bash
-sqlite3 $HOME/.local/share/btcmap/main.db \
-  "DELETE FROM access_token WHERE name='agent-probe';"
-```
-The token is in plain text in the DB, so leaving it around is the same as leaving a password in a config file. If you used a unique `name` (e.g. `agent-probe-1`, `agent-probe-2`), filter on that.
 
 ### Verifying changes against the real DB
 Useful when you want to see if a patch actually works on production-shaped data (real element counts, real wallet history, etc.) rather than the empty in-memory test DB. The pattern is:
@@ -138,10 +180,8 @@ Useful when you want to see if a patch actually works on production-shaped data 
 2. `cargo build` (debug is faster).
 3. Restart the server (kill + relaunch as above).
 4. Hit the endpoint with `curl`, read the response.
-5. Tail `/tmp/btcmap-server.log` for warnings/errors.
+5. Tail `/tmp/opencode/btcmap-server.log` for warnings/errors.
 6. Iterate.
-
-For wallet/sync RPCs especially, prefer this over adding unit tests — those endpoints talk to external services (Electrum, Overpass, OSM, LND) that aren't reachable from `cargo test`.
 
 ### Endpoints cheat sheet
 - `POST /rpc` — JSON-RPC, the main admin/control surface.
@@ -287,10 +327,8 @@ Use `db::test::pool()` for in-memory SQLite test databases.
 
 ### Configuration
 - Server binds to `127.0.0.1:8000` (hardcoded in main.rs)
-- Database stored in data directory (configurable via `data_dir_file_path`)
+- Database stored in ~/.local/share/btcmap
 - Logging controlled via `RUST_LOG` env var (defaults to "info")
-- `BTCMAP_API_BASE_URL` sets the public base URL of the API (used by the NIP-98 Nostr auth extractor). Defaults to `http://127.0.0.1:8000`.
-- `BTCMAP_API_CORS_ORIGINS` controls the CORS middleware in `main.rs`. Unset or `*` (default) allows any origin. Set to a comma-separated list to restrict. The middleware handles the OPTIONS preflight itself.
 - Release builds use native CPU optimization (via .cargo/config.toml)
 
 ### Temporary Files
