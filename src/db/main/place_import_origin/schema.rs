@@ -3,22 +3,13 @@ use std::sync::OnceLock;
 
 pub const TABLE_NAME: &str = "place_import_origin";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Name,
     GiteaSyncEnabled,
     GiteaLabelId,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Name => "name",
-            Columns::GiteaSyncEnabled => "gitea_sync_enabled",
-            Columns::GiteaLabelId => "gitea_label_id",
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -40,7 +31,7 @@ impl ImportOrigin {
                 Columns::GiteaLabelId,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -49,10 +40,10 @@ impl ImportOrigin {
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<ImportOrigin> {
         |row| {
             Ok(ImportOrigin {
-                id: row.get(Columns::Id.as_str())?,
-                name: row.get(Columns::Name.as_str())?,
-                gitea_sync_enabled: row.get(Columns::GiteaSyncEnabled.as_str())?,
-                gitea_label_id: row.get(Columns::GiteaLabelId.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                name: row.get(Columns::Name.as_ref())?,
+                gitea_sync_enabled: row.get(Columns::GiteaSyncEnabled.as_ref())?,
+                gitea_label_id: row.get(Columns::GiteaLabelId.as_ref())?,
             })
         }
     }
