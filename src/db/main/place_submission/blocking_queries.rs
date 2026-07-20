@@ -23,13 +23,13 @@ pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceSubmission> {
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        origin = Columns::Origin.as_str(),
-        external_id = Columns::ExternalId.as_str(),
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        category = Columns::Category.as_str(),
-        name = Columns::Name.as_str(),
-        extra_fields = Columns::ExtraFields.as_str(),
+        origin = Columns::Origin.as_ref(),
+        external_id = Columns::ExternalId.as_ref(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        category = Columns::Category.as_ref(),
+        name = Columns::Name.as_ref(),
+        extra_fields = Columns::ExtraFields.as_ref(),
         projection = PlaceSubmission::projection(),
     );
     conn.query_row(
@@ -59,10 +59,10 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
-        closed_at = Columns::ClosedAt.as_str(),
-        revoked = Columns::Revoked.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        closed_at = Columns::ClosedAt.as_ref(),
+        revoked = Columns::Revoked.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![], PlaceSubmission::mapper())?
@@ -87,10 +87,10 @@ pub fn select_origin_counts_since(
             ORDER BY {origin}
         "#,
         table = schema::TABLE_NAME,
-        origin = Columns::Origin.as_str(),
-        closed_at = Columns::ClosedAt.as_str(),
-        revoked = Columns::Revoked.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
+        origin = Columns::Origin.as_ref(),
+        closed_at = Columns::ClosedAt.as_ref(),
+        revoked = Columns::Revoked.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![since.format(&Rfc3339)?], |row| {
@@ -117,7 +117,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<PlaceSubmission> {
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], PlaceSubmission::mapper())
         .map_err(Into::into)
@@ -136,8 +136,8 @@ pub fn select_by_origin_and_external_id(
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
-        origin = Columns::Origin.as_str(),
-        external_id = Columns::ExternalId.as_str(),
+        origin = Columns::Origin.as_ref(),
+        external_id = Columns::ExternalId.as_ref(),
     );
     conn.query_row(
         &sql,
@@ -164,12 +164,12 @@ pub fn set_fields(
             WHERE {id} = :id
         "#,
         table = schema::TABLE_NAME,
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        category = Columns::Category.as_str(),
-        name = Columns::Name.as_str(),
-        extra_fields = Columns::ExtraFields.as_str(),
-        id = Columns::Id.as_str(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        category = Columns::Category.as_ref(),
+        name = Columns::Name.as_ref(),
+        extra_fields = Columns::ExtraFields.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     let _rows = conn.execute(
         &sql,
@@ -193,8 +193,8 @@ pub fn set_revoked(id: i64, revoked: bool, conn: &Connection) -> Result<PlaceSub
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        revoked = Columns::Revoked.as_str(),
-        id = Columns::Id.as_str(),
+        revoked = Columns::Revoked.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, revoked])?;
     select_by_id(id, conn)
@@ -208,8 +208,8 @@ pub fn set_ticket_url(id: i64, ticket_url: String, conn: &Connection) -> Result<
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        ticket_url = Columns::TicketUrl.as_str(),
-        id = Columns::Id.as_str(),
+        ticket_url = Columns::TicketUrl.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, ticket_url])?;
     select_by_id(id, conn)
@@ -228,8 +228,8 @@ pub fn set_updated_at(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(
         &sql,
@@ -257,8 +257,8 @@ pub fn set_closed_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                closed_at = Columns::ClosedAt.as_str(),
-                id = Columns::Id.as_str(),
+                closed_at = Columns::ClosedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, closed_at.format(&Rfc3339)?,])?;
         }
@@ -270,8 +270,8 @@ pub fn set_closed_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                closed_at = Columns::ClosedAt.as_str(),
-                id = Columns::Id.as_str(),
+                closed_at = Columns::ClosedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }

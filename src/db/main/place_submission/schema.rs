@@ -5,6 +5,8 @@ use time::OffsetDateTime;
 
 pub const TABLE_NAME: &str = "place_submission";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Origin,
@@ -20,27 +22,6 @@ pub enum Columns {
     UpdatedAt,
     ClosedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Origin => "origin",
-            Columns::ExternalId => "external_id",
-            Columns::Lat => "lat",
-            Columns::Lon => "lon",
-            Columns::Category => "category",
-            Columns::Name => "name",
-            Columns::ExtraFields => "extra_fields",
-            Columns::TicketUrl => "ticket_url",
-            Columns::Revoked => "revoked",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::ClosedAt => "closed_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,7 +71,7 @@ impl PlaceSubmission {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -98,7 +79,7 @@ impl PlaceSubmission {
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row| {
-            let extra_fields: String = row.get(Columns::ExtraFields.as_str())?;
+            let extra_fields: String = row.get(Columns::ExtraFields.as_ref())?;
             let extra_fields = serde_json::from_str(&extra_fields).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     2,
@@ -108,20 +89,20 @@ impl PlaceSubmission {
             })?;
 
             Ok(Self {
-                id: row.get(Columns::Id.as_str())?,
-                origin: row.get(Columns::Origin.as_str())?,
-                external_id: row.get(Columns::ExternalId.as_str())?,
-                lat: row.get(Columns::Lat.as_str())?,
-                lon: row.get(Columns::Lon.as_str())?,
-                category: row.get(Columns::Category.as_str())?,
-                name: row.get(Columns::Name.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                origin: row.get(Columns::Origin.as_ref())?,
+                external_id: row.get(Columns::ExternalId.as_ref())?,
+                lat: row.get(Columns::Lat.as_ref())?,
+                lon: row.get(Columns::Lon.as_ref())?,
+                category: row.get(Columns::Category.as_ref())?,
+                name: row.get(Columns::Name.as_ref())?,
                 extra_fields,
-                ticket_url: row.get(Columns::TicketUrl.as_str())?,
-                revoked: row.get(Columns::Revoked.as_str())?,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                closed_at: row.get(Columns::ClosedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                ticket_url: row.get(Columns::TicketUrl.as_ref())?,
+                revoked: row.get(Columns::Revoked.as_ref())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                closed_at: row.get(Columns::ClosedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }
