@@ -84,6 +84,7 @@ pub enum RpcMethod {
     CreateEvent,
     GetEvents,
     GetEvent,
+    UpdateEvent,
     DeleteEvent,
     // Import
     SubmitPlace,
@@ -151,6 +152,8 @@ impl Role {
         RpcMethod::GetEvents,
         // Admins can retreive events
         RpcMethod::GetEvent,
+        // Admins can update events
+        RpcMethod::UpdateEvent,
         // Admins can import places
         RpcMethod::SubmitPlace,
         // Admins can revoke imported places
@@ -179,6 +182,7 @@ impl Role {
         RpcMethod::CreateEvent,
         RpcMethod::GetEvents,
         RpcMethod::GetEvent,
+        RpcMethod::UpdateEvent,
         RpcMethod::DeleteEvent,
         RpcMethod::Search,
     ];
@@ -589,6 +593,10 @@ pub async fn handle(
         RpcMethod::GetEvent => RpcResponse::from(
             req.id.clone(),
             super::event::get_event::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::UpdateEvent => RpcResponse::from(
+            req.id.clone(),
+            super::event::update_event::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::DeleteEvent => RpcResponse::from(
             req.id.clone(),

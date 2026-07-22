@@ -49,6 +49,38 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Event> {
         .await?
 }
 
+#[allow(clippy::too_many_arguments)]
+pub async fn update(
+    id: i64,
+    area_id: Option<Option<i64>>,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    name: Option<String>,
+    website: Option<String>,
+    starts_at: Option<Option<OffsetDateTime>>,
+    ends_at: Option<Option<OffsetDateTime>>,
+    cron_schedule: Option<Option<String>>,
+    pool: &Pool,
+) -> Result<Event> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::update(
+                id,
+                area_id,
+                lat,
+                lon,
+                name.as_deref(),
+                website.as_deref(),
+                starts_at,
+                ends_at,
+                cron_schedule.as_ref().map(|inner| inner.as_deref()),
+                conn,
+            )
+        })
+        .await?
+}
+
 pub async fn set_deleted_at(
     id: i64,
     deleted_at: Option<OffsetDateTime>,
