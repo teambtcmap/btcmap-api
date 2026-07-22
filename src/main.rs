@@ -7,12 +7,14 @@ use rest::error::{RestApiError, RestApiErrorCode};
 mod error;
 use std::env;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod feed;
 mod rpc;
+use crate::db::main::conf::schema::Conf;
 use crate::service::log::Log;
 use actix_web::web::{scope, Data};
 mod db;
@@ -24,32 +26,29 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// CORS middleware for the API.
 ///
-/// Allowed origins are read from the `BTCMAP_API_CORS_ORIGINS` env var:
-/// - unset or `*` (the default): every origin is allowed
-/// - comma-separated list of origins: only those are allowed
+/// Allowed origins are read from the `conf.cors_origins` DB column (a
+/// comma-separated list):
+/// - empty (the default): every origin is allowed
+/// - one or more entries: only those origins are allowed
 ///
 /// The middleware always allows every method and every header, and caches
 /// preflight responses for 1 hour, which is enough for any other browser
 /// client to use the API without CORS errors.
-fn build_cors() -> Cors {
+fn build_cors(conf: &Conf) -> Cors {
     let mut cors = Cors::default()
         .allow_any_method()
         .allow_any_header()
         .max_age(3600);
 
-    match env::var("BTCMAP_API_CORS_ORIGINS") {
-        Ok(value) if value.trim() == "*" => cors.allow_any_origin(),
-        Ok(value) => {
-            for origin in value.split(',') {
-                let origin = origin.trim();
-                if !origin.is_empty() {
-                    cors = cors.allowed_origin(origin);
-                }
-            }
-            cors
+    if conf.cors_origins.is_empty() {
+        cors = cors.allow_any_origin();
+    } else {
+        for origin in &conf.cors_origins {
+            cors = cors.allowed_origin(origin);
         }
-        Err(_) => cors.allow_any_origin(),
     }
+
+    cors
 }
 
 #[actix_web::main]
@@ -82,7 +81,11 @@ async fn main() -> Result<()> {
         env::var("BTCMAP_API_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
 
     service::matrix::init(&main_pool);
-    service::wallet_cache::init(&main_pool);
+    // Cancellation token shared with every long-lived background task so we
+    // can break out of their loops before the actix runtime drops on SIGTERM.
+    // See the note in `service::wallet_cache::init` for why this matters.
+    let shutdown = CancellationToken::new();
+    service::wallet_cache::init(&main_pool, shutdown.clone());
 
     HttpServer::new(move || {
         App::new()
@@ -90,7 +93,7 @@ async fn main() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .wrap(from_fn(service::ban::check_if_banned))
-            .wrap(build_cors())
+            .wrap(build_cors(&conf))
             .app_data(Data::new(main_pool.clone()))
             .app_data(Data::new(image_pool.clone()))
             .app_data(Data::new(log_pool.clone()))
@@ -266,6 +269,10 @@ async fn main() -> Result<()> {
     .run()
     .await?;
 
+    // Signal background tasks to exit so they don't keep the actix runtime's
+    // blocking pool alive while the runtime is being dropped.
+    shutdown.cancel();
+
     Ok(())
 }
 
@@ -284,23 +291,26 @@ fn init_env() {
 
 #[cfg(test)]
 mod test {
+    use super::build_cors;
+    use crate::db::main::conf::schema::Conf;
     use actix_web::http::header::HeaderValue;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::{test, App};
-    use std::env;
 
-    use super::build_cors;
+    fn conf_with(origins: &[&str]) -> Conf {
+        Conf {
+            cors_origins: origins.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
 
     #[test]
     async fn cors_preflight_succeeds_with_any_origin() {
-        // SAFETY: tests in the same module run on the same thread by default,
-        // and we only ever set this once per test.
-        unsafe {
-            env::set_var("BTCMAP_API_CORS_ORIGINS", "*");
-        }
+        // Empty `cors_origins` is the default and means "allow any origin".
+        let conf = conf_with(&[]);
 
-        let app = test::init_service(App::new().wrap(build_cors())).await;
+        let app = test::init_service(App::new().wrap(build_cors(&conf))).await;
         let req = TestRequest::default()
             .method(actix_web::http::Method::OPTIONS)
             .uri("/rpc")
@@ -330,12 +340,9 @@ mod test {
 
     #[test]
     async fn cors_preflight_succeeds_for_allowed_origin() {
-        // SAFETY: see the note in the other test.
-        unsafe {
-            env::set_var("BTCMAP_API_CORS_ORIGINS", "https://allowed.example.com");
-        }
+        let conf = conf_with(&["https://allowed.example.com"]);
 
-        let app = test::init_service(App::new().wrap(build_cors())).await;
+        let app = test::init_service(App::new().wrap(build_cors(&conf))).await;
         let req = TestRequest::default()
             .method(actix_web::http::Method::OPTIONS)
             .uri("/rpc")
@@ -361,12 +368,9 @@ mod test {
 
     #[test]
     async fn cors_preflight_rejects_disallowed_origin() {
-        // SAFETY: see the note in the other test.
-        unsafe {
-            env::set_var("BTCMAP_API_CORS_ORIGINS", "https://allowed.example.com");
-        }
+        let conf = conf_with(&["https://allowed.example.com"]);
 
-        let app = test::init_service(App::new().wrap(build_cors())).await;
+        let app = test::init_service(App::new().wrap(build_cors(&conf))).await;
         let req = TestRequest::default()
             .method(actix_web::http::Method::OPTIONS)
             .uri("/rpc")

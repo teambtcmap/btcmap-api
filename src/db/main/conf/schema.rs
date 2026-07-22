@@ -21,6 +21,7 @@ pub enum Columns {
     XpubDonations,
     XpubTreasury,
     ElectrumUrl,
+    CorsOrigins,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -30,7 +31,7 @@ pub struct BoostPrice {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Conf {
     pub paywall_add_element_comment_price_sat: i64,
     pub boost_element_prices: Vec<BoostPrice>,
@@ -44,6 +45,7 @@ pub struct Conf {
     pub xpub_donations: String,
     pub xpub_treasury: String,
     pub electrum_url: String,
+    pub cors_origins: Vec<String>,
 }
 
 impl Conf {
@@ -63,6 +65,7 @@ impl Conf {
                 Columns::XpubDonations,
                 Columns::XpubTreasury,
                 Columns::ElectrumUrl,
+                Columns::CorsOrigins,
             ]
             .iter()
             .map(AsRef::as_ref)
@@ -83,6 +86,14 @@ impl Conf {
                     )
                 })?;
 
+            let cors_origins: String = row.get(Columns::CorsOrigins.as_ref())?;
+            let cors_origins = cors_origins
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+
             Ok(Self {
                 paywall_add_element_comment_price_sat: row
                     .get(Columns::PaywallAddElementCommentPriceSat.as_ref())?,
@@ -97,6 +108,7 @@ impl Conf {
                 xpub_donations: row.get(Columns::XpubDonations.as_ref())?,
                 xpub_treasury: row.get(Columns::XpubTreasury.as_ref())?,
                 electrum_url: row.get(Columns::ElectrumUrl.as_ref())?,
+                cors_origins,
             })
         }
     }

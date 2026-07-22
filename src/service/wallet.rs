@@ -71,7 +71,12 @@ pub async fn run(pool: &Pool) -> Result<Res> {
     Ok(res)
 }
 
-fn aggregate(spending: &str, donations: &str, treasury: &str, electrum_url: &str) -> Result<Res> {
+pub(crate) fn aggregate(
+    spending: &str,
+    donations: &str,
+    treasury: &str,
+    electrum_url: &str,
+) -> Result<Res> {
     let has_any_xpub =
         !spending.trim().is_empty() || !donations.trim().is_empty() || !treasury.trim().is_empty();
     if !has_any_xpub {

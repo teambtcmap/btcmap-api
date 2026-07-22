@@ -113,6 +113,10 @@ strum = { version = "0.28.0", features = ["derive"] }
 # https://github.com/tokio-rs/tokio/releases
 tokio = "1.52.3"
 
+# Cancellation tokens used to break background-task loops on graceful shutdown
+# https://github.com/tokio-rs/tokio/releases
+tokio-util = "0.7.18"
+
 # https://github.com/fnichol/names/blob/main/CHANGELOG.md
 names = "0.14.0"
 
