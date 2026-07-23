@@ -16,6 +16,8 @@ const GAP_LIMIT: u32 = 100;
 
 const RECENT_TX_LIMIT: usize = 10;
 
+const ELECTRUM_ENDPOINT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 const XPUB_VERSION: [u8; 4] = [0x04, 0x88, 0xB2, 0x1E];
 const TPUB_VERSION: [u8; 4] = [0x04, 0x35, 0x87, 0xCF];
 const YPUB_VERSION: [u8; 4] = [0x04, 0x9D, 0x7C, 0xB2];
@@ -98,8 +100,14 @@ pub(crate) fn aggregate(
             );
         }
         let config = electrum_client::Config::builder()
+            .timeout(Some(ELECTRUM_ENDPOINT_TIMEOUT))
             .validate_domain(!*insecure_tls)
             .build();
+        tracing::debug!(
+            endpoint = url,
+            timeout_secs = ELECTRUM_ENDPOINT_TIMEOUT.as_secs(),
+            "wallet scan: connecting to endpoint"
+        );
         let mut client = match Client::from_config(url, config) {
             Ok(client) => client,
             Err(e) => {
@@ -110,11 +118,11 @@ pub(crate) fn aggregate(
                 continue;
             }
         };
-        match (
-            scan_xpubs(&mut client, spending),
-            scan_xpubs(&mut client, donations),
-            scan_xpubs(&mut client, treasury),
-        ) {
+        tracing::debug!(endpoint = url, "wallet scan: endpoint connected");
+        let spending_result = scan_xpubs(&mut client, spending, "spending");
+        let donations_result = scan_xpubs(&mut client, donations, "donations");
+        let treasury_result = scan_xpubs(&mut client, treasury, "treasury");
+        match (spending_result, donations_result, treasury_result) {
             (
                 Ok((spending_bal, spending_tx)),
                 Ok((donations_bal, donations_tx)),
@@ -153,12 +161,40 @@ fn parse_electrum_endpoints(raw: &str) -> Result<Vec<(String, bool)>> {
     Ok(out)
 }
 
-fn scan_xpubs(client: &mut Client, xpubs: &str) -> Result<(i64, Vec<TxSummary>)> {
+fn scan_xpubs(
+    client: &mut Client,
+    xpubs: &str,
+    wallet: &'static str,
+) -> Result<(i64, Vec<TxSummary>)> {
     let mut total: i64 = 0;
     let mut all_recent: Vec<TxSummary> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
-    for xpub in xpubs.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-        let (balance, recent) = xpub_scan(client, xpub)?;
+    let xpubs: Vec<&str> = xpubs
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    tracing::debug!(
+        wallet,
+        xpub_count = xpubs.len(),
+        "wallet scan: group started"
+    );
+    for (index, xpub) in xpubs.iter().enumerate() {
+        let xpub_index = index + 1;
+        let started_at = std::time::Instant::now();
+        tracing::debug!(
+            wallet,
+            xpub_index,
+            xpub_count = xpubs.len(),
+            "wallet scan: xpub started"
+        );
+        let (balance, recent) = xpub_scan(client, xpub, wallet, xpub_index)?;
+        tracing::debug!(
+            wallet,
+            xpub_index,
+            elapsed = ?started_at.elapsed(),
+            "wallet scan: xpub completed"
+        );
         total = total
             .checked_add(balance)
             .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
@@ -169,6 +205,7 @@ fn scan_xpubs(client: &mut Client, xpubs: &str) -> Result<(i64, Vec<TxSummary>)>
         }
     }
     all_recent.truncate(RECENT_TX_LIMIT);
+    tracing::debug!(wallet, "wallet scan: group completed");
     Ok((total, all_recent))
 }
 
@@ -261,12 +298,24 @@ fn script_kind_and_raw_xpub(xpub: &str) -> Result<(ScriptKind, &str)> {
     }
 }
 
-fn xpub_scan(client: &mut Client, xpub: &str) -> Result<(i64, Vec<TxSummary>)> {
+fn xpub_scan(
+    client: &mut Client,
+    xpub: &str,
+    wallet: &'static str,
+    xpub_index: usize,
+) -> Result<(i64, Vec<TxSummary>)> {
     let (kind, raw_xpub) = script_kind_and_raw_xpub(xpub)?;
     let xpub = parse_xpub(raw_xpub)?;
     let scripts = derive_scripts(&xpub, kind)?;
     let refs: Vec<&electrum_client::bitcoin::Script> = scripts.iter().map(|s| s.as_ref()).collect();
+    tracing::debug!(
+        wallet,
+        xpub_index,
+        script_count = refs.len(),
+        "wallet scan: requesting balances"
+    );
     let balances = client.batch_script_get_balance(&refs)?;
+    tracing::debug!(wallet, xpub_index, "wallet scan: balances received");
     let mut total: i64 = 0;
     for balance in balances {
         let sat = (balance.confirmed as i64)
@@ -277,15 +326,19 @@ fn xpub_scan(client: &mut Client, xpub: &str) -> Result<(i64, Vec<TxSummary>)> {
             .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
     }
 
-    let recent = recent_txs_for_scripts(client, &refs)?;
+    let recent = recent_txs_for_scripts(client, &refs, wallet, xpub_index)?;
     Ok((total, recent))
 }
 
 fn recent_txs_for_scripts(
     client: &mut Client,
     scripts: &[&electrum_client::bitcoin::Script],
+    wallet: &'static str,
+    xpub_index: usize,
 ) -> Result<Vec<TxSummary>> {
+    tracing::debug!(wallet, xpub_index, "wallet scan: requesting histories");
     let histories = client.batch_script_get_history(scripts)?;
+    tracing::debug!(wallet, xpub_index, "wallet scan: histories received");
     let mut candidates: Vec<(i32, [u8; 32])> = Vec::new();
     let mut seen: HashSet<[u8; 32]> = HashSet::new();
     for h in histories {
@@ -306,7 +359,18 @@ fn recent_txs_for_scripts(
         return Ok(Vec::new());
     }
 
+    tracing::debug!(
+        wallet,
+        xpub_index,
+        transaction_count = selected.len(),
+        "wallet scan: requesting recent transactions"
+    );
     let txs: Vec<Transaction> = client.batch_transaction_get(&selected)?;
+    tracing::debug!(
+        wallet,
+        xpub_index,
+        "wallet scan: recent transactions received"
+    );
 
     let script_set: HashSet<&electrum_client::bitcoin::Script> = scripts.iter().copied().collect();
 
@@ -320,7 +384,19 @@ fn recent_txs_for_scripts(
     let prev_txs: Vec<Transaction> = if prev_needed.is_empty() {
         Vec::new()
     } else {
-        client.batch_transaction_get(&prev_needed)?
+        tracing::debug!(
+            wallet,
+            xpub_index,
+            transaction_count = prev_needed.len(),
+            "wallet scan: requesting previous transactions"
+        );
+        let transactions = client.batch_transaction_get(&prev_needed)?;
+        tracing::debug!(
+            wallet,
+            xpub_index,
+            "wallet scan: previous transactions received"
+        );
+        transactions
     };
     let mut prev_value: HashMap<(Txid, u32), i64> = HashMap::new();
     let mut prev_script: HashMap<(Txid, u32), &electrum_client::bitcoin::Script> = HashMap::new();

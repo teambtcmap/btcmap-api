@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{info, warn};
 
 pub(crate) const CACHE_KEY: &str = "wallet_snapshot";
 
@@ -33,10 +33,19 @@ pub struct Snapshot {
 pub fn init(pool: &MainPool, shutdown: CancellationToken) {
     let pool = pool.clone();
     tokio::spawn(async move {
+        info!(
+            refresh_interval_secs = REFRESH_INTERVAL.as_secs(),
+            refresh_timeout_secs = REFRESH_TIMEOUT.as_secs(),
+            "wallet snapshot refresher: started"
+        );
         if run_refresh(&pool, &shutdown).await {
             return;
         }
         loop {
+            info!(
+                refresh_interval_secs = REFRESH_INTERVAL.as_secs(),
+                "wallet snapshot refresher: waiting for next refresh"
+            );
             tokio::select! {
                 _ = shutdown.cancelled() => break,
                 _ = tokio::time::sleep(REFRESH_INTERVAL) => {}
@@ -45,12 +54,15 @@ pub fn init(pool: &MainPool, shutdown: CancellationToken) {
                 break;
             }
         }
+        info!("wallet snapshot refresher: stopped");
     });
 }
 
 /// Runs one refresh cycle. Returns `true` if shutdown was requested (the
 /// caller should stop scheduling further refreshes).
 async fn run_refresh(pool: &MainPool, shutdown: &CancellationToken) -> bool {
+    let started_at = std::time::Instant::now();
+    info!("wallet snapshot refresher: refresh started");
     let conf = match conf_queries::select(pool).await {
         Ok(c) => c,
         Err(err) => {
@@ -64,12 +76,22 @@ async fn run_refresh(pool: &MainPool, shutdown: &CancellationToken) -> bool {
         result = tokio::time::timeout(REFRESH_TIMEOUT, rx) => {
             match result {
                 Ok(Ok(Ok(res))) => {
+                    info!(
+                        elapsed = ?started_at.elapsed(),
+                        "wallet snapshot refresher: fetch succeeded"
+                    );
                     let snapshot = Snapshot {
                         fetched_at: OffsetDateTime::now_utc(),
                         res,
                     };
-                    if let Err(err) = store(&snapshot, pool).await {
-                        warn!(%err, "wallet snapshot refresher: failed to persist");
+                    match store(&snapshot, pool).await {
+                        Ok(()) => info!(
+                            fetched_at = %snapshot.fetched_at,
+                            "wallet snapshot refresher: cache updated"
+                        ),
+                        Err(err) => {
+                            warn!(%err, "wallet snapshot refresher: failed to persist");
+                        }
                     }
                 }
                 Ok(Ok(Err(err))) => {
