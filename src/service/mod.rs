@@ -3,6 +3,7 @@ pub mod area_element;
 pub mod auth;
 pub mod ban;
 pub mod comment;
+pub mod electrum_pinned;
 pub mod element;
 pub mod event;
 pub mod gitea;

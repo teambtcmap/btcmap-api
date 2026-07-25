@@ -20,7 +20,6 @@ pub enum Columns {
     XpubSpending,
     XpubDonations,
     XpubTreasury,
-    ElectrumUrl,
     CorsOrigins,
 }
 
@@ -44,7 +43,6 @@ pub struct Conf {
     pub xpub_spending: String,
     pub xpub_donations: String,
     pub xpub_treasury: String,
-    pub electrum_url: String,
     pub cors_origins: Vec<String>,
 }
 
@@ -64,7 +62,6 @@ impl Conf {
                 Columns::XpubSpending,
                 Columns::XpubDonations,
                 Columns::XpubTreasury,
-                Columns::ElectrumUrl,
                 Columns::CorsOrigins,
             ]
             .iter()
@@ -107,7 +104,6 @@ impl Conf {
                 xpub_spending: row.get(Columns::XpubSpending.as_ref())?,
                 xpub_donations: row.get(Columns::XpubDonations.as_ref())?,
                 xpub_treasury: row.get(Columns::XpubTreasury.as_ref())?,
-                electrum_url: row.get(Columns::ElectrumUrl.as_ref())?,
                 cors_origins,
             })
         }

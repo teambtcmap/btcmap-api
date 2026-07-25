@@ -92,6 +92,11 @@ pub enum RpcMethod {
     RevokeSubmittedPlace,
     SyncSubmittedPlaces,
     GetPlaceImportOrigins,
+    // Electrum server
+    GetElectrumServers,
+    AddElectrumServer,
+    UpdateElectrumServer,
+    RemoveElectrumServer,
     // Matrix
     SendMatrixMessage,
     // Debug
@@ -170,6 +175,14 @@ impl Role {
         RpcMethod::Dashboard,
         // Admins can query wallet balances for the xpubs configured in the conf table
         RpcMethod::GetWallets,
+        // Admins can list electrum servers configured for wallet balance lookups
+        RpcMethod::GetElectrumServers,
+        // Admins can add electrum servers
+        RpcMethod::AddElectrumServer,
+        // Admins can update electrum servers
+        RpcMethod::UpdateElectrumServer,
+        // Admins can soft-delete electrum servers
+        RpcMethod::RemoveElectrumServer,
     ];
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
@@ -641,6 +654,22 @@ pub async fn handle(
         RpcMethod::GetPlaceImportOrigins => RpcResponse::from(
             req.id.clone(),
             super::import::get_place_import_origins::run(&main_pool).await?,
+        ),
+        RpcMethod::GetElectrumServers => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::get_electrum_servers::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::AddElectrumServer => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::add_electrum_server::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::UpdateElectrumServer => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::update_electrum_server::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::RemoveElectrumServer => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::remove_electrum_server::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SendMatrixMessage => {
             super::matrix::send_matrix_message::run(params(req.params)?, &main_pool).await;

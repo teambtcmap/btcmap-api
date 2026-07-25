@@ -1,3 +1,4 @@
+use crate::db::main::electrum_server::schema::ElectrumServer;
 use crate::{db, Result};
 use deadpool_sqlite::Pool;
 use electrum_client::bitcoin::base58;
@@ -60,12 +61,14 @@ impl Res {
 
 pub async fn run(pool: &Pool) -> Result<Res> {
     let conf = db::main::conf::queries::select(pool).await?;
+    let servers = db::main::electrum_server::queries::select_all(pool).await?;
+    let servers = active_servers_as_tuples(servers);
     let res = task::spawn_blocking(move || {
         aggregate(
             &conf.xpub_spending,
             &conf.xpub_donations,
             &conf.xpub_treasury,
-            &conf.electrum_url,
+            &servers,
         )
     })
     .await
@@ -73,74 +76,59 @@ pub async fn run(pool: &Pool) -> Result<Res> {
     Ok(res)
 }
 
+/// Drops soft-deleted rows and projects the rest to the `(name, url, spki_pin)`
+/// tuples the scan loop iterates over. Order is preserved: `select_all` already
+/// returns rows ordered by descending priority, so the resulting `Vec` is in
+/// the order the scan should try them.
+pub(crate) fn active_servers_as_tuples(
+    servers: Vec<ElectrumServer>,
+) -> Vec<(String, String, String)> {
+    servers
+        .into_iter()
+        .filter(|s| s.deleted_at.is_none())
+        .map(|s| (s.name, s.url, s.spki_pin))
+        .collect()
+}
+
 pub(crate) fn aggregate(
     spending: &str,
     donations: &str,
     treasury: &str,
-    electrum_url: &str,
+    electrum_servers: &[(String, String, String)],
 ) -> Result<Res> {
     let has_any_xpub =
         !spending.trim().is_empty() || !donations.trim().is_empty() || !treasury.trim().is_empty();
     if !has_any_xpub {
         return Ok(Res::empty());
     }
-    let endpoints = parse_electrum_endpoints(electrum_url)?;
+    let endpoints = parse_electrum_endpoints(electrum_servers);
     if endpoints.is_empty() {
         return Err(crate::Error::Other(
-            "electrum_url is empty but at least one xpub is configured".into(),
+            "no electrum servers configured but at least one xpub is set".into(),
         ));
     }
     let mut last_err: Option<crate::Error> = None;
-    for (url, insecure_tls) in &endpoints {
-        if *insecure_tls {
-            tracing::warn!(
-                "Electrum endpoint {} uses the insecure- prefix: TLS certificate validation \
-                 is disabled for this endpoint. This is unsafe on untrusted networks.",
-                url
-            );
-        }
-        let config = electrum_client::Config::builder()
-            .timeout(Some(ELECTRUM_ENDPOINT_TIMEOUT))
-            .validate_domain(!*insecure_tls)
-            .build();
+    for (name, url, spki_pin) in &endpoints {
         tracing::debug!(
-            endpoint = url,
-            timeout_secs = ELECTRUM_ENDPOINT_TIMEOUT.as_secs(),
+            server = name.as_str(),
+            endpoint = url.as_str(),
             "wallet scan: connecting to endpoint"
         );
-        let mut client = match Client::from_config(url, config) {
-            Ok(client) => client,
-            Err(e) => {
-                last_err = Some(crate::Error::Other(format!(
-                    "electrum client connect failed for {}: {}",
-                    url, e
-                )));
+        let mut client = match connect_client(url, spki_pin) {
+            Ok(c) => c,
+            Err(err) => {
+                last_err = Some(err);
                 continue;
             }
         };
-        tracing::debug!(endpoint = url, "wallet scan: endpoint connected");
-        let spending_result = scan_xpubs(&mut client, spending, "spending");
-        let donations_result = scan_xpubs(&mut client, donations, "donations");
-        let treasury_result = scan_xpubs(&mut client, treasury, "treasury");
-        match (spending_result, donations_result, treasury_result) {
-            (
-                Ok((spending_bal, spending_tx)),
-                Ok((donations_bal, donations_tx)),
-                Ok((treasury_bal, treasury_tx)),
-            ) => {
-                return Ok(Res {
-                    spending: spending_bal,
-                    donations: donations_bal,
-                    treasury: treasury_bal,
-                    spending_tx,
-                    donations_tx,
-                    treasury_tx,
-                });
-            }
-            (a, b, c) => {
-                let err = a.err().or(b.err()).or(c.err()).unwrap_or_else(|| {
-                    crate::Error::Other(format!("electrum scan failed for {}", url))
-                });
+        tracing::debug!(
+            server = name.as_str(),
+            endpoint = url.as_str(),
+            "wallet scan: endpoint connected"
+        );
+        match scan_three_wallets(client.as_mut(), spending, donations, treasury) {
+            Ok(res) => return Ok(res),
+            Err(err) => {
                 last_err = Some(err);
             }
         }
@@ -148,21 +136,75 @@ pub(crate) fn aggregate(
     Err(last_err.unwrap_or_else(|| crate::Error::Other("no electrum endpoints succeeded".into())))
 }
 
-fn parse_electrum_endpoints(raw: &str) -> Result<Vec<(String, bool)>> {
-    let mut out = Vec::new();
-    for entry in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-        let (url, insecure_tls) = if let Some(stripped) = entry.strip_prefix("insecure-") {
-            (stripped.to_string(), true)
-        } else {
-            (entry.to_string(), false)
-        };
-        out.push((url, insecure_tls));
+fn connect_client(url: &str, spki_pin: &str) -> Result<Box<dyn WalletBackend>> {
+    if spki_pin.is_empty() {
+        let config = electrum_client::Config::builder()
+            .timeout(Some(ELECTRUM_ENDPOINT_TIMEOUT))
+            .build();
+        tracing::debug!(
+            endpoint = url,
+            timeout_secs = ELECTRUM_ENDPOINT_TIMEOUT.as_secs(),
+            "wallet scan: building client config"
+        );
+        let client = Client::from_config(url, config).map_err(|e| {
+            crate::Error::Other(format!("electrum client connect failed for {}: {}", url, e))
+        })?;
+        Ok(Box::new(client))
+    } else {
+        let client = crate::service::electrum_pinned::PinnedClient::connect(url, spki_pin)
+            .map_err(|e| {
+                crate::Error::Other(format!("pinned electrum connect failed for {}: {}", url, e))
+            })?;
+        Ok(Box::new(client))
     }
-    Ok(out)
+}
+
+fn scan_three_wallets(
+    client: &mut dyn WalletBackend,
+    spending: &str,
+    donations: &str,
+    treasury: &str,
+) -> Result<Res> {
+    let spending_result = scan_xpubs(client, spending, "spending");
+    let donations_result = scan_xpubs(client, donations, "donations");
+    let treasury_result = scan_xpubs(client, treasury, "treasury");
+    match (spending_result, donations_result, treasury_result) {
+        (
+            Ok((spending_bal, spending_tx)),
+            Ok((donations_bal, donations_tx)),
+            Ok((treasury_bal, treasury_tx)),
+        ) => Ok(Res {
+            spending: spending_bal,
+            donations: donations_bal,
+            treasury: treasury_bal,
+            spending_tx,
+            donations_tx,
+            treasury_tx,
+        }),
+        (a, b, c) => Err(a
+            .err()
+            .or(b.err())
+            .or(c.err())
+            .unwrap_or_else(|| crate::Error::Other("electrum scan failed".into()))),
+    }
+}
+
+fn parse_electrum_endpoints(servers: &[(String, String, String)]) -> Vec<(String, String, String)> {
+    servers
+        .iter()
+        .map(|(name, url, spki_pin)| {
+            (
+                name.clone(),
+                url.trim().to_string(),
+                spki_pin.trim().to_string(),
+            )
+        })
+        .filter(|(_, url, _)| !url.is_empty())
+        .collect()
 }
 
 fn scan_xpubs(
-    client: &mut Client,
+    client: &mut dyn WalletBackend,
     xpubs: &str,
     wallet: &'static str,
 ) -> Result<(i64, Vec<TxSummary>)> {
@@ -299,7 +341,7 @@ fn script_kind_and_raw_xpub(xpub: &str) -> Result<(ScriptKind, &str)> {
 }
 
 fn xpub_scan(
-    client: &mut Client,
+    client: &mut dyn WalletBackend,
     xpub: &str,
     wallet: &'static str,
     xpub_index: usize,
@@ -314,12 +356,12 @@ fn xpub_scan(
         script_count = refs.len(),
         "wallet scan: requesting balances"
     );
-    let balances = client.batch_script_get_balance(&refs)?;
+    let balances = client.balance(&refs)?;
     tracing::debug!(wallet, xpub_index, "wallet scan: balances received");
     let mut total: i64 = 0;
-    for balance in balances {
-        let sat = (balance.confirmed as i64)
-            .checked_add(balance.unconfirmed)
+    for (confirmed, unconfirmed) in balances {
+        let sat = (confirmed as i64)
+            .checked_add(unconfirmed)
             .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
         total = total
             .checked_add(sat)
@@ -331,21 +373,20 @@ fn xpub_scan(
 }
 
 fn recent_txs_for_scripts(
-    client: &mut Client,
+    client: &mut dyn WalletBackend,
     scripts: &[&electrum_client::bitcoin::Script],
     wallet: &'static str,
     xpub_index: usize,
 ) -> Result<Vec<TxSummary>> {
     tracing::debug!(wallet, xpub_index, "wallet scan: requesting histories");
-    let histories = client.batch_script_get_history(scripts)?;
+    let histories = client.history(scripts)?;
     tracing::debug!(wallet, xpub_index, "wallet scan: histories received");
     let mut candidates: Vec<(i32, [u8; 32])> = Vec::new();
     let mut seen: HashSet<[u8; 32]> = HashSet::new();
     for h in histories {
-        for entry in h {
-            let raw: [u8; 32] = *entry.tx_hash.as_ref();
-            if seen.insert(raw) {
-                candidates.push((entry.height, raw));
+        for (height, tx_hash) in h {
+            if seen.insert(tx_hash) {
+                candidates.push((height, tx_hash));
             }
         }
     }
@@ -365,7 +406,7 @@ fn recent_txs_for_scripts(
         transaction_count = selected.len(),
         "wallet scan: requesting recent transactions"
     );
-    let txs: Vec<Transaction> = client.batch_transaction_get(&selected)?;
+    let txs: Vec<Transaction> = client.transaction(&selected)?;
     tracing::debug!(
         wallet,
         xpub_index,
@@ -390,7 +431,7 @@ fn recent_txs_for_scripts(
             transaction_count = prev_needed.len(),
             "wallet scan: requesting previous transactions"
         );
-        let transactions = client.batch_transaction_get(&prev_needed)?;
+        let transactions = client.transaction(&prev_needed)?;
         tracing::debug!(
             wallet,
             xpub_index,
@@ -497,8 +538,151 @@ fn parse_xpub(s: &str) -> Result<Xpub> {
     Xpub::decode(&data).map_err(|e| crate::Error::Other(format!("invalid xpub: {}", e)))
 }
 
+/// Backend abstraction shared by the public electrum-client and our SPKI-pinned
+/// client. All wallet scanning happens through this interface so the same
+/// script-derivation, balance-summing and history-walking logic works whether
+/// the server is reached through a normal CA-validated TLS connection or a
+/// pinned self-signed one.
+type History = Vec<(i32, [u8; 32])>;
+
+trait WalletBackend {
+    /// Returns `(confirmed, unconfirmed)` in satoshis for each script, in the
+    /// same order as the input slice.
+    fn balance(&mut self, scripts: &[&electrum_client::bitcoin::Script])
+        -> Result<Vec<(u64, i64)>>;
+    /// Returns the history `(height, tx_hash)` for each script, in input order.
+    #[allow(clippy::type_complexity)]
+    fn history(&mut self, scripts: &[&electrum_client::bitcoin::Script]) -> Result<Vec<History>>;
+    /// Fetches the full transactions for the given txids, in input order.
+    fn transaction(&mut self, txids: &[Txid]) -> Result<Vec<Transaction>>;
+}
+
+impl WalletBackend for Client {
+    fn balance(
+        &mut self,
+        scripts: &[&electrum_client::bitcoin::Script],
+    ) -> Result<Vec<(u64, i64)>> {
+        let res = Client::batch_script_get_balance(self, scripts)?;
+        Ok(res
+            .into_iter()
+            .map(|b| (b.confirmed, b.unconfirmed))
+            .collect())
+    }
+
+    fn history(
+        &mut self,
+        scripts: &[&electrum_client::bitcoin::Script],
+    ) -> Result<Vec<Vec<(i32, [u8; 32])>>> {
+        let res = Client::batch_script_get_history(self, scripts)?;
+        let mut out = Vec::with_capacity(res.len());
+        for entries in res {
+            let mut parsed = Vec::with_capacity(entries.len());
+            for e in entries {
+                let bytes: [u8; 32] = *e.tx_hash.as_ref();
+                parsed.push((e.height, bytes));
+            }
+            out.push(parsed);
+        }
+        Ok(out)
+    }
+
+    fn transaction(&mut self, txids: &[Txid]) -> Result<Vec<Transaction>> {
+        Client::batch_transaction_get(self, txids).map_err(Into::into)
+    }
+}
+
+impl WalletBackend for crate::service::electrum_pinned::PinnedClient {
+    fn balance(
+        &mut self,
+        scripts: &[&electrum_client::bitcoin::Script],
+    ) -> Result<Vec<(u64, i64)>> {
+        let res =
+            crate::service::electrum_pinned::PinnedClient::batch_script_get_balance(self, scripts)?;
+        Ok(res
+            .into_iter()
+            .map(|b| (b.confirmed, b.unconfirmed))
+            .collect())
+    }
+
+    fn history(
+        &mut self,
+        scripts: &[&electrum_client::bitcoin::Script],
+    ) -> Result<Vec<Vec<(i32, [u8; 32])>>> {
+        let res =
+            crate::service::electrum_pinned::PinnedClient::batch_script_get_history(self, scripts)?;
+        res.into_iter()
+            .map(|entries| {
+                entries
+                    .into_iter()
+                    .map(|e| {
+                        let bytes = hex_decode(&e.tx_hash)
+                            .map_err(|err| crate::Error::Other(format!("history hex: {}", err)))?;
+                        if bytes.len() != 32 {
+                            return Err(crate::Error::Other(format!(
+                                "history tx_hash is {} bytes, expected 32",
+                                bytes.len()
+                            )));
+                        }
+                        let mut hash = [0u8; 32];
+                        hash.copy_from_slice(&bytes);
+                        Ok((e.height, hash))
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn transaction(&mut self, txids: &[Txid]) -> Result<Vec<Transaction>> {
+        let pinned_ids: Vec<crate::service::electrum_pinned::Txid> = txids
+            .iter()
+            .map(|id| {
+                let mut bytes = [0u8; 32];
+                bytes.copy_from_slice(id.as_ref());
+                crate::service::electrum_pinned::Txid::from_bytes(bytes)
+            })
+            .collect();
+        let hexes = crate::service::electrum_pinned::PinnedClient::batch_transaction_get(
+            self,
+            &pinned_ids,
+        )?;
+        let mut txs = Vec::with_capacity(hexes.len());
+        for hex in hexes {
+            let bytes = hex_decode(&hex)
+                .map_err(|err| crate::Error::Other(format!("transaction hex: {}", err)))?;
+            let tx = electrum_client::bitcoin::consensus::deserialize(&bytes)
+                .map_err(|e| crate::Error::Other(format!("transaction parse: {}", e)))?;
+            txs.push(tx);
+        }
+        Ok(txs)
+    }
+}
+
+fn hex_decode(s: &str) -> std::result::Result<Vec<u8>, String> {
+    let bytes = s.as_bytes();
+    if !bytes.len().is_multiple_of(2) {
+        return Err("odd length".into());
+    }
+    let mut out = Vec::with_capacity(bytes.len() / 2);
+    for chunk in bytes.chunks(2) {
+        let hi = nibble(chunk[0])?;
+        let lo = nibble(chunk[1])?;
+        out.push((hi << 4) | lo);
+    }
+    Ok(out)
+}
+
+fn nibble(b: u8) -> std::result::Result<u8, String> {
+    match b {
+        b'0'..=b'9' => Ok(b - b'0'),
+        b'a'..=b'f' => Ok(b - b'a' + 10),
+        b'A'..=b'F' => Ok(b - b'A' + 10),
+        _ => Err(format!("invalid hex char: {}", b as char)),
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use crate::db::main::electrum_server::schema::ElectrumServer;
     use crate::db::main::test::pool;
     use crate::Result;
     use electrum_client::bitcoin::base58;
@@ -534,47 +718,80 @@ mod test {
 
     #[test]
     fn parse_electrum_endpoints_single_plain() {
-        let endpoints = super::parse_electrum_endpoints("ssl://electrum.foo.bar:50002").unwrap();
+        let servers = vec![(
+            "foo".to_string(),
+            "ssl://electrum.foo.bar:50002".to_string(),
+            "".to_string(),
+        )];
+        let endpoints = super::parse_electrum_endpoints(&servers);
         assert_eq!(
             endpoints,
-            vec![("ssl://electrum.foo.bar:50002".to_string(), false)]
+            vec![(
+                "foo".to_string(),
+                "ssl://electrum.foo.bar:50002".to_string(),
+                "".to_string(),
+            )]
         );
     }
 
     #[test]
-    fn parse_electrum_endpoints_mixed_with_insecure_prefix() {
-        let endpoints = super::parse_electrum_endpoints(
-            "insecure-ssl://electrs.com.au:50002,ssl://electrum.foo.bar:50002",
-        )
-        .unwrap();
+    fn parse_electrum_endpoints_does_not_strip_insecure_prefix() {
+        // The `insecure-` prefix is no longer recognised: it is left in the URL
+        // and would just cause the electrum client to fail to connect.
+        let servers = vec![(
+            "a".to_string(),
+            "insecure-ssl://electrs.com.au:50002".to_string(),
+            "".to_string(),
+        )];
+        let endpoints = super::parse_electrum_endpoints(&servers);
         assert_eq!(
             endpoints,
-            vec![
-                ("ssl://electrs.com.au:50002".to_string(), true),
-                ("ssl://electrum.foo.bar:50002".to_string(), false),
-            ]
+            vec![(
+                "a".to_string(),
+                "insecure-ssl://electrs.com.au:50002".to_string(),
+                "".to_string(),
+            )]
         );
     }
 
     #[test]
     fn parse_electrum_endpoints_trims_whitespace_and_skips_empty() {
-        let endpoints = super::parse_electrum_endpoints(
-            "  tcp://a:50001 , , insecure-tcp://b:50001  ,,tcp://c:50001",
-        )
-        .unwrap();
+        let servers = vec![
+            (
+                "a".to_string(),
+                "  tcp://a:50001 ".to_string(),
+                "".to_string(),
+            ),
+            ("b".to_string(), " ".to_string(), "".to_string()),
+            ("c".to_string(), "tcp://b:50001".to_string(), "".to_string()),
+            ("d".to_string(), "tcp://c:50001".to_string(), "".to_string()),
+        ];
+        let endpoints = super::parse_electrum_endpoints(&servers);
         assert_eq!(
             endpoints,
             vec![
-                ("tcp://a:50001".to_string(), false),
-                ("tcp://b:50001".to_string(), true),
-                ("tcp://c:50001".to_string(), false),
+                ("a".to_string(), "tcp://a:50001".to_string(), "".to_string(),),
+                ("c".to_string(), "tcp://b:50001".to_string(), "".to_string(),),
+                ("d".to_string(), "tcp://c:50001".to_string(), "".to_string(),),
             ]
         );
     }
 
     #[test]
-    fn parse_electrum_endpoints_empty_string_yields_empty_vec() {
-        let endpoints = super::parse_electrum_endpoints("").unwrap();
+    fn parse_electrum_endpoints_preserves_pin() {
+        let pin = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+        let servers = vec![(
+            "pinned".to_string(),
+            "ssl://foo:50002".to_string(),
+            pin.to_string(),
+        )];
+        let endpoints = super::parse_electrum_endpoints(&servers);
+        assert_eq!(endpoints[0].2, pin);
+    }
+
+    #[test]
+    fn parse_electrum_endpoints_empty_yields_empty_vec() {
+        let endpoints = super::parse_electrum_endpoints(&[]);
         assert!(endpoints.is_empty());
     }
 
@@ -599,6 +816,107 @@ mod test {
         assert!(res.spending_tx.is_empty());
         assert!(res.donations_tx.is_empty());
         assert!(res.treasury_tx.is_empty());
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn run_with_xpub_but_no_servers_returns_error() -> Result<()> {
+        let pool = pool();
+        // Configure xpubs but no electrum servers at all
+        pool.get()
+            .await?
+            .interact(|conn| {
+                conn.execute(
+                    "UPDATE conf SET xpub_spending = ?1",
+                    rusqlite::params![
+                        "xpub0000000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                )?;
+                Ok::<_, crate::Error>(())
+            })
+            .await??;
+        let res = super::run(&pool).await;
+        assert!(res.is_err());
+        let err = match res {
+            Ok(_) => panic!("expected error"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            err.contains("no electrum servers configured"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn parse_electrum_endpoints_preserves_input_order() -> Result<()> {
+        // Soft-deleted servers are filtered out by the caller (`run` /
+        // `wallet_cache::load_active_servers`) before reaching this helper,
+        // so the only ordering guarantee `parse_electrum_endpoints` makes is
+        // that it preserves whatever order it got.
+        let servers = vec![
+            (
+                "low".to_string(),
+                "ssl://low:50002".to_string(),
+                "".to_string(),
+            ),
+            (
+                "high".to_string(),
+                "ssl://high:50002".to_string(),
+                "".to_string(),
+            ),
+        ];
+        let endpoints = super::parse_electrum_endpoints(&servers);
+        assert_eq!(endpoints.len(), 2);
+        assert_eq!(endpoints[0].0, "low");
+        assert_eq!(endpoints[1].0, "high");
+        Ok(())
+    }
+
+    #[test]
+    fn active_servers_as_tuples_skips_deleted_and_preserves_order() -> Result<()> {
+        let now = time::OffsetDateTime::now_utc();
+        // Input order mirrors what `select_all` returns: descending priority.
+        // `active_servers_as_tuples` is a pure projection — it must drop the
+        // soft-deleted row and keep the rest in the same positions.
+        let servers = vec![
+            ElectrumServer {
+                id: 2,
+                name: "deleted_high".to_string(),
+                url: "ssl://deleted-high:50002".to_string(),
+                priority: 100,
+                spki_pin: "".to_string(),
+                created_at: now,
+                updated_at: now,
+                deleted_at: Some(now),
+            },
+            ElectrumServer {
+                id: 3,
+                name: "active_high".to_string(),
+                url: "ssl://active-high:50002".to_string(),
+                priority: 50,
+                spki_pin: "".to_string(),
+                created_at: now,
+                updated_at: now,
+                deleted_at: None,
+            },
+            ElectrumServer {
+                id: 1,
+                name: "active_low".to_string(),
+                url: "ssl://active-low:50002".to_string(),
+                priority: 1,
+                spki_pin: "".to_string(),
+                created_at: now,
+                updated_at: now,
+                deleted_at: None,
+            },
+        ];
+        let active = super::active_servers_as_tuples(servers);
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].0, "active_high");
+        assert_eq!(active[0].1, "ssl://active-high:50002");
+        assert_eq!(active[1].0, "active_low");
+        assert_eq!(active[1].1, "ssl://active-low:50002");
         Ok(())
     }
 

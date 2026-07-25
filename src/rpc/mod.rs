@@ -4,6 +4,7 @@ pub mod analytics;
 pub mod area;
 pub mod auth;
 pub mod boost_element;
+pub mod electrum;
 pub mod element;
 pub mod event;
 pub mod generate_area_icons;

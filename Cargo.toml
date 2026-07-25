@@ -128,3 +128,21 @@ nostr = { version = "0.44.3", default-features = false, features = ["std"] }
 # Used to query Bitcoin wallet balances from xpubs via a public Electrum server
 # https://github.com/bitcoindevkit/rust-electrum-client/releases
 electrum-client = { version = "0.25.0", default-features = false, features = ["use-rustls"] }
+
+# TLS stack used to implement SPKI-pinned electrum connections (the electrum-client
+# crate has no public API for certificate pinning).
+# https://github.com/rustls/rustls/releases
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+
+# Rustls-owned equivalents of `webpki` types so we don't pull in a different version.
+# https://github.com/rustls/pki-types
+rustls-pki-types = "1"
+
+# X.509 certificate parser used to extract the SPKI from a server certificate so
+# we can compare it against the pin.
+# https://github.com/rusticata/x509-parser
+x509-parser = "0.18"
+
+# SHA-256 hashing for SPKI pin comparison.
+# https://github.com/RustCrypto/hashes
+sha2 = "0.10"

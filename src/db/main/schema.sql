@@ -80,11 +80,21 @@ CREATE TABLE conf(
     id INTEGER PRIMARY KEY NOT NULL,
     paywall_add_element_comment_price_sat INTEGER NOT NULL,
     boost_element_prices TEXT NOT NULL DEFAULT '[]'
-, lnbits_invoice_key TEXT NOT NULL DEFAULT '', gitea_api_key TEXT NOT NULL DEFAULT '', matrix_bot_password TEXT NOT NULL DEFAULT '', lnd_invoices_macaroon TEXT NOT NULL DEFAULT '', ppq_key TEXT NOT NULL DEFAULT '', lnd_readonly_macaroon TEXT NOT NULL DEFAULT '', xpub_spending TEXT NOT NULL DEFAULT '', xpub_donations TEXT NOT NULL DEFAULT '', xpub_treasury TEXT NOT NULL DEFAULT '', electrum_url TEXT NOT NULL DEFAULT '', cors_origins TEXT NOT NULL DEFAULT '') STRICT;
-INSERT INTO conf VALUES(1,500,'[]','','','','','','','','','','','');
+, lnbits_invoice_key TEXT NOT NULL DEFAULT '', gitea_api_key TEXT NOT NULL DEFAULT '', matrix_bot_password TEXT NOT NULL DEFAULT '', lnd_invoices_macaroon TEXT NOT NULL DEFAULT '', ppq_key TEXT NOT NULL DEFAULT '', lnd_readonly_macaroon TEXT NOT NULL DEFAULT '', xpub_spending TEXT NOT NULL DEFAULT '', xpub_donations TEXT NOT NULL DEFAULT '', xpub_treasury TEXT NOT NULL DEFAULT '', cors_origins TEXT NOT NULL DEFAULT '') STRICT;
+INSERT INTO conf VALUES(1,500,'[]','','','','','','','','','','');
 CREATE TABLE cache(
     key TEXT NOT NULL UNIQUE,
     value TEXT NOT NULL
+) STRICT;
+CREATE TABLE electrum_server(
+    id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    url TEXT NOT NULL UNIQUE,
+    priority INTEGER NOT NULL DEFAULT 0,
+    spki_pin TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    deleted_at TEXT
 ) STRICT;
 CREATE TABLE element_issue(
     id INTEGER PRIMARY KEY NOT NULL,
@@ -177,6 +187,10 @@ END;
 CREATE TRIGGER acess_token_updated_at UPDATE OF user_id, name, secret, roles, import_origins, created_at, deleted_at ON access_token
 BEGIN
     UPDATE access_token SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
+CREATE TRIGGER electrum_server_updated_at UPDATE OF name, url, priority, spki_pin, created_at, deleted_at ON electrum_server
+BEGIN
+    UPDATE electrum_server SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
 CREATE TRIGGER element_event_updated_at UPDATE OF user_id, element_id, type, tags, created_at, deleted_at ON element_event
 BEGIN

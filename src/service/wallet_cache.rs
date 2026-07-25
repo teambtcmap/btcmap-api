@@ -1,8 +1,9 @@
 use crate::db::main::cache::queries as cache_queries;
 use crate::db::main::conf::queries as conf_queries;
 use crate::db::main::conf::schema::Conf;
+use crate::db::main::electrum_server::queries as electrum_server_queries;
 use crate::db::main::MainPool;
-use crate::service::wallet::{aggregate, Res as WalletRes};
+use crate::service::wallet::{active_servers_as_tuples, aggregate, Res as WalletRes};
 use crate::Result;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -70,7 +71,8 @@ async fn run_refresh(pool: &MainPool, shutdown: &CancellationToken) -> bool {
             return false;
         }
     };
-    let rx = spawn_blocking_refresh(conf);
+    let servers = load_active_servers(pool).await;
+    let rx = spawn_blocking_refresh(conf, servers);
     tokio::select! {
         _ = shutdown.cancelled() => true,
         result = tokio::time::timeout(REFRESH_TIMEOUT, rx) => {
@@ -123,7 +125,10 @@ async fn run_refresh(pool: &MainPool, shutdown: &CancellationToken) -> bool {
 /// regardless of what the electrum call is doing. This is what makes
 /// SIGTERM return control within milliseconds even when the electrum
 /// server is blackholed.
-fn spawn_blocking_refresh(conf: Conf) -> oneshot::Receiver<Result<WalletRes>> {
+fn spawn_blocking_refresh(
+    conf: Conf,
+    servers: Vec<(String, String, String)>,
+) -> oneshot::Receiver<Result<WalletRes>> {
     let (tx, rx) = oneshot::channel();
     std::thread::Builder::new()
         .name("wallet-refresh".into())
@@ -132,7 +137,7 @@ fn spawn_blocking_refresh(conf: Conf) -> oneshot::Receiver<Result<WalletRes>> {
                 &conf.xpub_spending,
                 &conf.xpub_donations,
                 &conf.xpub_treasury,
-                &conf.electrum_url,
+                &servers,
             );
             let _ = tx.send(result);
         })
@@ -140,12 +145,23 @@ fn spawn_blocking_refresh(conf: Conf) -> oneshot::Receiver<Result<WalletRes>> {
     rx
 }
 
+async fn load_active_servers(pool: &MainPool) -> Vec<(String, String, String)> {
+    match electrum_server_queries::select_all(pool).await {
+        Ok(servers) => active_servers_as_tuples(servers),
+        Err(err) => {
+            warn!(%err, "wallet snapshot refresher: failed to load electrum servers");
+            Vec::new()
+        }
+    }
+}
+
 pub async fn get_or_fetch(pool: &MainPool) -> Result<Snapshot> {
     if let Some(snapshot) = load(pool).await? {
         return Ok(snapshot);
     }
     let conf = conf_queries::select(pool).await?;
-    let rx = spawn_blocking_refresh(conf);
+    let servers = load_active_servers(pool).await;
+    let rx = spawn_blocking_refresh(conf, servers);
     let res = match tokio::time::timeout(REFRESH_TIMEOUT, rx).await {
         Ok(Ok(Ok(res))) => res,
         Ok(Ok(Err(err))) => return Err(err),

@@ -61,15 +61,24 @@ async fn main() -> Result<()> {
 
     let conf = db::main::conf::queries::select(&main_pool).await?;
 
-    if conf.electrum_url.trim().is_empty()
-        && (!conf.xpub_spending.trim().is_empty()
-            || !conf.xpub_donations.trim().is_empty()
-            || !conf.xpub_treasury.trim().is_empty())
+    if !conf.xpub_spending.trim().is_empty()
+        || !conf.xpub_donations.trim().is_empty()
+        || !conf.xpub_treasury.trim().is_empty()
     {
-        tracing::warn!(
-            "electrum_url is not configured in the conf table but at least one xpub is set. \
-             The get_wallets RPC will return an error until electrum_url is configured."
-        );
+        match db::main::electrum_server::queries::select_all(&main_pool).await {
+            Ok(servers) => {
+                let active = servers.iter().filter(|s| s.deleted_at.is_none()).count();
+                if active == 0 {
+                    tracing::warn!(
+                        "no electrum_server rows are configured but at least one xpub is set. \
+                         The get_wallets RPC will return an error until an electrum server is added."
+                    );
+                }
+            }
+            Err(err) => {
+                tracing::warn!(%err, "failed to load electrum_server rows for startup check");
+            }
+        }
     }
 
     // Trusted external base URL of this API. Used by the NIP-98 NostrAuth
