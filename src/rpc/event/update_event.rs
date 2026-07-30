@@ -7,14 +7,18 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 mod optional_rfc3339 {
-    use serde::{Deserialize, Deserializer};
-    use time::OffsetDateTime;
+    use serde::{de::Error, Deserialize, Deserializer};
+    use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Option<OffsetDateTime>>, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(Some(Option::deserialize(deserializer)?))
+        let opt = Option::<String>::deserialize(deserializer)?;
+        Ok(Some(match opt {
+            None => None,
+            Some(s) => Some(OffsetDateTime::parse(&s, &Rfc3339).map_err(D::Error::custom)?),
+        }))
     }
 }
 
@@ -85,4 +89,49 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     )
     .await
     .map(Into::into)
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+    use time::macros::datetime;
+
+    #[test]
+    fn parses_rfc3339_string() {
+        let v = json!({
+            "id": 1,
+            "starts_at": "2026-08-20T19:00:00Z",
+            "ends_at": "2026-08-20T22:00:00Z",
+        });
+        let p: super::Params = serde_json::from_value(v).unwrap();
+        assert_eq!(p.starts_at, Some(Some(datetime!(2026-08-20 19:00:00 UTC))));
+        assert_eq!(p.ends_at, Some(Some(datetime!(2026-08-20 22:00:00 UTC))));
+    }
+
+    #[test]
+    fn parses_null_as_clear() {
+        let v = json!({
+            "id": 1,
+            "starts_at": null,
+            "ends_at": null,
+        });
+        let p: super::Params = serde_json::from_value(v).unwrap();
+        assert_eq!(p.starts_at, Some(None));
+        assert_eq!(p.ends_at, Some(None));
+    }
+
+    #[test]
+    fn omits_field() {
+        let v = json!({ "id": 1, "name": "renamed" });
+        let p: super::Params = serde_json::from_value(v).unwrap();
+        assert_eq!(p.starts_at, None);
+        assert_eq!(p.ends_at, None);
+        assert_eq!(p.name.as_deref(), Some("renamed"));
+    }
+
+    #[test]
+    fn rejects_invalid_timestamp() {
+        let v = json!({ "id": 1, "starts_at": "yesterday evening" });
+        assert!(serde_json::from_value::<super::Params>(v).is_err());
+    }
 }

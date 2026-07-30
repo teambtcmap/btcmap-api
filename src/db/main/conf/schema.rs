@@ -17,9 +17,6 @@ pub enum Columns {
     LndInvoicesMacaroon,
     LndReadonlyMacaroon,
     PpqKey,
-    XpubSpending,
-    XpubDonations,
-    XpubTreasury,
     CorsOrigins,
 }
 
@@ -40,9 +37,6 @@ pub struct Conf {
     pub lnd_invoices_macaroon: String,
     pub lnd_readonly_macaroon: String,
     pub ppq_key: String,
-    pub xpub_spending: String,
-    pub xpub_donations: String,
-    pub xpub_treasury: String,
     pub cors_origins: Vec<String>,
 }
 
@@ -59,9 +53,6 @@ impl Conf {
                 Columns::LndInvoicesMacaroon,
                 Columns::LndReadonlyMacaroon,
                 Columns::PpqKey,
-                Columns::XpubSpending,
-                Columns::XpubDonations,
-                Columns::XpubTreasury,
                 Columns::CorsOrigins,
             ]
             .iter()
@@ -101,9 +92,6 @@ impl Conf {
                 lnd_invoices_macaroon: row.get(Columns::LndInvoicesMacaroon.as_ref())?,
                 lnd_readonly_macaroon: row.get(Columns::LndReadonlyMacaroon.as_ref())?,
                 ppq_key: row.get(Columns::PpqKey.as_ref())?,
-                xpub_spending: row.get(Columns::XpubSpending.as_ref())?,
-                xpub_donations: row.get(Columns::XpubDonations.as_ref())?,
-                xpub_treasury: row.get(Columns::XpubTreasury.as_ref())?,
                 cors_origins,
             })
         }

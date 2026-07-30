@@ -28,7 +28,7 @@ const VPUB_VERSION: [u8; 4] = [0x04, 0x5F, 0x1C, 0xF6];
 
 const TAPROOT_XPUB_PREFIX: &str = "taproot:";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TxSummary {
     pub id: String,
     pub received: i64,
@@ -36,43 +36,41 @@ pub struct TxSummary {
     pub delta: i64,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WalletSnapshot {
+    pub id: i64,
+    pub name: String,
+    pub xpub: String,
+    pub balance_sats: i64,
+    pub tx: Vec<TxSummary>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Res {
-    pub spending: i64,
-    pub donations: i64,
-    pub treasury: i64,
-    pub spending_tx: Vec<TxSummary>,
-    pub donations_tx: Vec<TxSummary>,
-    pub treasury_tx: Vec<TxSummary>,
+    pub wallets: Vec<WalletSnapshot>,
 }
 
 impl Res {
     fn empty() -> Self {
         Self {
-            spending: 0,
-            donations: 0,
-            treasury: 0,
-            spending_tx: Vec::new(),
-            donations_tx: Vec::new(),
-            treasury_tx: Vec::new(),
+            wallets: Vec::new(),
         }
     }
 }
 
+#[allow(dead_code)]
 pub async fn run(pool: &Pool) -> Result<Res> {
-    let conf = db::main::conf::queries::select(pool).await?;
+    let wallets = db::main::wallet::queries::select_all(pool).await?;
+    let wallets: Vec<(i64, String, String)> = wallets
+        .into_iter()
+        .filter(|w| w.deleted_at.is_none())
+        .map(|w| (w.id, w.name, w.xpub))
+        .collect();
     let servers = db::main::electrum_server::queries::select_all(pool).await?;
     let servers = active_servers_as_tuples(servers);
-    let res = task::spawn_blocking(move || {
-        aggregate(
-            &conf.xpub_spending,
-            &conf.xpub_donations,
-            &conf.xpub_treasury,
-            &servers,
-        )
-    })
-    .await
-    .map_err(|e| crate::Error::Other(format!("blocking join failed: {}", e)))??;
+    let res = task::spawn_blocking(move || aggregate(&wallets, &servers))
+        .await
+        .map_err(|e| crate::Error::Other(format!("blocking join failed: {}", e)))??;
     Ok(res)
 }
 
@@ -91,20 +89,16 @@ pub(crate) fn active_servers_as_tuples(
 }
 
 pub(crate) fn aggregate(
-    spending: &str,
-    donations: &str,
-    treasury: &str,
+    wallets: &[(i64, String, String)],
     electrum_servers: &[(String, String, String)],
 ) -> Result<Res> {
-    let has_any_xpub =
-        !spending.trim().is_empty() || !donations.trim().is_empty() || !treasury.trim().is_empty();
-    if !has_any_xpub {
+    if wallets.is_empty() {
         return Ok(Res::empty());
     }
     let endpoints = parse_electrum_endpoints(electrum_servers);
     if endpoints.is_empty() {
         return Err(crate::Error::Other(
-            "no electrum servers configured but at least one xpub is set".into(),
+            "no electrum servers configured but at least one wallet is set".into(),
         ));
     }
     let mut last_err: Option<crate::Error> = None;
@@ -126,7 +120,7 @@ pub(crate) fn aggregate(
             endpoint = url.as_str(),
             "wallet scan: endpoint connected"
         );
-        match scan_three_wallets(client.as_mut(), spending, donations, treasury) {
+        match scan_wallets(client.as_mut(), wallets) {
             Ok(res) => return Ok(res),
             Err(err) => {
                 last_err = Some(err);
@@ -159,34 +153,28 @@ fn connect_client(url: &str, spki_pin: &str) -> Result<Box<dyn WalletBackend>> {
     }
 }
 
-fn scan_three_wallets(
-    client: &mut dyn WalletBackend,
-    spending: &str,
-    donations: &str,
-    treasury: &str,
-) -> Result<Res> {
-    let spending_result = scan_xpubs(client, spending, "spending");
-    let donations_result = scan_xpubs(client, donations, "donations");
-    let treasury_result = scan_xpubs(client, treasury, "treasury");
-    match (spending_result, donations_result, treasury_result) {
-        (
-            Ok((spending_bal, spending_tx)),
-            Ok((donations_bal, donations_tx)),
-            Ok((treasury_bal, treasury_tx)),
-        ) => Ok(Res {
-            spending: spending_bal,
-            donations: donations_bal,
-            treasury: treasury_bal,
-            spending_tx,
-            donations_tx,
-            treasury_tx,
-        }),
-        (a, b, c) => Err(a
-            .err()
-            .or(b.err())
-            .or(c.err())
-            .unwrap_or_else(|| crate::Error::Other("electrum scan failed".into()))),
+fn scan_wallets(client: &mut dyn WalletBackend, wallets: &[(i64, String, String)]) -> Result<Res> {
+    let mut snapshots: Vec<WalletSnapshot> = Vec::with_capacity(wallets.len());
+    let mut last_err: Option<crate::Error> = None;
+    for (id, name, xpub) in wallets {
+        match scan_single_wallet(client, xpub, name) {
+            Ok((balance, tx)) => snapshots.push(WalletSnapshot {
+                id: *id,
+                name: name.clone(),
+                xpub: xpub.clone(),
+                balance_sats: balance,
+                tx,
+            }),
+            Err(err) => {
+                tracing::warn!(wallet = name.as_str(), %err, "wallet scan: failed");
+                last_err = Some(err);
+            }
+        }
     }
+    if snapshots.is_empty() {
+        return Err(last_err.unwrap_or_else(|| crate::Error::Other("electrum scan failed".into())));
+    }
+    Ok(Res { wallets: snapshots })
 }
 
 fn parse_electrum_endpoints(servers: &[(String, String, String)]) -> Vec<(String, String, String)> {
@@ -203,52 +191,20 @@ fn parse_electrum_endpoints(servers: &[(String, String, String)]) -> Vec<(String
         .collect()
 }
 
-fn scan_xpubs(
+fn scan_single_wallet(
     client: &mut dyn WalletBackend,
-    xpubs: &str,
-    wallet: &'static str,
+    xpub: &str,
+    wallet: &str,
 ) -> Result<(i64, Vec<TxSummary>)> {
-    let mut total: i64 = 0;
-    let mut all_recent: Vec<TxSummary> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    let xpubs: Vec<&str> = xpubs
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .collect();
+    let started_at = std::time::Instant::now();
+    tracing::debug!(wallet, "wallet scan: xpub started");
+    let (balance, recent) = xpub_scan(client, xpub, wallet, 1)?;
     tracing::debug!(
         wallet,
-        xpub_count = xpubs.len(),
-        "wallet scan: group started"
+        elapsed = ?started_at.elapsed(),
+        "wallet scan: xpub completed"
     );
-    for (index, xpub) in xpubs.iter().enumerate() {
-        let xpub_index = index + 1;
-        let started_at = std::time::Instant::now();
-        tracing::debug!(
-            wallet,
-            xpub_index,
-            xpub_count = xpubs.len(),
-            "wallet scan: xpub started"
-        );
-        let (balance, recent) = xpub_scan(client, xpub, wallet, xpub_index)?;
-        tracing::debug!(
-            wallet,
-            xpub_index,
-            elapsed = ?started_at.elapsed(),
-            "wallet scan: xpub completed"
-        );
-        total = total
-            .checked_add(balance)
-            .ok_or_else(|| crate::Error::Other("balance overflow".into()))?;
-        for tx in recent {
-            if seen.insert(tx.id.clone()) {
-                all_recent.push(tx);
-            }
-        }
-    }
-    all_recent.truncate(RECENT_TX_LIMIT);
-    tracing::debug!(wallet, "wallet scan: group completed");
-    Ok((total, all_recent))
+    Ok((balance, recent))
 }
 
 fn derive_scripts(
@@ -343,7 +299,7 @@ fn script_kind_and_raw_xpub(xpub: &str) -> Result<(ScriptKind, &str)> {
 fn xpub_scan(
     client: &mut dyn WalletBackend,
     xpub: &str,
-    wallet: &'static str,
+    wallet: &str,
     xpub_index: usize,
 ) -> Result<(i64, Vec<TxSummary>)> {
     let (kind, raw_xpub) = script_kind_and_raw_xpub(xpub)?;
@@ -375,7 +331,7 @@ fn xpub_scan(
 fn recent_txs_for_scripts(
     client: &mut dyn WalletBackend,
     scripts: &[&electrum_client::bitcoin::Script],
-    wallet: &'static str,
+    wallet: &str,
     xpub_index: usize,
 ) -> Result<Vec<TxSummary>> {
     tracing::debug!(wallet, xpub_index, "wallet scan: requesting histories");
@@ -706,17 +662,6 @@ mod test {
     }
 
     #[test]
-    fn split_xpubs_skips_empty_entries() {
-        let xpubs = "  , , ";
-        let entries: Vec<&str> = xpubs
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .collect();
-        assert!(entries.is_empty());
-    }
-
-    #[test]
     fn parse_electrum_endpoints_single_plain() {
         let servers = vec![(
             "foo".to_string(),
@@ -795,46 +740,24 @@ mod test {
         assert!(endpoints.is_empty());
     }
 
-    #[test]
-    fn split_xpubs_collects_non_empty_entries() {
-        let xpubs = "xpubAAA, zpubBBB ,,";
-        let entries: Vec<&str> = xpubs
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .collect();
-        assert_eq!(entries, vec!["xpubAAA", "zpubBBB"]);
-    }
-
     #[actix_web::test]
-    async fn run_with_empty_conf_returns_zeros() -> Result<()> {
+    async fn run_with_no_wallets_returns_empty() -> Result<()> {
         let pool = pool();
         let res = super::run(&pool).await?;
-        assert_eq!(res.spending, 0);
-        assert_eq!(res.donations, 0);
-        assert_eq!(res.treasury, 0);
-        assert!(res.spending_tx.is_empty());
-        assert!(res.donations_tx.is_empty());
-        assert!(res.treasury_tx.is_empty());
+        assert!(res.wallets.is_empty());
         Ok(())
     }
 
     #[actix_web::test]
-    async fn run_with_xpub_but_no_servers_returns_error() -> Result<()> {
+    async fn run_with_wallet_but_no_servers_returns_error() -> Result<()> {
         let pool = pool();
-        // Configure xpubs but no electrum servers at all
-        pool.get()
-            .await?
-            .interact(|conn| {
-                conn.execute(
-                    "UPDATE conf SET xpub_spending = ?1",
-                    rusqlite::params![
-                        "xpub0000000000000000000000000000000000000000000000000000000000000000"
-                    ],
-                )?;
-                Ok::<_, crate::Error>(())
-            })
-            .await??;
+        // Insert a wallet but no electrum servers at all
+        crate::db::main::wallet::queries::insert(
+            "spending".into(),
+            "xpub0000000000000000000000000000000000000000000000000000000000000000".into(),
+            &pool,
+        )
+        .await?;
         let res = super::run(&pool).await;
         assert!(res.is_err());
         let err = match res {

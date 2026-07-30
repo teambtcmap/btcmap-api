@@ -2,7 +2,6 @@ pub mod access_token;
 pub mod area;
 pub mod area_element;
 pub mod ban;
-pub mod cache;
 pub mod conf;
 pub mod electrum_server;
 pub mod element;
@@ -16,6 +15,7 @@ pub mod place_import_origin;
 pub mod place_submission;
 pub mod report;
 pub mod user;
+pub mod wallet;
 
 use super::Migration;
 use crate::Result;

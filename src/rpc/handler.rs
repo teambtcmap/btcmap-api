@@ -97,6 +97,11 @@ pub enum RpcMethod {
     AddElectrumServer,
     UpdateElectrumServer,
     RemoveElectrumServer,
+    // Wallet
+    GetWallets,
+    AddWallet,
+    UpdateWallet,
+    RemoveWallet,
     // Matrix
     SendMatrixMessage,
     // Debug
@@ -104,7 +109,6 @@ pub enum RpcMethod {
     GetDailyInfraReport,
     GetTopClients,
     Dashboard,
-    GetWallets,
 }
 
 impl Role {
@@ -175,6 +179,12 @@ impl Role {
         RpcMethod::Dashboard,
         // Admins can query wallet balances for the xpubs configured in the conf table
         RpcMethod::GetWallets,
+        // Admins can create wallets
+        RpcMethod::AddWallet,
+        // Admins can update wallets
+        RpcMethod::UpdateWallet,
+        // Admins can soft-delete wallets
+        RpcMethod::RemoveWallet,
         // Admins can list electrum servers configured for wallet balance lookups
         RpcMethod::GetElectrumServers,
         // Admins can add electrum servers
@@ -671,6 +681,22 @@ pub async fn handle(
             req.id.clone(),
             super::electrum::remove_electrum_server::run(params(req.params)?, &main_pool).await?,
         ),
+        RpcMethod::GetWallets => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::get_wallets::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::AddWallet => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::add_wallet::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::UpdateWallet => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::update_wallet::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::RemoveWallet => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::remove_wallet::run(params(req.params)?, &main_pool).await?,
+        ),
         RpcMethod::SendMatrixMessage => {
             super::matrix::send_matrix_message::run(params(req.params)?, &main_pool).await;
             Ok(RpcResponse::success(
@@ -694,9 +720,6 @@ pub async fn handle(
             req.id.clone(),
             super::analytics::dashboard::run(&main_pool, &log_pool).await?,
         ),
-        RpcMethod::GetWallets => {
-            RpcResponse::from(req.id.clone(), super::get_wallets::run(&main_pool).await?)
-        }
     }?;
 
     Ok(Json(res))
@@ -1149,5 +1172,160 @@ mod test {
 
         let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
         assert!(res.error.is_some());
+    }
+
+    #[test]
+    async fn wallet_rpcs_require_admin() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("alice", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::User],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        for method in [
+            "get_wallets",
+            "add_wallet",
+            "update_wallet",
+            "remove_wallet",
+        ] {
+            let req = test::TestRequest::post()
+                .uri("/")
+                .insert_header((header::AUTHORIZATION, "Bearer secret"))
+                .set_json(json!({
+                    "jsonrpc": "2.0",
+                    "method": method,
+                    "id": 1
+                }))
+                .to_request();
+            let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+            assert!(
+                res.error.is_some(),
+                "method {method} should be rejected for non-admin user"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn wallet_crud_round_trip() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("root", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let add_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "add_wallet",
+                "params": {
+                    "name": "spending",
+                    "xpub": "xpub0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                "id": 1
+            }))
+            .to_request();
+        let add_res: RpcResponse = test::call_and_read_body_json(&app, add_req).await;
+        assert!(add_res.error.is_none(), "add_wallet should succeed");
+        let wallet_id = add_res.result.unwrap()["id"].as_i64().unwrap();
+
+        let update_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "update_wallet",
+                "params": {
+                    "id": wallet_id,
+                    "name": "treasury"
+                },
+                "id": 2
+            }))
+            .to_request();
+        let update_res: RpcResponse = test::call_and_read_body_json(&app, update_req).await;
+        assert!(update_res.error.is_none(), "update_wallet should succeed");
+        assert_eq!(update_res.result.unwrap()["name"], "treasury");
+
+        let list_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "get_wallets",
+                "params": {},
+                "id": 3
+            }))
+            .to_request();
+        let list_res: RpcResponse = test::call_and_read_body_json(&app, list_req).await;
+        let list = list_res.result.unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 1);
+        assert_eq!(list[0]["name"], "treasury");
+
+        let remove_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "remove_wallet",
+                "params": { "id": wallet_id },
+                "id": 4
+            }))
+            .to_request();
+        let remove_res: RpcResponse = test::call_and_read_body_json(&app, remove_req).await;
+        assert!(remove_res.error.is_none(), "remove_wallet should succeed");
+        assert!(remove_res.result.unwrap()["deleted_at"].is_string());
+
+        let list_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "get_wallets",
+                "params": { "include_deleted": true },
+                "id": 5
+            }))
+            .to_request();
+        let list_res: RpcResponse = test::call_and_read_body_json(&app, list_req).await;
+        let list = list_res.result.unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 1);
+        assert!(list[0]["deleted_at"].is_string());
+
+        Ok(())
     }
 }
