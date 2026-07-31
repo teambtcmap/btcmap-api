@@ -974,4 +974,47 @@ mod test {
         assert_eq!(net, 50_000 + 12_345);
         let _: Transaction = tx;
     }
+
+    #[test]
+    #[ignore = "hits a public Electrum server; run with `cargo test -- --ignored`"]
+    fn aggregate_fetches_known_xpub_balance_and_history() -> Result<()> {
+        // Hardcoded well-known mainnet xpub used as a fixture. Bitcoin history
+        // is permanent, so even if the wallet is later drained the tx history
+        // stays queryable forever.
+        let xpub = "xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz".to_string();
+
+        let wallets = vec![(1_i64, "fixture".to_string(), xpub)];
+        let servers = vec![(
+            "blockstream".to_string(),
+            "ssl://electrum.blockstream.info:50002".to_string(),
+            "".to_string(),
+        )];
+
+        let res = super::aggregate(&wallets, &servers)?;
+
+        assert_eq!(res.wallets.len(), 1, "expected one wallet snapshot");
+        let snap = &res.wallets[0];
+        eprintln!(
+            "balance: {} sats ({:.8} BTC)",
+            snap.balance_sats,
+            snap.balance_sats as f64 / 100_000_000.0
+        );
+        eprintln!("recent transactions ({}):", snap.tx.len());
+        for tx in &snap.tx {
+            eprintln!(
+                "  {} received={} sent={} delta={}",
+                tx.id, tx.received, tx.sent, tx.delta
+            );
+        }
+        assert!(
+            snap.balance_sats > 0,
+            "expected positive balance, got {} sats",
+            snap.balance_sats
+        );
+        assert!(
+            !snap.tx.is_empty(),
+            "expected at least one recent transaction"
+        );
+        Ok(())
+    }
 }
