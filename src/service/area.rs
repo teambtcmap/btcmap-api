@@ -208,7 +208,13 @@ pub async fn get_trending_areas(
             .await?;
     let mut areas_to_events: HashMap<i64, Vec<&ElementEvent>> = HashMap::new();
     for event in &events {
-        let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
+        // Elements can be purged after their events were recorded, so a
+        // missing element should not fail the whole query
+        let element = match db::main::element::queries::select_by_id(event.element_id, pool).await {
+            Ok(element) => element,
+            Err(crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => continue,
+            Err(err) => return Err(err),
+        };
         let element_area_ids: Vec<i64> =
             db::main::area_element::queries::select_by_element_id(element.id, pool)
                 .await?
@@ -230,7 +236,13 @@ pub async fn get_trending_areas(
         .collect();
     let mut areas_to_comments: HashMap<i64, Vec<&ElementComment>> = HashMap::new();
     for comment in &comments {
-        let element = db::main::element::queries::select_by_id(comment.element_id, pool).await?;
+        // Same as above: skip comments whose element was purged
+        let element = match db::main::element::queries::select_by_id(comment.element_id, pool).await
+        {
+            Ok(element) => element,
+            Err(crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => continue,
+            Err(err) => return Err(err),
+        };
         let element_area_ids: Vec<i64> =
             db::main::area_element::queries::select_by_element_id(element.id, pool)
                 .await?
