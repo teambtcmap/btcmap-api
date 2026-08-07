@@ -70,6 +70,27 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         .map_err(Into::into)
 }
 
+pub fn select_revoked_with_ticket_url(conn: &Connection) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {revoked} = 1 AND {ticket_url} IS NOT NULL
+            ORDER BY {updated_at} DESC, {id} DESC
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        revoked = Columns::Revoked.as_str(),
+        ticket_url = Columns::TicketUrl.as_str(),
+        updated_at = Columns::UpdatedAt.as_str(),
+        id = Columns::Id.as_str(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_origin_counts_since(
     since: OffsetDateTime,
     conn: &Connection,
@@ -552,6 +573,42 @@ mod test {
 
         let counts = super::select_origin_counts_since(datetime!(2030-01-01 00:00 UTC), &conn)?;
         assert!(counts.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_revoked_with_ticket_url() -> Result<()> {
+        let conn = conn();
+
+        let args = InsertArgs {
+            origin: "foo".to_string(),
+            external_id: "1".to_string(),
+            lat: 1.0,
+            lon: 2.0,
+            category: "cafe".to_string(),
+            name: "Place 1".to_string(),
+            extra_fields: Map::new(),
+        };
+        let submission = super::insert(&args, &conn)?;
+
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert!(results.is_empty());
+
+        super::set_revoked(submission.id, true, &conn)?;
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert!(results.is_empty());
+
+        super::set_ticket_url(
+            submission.id,
+            "https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/1".to_string(),
+            &conn,
+        )?;
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert_eq!(1, results.len());
+        assert_eq!(submission.id, results[0].id);
+        assert!(results[0].revoked);
+        assert!(results[0].ticket_url.is_some());
 
         Ok(())
     }
