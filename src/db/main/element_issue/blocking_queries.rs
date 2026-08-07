@@ -60,13 +60,14 @@ pub fn select_ordered_by_severity(
     let area_join = match area_id {
             662 => "".into(),
             _ => format!(
-                "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}", 
-                area_element_table = db::main::area_element::schema::TABLE_NAME
+                "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id} AND ae.{ae_deleted_at} IS NULL",
+                area_element_table = db::main::area_element::schema::TABLE_NAME,
+                ae_deleted_at = db::main::area_element::schema::Columns::DeletedAt.as_ref(),
             )
         };
     let sql = format!(
         r#"
-                SELECT 
+                SELECT
                     json_extract(e.overpass_data, '$.type') AS element_osm_type,
                     json_extract(e.overpass_data, '$.id') AS element_osm_id,
                     json_extract(e.overpass_data, '$.tags.name') AS element_name,
@@ -125,8 +126,9 @@ pub fn select_count(
     let area_join = match area_id {
             662 => "".into(),
             _ => format!(
-                "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id}",
-                area_element_table = db::main::area_element::schema::TABLE_NAME
+                "INNER JOIN {area_element_table} ae ON ae.element_id = ei.element_id AND ae.area_id = {area_id} AND ae.{ae_deleted_at} IS NULL",
+                area_element_table = db::main::area_element::schema::TABLE_NAME,
+                ae_deleted_at = db::main::area_element::schema::Columns::DeletedAt.as_ref(),
             )
         };
     let sql = if include_deleted {
@@ -353,6 +355,88 @@ mod test {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].issue_code, "missing_icon");
         assert_eq!(issues[0].element_osm_id, element2_id);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_ordered_by_severity_excludes_soft_deleted_area_element() -> Result<()> {
+        let conn = conn();
+        conn.pragma_update(None, "foreign_keys", false)?;
+
+        let inside_id = 100;
+        let outside_id = 200;
+        let area_id = 1;
+
+        let inside = element_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(inside_id),
+            &conn,
+        )?;
+        let outside = element_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(outside_id),
+            &conn,
+        )?;
+
+        let inside_mapping = area_element_queries::insert(area_id, inside.id, &conn)?;
+        let outside_mapping = area_element_queries::insert(area_id, outside.id, &conn)?;
+
+        super::insert(inside.id, "missing_icon", 3, &conn)?;
+        super::insert(outside.id, "missing_icon", 5, &conn)?;
+
+        area_element_queries::set_deleted_at(
+            outside_mapping.id,
+            Some(&OffsetDateTime::now_utc()),
+            &conn,
+        )?;
+
+        let _ = inside_mapping;
+
+        let issues = super::select_ordered_by_severity(area_id, 10, 0, true, &conn)?;
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].element_osm_id, inside_id);
+        assert_eq!(issues[0].issue_code, "missing_icon");
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_count_excludes_soft_deleted_area_element() -> Result<()> {
+        let conn = conn();
+        conn.pragma_update(None, "foreign_keys", false)?;
+
+        let inside_id = 100;
+        let outside_id = 200;
+        let area_id = 1;
+
+        let inside = element_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(inside_id),
+            &conn,
+        )?;
+        let outside = element_queries::insert(
+            &crate::service::overpass::OverpassElement::mock(outside_id),
+            &conn,
+        )?;
+
+        area_element_queries::insert(area_id, inside.id, &conn)?;
+        let outside_mapping = area_element_queries::insert(area_id, outside.id, &conn)?;
+
+        super::insert(inside.id, "missing_icon", 3, &conn)?;
+        super::insert(outside.id, "missing_icon", 5, &conn)?;
+
+        let before = super::select_count(area_id, false, true, &conn)?;
+        assert_eq!(before, 2);
+
+        area_element_queries::set_deleted_at(
+            outside_mapping.id,
+            Some(&OffsetDateTime::now_utc()),
+            &conn,
+        )?;
+
+        let after_excluding_deleted = super::select_count(area_id, false, true, &conn)?;
+        assert_eq!(after_excluding_deleted, 1);
+
+        let after_including_deleted = super::select_count(area_id, true, true, &conn)?;
+        assert_eq!(after_including_deleted, 1);
 
         Ok(())
     }
