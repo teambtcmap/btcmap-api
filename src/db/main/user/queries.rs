@@ -116,6 +116,14 @@ pub async fn set_npub(id: i64, npub: Option<String>, pool: &Pool) -> Result<User
         .await?
 }
 
+pub async fn set_geofence(id: i64, geofence: &[i64], pool: &Pool) -> Result<User> {
+    let geofence = geofence.to_vec();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_geofence(id, &geofence, conn))
+        .await?
+}
+
 pub async fn select_user_stats(pool: &Pool) -> Result<blocking_queries::UserStats> {
     pool.get()
         .await?

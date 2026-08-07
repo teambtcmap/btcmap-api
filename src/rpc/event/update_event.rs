@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, main::event::schema::Event},
+    db::{self, main::event::schema::Event, main::user::schema::User},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -74,7 +74,8 @@ impl From<Event> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
+    super::geofence::check_existing(user, params.id, pool).await?;
     db::main::event::queries::update(
         params.id,
         params.area_id,

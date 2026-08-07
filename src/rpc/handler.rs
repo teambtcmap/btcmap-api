@@ -70,6 +70,7 @@ pub enum RpcMethod {
     // user
     GetUserActivity,
     SetUserTag,
+    SetUserGeofence,
     RemoveUserTag,
     GetMostActiveUsers,
     // invoice
@@ -151,6 +152,9 @@ impl Role {
         RpcMethod::SetUserTag,
         // Admins can remove custom user tags
         RpcMethod::RemoveUserTag,
+        // Admins can set the geofence that constrains where an event
+        // manager is allowed to create, edit or delete events
+        RpcMethod::SetUserGeofence,
         // Admins can request universal search
         RpcMethod::Search,
         // Admins can query user activity (TODO ask Rockedf if he still needs it)
@@ -544,6 +548,10 @@ pub async fn handle(
             req.id.clone(),
             super::set_user_tag::run(params(req.params)?, &main_pool).await?,
         ),
+        RpcMethod::SetUserGeofence => RpcResponse::from(
+            req.id.clone(),
+            super::set_user_geofence::run(params(req.params)?, &main_pool).await?,
+        ),
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
             super::remove_user_tag::run(params(req.params)?, &main_pool).await?,
@@ -607,7 +615,7 @@ pub async fn handle(
         ),
         RpcMethod::CreateEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::create_event::run(params(req.params)?, &main_pool).await?,
+            super::event::create_event::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::GetEvents => RpcResponse::from(
             req.id.clone(),
@@ -619,11 +627,11 @@ pub async fn handle(
         ),
         RpcMethod::UpdateEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::update_event::run(params(req.params)?, &main_pool).await?,
+            super::event::update_event::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::DeleteEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::delete_event::run(params(req.params)?, &main_pool).await?,
+            super::event::delete_event::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::SubmitPlace => {
             let params: super::import::submit_place::Params = params(req.params)?;

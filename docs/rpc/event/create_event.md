@@ -54,6 +54,14 @@ The optional `cron_schedule` field accepts a cron expression that describes when
 - Admin
 - Event Manager
 
+## Geofence Restriction
+
+If the calling user holds the `event_manager` role and has a non-empty
+[geofence](../user-methods.md#set_user_geofence), the event must
+either be linked to an `area_id` in the geofence, or its `(lat, lon)` must
+fall inside the geometry of at least one area in the geofence. Admins and
+roots are not subject to this check. An empty geofence means unrestricted.
+
 ## Examples
 
 ### btcmap-cli

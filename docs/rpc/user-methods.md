@@ -6,6 +6,7 @@ This document describes the available RPC methods for interacting with users.
 
 - [get_user_activity](#get_user_activity) - Get activity data for a specific user
 - [set_user_tag](#set_user_tag) - Set a tag for a user
+- [set_user_geofence](#set_user_geofence) - Restrict where an event manager may operate
 - [remove_user_tag](#remove_user_tag) - Remove a tag from a user
 - [get_most_active_users](#get_most_active_users) - Get the most active users
 - [get_users](#get_users) - Retrieve users based on query parameters
@@ -84,6 +85,78 @@ Set a tag for a user.
   },
   "id": 1
 }
+```
+
+### set_user_geofence
+
+Sets the geofence — a whitelist of area ids — that constrains where the target
+user is allowed to manage events. The restriction only applies when the target
+user holds the `event_manager` role; admins and other roles are unaffected.
+
+When the geofence is non-empty, the target user is allowed to create, update
+or delete an event only if:
+
+- the event is linked to an `area_id` that is in the geofence, **or**
+- the event's `(lat, lon)` falls inside the polygon (or multi-polygon / line
+  string) of at least one area in the geofence.
+
+Pass an empty array to clear the geofence and lift the restriction. The
+response echoes the new state.
+
+**Required Admin Action**: `admin` (only admins and roots may call this).
+
+#### Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "set_user_geofence",
+  "params": {
+    "user_name": "alice",
+    "geofence": [1, 5, 14]
+  },
+  "id": 1
+}
+```
+
+| Field       | Type            | Description                                                                                       |
+| ----------- | --------------- | ------------------------------------------------------------------------------------------------- |
+| `user_name` | string          | Required. Username of the user whose geofence is being set.                                        |
+| `geofence`  | array of ints   | Required. Area ids the user is allowed to operate in. Pass `[]` to clear the restriction entirely. |
+
+#### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "id": 19,
+    "name": "alice",
+    "geofence": [1, 5, 14]
+  },
+  "id": 1
+}
+```
+
+#### Error cases
+
+- If `user_name` does not match an existing user, the call returns a server
+  error.
+- When the target user is an event manager and tries to create, update, or
+  delete an event outside their geofence, the event-mutating call rejects
+  with a message like `"Area 999 is outside your geofence (allowed: [1, 5, 14])"`
+  or `"Location (51.5, -0.1) is outside your geofence (allowed areas: [1, 5, 14])"`.
+
+#### Examples
+
+##### curl
+
+```bash
+curl --header 'Content-Type: application/json' \
+  --header "Authorization: Bearer $ADMIN_ACCESS_TOKEN" \
+  --request POST \
+  --data '{"jsonrpc":"2.0","method":"set_user_geofence","params":{"user_name":"alice","geofence":[1,5,14]},"id":1}' \
+  https://api.btcmap.org/rpc
 ```
 
 ### remove_user_tag

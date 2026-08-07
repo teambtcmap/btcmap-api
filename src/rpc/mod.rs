@@ -33,6 +33,7 @@ pub mod remove_user_tag;
 pub mod set_area_image;
 pub mod set_area_tag;
 pub mod set_element_tag;
+pub mod set_user_geofence;
 pub mod set_user_tag;
 pub mod sync_elements;
 pub mod sync_unpaid_invoices;
