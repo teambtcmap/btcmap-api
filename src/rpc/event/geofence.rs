@@ -1,5 +1,5 @@
 use crate::{
-    db::{self, main::area::schema::Area, main::user::schema::Role},
+    db::{self, main::area::schema::Area},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -10,14 +10,13 @@ use geo::Polygon;
 use std::collections::HashSet;
 
 /// Verify that the (area_id, lat, lon) the caller wants to operate on is
-/// inside the caller's geofence, when the caller is an event manager with a
-/// non-empty geofence.
+/// inside the caller's geofence when it is non-empty.
 ///
-/// Returns `Ok(true)` when no check is needed (user is not an event manager,
-/// or has an empty geofence) or when the point falls inside the fence.
+/// Returns `Ok(true)` when no check is needed because the geofence is empty or
+/// when the point falls inside the fence.
 ///
-/// Returns an error when the user is an event manager, has a non-empty
-/// geofence, and the point falls outside every fence area.
+/// Returns an error when the caller has a non-empty geofence and the point
+/// falls outside every fence area.
 pub(crate) async fn check(
     user: &crate::db::main::user::schema::User,
     area_id: Option<i64>,
@@ -25,9 +24,6 @@ pub(crate) async fn check(
     lon: f64,
     pool: &Pool,
 ) -> Result<bool> {
-    if !user.roles.contains(&Role::EventManager) {
-        return Ok(true);
-    }
     if user.geofence.is_empty() {
         return Ok(true);
     }
@@ -176,15 +172,17 @@ mod test {
     }
 
     #[test]
-    fn admin_user_is_unconstrained() -> Result<()> {
+    fn roles_with_non_empty_geofence_are_restricted() -> Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
         rt.block_on(async {
             let pool = pool();
-            let admin = user_with(vec![Role::Admin], vec![]);
-            assert!(check(&admin, None, 0.0, 0.0, &pool).await?);
-            assert!(check(&admin, Some(999), 0.0, 0.0, &pool).await?);
+            for role in [Role::Root, Role::Admin, Role::EventManager] {
+                let user = user_with(vec![role], vec![1]);
+                let err = check(&user, Some(999), 0.0, 0.0, &pool).await.unwrap_err();
+                assert!(err.to_string().contains("outside your geofence"));
+            }
             Ok::<(), crate::Error>(())
         })
     }

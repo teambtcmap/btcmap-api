@@ -90,8 +90,9 @@ Set a tag for a user.
 ### set_user_geofence
 
 Sets the geofence — a whitelist of area ids — that constrains where the target
-user is allowed to manage events. The restriction only applies when the target
-user holds the `event_manager` role; admins and other roles are unaffected.
+user is allowed to manage events. When the target user has a non-empty
+geofence, the restriction applies equally to root, admin, and event manager
+roles.
 
 When the geofence is non-empty, the target user is allowed to create, update
 or delete an event only if:
@@ -142,10 +143,10 @@ response echoes the new state.
 
 - If `user_name` does not match an existing user, the call returns a server
   error.
-- When the target user is an event manager and tries to create, update, or
-  delete an event outside their geofence, the event-mutating call rejects
-  with a message like `"Area 999 is outside your geofence (allowed: [1, 5, 14])"`
-  or `"Location (51.5, -0.1) is outside your geofence (allowed areas: [1, 5, 14])"`.
+- When the target user tries to create, update, or delete an event outside their
+  geofence, the event-mutating call rejects with a message like
+  `"Area 999 is outside your geofence (allowed: [1, 5, 14])"` or
+  `"Location (51.5, -0.1) is outside your geofence (allowed areas: [1, 5, 14])"`.
 
 #### Examples
 

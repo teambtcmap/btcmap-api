@@ -75,7 +75,11 @@ impl From<Event> for Res {
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
-    super::geofence::check_existing(user, params.id, pool).await?;
+    let event = db::main::event::queries::select_by_id(params.id, pool).await?;
+    let area_id = params.area_id.unwrap_or(event.area_id);
+    let lat = params.lat.unwrap_or(event.lat);
+    let lon = params.lon.unwrap_or(event.lon);
+    super::geofence::check(user, area_id, lat, lon, pool).await?;
     db::main::event::queries::update(
         params.id,
         params.area_id,
@@ -94,8 +98,77 @@ pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
 
 #[cfg(test)]
 mod test {
+    use crate::{
+        db::main::{
+            event::queries as event_queries,
+            test::pool,
+            user::schema::{Role, User},
+        },
+        Result,
+    };
     use serde_json::json;
     use time::macros::datetime;
+
+    #[test]
+    fn rejects_moving_event_outside_geofence() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let event = event_queries::insert(
+                Some(1),
+                0.0,
+                0.0,
+                "meetup".into(),
+                "https://example.com".into(),
+                None,
+                None,
+                None,
+                &pool,
+            )
+            .await?;
+            let user = User {
+                id: 1,
+                name: "root".into(),
+                password: String::new(),
+                roles: vec![Role::Root],
+                saved_places: vec![],
+                saved_areas: vec![],
+                npub: None,
+                geofence: vec![1],
+                created_at: String::new(),
+                updated_at: String::new(),
+                deleted_at: None,
+            };
+            let err = match super::run(
+                super::Params {
+                    id: event.id,
+                    area_id: Some(Some(999)),
+                    lat: None,
+                    lon: None,
+                    name: None,
+                    website: None,
+                    starts_at: None,
+                    ends_at: None,
+                    cron_schedule: None,
+                },
+                &user,
+                &pool,
+            )
+            .await
+            {
+                Ok(_) => panic!("expected geofence violation"),
+                Err(err) => err,
+            };
+            assert!(err.to_string().contains("outside your geofence"));
+            assert_eq!(
+                event_queries::select_by_id(event.id, &pool).await?.area_id,
+                Some(1)
+            );
+            Ok::<(), crate::Error>(())
+        })
+    }
 
     #[test]
     fn parses_rfc3339_string() {

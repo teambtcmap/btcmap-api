@@ -28,12 +28,12 @@ Everything flows, everything changes. If an event's location has changed or it's
 
 ## Geofence Restriction
 
-If the calling user holds the `event_manager` role and has a non-empty
+If the calling user has a non-empty
 [geofence](../user-methods.md#set_user_geofence), the existing event being
 deleted must already satisfy the geofence — either its `area_id` is in the
 geofence, or its stored `(lat, lon)` falls inside the geometry of at least
-one area in the geofence. Admins and roots are not subject to this check.
-An empty geofence means unrestricted.
+one area in the geofence. This restriction applies equally to root, admin,
+and event manager callers. An empty geofence means unrestricted.
 
 ## Examples
 

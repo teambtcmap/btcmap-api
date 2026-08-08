@@ -167,6 +167,7 @@ impl Role {
         RpcMethod::GetEvent,
         // Admins can update events
         RpcMethod::UpdateEvent,
+        RpcMethod::DeleteEvent,
         // Admins can import places
         RpcMethod::SubmitPlace,
         // Admins can revoke imported places

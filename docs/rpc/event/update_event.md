@@ -57,12 +57,12 @@ If no event with the given `id` exists, the call fails with a server error.
 
 ## Geofence Restriction
 
-If the calling user holds the `event_manager` role and has a non-empty
-[geofence](../user-methods.md#set_user_geofence), the existing event being
-updated must already satisfy the geofence — either its `area_id` is in the
-geofence, or its stored `(lat, lon)` falls inside the geometry of at least
-one area in the geofence. Admins and roots are not subject to this check.
-An empty geofence means unrestricted.
+If the calling user has a non-empty
+[geofence](../user-methods.md#set_user_geofence), the event state after the
+update must satisfy the geofence — either its resulting `area_id` is in the
+geofence, or its resulting `(lat, lon)` falls inside the geometry of at least
+one area in the geofence. This restriction applies equally to root, admin,
+and event manager callers. An empty geofence means unrestricted.
 
 ## Examples
 
