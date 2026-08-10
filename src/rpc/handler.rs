@@ -515,7 +515,7 @@ pub async fn handle(
         ),
         RpcMethod::SetAreaImage => RpcResponse::from(
             req.id.clone(),
-            super::set_area_image::run(params(req.params)?, &main_pool, &image_pool).await?,
+            super::area::set_area_image::run(params(req.params)?, &main_pool, &image_pool).await?,
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
