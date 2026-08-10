@@ -32,7 +32,7 @@ impl From<Event> for Res {
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
-    super::geofence::check(user, params.area_id, params.lat, params.lon, pool).await?;
+    super::geofence::check(user, params.lat, params.lon, pool).await?;
     db::main::event::queries::insert(
         params.area_id,
         params.lat,

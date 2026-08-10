@@ -76,10 +76,9 @@ impl From<Event> for Res {
 
 pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
     let event = db::main::event::queries::select_by_id(params.id, pool).await?;
-    let area_id = params.area_id.unwrap_or(event.area_id);
     let lat = params.lat.unwrap_or(event.lat);
     let lon = params.lon.unwrap_or(event.lon);
-    super::geofence::check(user, area_id, lat, lon, pool).await?;
+    super::geofence::check(user, lat, lon, pool).await?;
     db::main::event::queries::update(
         params.id,
         params.area_id,
@@ -99,27 +98,77 @@ pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
 #[cfg(test)]
 mod test {
     use crate::{
-        db::main::{
-            event::queries as event_queries,
-            test::pool,
-            user::schema::{Role, User},
+        db::{
+            self,
+            main::{
+                event::queries as event_queries,
+                test::pool,
+                user::schema::{Role, User},
+            },
         },
         Result,
     };
-    use serde_json::json;
+    use serde_json::{json, Map};
     use time::macros::datetime;
 
+    // A small Phuket-shaped polygon used as the fenced (parent) area.
+    const PHUKET: &str = r#"{
+        "type":"Feature",
+        "properties":{},
+        "geometry":{
+            "type":"Polygon",
+            "coordinates":[[
+                [98.2181205776469, 8.20412838698085],
+                [98.2181205776469, 7.74024270965898],
+                [98.4806081271279, 7.74024270965898],
+                [98.4806085771279, 8.20412838698085],
+                [98.2181205776469, 8.20412838698085]
+            ]]
+        }
+    }"#;
+
+    async fn insert_area(
+        name: &str,
+        geo_json: serde_json::Value,
+        pool: &deadpool_sqlite::Pool,
+    ) -> Result<i64> {
+        let mut tags = Map::new();
+        tags.insert("name".into(), json!(name));
+        tags.insert("geo_json".into(), geo_json);
+        tags.insert("url_alias".into(), json!(name));
+        Ok(db::main::area::queries::insert(tags, pool).await?.id)
+    }
+
+    fn em_user(geofence: Vec<i64>) -> User {
+        User {
+            id: 1,
+            name: "em".into(),
+            password: String::new(),
+            roles: vec![Role::EventManager],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
+            geofence,
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+        }
+    }
+
     #[test]
-    fn rejects_moving_event_outside_geofence() -> Result<()> {
+    fn rejects_update_when_point_is_outside_geofence() -> Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
         rt.block_on(async {
             let pool = pool();
+            // Event lives in London, but the user is fenced to Phuket.
+            let phuket =
+                insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
             let event = event_queries::insert(
-                Some(1),
-                0.0,
-                0.0,
+                Some(phuket),
+                51.5,
+                -0.1,
                 "meetup".into(),
                 "https://example.com".into(),
                 None,
@@ -128,25 +177,114 @@ mod test {
                 &pool,
             )
             .await?;
-            let user = User {
-                id: 1,
-                name: "root".into(),
-                password: String::new(),
-                roles: vec![Role::Root],
-                saved_places: vec![],
-                saved_areas: vec![],
-                npub: None,
-                geofence: vec![1],
-                created_at: String::new(),
-                updated_at: String::new(),
-                deleted_at: None,
-            };
+            let user = em_user(vec![phuket]);
             let err = match super::run(
                 super::Params {
                     id: event.id,
-                    area_id: Some(Some(999)),
+                    area_id: None,
                     lat: None,
                     lon: None,
+                    name: Some("renamed".into()),
+                    website: None,
+                    starts_at: None,
+                    ends_at: None,
+                    cron_schedule: None,
+                },
+                &user,
+                &pool,
+            )
+            .await
+            {
+                Ok(_) => panic!("expected geofence violation"),
+                Err(err) => err,
+            };
+            assert!(err.to_string().contains("outside your geofence"));
+            Ok::<(), crate::Error>(())
+        })
+    }
+
+    #[test]
+    fn allows_editing_event_in_subarea_when_geofence_is_parent() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            // The user's geofence is the parent (Phuket). The event already
+            // has a child area_id assigned, but the point is inside the
+            // parent polygon, so the update must succeed.
+            let phuket =
+                insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+            let child = insert_area(
+                "phuket-tourism",
+                serde_json::from_str(PHUKET).unwrap(),
+                &pool,
+            )
+            .await?;
+            let event = event_queries::insert(
+                Some(child),
+                7.98,
+                98.33,
+                "meetup".into(),
+                "https://example.com".into(),
+                None,
+                None,
+                None,
+                &pool,
+            )
+            .await?;
+            let user = em_user(vec![phuket]);
+            let res = super::run(
+                super::Params {
+                    id: event.id,
+                    area_id: None,
+                    lat: None,
+                    lon: None,
+                    name: Some("renamed".into()),
+                    website: None,
+                    starts_at: None,
+                    ends_at: None,
+                    cron_schedule: None,
+                },
+                &user,
+                &pool,
+            )
+            .await?;
+            assert_eq!(res.name, "renamed");
+            assert_eq!(res.area_id, Some(child));
+            Ok::<(), crate::Error>(())
+        })
+    }
+
+    #[test]
+    fn rejects_update_when_new_lat_lon_move_event_outside_geofence() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let phuket =
+                insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+            let event = event_queries::insert(
+                Some(phuket),
+                7.98,
+                98.33,
+                "meetup".into(),
+                "https://example.com".into(),
+                None,
+                None,
+                None,
+                &pool,
+            )
+            .await?;
+            let user = em_user(vec![phuket]);
+            // Try to drag the event to London via the lat/lon params.
+            let err = match super::run(
+                super::Params {
+                    id: event.id,
+                    area_id: None,
+                    lat: Some(51.5),
+                    lon: Some(-0.1),
                     name: None,
                     website: None,
                     starts_at: None,
@@ -163,8 +301,8 @@ mod test {
             };
             assert!(err.to_string().contains("outside your geofence"));
             assert_eq!(
-                event_queries::select_by_id(event.id, &pool).await?.area_id,
-                Some(1)
+                event_queries::select_by_id(event.id, &pool).await?.lat,
+                7.98
             );
             Ok::<(), crate::Error>(())
         })

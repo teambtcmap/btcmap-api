@@ -7,38 +7,28 @@ use geo::Contains;
 use geo::LineString;
 use geo::MultiPolygon;
 use geo::Polygon;
-use std::collections::HashSet;
 
-/// Verify that the (area_id, lat, lon) the caller wants to operate on is
-/// inside the caller's geofence when it is non-empty.
+/// Verify that the (lat, lon) the caller wants to operate on is inside the
+/// caller's geofence when the geofence is non-empty.
+///
+/// The geofence is a set of area polygons. The check is purely geometric:
+/// the point must fall inside at least one of them. `area_id` is intentionally
+/// ignored so that sub-areas (e.g. a community inside a country-level fence)
+/// are accepted as long as the point itself is inside the fenced region.
 ///
 /// Returns `Ok(true)` when no check is needed because the geofence is empty or
 /// when the point falls inside the fence.
 ///
 /// Returns an error when the caller has a non-empty geofence and the point
-/// falls outside every fence area.
+/// falls outside every fenced area.
 pub(crate) async fn check(
     user: &crate::db::main::user::schema::User,
-    area_id: Option<i64>,
     lat: f64,
     lon: f64,
     pool: &Pool,
 ) -> Result<bool> {
     if user.geofence.is_empty() {
         return Ok(true);
-    }
-
-    let allowed_ids: HashSet<i64> = user.geofence.iter().copied().collect();
-
-    if let Some(id) = area_id {
-        if allowed_ids.contains(&id) {
-            return Ok(true);
-        }
-        return Err(format!(
-            "Area {id} is outside your geofence (allowed: {:?})",
-            user.geofence
-        )
-        .into());
     }
 
     let areas = db::main::area::queries::select_by_ids(&user.geofence, pool).await?;
@@ -85,16 +75,14 @@ fn point_inside_area(area: &Area, coord: geo::Coord) -> Result<bool> {
 }
 
 /// Convenience wrapper used by `delete_event`: load the existing event
-/// then run the geofence check against its stored (area_id, lat, lon).
+/// then run the geofence check against its stored (lat, lon).
 pub(crate) async fn check_existing(
     user: &crate::db::main::user::schema::User,
     event_id: i64,
     pool: &Pool,
 ) -> Result<()> {
     let event = db::main::event::queries::select_by_id(event_id, pool).await?;
-    check(user, event.area_id, event.lat, event.lon, pool)
-        .await
-        .map(|_| ())
+    check(user, event.lat, event.lon, pool).await.map(|_| ())
 }
 
 #[cfg(test)]
@@ -180,7 +168,9 @@ mod test {
             let pool = pool();
             for role in [Role::Root, Role::Admin, Role::EventManager] {
                 let user = user_with(vec![role], vec![1]);
-                let err = check(&user, Some(999), 0.0, 0.0, &pool).await.unwrap_err();
+                // Point (0, 0) is null island, definitely outside area id=1
+                // (which is the test's first insert and has no polygon set).
+                let err = check(&user, 0.0, 0.0, &pool).await.unwrap_err();
                 assert!(err.to_string().contains("outside your geofence"));
             }
             Ok::<(), crate::Error>(())
@@ -195,39 +185,8 @@ mod test {
         rt.block_on(async {
             let pool = pool();
             let user = user_with(vec![Role::EventManager], vec![]);
-            assert!(check(&user, None, 0.0, 0.0, &pool).await?);
-            assert!(check(&user, Some(123), 0.0, 0.0, &pool).await?);
-            Ok::<(), crate::Error>(())
-        })
-    }
-
-    #[test]
-    fn event_manager_with_geofence_allows_area_id_inside() -> Result<()> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        rt.block_on(async {
-            let pool = pool();
-            let phuket =
-                insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
-            let user = user_with(vec![Role::EventManager], vec![phuket.id]);
-            assert!(check(&user, Some(phuket.id), 0.0, 0.0, &pool).await?);
-            Ok::<(), crate::Error>(())
-        })
-    }
-
-    #[test]
-    fn event_manager_with_geofence_rejects_area_id_outside() -> Result<()> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        rt.block_on(async {
-            let pool = pool();
-            let phuket =
-                insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
-            let user = user_with(vec![Role::EventManager], vec![phuket.id]);
-            let err = check(&user, Some(999), 0.0, 0.0, &pool).await.unwrap_err();
-            assert!(err.to_string().contains("outside your geofence"));
+            assert!(check(&user, 0.0, 0.0, &pool).await?);
+            assert!(check(&user, 51.5, -0.1, &pool).await?);
             Ok::<(), crate::Error>(())
         })
     }
@@ -243,7 +202,7 @@ mod test {
                 insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
             let user = user_with(vec![Role::EventManager], vec![phuket.id]);
             // Inside Phuket polygon
-            assert!(check(&user, None, 7.98, 98.33, &pool).await?);
+            assert!(check(&user, 7.98, 98.33, &pool).await?);
             Ok::<(), crate::Error>(())
         })
     }
@@ -259,7 +218,7 @@ mod test {
                 insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
             let user = user_with(vec![Role::EventManager], vec![phuket.id]);
             // Inside London polygon, way outside Phuket
-            let err = check(&user, None, 51.5, -0.1, &pool).await.unwrap_err();
+            let err = check(&user, 51.5, -0.1, &pool).await.unwrap_err();
             assert!(err.to_string().contains("outside your geofence"));
             Ok::<(), crate::Error>(())
         })
@@ -278,12 +237,81 @@ mod test {
                 insert_area("london", serde_json::from_str(LONDON).unwrap(), &pool).await?;
             let user = user_with(vec![Role::EventManager], vec![phuket.id, london.id]);
             // Phuket point passes
-            assert!(check(&user, None, 7.98, 98.33, &pool).await?);
+            assert!(check(&user, 7.98, 98.33, &pool).await?);
             // London point passes
-            assert!(check(&user, None, 51.5, -0.1, &pool).await?);
+            assert!(check(&user, 51.5, -0.1, &pool).await?);
             // In-between point fails
-            let err = check(&user, None, 40.0, 50.0, &pool).await.unwrap_err();
+            let err = check(&user, 40.0, 50.0, &pool).await.unwrap_err();
             assert!(err.to_string().contains("outside your geofence"));
+            Ok::<(), crate::Error>(())
+        })
+    }
+
+    // A small polygon that lives entirely inside the Phuket polygon above.
+    // Used to model a sub-area (e.g. a community inside a country-level fence)
+    // and verify the geofence check doesn't care about area ids.
+    const PHUKET_SUB: &str = r#"{
+        "type":"Feature",
+        "properties":{},
+        "geometry":{
+            "type":"Polygon",
+            "coordinates":[[
+                [98.30, 7.95],
+                [98.30, 7.85],
+                [98.40, 7.85],
+                [98.40, 7.95],
+                [98.30, 7.95]
+            ]]
+        }
+    }"#;
+
+    #[test]
+    fn point_inside_subarea_is_allowed_by_parent_geofence() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let phuket =
+                insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+            // The sub-area exists in the database but is NOT in the user's
+            // geofence. The check must still pass because the point is
+            // geometrically inside the fenced (parent) area.
+            let _subarea = insert_area(
+                "phuket-tourism",
+                serde_json::from_str(PHUKET_SUB).unwrap(),
+                &pool,
+            )
+            .await?;
+            let user = user_with(vec![Role::EventManager], vec![phuket.id]);
+            assert!(check(&user, 7.90, 98.35, &pool).await?);
+            Ok::<(), crate::Error>(())
+        })
+    }
+
+    #[test]
+    fn point_outside_parent_geofence_is_rejected_even_if_subarea_exists() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let phuket =
+                insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+            let subarea = insert_area(
+                "some-other",
+                serde_json::from_str(PHUKET_SUB).unwrap(),
+                &pool,
+            )
+            .await?;
+            // Geofence is the sub-area, point is inside the parent polygon
+            // but well outside the sub-area polygon. Must be rejected.
+            let user = user_with(vec![Role::EventManager], vec![subarea.id]);
+            let err = check(&user, 8.10, 98.40, &pool).await.unwrap_err();
+            assert!(err.to_string().contains("outside your geofence"));
+            // Sanity: phuket is also created so we don't rely on subarea id
+            // being 1 in test ordering.
+            assert!(phuket.id != subarea.id);
             Ok::<(), crate::Error>(())
         })
     }
