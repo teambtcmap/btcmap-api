@@ -507,7 +507,7 @@ pub async fn handle(
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::set_area_tag::run(params(req.params)?, &main_pool).await?,
+            super::area::set_area_tag::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
