@@ -24,6 +24,11 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
 
+    # cargo test regenerates bindings/ (ts-rs), so a diff here means the
+    # committed TypeScript bindings are stale — commit the regenerated files
+    - name: Check TypeScript bindings are up to date
+      run: git diff --exit-code bindings/
+
     - name: Build
       run: cargo build --release  --verbose
 

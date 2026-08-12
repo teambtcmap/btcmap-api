@@ -94,4 +94,35 @@ The `devtools` script provides helper commands for development:
 | `fetch-log-db` | Fetch only the log database |
 | `deploy` | Run tests, build release, deploy to production |
 | `gen-main-schema` | Generate `schema.sql` from migrations |
+| `export-ts-types [dir]` | Export the TypeScript bindings to a directory |
+
+### TypeScript bindings (`bindings/`)
+
+`bindings/` contains TypeScript definitions for the v4 REST types that
+[btcmap.org](https://github.com/teambtcmap/btcmap.org) consumes. They are
+**generated, not hand-written**: structs annotated with `#[derive(ts_rs::TS)]`
+are exported by [ts-rs](https://github.com/Aleph-Alpha/ts-rs) every time
+`cargo test` runs, so the directory always matches the code on your branch and
+never goes stale silently — CI fails if a commit leaves it out of date.
+
+How the pieces fit:
+
+- **Changing an exported struct?** Run `cargo test` (or
+  `devtools export-ts-types`), and commit the updated `bindings/` files along
+  with your change. The diff doubles as a readable record of the API change.
+- **Adding a new response type for the frontend?** Add
+  `#[derive(ts_rs::TS)]` + `#[ts(export)]` to the struct. Conventions:
+  64-bit integers get `#[ts(type = "number")]` (JSON transport), RFC 3339
+  timestamps get `#[ts(type = "string")]`, and names that repeat across
+  modules get `#[ts(rename = "...")]` so every binding file is unique.
+  Export is opt-in per struct — types not meant for third-party use simply
+  don't get the derive.
+- **Consuming the types?** The frontend fetches this directory from GitHub
+  (`pnpm types:api` in btcmap.org) — no Rust toolchain or checkout of this
+  repo required. Any other client can do the same.
+
+The dynamic `GET /v4/places` responses (shaped by the `fields` query param)
+are described by the all-optional `Place` type, kept in sync with
+`service::element::TAGS` by the `place_type_covers_all_generate_tags_fields`
+test.
 | `install-completions` | Install bash tab completions for devtools |
