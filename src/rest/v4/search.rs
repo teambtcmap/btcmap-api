@@ -38,27 +38,33 @@ fn has_next_page(offset: i64, limit: i64, total: i64) -> bool {
     next_offset < total && next_offset <= MAX_OFFSET
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct SearchedArea {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub alias: Option<String>,
     /// `[west, south, east, north]`. Absent when the area has no bbox of its own.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub bbox: Option<[f64; 4]>,
 }
 
 /// `SearchedPlace` is boxed because it is an order of magnitude larger than
 /// `SearchedArea`, and clippy's `large_enum_variant` would otherwise fire.
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SearchResult {
     Area(SearchedArea),
     Place(Box<SearchedPlace>),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct SearchResponse {
     pub results: Vec<SearchResult>,
     pub total_count: u32,
@@ -67,9 +73,12 @@ pub struct SearchResponse {
     pub pagination: PaginationInfo,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct PaginationInfo {
+    #[ts(type = "number")]
     pub offset: i64,
+    #[ts(type = "number")]
     pub limit: i64,
     pub total: u32,
 }

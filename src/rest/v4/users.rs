@@ -24,20 +24,26 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct SavedPlace {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct SavedArea {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct MeResponse {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub roles: Vec<String>,
@@ -92,14 +98,17 @@ pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, Re
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, rename = "CreateUserArgs")]
 pub struct PostArgs {
     pub name: Option<String>,
     pub password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "CreateUserResponse")]
 pub struct PostResponse {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub roles: Vec<String>,
@@ -134,18 +143,21 @@ pub async fn post(
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct CreateTokenArgs {
     pub label: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct CreateTokenResponse {
     pub token: String,
     pub user: MeResponse,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct ChangePasswordArgs {
     pub old_password: String,
     pub new_password: String,
@@ -174,7 +186,8 @@ pub async fn change_password(
     Ok(Json(()))
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct UpdateUsernameArgs {
     pub username: String,
 }
@@ -192,7 +205,8 @@ pub async fn update_username(
     Ok(Json(MeResponse::from(&updated_user)))
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct NostrIdentityResponse {
     /// Bech32 npub (`npub1...`) currently linked to the account, or `null`.
     pub npub: Option<String>,

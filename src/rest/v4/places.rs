@@ -373,11 +373,14 @@ pub async fn get_by_id(
         })
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceComment")]
 pub struct Comment {
+    #[ts(type = "number")]
     pub id: i64,
     pub text: String,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
 }
 
@@ -405,18 +408,25 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<MainPool>) -> Res<V
         .map_err(|_| RestApiError::database())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceActivity")]
 pub struct Activity {
+    #[ts(type = "number")]
     pub id: i64,
     pub r#type: String,
+    #[ts(type = "number | null")]
     pub user_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub user_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub user_tip: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
 }
 
@@ -451,14 +461,19 @@ pub async fn get_by_id_activity(id: Path<String>, pool: Data<MainPool>) -> Res<V
         .map_err(|_| RestApiError::database())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceArea")]
 pub struct AreaResponse {
+    #[ts(type = "number")]
     pub id: i64,
     pub alias: String,
+    #[ts(type = "Record<string, unknown>")]
     pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
 }
 

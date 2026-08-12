@@ -22,8 +22,10 @@ pub struct SearchArgs {
     pub r#type: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct AreaSearchResult {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub r#type: String,
@@ -99,8 +101,10 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
     Ok(Json(results))
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, rename = "Area")]
 pub struct GetByIdRes {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub r#type: String,

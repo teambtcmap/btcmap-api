@@ -11,7 +11,8 @@ use names::Name;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct AuthNostrResponse {
     pub token: String,
     pub username: String,

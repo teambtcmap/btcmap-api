@@ -11,7 +11,8 @@ use actix_web::web::Json;
 use actix_web::web::Path;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "Invoice")]
 pub struct GetByIdRes {
     id: String,
     status: String,
