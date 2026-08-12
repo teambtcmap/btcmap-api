@@ -79,11 +79,30 @@ CREATE TABLE invoice(
 CREATE TABLE conf(
     id INTEGER PRIMARY KEY NOT NULL,
     paywall_add_element_comment_price_sat INTEGER NOT NULL,
-    paywall_boost_element_30d_price_sat INTEGER NOT NULL,
-    paywall_boost_element_90d_price_sat INTEGER NOT NULL,
-    paywall_boost_element_365d_price_sat INTEGER NOT NULL
-, lnbits_invoice_key TEXT NOT NULL DEFAULT '', gitea_api_key TEXT NOT NULL DEFAULT '', matrix_bot_password TEXT NOT NULL DEFAULT '', lnd_invoices_macaroon TEXT NOT NULL DEFAULT '', ppq_key TEXT NOT NULL DEFAULT '', lnd_readonly_macaroon TEXT NOT NULL DEFAULT '', xpub_spending TEXT NOT NULL DEFAULT '', xpub_donations TEXT NOT NULL DEFAULT '', xpub_treasury TEXT NOT NULL DEFAULT '') STRICT;
-INSERT INTO conf VALUES(1,500,5000,10000,30000,'','','','','','','','','');
+    boost_element_prices TEXT NOT NULL DEFAULT '[]'
+, lnbits_invoice_key TEXT NOT NULL DEFAULT '', gitea_api_key TEXT NOT NULL DEFAULT '', matrix_bot_password TEXT NOT NULL DEFAULT '', lnd_invoices_macaroon TEXT NOT NULL DEFAULT '', ppq_key TEXT NOT NULL DEFAULT '', lnd_readonly_macaroon TEXT NOT NULL DEFAULT '', cors_origins TEXT NOT NULL DEFAULT '') STRICT;
+INSERT INTO conf VALUES(1,500,'[]','','','','','','','');
+CREATE TABLE wallet(
+    id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    xpub TEXT NOT NULL,
+    cached_balance_sats INTEGER NOT NULL DEFAULT 0,
+    cached_tx TEXT NOT NULL DEFAULT '[]',
+    cached_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    deleted_at TEXT
+) STRICT;
+CREATE TABLE electrum_server(
+    id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    url TEXT NOT NULL UNIQUE,
+    priority INTEGER NOT NULL DEFAULT 0,
+    spki_pin TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    deleted_at TEXT
+) STRICT;
 CREATE TABLE element_issue(
     id INTEGER PRIMARY KEY NOT NULL,
     element_id INTEGER NOT NULL REFERENCES element(id),
@@ -101,7 +120,7 @@ CREATE TABLE IF NOT EXISTS "user"(
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
-, saved_places TEXT NOT NULL DEFAULT '', saved_areas TEXT NOT NULL DEFAULT '', npub TEXT) STRICT;
+, saved_places TEXT NOT NULL DEFAULT '', saved_areas TEXT NOT NULL DEFAULT '', npub TEXT, geofence TEXT NOT NULL DEFAULT '') STRICT;
 CREATE TABLE access_token(
     id INTEGER PRIMARY KEY NOT NULL,
     user_id INTEGER NOT NULL REFERENCES "user"(id),
@@ -176,6 +195,14 @@ CREATE TRIGGER acess_token_updated_at UPDATE OF user_id, name, secret, roles, im
 BEGIN
     UPDATE access_token SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
+CREATE TRIGGER electrum_server_updated_at UPDATE OF name, url, priority, spki_pin, created_at, deleted_at ON electrum_server
+BEGIN
+    UPDATE electrum_server SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
+CREATE TRIGGER wallet_updated_at UPDATE OF name, xpub, cached_balance_sats, cached_tx, cached_at, created_at, deleted_at ON wallet
+BEGIN
+    UPDATE wallet SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
 CREATE TRIGGER element_event_updated_at UPDATE OF user_id, element_id, type, tags, created_at, deleted_at ON element_event
 BEGIN
     UPDATE element_event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -196,7 +223,7 @@ CREATE TRIGGER osm_user_updated_at UPDATE OF osm_data, tags, created_at, deleted
 BEGIN
     UPDATE osm_user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, npub, created_at, deleted_at ON user
+CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, npub, geofence, created_at, deleted_at ON user
 BEGIN
     UPDATE user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;

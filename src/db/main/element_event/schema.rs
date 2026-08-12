@@ -5,6 +5,8 @@ use time::OffsetDateTime;
 
 pub const TABLE_NAME: &str = "element_event";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     UserId,
@@ -14,21 +16,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::UserId => "user_id",
-            Columns::ElementId => "element_id",
-            Columns::Type => "type",
-            Columns::Tags => "tags",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -58,7 +45,7 @@ impl ElementEvent {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -66,7 +53,7 @@ impl ElementEvent {
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<ElementEvent> {
         |row| {
-            let tags: String = row.get(Columns::Tags.as_str())?;
+            let tags: String = row.get(Columns::Tags.as_ref())?;
             let tags = serde_json::from_str(&tags).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     2,
@@ -75,14 +62,14 @@ impl ElementEvent {
                 )
             })?;
             Ok(ElementEvent {
-                id: row.get(Columns::Id.as_str())?,
-                user_id: row.get(Columns::UserId.as_str())?,
-                element_id: row.get(Columns::ElementId.as_str())?,
-                r#type: row.get(Columns::Type.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                user_id: row.get(Columns::UserId.as_ref())?,
+                element_id: row.get(Columns::ElementId.as_ref())?,
+                r#type: row.get(Columns::Type.as_ref())?,
                 tags,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }

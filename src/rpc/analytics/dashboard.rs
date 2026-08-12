@@ -4,10 +4,10 @@ use crate::db::log::LogPool;
 use crate::db::main::element_event::queries as element_event_queries;
 use crate::db::main::place_submission::queries as place_submission_queries;
 use crate::db::main::place_submission::schema::OriginSubmissionCounts;
+use crate::db::main::wallet::schema::Wallet;
 use crate::db::main::MainPool;
 use crate::service::lnd;
 use crate::service::lnd::NodeStats;
-use crate::service::wallet;
 use crate::Result;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -100,9 +100,26 @@ pub struct SyncRun {
 
 #[derive(Serialize)]
 pub struct Wallets {
-    pub spending: i64,
-    pub donations: i64,
-    pub treasury: i64,
+    pub wallets: Vec<WalletSnapshot>,
+}
+
+#[derive(Serialize)]
+pub struct WalletSnapshot {
+    pub id: i64,
+    pub name: String,
+    pub xpub: String,
+    pub cached_balance_sats: i64,
+    pub cached_tx: Vec<TxSummary>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub cached_at: Option<OffsetDateTime>,
+}
+
+#[derive(Serialize)]
+pub struct TxSummary {
+    pub id: String,
+    pub received: i64,
+    pub sent: i64,
+    pub delta: i64,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -221,18 +238,12 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
             None
         }
     };
-    let wallets = match wallet::run(pool).await {
-        Ok(stats) => Wallets {
-            spending: stats.spending,
-            donations: stats.donations,
-            treasury: stats.treasury,
-        },
+    let wallets = match load_wallet_snapshots(pool).await {
+        Ok(wallets) => Wallets { wallets },
         Err(err) => {
-            warn!(%err, "failed to fetch wallet stats");
+            warn!(%err, "failed to load wallet stats");
             Wallets {
-                spending: 0,
-                donations: 0,
-                treasury: 0,
+                wallets: Vec::new(),
             }
         }
     };
@@ -259,6 +270,31 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         sync_runs,
         wallets,
     })
+}
+
+async fn load_wallet_snapshots(pool: &MainPool) -> Result<Vec<WalletSnapshot>> {
+    let wallets: Vec<Wallet> = crate::db::main::wallet::queries::select_all(pool).await?;
+    Ok(wallets
+        .into_iter()
+        .filter(|w| w.deleted_at.is_none())
+        .map(|w| WalletSnapshot {
+            id: w.id,
+            name: w.name,
+            xpub: w.xpub,
+            cached_balance_sats: w.cached_balance_sats,
+            cached_tx: w
+                .cached_tx
+                .into_iter()
+                .map(|t| TxSummary {
+                    id: t.id,
+                    received: t.received,
+                    sent: t.sent,
+                    delta: t.delta,
+                })
+                .collect(),
+            cached_at: w.cached_at,
+        })
+        .collect())
 }
 
 async fn collect_imports(
@@ -395,9 +431,7 @@ mod test {
         assert!(res.logs.top_rest_api_calls.is_empty());
         assert!(res.sync_runs.is_empty());
         assert!(res.lnd.is_none());
-        assert_eq!(0, res.wallets.spending);
-        assert_eq!(0, res.wallets.donations);
-        assert_eq!(0, res.wallets.treasury);
+        assert!(res.wallets.wallets.is_empty());
         assert_eq!(0, res.unique_ips_24h.web);
         assert_eq!(0, res.unique_ips_24h.android);
         assert_eq!(0, res.unique_ips_24h.ios);

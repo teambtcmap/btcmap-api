@@ -3,6 +3,7 @@ pub mod area;
 pub mod area_element;
 pub mod ban;
 pub mod conf;
+pub mod electrum_server;
 pub mod element;
 pub mod element_comment;
 pub mod element_event;
@@ -14,6 +15,7 @@ pub mod place_import_origin;
 pub mod place_submission;
 pub mod report;
 pub mod user;
+pub mod wallet;
 
 use super::Migration;
 use crate::Result;

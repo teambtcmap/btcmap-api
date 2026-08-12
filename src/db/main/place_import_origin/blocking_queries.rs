@@ -11,7 +11,7 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<ImportOrig
         "#,
         projection = ImportOrigin::projection(),
         table = schema::TABLE_NAME,
-        name = Columns::Name.as_str(),
+        name = Columns::Name.as_ref(),
     );
     conn.prepare(&sql)?
         .query_row(params![name], ImportOrigin::mapper())
@@ -28,7 +28,7 @@ pub fn select_all(conn: &Connection) -> Result<Vec<ImportOrigin>> {
         "#,
         projection = ImportOrigin::projection(),
         table = schema::TABLE_NAME,
-        name = Columns::Name.as_str(),
+        name = Columns::Name.as_ref(),
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([], ImportOrigin::mapper())?;

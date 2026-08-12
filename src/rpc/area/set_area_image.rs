@@ -46,7 +46,7 @@ pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<
     let area = db::main::area::queries::select_by_id_or_alias(&params.area_id, pool).await?;
     let image_type = params.image_type.as_deref().unwrap_or("square");
     let bytes = BASE64_STANDARD.decode(params.image_base64)?;
-    let ext = super::generate_area_icons::detect_ext(&bytes)
+    let ext = super::super::generate_area_icons::detect_ext(&bytes)
         .ok_or(Error::Other("unsupported image format".into()))?;
     let file_name = format!("{}_{}.{}", area.id, image_type, ext);
     let mut file = OpenOptions::new()
@@ -61,7 +61,7 @@ pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<
 
     let dims = actix_web::web::block({
         let bytes = bytes.clone();
-        move || super::generate_area_icons::decode_dimensions(&bytes)
+        move || super::super::generate_area_icons::decode_dimensions(&bytes)
     })
     .await?;
 

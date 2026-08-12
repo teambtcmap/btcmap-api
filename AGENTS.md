@@ -10,8 +10,7 @@ BTC Map API is a Rust web service built with actix-web that provides a REST and 
 
 ### Building
 ```bash
-cargo build --release # Production build
-cargo build # Debug build
+cargo build
 ```
 
 ### Running
@@ -27,12 +26,14 @@ cargo test <test_name> # Run a single test by name
 cargo test -- --nocapture # Run tests with stdout/stderr output
 ```
 
-### Linting & Formatting
+### Linting
 ```bash
-cargo clippy # Run linter (includes many warnings)
-cargo clippy -- -D warnings # Treat warnings as errors
-cargo fmt # Format code
-cargo fmt --check # Check formatting without modifying
+cargo clippy -- -D warnings
+```
+
+### Formatting
+```bash
+cargo fmt
 ```
 
 ### Running a Specific Test
@@ -49,6 +50,145 @@ cargo fmt            # Format code
 cargo clippy -- -D warnings  # Lint (must pass with zero warnings)
 cargo test           # Run tests
 ```
+
+## Local Server Workflow
+
+When working on REST or RPC endpoints, test them locally to validate changes. Some endpoints require auth token.
+
+### Databases
+The running server uses the real local DBs at `$HOME/.local/share/btcmap/`: `main.db`, `log.db`, `image.db`. Unit tests use in-memory pools and never touch them.
+
+### Build once
+```bash
+cargo build
+```
+Debug build is enough for local poking.
+
+### Start the server in the background
+Run the compiled binary directly so the recorded PID belongs to the server rather than to `cargo`:
+
+```bash
+(
+  set -eu
+  pid_file=/tmp/opencode/btcmap-server.pid
+  log_file=/tmp/opencode/btcmap-server.log
+
+  if [ -s "$pid_file" ]; then
+    old_pid="$(cat "$pid_file")"
+    if [[ "$old_pid" =~ ^[1-9][0-9]*$ ]] &&
+      kill -0 "$old_pid" 2>/dev/null &&
+      [[ "$(ps -p "$old_pid" -o comm=)" == *btcmap-api* ]]; then
+      printf 'Server already running (PID %s)\n' "$old_pid"
+      exit 0
+    fi
+    rm -f "$pid_file"
+  fi
+
+  nohup env RUST_LOG="${RUST_LOG:-info}" ./target/debug/btcmap-api \
+    >"$log_file" 2>&1 </dev/null &
+  pid=$!
+  printf '%s\n' "$pid" >"$pid_file"
+
+  for _ in {1..60}; do
+    if curl -fsS --max-time 1 \
+      'http://127.0.0.1:8000/v2/elements?limit=1' >/dev/null; then
+      printf 'Server ready (PID %s)\n' "$pid"
+      exit 0
+    fi
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.5
+  done
+
+  kill -TERM "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  rm -f "$pid_file"
+  tail -n 50 "$log_file" >&2
+  exit 1
+)
+```
+
+The readiness probe verifies that the HTTP server and database are usable. If startup fails or times out, the command stops the process, removes the PID file, and prints the latest log output.
+
+### Stop the server
+Send `SIGTERM` first so Actix can shut down gracefully. After ten seconds, force termination if needed:
+
+```bash
+(
+  set -eu
+  pid_file=/tmp/opencode/btcmap-server.pid
+
+  if [ ! -s "$pid_file" ]; then
+    printf 'Server is not running\n'
+    exit 0
+  fi
+
+  pid="$(cat "$pid_file")"
+  if ! [[ "$pid" =~ ^[1-9][0-9]*$ ]] ||
+    ! kill -0 "$pid" 2>/dev/null ||
+    [[ "$(ps -p "$pid" -o comm=)" != *btcmap-api* ]]; then
+    rm -f "$pid_file"
+    printf 'Removed stale PID file\n'
+    exit 0
+  fi
+
+  kill -TERM "$pid"
+  for _ in {1..100}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$pid_file"
+      exit 0
+    fi
+    sleep 0.1
+  done
+
+  kill -KILL "$pid"
+  rm -f "$pid_file"
+)
+```
+
+### Create a temporary admin token
+Some endpoints require `Bearer` auth with a token that has a priviledged role. Mint a test token if not present in the local `main.db`:
+
+```bash
+sqlite3 $HOME/.local/share/btcmap/main.db <<'SQL'
+INSERT INTO access_token (user_id, name, secret, roles)
+VALUES (
+  (SELECT id FROM user WHERE roles LIKE '%root%' LIMIT 1),
+  'agent-probe',
+  'opencode',
+  '["root"]'
+);
+SQL
+```
+Pick a user with the `root` role and a `secret` string that is static and set to "opencode". The `secret` becomes the bearer token.
+
+### Call an RPC which requires auth
+```bash
+curl -sS \
+  -X POST http://127.0.0.1:8000/rpc \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer opencode' \
+  -d '{"jsonrpc":"2.0","id":"1","method":"get_wallets"}'
+```
+- Endpoint: `POST /rpc` (not `/v2/rpc` or `/v3/rpc` — there's no version prefix).
+- Method names are `snake_case` (e.g. `get_wallets`, `get_element`, `dashboard`).
+- Response is JSON-RPC 2.0: `result` on success, `error` with `code`/`message`/`data` on failure.
+- For slow calls, add `--max-time 180` to `curl`.
+
+### Verifying changes against the real DB
+Useful when you want to see if a patch actually works on production-shaped data (real element counts, real wallet history, etc.) rather than the empty in-memory test DB. The pattern is:
+1. Make the code change.
+2. `cargo build` (debug is faster).
+3. Restart the server (kill + relaunch as above).
+4. Hit the endpoint with `curl`, read the response.
+5. Tail `/tmp/opencode/btcmap-server.log` for warnings/errors.
+6. Iterate.
+
+### Endpoints cheat sheet
+- `POST /rpc` — JSON-RPC, the main admin/control surface.
+- `GET /v2/elements`, `/v2/elements/{id}`, `/v2/areas`, `/v2/areas/{id}`, `/v2/reports`, `/v2/users` — read-only public API.
+- `GET /v3/...` and `GET /v4/...` — same data, newer shape; see `docs/rest/v3/` and `docs/rest/v4/`.
+- `GET /feeds/...` — Atom/RSS feeds.
+- `GET /og/element/{id}` — OpenGraph image for a place.
 
 ### Rust version
 The project does not pin its Rust version. Contributors should use a recent stable Rust toolchain with `rustfmt` and `clippy` components installed.
@@ -205,11 +345,12 @@ Use `db::test::pool()` for in-memory SQLite test databases.
 
 ### Configuration
 - Server binds to `127.0.0.1:8000` (hardcoded in main.rs)
-- Database stored in data directory (configurable via `data_dir_file_path`)
+- Database stored in ~/.local/share/btcmap
 - Logging controlled via `RUST_LOG` env var (defaults to "info")
-- `BTCMAP_API_BASE_URL` sets the public base URL of the API (used by the NIP-98 Nostr auth extractor). Defaults to `http://127.0.0.1:8000`.
-- `BTCMAP_API_CORS_ORIGINS` controls the CORS middleware in `main.rs`. Unset or `*` (default) allows any origin. Set to a comma-separated list to restrict. The middleware handles the OPTIONS preflight itself.
 - Release builds use native CPU optimization (via .cargo/config.toml)
+
+### Temporary Files
+For scratch files, logs, PIDs, or any other transient artifacts outside the workspace, always use `/tmp/opencode` — this path is pre-approved and won't trigger permission prompts. Do NOT use bare `/tmp/...` paths. Examples: `/tmp/opencode/btcmap-server.log`, `/tmp/opencode/btcmap-server.pid`.
 
 ### Key Dependencies
 - **actix-web**: HTTP server

@@ -15,7 +15,7 @@ pub fn insert(overpass_data: &OverpassElement, conn: &Connection) -> Result<Elem
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        overpass_data = Columns::OverpassData.as_str(),
+        overpass_data = Columns::OverpassData.as_ref(),
         projection = Element::projection(),
     );
     conn.query_row(
@@ -43,8 +43,8 @@ pub fn select_updated_since(
             "#,
             projection = Element::projection(),
             table = schema::TABLE_NAME,
-            updated_at = Columns::UpdatedAt.as_str(),
-            id = Columns::Id.as_str(),
+            updated_at = Columns::UpdatedAt.as_ref(),
+            id = Columns::Id.as_ref(),
         )
     } else {
         format!(
@@ -57,9 +57,9 @@ pub fn select_updated_since(
             "#,
             projection = Element::projection(),
             table = schema::TABLE_NAME,
-            deleted_at = Columns::DeletedAt.as_str(),
-            updated_at = Columns::UpdatedAt.as_str(),
-            id = Columns::Id.as_str(),
+            deleted_at = Columns::DeletedAt.as_ref(),
+            updated_at = Columns::UpdatedAt.as_ref(),
+            id = Columns::Id.as_ref(),
         )
     };
     Ok(conn
@@ -93,9 +93,9 @@ pub fn select_by_search_query(
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
-        overpass_data = Columns::OverpassData.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        overpass_data = Columns::OverpassData.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![search_query.into()], Element::mapper())?
@@ -118,9 +118,9 @@ pub fn select_by_bbox(
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        deleted_at = Columns::DeletedAt.as_str(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        deleted_at = Columns::DeletedAt.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(named_params! { ":min_lat": min_lat, ":max_lat": max_lat, ":min_lon": min_lon, ":max_lon": max_lon }, Element::mapper())?
@@ -147,7 +147,7 @@ pub fn select_by_osm_tag_value(
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
-        overpass_data = Columns::OverpassData.as_str(),
+        overpass_data = Columns::OverpassData.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![tag_value], Element::mapper())?
@@ -171,8 +171,8 @@ pub fn select_with_opening_hours_without_humanization(
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
-        overpass_data = Columns::OverpassData.as_str(),
-        tags = Columns::Tags.as_str(),
+        overpass_data = Columns::OverpassData.as_ref(),
+        tags = Columns::Tags.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![limit], Element::mapper())?
@@ -198,14 +198,14 @@ pub fn select_with_opening_hours_without_humanization_by_area(
             LIMIT ?2
         "#,
         table = table,
-        id = Columns::Id.as_str(),
-        overpass_data = Columns::OverpassData.as_str(),
-        tags = Columns::Tags.as_str(),
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        deleted_at = Columns::DeletedAt.as_str(),
+        id = Columns::Id.as_ref(),
+        overpass_data = Columns::OverpassData.as_ref(),
+        tags = Columns::Tags.as_ref(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        deleted_at = Columns::DeletedAt.as_ref(),
         area_element_table = area_element_schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
@@ -242,7 +242,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Element> {
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], Element::mapper())
         .map_err(Into::into)
@@ -262,7 +262,7 @@ pub fn select_by_ids(ids: &[i64], conn: &Connection) -> Result<Vec<Element>> {
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
         placeholders = placeholders.join(", "),
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -290,7 +290,7 @@ pub fn select_by_osm_type_and_id(
         "#,
         projection = Element::projection(),
         table = schema::TABLE_NAME,
-        overpass_data = Columns::OverpassData.as_str(),
+        overpass_data = Columns::OverpassData.as_ref(),
     );
     Ok(conn.query_row(&sql, params![osm_type, osm_id], Element::mapper())?)
 }
@@ -303,12 +303,12 @@ pub fn select_merchants_count(conn: &Connection, verified_since: Option<Date>) -
             WHERE {deleted_at} IS NULL AND coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') != 'atm' AND coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') != 'bureau_de_change'
         "#,
         table = schema::TABLE_NAME,
-        deleted_at = Columns::DeletedAt.as_str(),
-        overpass_data = Columns::OverpassData.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        overpass_data = Columns::OverpassData.as_ref(),
     );
     if let Some(verified_since) = verified_since {
         let verified_since = verified_since.to_string();
-        sql.push_str(&format!(" AND (coalesce(json_extract({overpass_data}, '$.tags.survey:date'), '2000-01-01') > '{verified_since}' OR coalesce(json_extract({overpass_data}, '$.tags.check_date'), '2000-01-01') > '{verified_since}' OR coalesce(json_extract({overpass_data}, '$.tags.check_date:currency:XBT'), '2000-01-01') > '{verified_since}')", overpass_data = Columns::OverpassData.as_str()));
+        sql.push_str(&format!(" AND (coalesce(json_extract({overpass_data}, '$.tags.survey:date'), '2000-01-01') > '{verified_since}' OR coalesce(json_extract({overpass_data}, '$.tags.check_date'), '2000-01-01') > '{verified_since}' OR coalesce(json_extract({overpass_data}, '$.tags.check_date:currency:XBT'), '2000-01-01') > '{verified_since}')", overpass_data = Columns::OverpassData.as_ref()));
     }
     Ok(conn.query_row(&sql, [], |row| row.get(0))?)
 }
@@ -321,12 +321,12 @@ pub fn select_exchanges_count(conn: &Connection, verified_since: Option<Date>) -
             WHERE {deleted_at} IS NULL AND (coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') = 'atm' OR coalesce(json_extract({overpass_data}, '$.tags.amenity'), '') = 'bureau_de_change')
         "#,
         table = schema::TABLE_NAME,
-        deleted_at = Columns::DeletedAt.as_str(),
-        overpass_data = Columns::OverpassData.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        overpass_data = Columns::OverpassData.as_ref(),
     );
     if let Some(verified_since) = verified_since {
         let verified_since = verified_since.to_string();
-        sql.push_str(&format!(" AND (json_extract({overpass_data}, '$.tags.survey:date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date:currency:XBT') > '{verified_since}')", overpass_data = Columns::OverpassData.as_str()));
+        sql.push_str(&format!(" AND (json_extract({overpass_data}, '$.tags.survey:date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date') > '{verified_since}' or json_extract({overpass_data}, '$.tags.check_date:currency:XBT') > '{verified_since}')", overpass_data = Columns::OverpassData.as_ref()));
     }
     Ok(conn.query_row(&sql, [], |row| row.get(0))?)
 }
@@ -343,8 +343,8 @@ pub fn set_overpass_data(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        overpass_data = Columns::OverpassData.as_str(),
-        id = Columns::Id.as_str(),
+        overpass_data = Columns::OverpassData.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, serde_json::to_string(overpass_data)?,])?;
     select_by_id(id, conn)
@@ -356,8 +356,8 @@ pub fn patch_tags(id: i64, tags: &Map<String, Value>, conn: &Connection) -> Resu
             UPDATE {table} SET {tags} = json_patch({tags}, ?2) WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, &serde_json::to_string(tags)?,])?;
     select_by_id(id, conn)
@@ -377,8 +377,8 @@ pub fn remove_tag(element_id: i64, tag_name: &str, conn: &Connection) -> Result<
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        tags = Columns::Tags.as_str(),
-        id = Columns::Id.as_str(),
+        tags = Columns::Tags.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![element_id, format!("$.{tag_name}"),])?;
     select_by_id(element_id, conn)
@@ -392,9 +392,9 @@ pub fn set_lat_lon(id: i64, lat: f64, lon: f64, conn: &Connection) -> Result<Ele
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        id = Columns::Id.as_str(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, lat, lon])?;
     select_by_id(id, conn)
@@ -409,8 +409,8 @@ pub fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) ->
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, updated_at.format(&Rfc3339).unwrap()])?;
     select_by_id(id, conn)
@@ -430,8 +430,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?,])?;
         }
@@ -443,8 +443,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }
@@ -475,7 +475,7 @@ fn tag_value_predicate(word_count: usize, first_word_param: usize) -> String {
                 WHERE t.type = 'text' AND t.value LIKE ?{param} ESCAPE '\'
             )"#,
             table = schema::TABLE_NAME,
-            overpass_data = Columns::OverpassData.as_str(),
+            overpass_data = Columns::OverpassData.as_ref(),
             param = first_word_param + i,
         ));
     }
@@ -485,10 +485,10 @@ fn tag_value_predicate(word_count: usize, first_word_param: usize) -> String {
             AND {lon} IS NOT NULL
             AND json_type({overpass_data}, '$.tags') = 'object'
             AND json_extract({overpass_data}, '$.tags.name') IS NOT NULL{words}"#,
-        deleted_at = Columns::DeletedAt.as_str(),
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        overpass_data = Columns::OverpassData.as_str(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        overpass_data = Columns::OverpassData.as_ref(),
     )
 }
 
@@ -516,7 +516,7 @@ pub fn select_by_tag_value_search(
     // predicate stays on the raw name, so this COALESCE is never null.
     let name = format!(
         r#"COALESCE(NULLIF(json_extract({od}, '$.tags."name:en"'), ''), json_extract({od}, '$.tags.name'))"#,
-        od = Columns::OverpassData.as_str(),
+        od = Columns::OverpassData.as_ref(),
     );
     let sql = format!(
         r#"
@@ -541,9 +541,9 @@ pub fn select_by_tag_value_search(
         projection = Element::projection(),
         table = schema::TABLE_NAME,
         predicate = tag_value_predicate(words.len(), 8),
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        id = Columns::Id.as_str(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        id = Columns::Id.as_ref(),
     );
 
     let escaped = escape_like(query);

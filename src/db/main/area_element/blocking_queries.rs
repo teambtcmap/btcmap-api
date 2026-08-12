@@ -16,8 +16,8 @@ pub fn insert(area_id: i64, element_id: i64, conn: &Connection) -> Result<AreaEl
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        area_id = Columns::AreaId.as_str(),
-        element_id = Columns::ElementId.as_str(),
+        area_id = Columns::AreaId.as_ref(),
+        element_id = Columns::ElementId.as_ref(),
         projection = AreaElement::projection(),
     );
     conn.query_row(&sql, params![area_id, element_id], AreaElement::mapper())
@@ -39,8 +39,8 @@ pub fn select_updated_since(
         "#,
         projection = AreaElement::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -61,9 +61,9 @@ pub fn select_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<AreaElem
         "#,
         projection = AreaElement::projection(),
         table = schema::TABLE_NAME,
-        area_id = Columns::AreaId.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        area_id = Columns::AreaId.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![area_id,], AreaElement::mapper())?
@@ -81,9 +81,9 @@ pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<Ar
         "#,
         projection = AreaElement::projection(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![element_id,], AreaElement::mapper())?
@@ -100,7 +100,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<AreaElement> {
         "#,
         projection = AreaElement::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], AreaElement::mapper())
         .map_err(Into::into)
@@ -119,8 +119,8 @@ pub fn set_updated_at(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, updated_at.format(&Rfc3339)?,])?;
     select_by_id(id, conn)
@@ -140,8 +140,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?,])?;
         }
@@ -153,8 +153,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }
@@ -191,7 +191,7 @@ mod tests {
     fn select_updated_since() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Create test timestamps
         let base_time = OffsetDateTime::now_utc();
@@ -248,7 +248,7 @@ mod tests {
     fn select_updated_since_ordering() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let time = OffsetDateTime::now_utc();
 
         // Insert records with same updated_at but different ids
@@ -273,7 +273,7 @@ mod tests {
     fn select_by_area_id_basic() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert test data for multiple areas
@@ -309,7 +309,7 @@ mod tests {
     fn select_by_area_id_ordering() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert records with same area_id and same updated_at but different ids
@@ -342,7 +342,7 @@ mod tests {
     fn select_by_element_id_basic() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert test data for multiple elements
@@ -378,7 +378,7 @@ mod tests {
     fn select_by_element_id_ordering() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let now = OffsetDateTime::now_utc();
 
         // Insert records with same element_id and same updated_at but different ids
@@ -412,7 +412,7 @@ mod tests {
         // Setup in-memory database
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Insert test data
         let test_id = 1;
@@ -440,7 +440,7 @@ mod tests {
         // Setup test database
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Insert test data
         let test_id = 1;
@@ -479,7 +479,7 @@ mod tests {
         // Setup test database
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         // Insert test data
         let item = super::insert(1, 1, &conn)?;
@@ -503,7 +503,7 @@ mod tests {
     fn set_deleted_at_with_null() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let deleted_time = OffsetDateTime::now_utc();
 
         // Insert with deleted_at already set

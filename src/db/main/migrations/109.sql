@@ -1,0 +1,1 @@
+ALTER TABLE conf ADD COLUMN cors_origins TEXT NOT NULL DEFAULT '';

@@ -77,7 +77,14 @@ Behavior is controlled by environment variables (all optional in local dev):
 |----------|---------|---------|
 | `RUST_LOG` | `info` | Log level. |
 | `BTCMAP_API_BASE_URL` | `http://127.0.0.1:8000` | Public base URL of the API. NIP-98 Nostr auth verifies the signed event's `u` tag against this value, **not** the request `Host`/`X-Forwarded-*` headers. **In production this must be set to the public origin** (e.g. `https://api.btcmap.org`) or all Nostr auth fails with `401`. See [Server Configuration (NIP-98)](docs/rest/v4/auth.md#server-configuration-nip-98). |
-| `BTCMAP_API_CORS_ORIGINS` | `*` | Comma-separated allowlist of CORS origins. `*` (or unset) allows any origin. |
+
+The CORS allowlist lives in the `conf` table (column `cors_origins`): a
+comma-separated list of allowed origins. Empty (the default) allows any
+origin. Update the row directly, e.g.:
+
+```sql
+UPDATE conf SET cors_origins = 'https://btcmap.org,https://dashboard.btcmap.org';
+```
 
 ### devtools
 

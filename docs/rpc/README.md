@@ -10,12 +10,13 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 - [Auth](auth.md) - Methods for admins to manage passwords.
 - [Element Methods](element-methods.md) - Methods for working with map elements
 - [Area Methods](area-methods.md) - Methods for working with geographic areas
-- [User Methods](user-methods.md) - Methods for working with user data
+- [User Methods](user-methods.md) - Methods for working with user data, including the `set_user_geofence` restriction on event managers
 - [Admin Methods](admin-methods.md) - Methods for administrative operations
 - [Log Methods](log/README.md) - Methods for log analysis and infrastructure reporting
 - [Invoice Methods](invoice-methods.md) - Methods for handling payments
 - [Search Methods](search-methods.md) - Methods for searching
-- [get_wallets](get_wallets.md) - Aggregate on-chain balance for the project wallets
+- [Electrum servers](electrum/) - Methods for managing electrum servers used by wallet balance lookups
+- [Wallets](wallet/) - Methods for managing project wallets and reading their on-chain balances
 
 ## Authentication
 

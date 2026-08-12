@@ -49,6 +49,10 @@ pub struct MeResponse {
     pub roles: Vec<String>,
     pub saved_places: Vec<SavedPlace>,
     pub saved_areas: Vec<SavedArea>,
+    /// Area ids the user is restricted to when acting as an event manager.
+    /// Empty means unrestricted.
+    #[ts(type = "Array<number>")]
+    pub geofence: Vec<i64>,
     /// Bech32 npub (`npub1...`) of the Nostr identity linked to this user,
     /// or `null` when no pubkey is linked.
     pub npub: Option<String>,
@@ -62,6 +66,7 @@ impl From<&User> for MeResponse {
             roles: user.roles.iter().map(|r| r.to_string()).collect(),
             saved_places: vec![],
             saved_areas: vec![],
+            geofence: user.geofence.clone(),
             npub: user.npub.clone(),
         }
     }
@@ -94,6 +99,7 @@ pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, Re
         roles: user.roles.iter().map(|r| r.to_string()).collect(),
         saved_places,
         saved_areas,
+        geofence: user.geofence,
         npub: user.npub,
     }))
 }
@@ -379,6 +385,7 @@ pub async fn create_token(
             roles: user.roles.iter().map(|r| r.to_string()).collect(),
             saved_places,
             saved_areas,
+            geofence: user.geofence,
             npub: user.npub,
         },
     }))
