@@ -4,7 +4,7 @@ _devtools() {
     local cur prev words cword
     _init_completion || return
 
-    local commands="main-db image-db log-db fetch-db fetch-main-db fetch-image-db fetch-log-db deploy gen-main-schema install-completions"
+    local commands="main-db image-db log-db fetch-db fetch-main-db fetch-image-db fetch-log-db deploy gen-main-schema export-ts-types install-completions"
 
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=($(compgen -W "$commands" -- "$cur"))
