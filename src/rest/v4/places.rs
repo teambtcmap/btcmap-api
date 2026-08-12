@@ -148,6 +148,78 @@ pub struct SearchedPlace {
     pub localized_name: Option<Map<String, Value>>,
 }
 
+/// Type-export-only description of the dynamic place responses.
+/// `GET /v4/places` and `GET /v4/places/{id}` build their JSON at runtime
+/// from the `fields` query param, so every field except `id` is optional.
+/// Fields requested via the `osm:<tag>` passthrough appear as extra keys and
+/// cannot be typed statically. Kept in sync with `service::element::TAGS` by
+/// `place_type_covers_all_generate_tags_fields`.
+#[derive(ts_rs::TS)]
+#[ts(export)]
+#[allow(dead_code)]
+pub struct Place {
+    #[ts(type = "number")]
+    pub id: i64,
+    #[ts(optional)]
+    pub osm_id: Option<String>,
+    #[ts(optional)]
+    pub osm_url: Option<String>,
+    #[ts(optional)]
+    pub osm_edit_url: Option<String>,
+    #[ts(optional)]
+    pub lat: Option<f64>,
+    #[ts(optional)]
+    pub lon: Option<f64>,
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[ts(optional)]
+    pub address: Option<String>,
+    #[ts(optional)]
+    pub icon: Option<String>,
+    #[ts(optional)]
+    pub phone: Option<String>,
+    #[ts(optional)]
+    pub website: Option<String>,
+    #[ts(optional)]
+    pub twitter: Option<String>,
+    #[ts(optional)]
+    pub facebook: Option<String>,
+    #[ts(optional)]
+    pub instagram: Option<String>,
+    #[ts(optional)]
+    pub line: Option<String>,
+    #[ts(optional)]
+    pub email: Option<String>,
+    #[ts(optional)]
+    pub opening_hours: Option<String>,
+    #[ts(optional)]
+    pub boosted_until: Option<String>,
+    #[ts(optional)]
+    pub required_app_url: Option<String>,
+    #[ts(optional)]
+    pub created_at: Option<String>,
+    #[ts(optional)]
+    pub updated_at: Option<String>,
+    #[ts(optional)]
+    pub deleted_at: Option<String>,
+    #[ts(optional)]
+    pub verified_at: Option<String>,
+    #[ts(optional, type = "number")]
+    pub comments: Option<i64>,
+    #[ts(optional)]
+    pub description: Option<String>,
+    #[ts(optional)]
+    pub image: Option<String>,
+    #[ts(optional)]
+    pub payment_provider: Option<String>,
+    #[ts(optional)]
+    pub telegram: Option<String>,
+    #[ts(optional, type = "Record<string, string>")]
+    pub localized_name: Option<Map<String, Value>>,
+    #[ts(optional, type = "Record<string, string>")]
+    pub localized_opening_hours: Option<Map<String, Value>>,
+}
+
 #[get("/search")]
 pub async fn search(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<SearchedPlace>> {
     let lat = args.lat.unwrap_or(0.0);
@@ -494,6 +566,23 @@ pub async fn delete_saved(auth: Auth, path: Path<i64>, pool: Data<MainPool>) -> 
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(actix_web::web::Json(saved_places))
+}
+
+// Separate module: `mod test` below imports actix's `#[test]` macro, which
+// only accepts async fns; this is a plain sync test.
+#[cfg(test)]
+mod place_type_test {
+    #[test]
+    fn place_type_covers_all_generate_tags_fields() {
+        let decl = <super::Place as ts_rs::TS>::decl(&ts_rs::Config::default());
+        for tag in crate::service::element::TAGS {
+            assert!(
+                decl.contains(tag),
+                "Place is missing `{tag}` — TAGS gained a field; add it to the Place struct"
+            );
+        }
+        assert!(decl.contains("id"));
+    }
 }
 
 #[cfg(test)]
