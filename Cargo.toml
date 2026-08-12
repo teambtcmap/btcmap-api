@@ -124,3 +124,8 @@ nostr = { version = "0.44.3", default-features = false, features = ["std"] }
 # Used to query Bitcoin wallet balances from xpubs via a public Electrum server
 # https://github.com/bitcoindevkit/rust-electrum-client/releases
 electrum-client = { version = "0.25.0", default-features = false, features = ["use-rustls"] }
+
+# Derives TypeScript definitions from response structs so btcmap.org can
+# generate its API types from this crate (dev tool; no runtime use)
+# https://github.com/Aleph-Alpha/ts-rs/blob/main/CHANGELOG.md
+ts-rs = "12.0.1"

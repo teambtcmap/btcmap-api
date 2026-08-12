@@ -76,53 +76,75 @@ pub struct SearchArgs {
     tag_value: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct SearchedPlace {
+    #[ts(type = "number")]
     pub id: i64,
     pub lat: f64,
     pub lon: f64,
     pub icon: String,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub opening_hours: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
     pub comments: Option<i64>,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
+    #[ts(type = "string | null")]
     pub verified_at: Option<OffsetDateTime>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub osm_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub phone: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub website: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub twitter: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub facebook: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub instagram: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub line: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "time::serde::rfc3339::option")]
+    #[ts(optional, type = "string")]
     pub boosted_until: Option<OffsetDateTime>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub required_app_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub image: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub payment_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "Record<string, string>")]
     pub localized_name: Option<Map<String, Value>>,
 }
 
