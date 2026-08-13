@@ -36,24 +36,33 @@ pub struct GetActivityArgs {
     places: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct ActivityItem {
     pub r#type: String,
+    #[ts(type = "number")]
     pub place_id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub place_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
     pub osm_user_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub osm_user_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub osm_user_tip: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub comment: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
     pub duration_days: Option<i64>,
     pub image: String,
     #[serde(with = "time::serde::rfc3339", rename = "date")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
 }
 

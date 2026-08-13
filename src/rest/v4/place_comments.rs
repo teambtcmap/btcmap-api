@@ -39,17 +39,23 @@ const fn default_include_deleted() -> bool {
     false
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceCommentListItem")]
 pub struct Item {
+    #[ts(type = "number")]
     pub id: i64,
+    #[ts(type = "number")]
     pub place_id: i64,
     pub text: String,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "time::serde::rfc3339::option")]
+    #[ts(optional, type = "string")]
     pub deleted_at: Option<OffsetDateTime>,
 }
 
@@ -91,8 +97,10 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> Result<Json<Item>
         .map(Into::into)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceCommentQuote")]
 pub struct Quote {
+    #[ts(type = "number")]
     pub quote_sat: i64,
 }
 
@@ -103,13 +111,15 @@ pub async fn get_quote(conf: Data<Conf>) -> RestResult<Quote> {
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PostPlaceCommentArgs")]
 pub struct PostArgs {
     pub place_id: String,
     pub comment: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PostPlaceCommentResponse")]
 pub struct PostResponse {
     pub invoice_id: String,
     pub invoice: String,

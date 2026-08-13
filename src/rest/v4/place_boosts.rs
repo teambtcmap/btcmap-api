@@ -14,10 +14,14 @@ use actix_web::HttpRequest;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceBoostQuote")]
 pub struct Quote {
+    #[ts(type = "number")]
     pub quote_30d_sat: i64,
+    #[ts(type = "number")]
     pub quote_90d_sat: i64,
+    #[ts(type = "number")]
     pub quote_365d_sat: i64,
 }
 
@@ -37,13 +41,16 @@ pub async fn get_quote(conf: Data<Conf>) -> RestResult<Quote> {
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PostPlaceBoostArgs")]
 pub struct PostArgs {
     pub place_id: String,
+    #[ts(type = "number")]
     pub days: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PostPlaceBoostResponse")]
 pub struct PostResponse {
     pub invoice_id: String,
     pub invoice: String,

@@ -7,13 +7,17 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct Country {
+    #[ts(type = "number")]
     pub id: i64,
     pub alias: String,
     pub name: String,
     pub icon: Option<String>,
+    #[ts(type = "number")]
     pub places_total: i64,
+    #[ts(type = "number")]
     pub places_verified_1y: i64,
     pub grade: i32,
 }

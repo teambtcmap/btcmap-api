@@ -76,6 +76,17 @@ case "$1" in
         rm -f /tmp/schema_gen.db
         ;;
 
+    export-ts-types)
+        # Export the ts-rs TypeScript bindings into a btcmap.org checkout
+        # (or any target directory). The frontend commits the result.
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        cd "$script_dir"
+        target="${2:-../btcmap.org/src/types/btcmap-api}"
+        mkdir -p "$target"
+        TS_RS_EXPORT_DIR="$(cd "$target" && pwd)" cargo test export_bindings \
+            && echo "exported TypeScript bindings to $target"
+        ;;
+
     install-completions)
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         
