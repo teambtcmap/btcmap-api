@@ -1,9 +1,6 @@
-# Area RPC
+# BTC Map Areas RPC
 
-Methods for managing geographic areas on BTC Map. Areas are GeoJSON polygons
-(typically countries, communities, or neighborhoods) that group together the
-map elements within their boundary. Each area has its own row in the `area`
-table and is identified by a numeric `id` or a string `url_alias` tag.
+Methods for managing geographic areas on BTC Map. Areas are GeoJSON polygons (typically countries or communities) that group together the map elements within their boundary. Each area has its own row in the `area` table and is identified by a numeric `id` or a string `url_alias` tag.
 
 - [add_area](add_area.md) - Create a new area
 - [get_area](get_area.md) - Retrieve a single area by id or alias
