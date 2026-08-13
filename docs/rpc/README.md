@@ -1,4 +1,4 @@
-# BTCMap RPC API
+# BTC Map RPC API
 
 The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) interface for interacting with BTCMap services.
 
@@ -6,8 +6,9 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 
 ## Method Categories
 
+- [Auth (STABLE)](auth.md) - Used to create and manage BTC Map accounts
+- [Events (STABLE)](event/README.md) - Event management API
 - [Public Methods](public-methods.md) - Methods for client apps to use
-- [Auth](auth.md) - Methods for admins to manage passwords.
 - [Element Methods](element-methods.md) - Methods for working with map elements
 - [Area Methods](area-methods.md) - Methods for working with geographic areas
 - [User Methods](user-methods.md) - Methods for working with user data, including the `set_user_geofence` restriction on event managers
