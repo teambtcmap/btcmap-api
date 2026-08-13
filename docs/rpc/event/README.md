@@ -1,11 +1,11 @@
 # Event RPC
 
-Methods for managing Bitcoin-related events shown on BTC Map. Most events are
+Methods for managing events distributed via BTC Map REST API. Most events are
 either conferences or recurring community meetups, pinned to a fixed location
-via `(lat, lon)` and optionally linked to an [area](../area-methods.md).
+via `(lat, lon)` and optionally linked to a particular [community](../area-methods.md).
 
 Each event has its own row in the `event` table. Deletion is soft (`deleted_at`
-is set); use `get_events` with `include_deleted` to surface tombstones, and
+is set to non-null deletion timestamp). Use `get_events` with `include_deleted` to surface tombstones, and
 `include_past` to surface events whose `starts_at` is already in the past.
 Events without a `starts_at` are treated as permanent and are always returned
 by `get_events`.
@@ -13,7 +13,7 @@ by `get_events`.
 If the calling user has a non-empty
 [geofence](../user-methods.md#set_user_geofence), `create_event`,
 `update_event`, and `delete_event` enforce that the event falls inside the
-geofence (via `area_id` or via its `(lat, lon)`). This applies equally to
+geofence. This applies equally to
 root, admin, and event manager callers.
 
 - [create_event](create_event.md) - Add a new event
