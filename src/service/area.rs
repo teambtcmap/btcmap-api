@@ -36,6 +36,7 @@ pub struct Bbox {
 // but wat if an element was moved? It could change its area set... TODO
 pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
     let area = db::main::area::queries::insert(tags, pool).await?;
+    let area = sync_bbox(&area, pool).await?;
     let area_elements =
         service::area_element::get_elements_within_geometries(area.geo_json_geometries()?, pool)
             .await?;
@@ -64,8 +65,7 @@ pub async fn patch_tags(
             affected_element_ids.insert(element.id);
         }
         let area = db::main::area::queries::patch_tags(area.id, tags, pool).await?;
-        let area =
-            db::main::area::queries::set_bbox(area.id, -180.0, -90.0, 180.0, 90.0, pool).await?;
+        let area = sync_bbox(&area, pool).await?;
         let elements_in_new_bounds = service::area_element::get_elements_within_geometries(
             area.geo_json_geometries()?,
             pool,
@@ -83,6 +83,17 @@ pub async fn patch_tags(
     } else {
         db::main::area::queries::patch_tags(area.id, tags, pool).await
     }
+}
+
+async fn sync_bbox(area: &Area, pool: &Pool) -> Result<Area> {
+    let bbox = area.geo_json()?.bbox().unwrap_or(Bbox {
+        west: -180.0,
+        south: -90.0,
+        east: 180.0,
+        north: 90.0,
+    });
+    db::main::area::queries::set_bbox(area.id, bbox.west, bbox.south, bbox.east, bbox.north, pool)
+        .await
 }
 
 pub async fn remove_tag_async(
@@ -664,6 +675,102 @@ mod test {
                 .deleted_at
                 .is_none()
         );
+        Ok(())
+    }
+
+    #[test]
+    async fn insert_should_set_bbox_from_geojson() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        );
+        let area = super::insert(tags, &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, 98.2181205776469);
+        assert_eq!(db_area.bbox_south, 7.74024270965898);
+        assert_eq!(db_area.bbox_east, 98.4806081271079);
+        assert_eq!(db_area.bbox_north, 8.20412838698085);
+        Ok(())
+    }
+
+    #[test]
+    async fn insert_should_fall_back_to_world_bbox_when_geojson_has_no_geometry() -> Result<()> {
+        let pool = pool();
+        let area = super::insert(Area::mock_tags(), &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, -180.0);
+        assert_eq!(db_area.bbox_south, -90.0);
+        assert_eq!(db_area.bbox_east, 180.0);
+        assert_eq!(db_area.bbox_north, 90.0);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_tags_should_update_bbox_for_new_geojson() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [0.0, 0.0],
+                        [0.0, 1.0],
+                        [1.0, 1.0],
+                        [1.0, 0.0],
+                        [0.0, 0.0]
+                    ]]
+                }
+            }),
+        );
+        let area = super::insert(tags, &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, 0.0);
+        assert_eq!(db_area.bbox_south, 0.0);
+        assert_eq!(db_area.bbox_east, 1.0);
+        assert_eq!(db_area.bbox_north, 1.0);
+        let mut patch_set = Map::new();
+        patch_set.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        );
+        super::patch_tags(&area.id.to_string(), patch_set, &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, 98.2181205776469);
+        assert_eq!(db_area.bbox_south, 7.74024270965898);
+        assert_eq!(db_area.bbox_east, 98.4806081271079);
+        assert_eq!(db_area.bbox_north, 8.20412838698085);
         Ok(())
     }
 
