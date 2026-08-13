@@ -10,7 +10,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 - [Events (STABLE)](event/README.md) - Event management API
 - [Public Methods](public-methods.md) - Methods for client apps to use
 - [Element Methods](element-methods.md) - Methods for working with map elements
-- [Area Methods](area-methods.md) - Methods for working with geographic areas
+- [Area Methods](area/README.md) - Methods for working with geographic areas
 - [User Methods](user-methods.md) - Methods for working with user data, including the `set_user_geofence` restriction on event managers
 - [Admin Methods](admin-methods.md) - Methods for administrative operations
 - [Log Methods](log/README.md) - Methods for log analysis and infrastructure reporting

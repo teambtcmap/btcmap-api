@@ -2,7 +2,7 @@
 
 Methods for managing events distributed via BTC Map REST API. Most events are
 either conferences or recurring community meetups, pinned to a fixed location
-via `(lat, lon)` and optionally linked to a particular [community](../area-methods.md).
+via `(lat, lon)` and optionally linked to a particular [community](../area/README.md).
 
 Each event has its own row in the `event` table. Deletion is soft (`deleted_at`
 is set to non-null deletion timestamp). Use `get_events` with `include_deleted` to surface tombstones, and
