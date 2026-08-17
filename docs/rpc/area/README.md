@@ -12,5 +12,6 @@ Methods for managing geographic areas on BTC Map. Areas are GeoJSON polygons (ty
 - [get_most_commented_countries](get_most_commented_countries.md) - Countries with the most comments in a given period
 - [get_trending_communities](get_trending_communities.md) - Communities trending in a given period
 - [generate_areas_elements_mapping](generate_areas_elements_mapping.md) - Recompute which elements belong to which areas
+- [generate_area_bboxes](generate_area_bboxes.md) - Recompute the bounding box of every area from its GeoJSON
 - [generate_reports](generate_reports.md) - Generate daily area reports
 - [get_area_dashboard](get_area_dashboard.md) - 365-day element and verification charts for an area

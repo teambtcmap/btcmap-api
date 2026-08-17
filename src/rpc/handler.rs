@@ -563,7 +563,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateAreaBboxes => RpcResponse::from(
             req.id.clone(),
-            super::area::generate_bboxes::run(&main_pool).await?,
+            super::area::generate_area_bboxes::run(&main_pool).await?,
         ),
         RpcMethod::GenerateAreaIcons => RpcResponse::from(
             req.id.clone(),

@@ -33,7 +33,6 @@ Empty params object:
 ## Allowed Roles
 
 - Root
-- Admin
 
 ## Examples
 
