@@ -56,6 +56,9 @@ pub async fn patch_tags(
     }
     let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
+        serde_json::to_string(&tags["geo_json"])?
+            .parse::<GeoJson>()
+            .map_err(|_| "invalid geo_json")?;
         let mut affected_element_ids: HashSet<i64> = HashSet::new();
         for area_element in
             db::main::area_element::queries::select_by_area_id(area.id, pool).await?
@@ -771,6 +774,37 @@ mod test {
         assert_eq!(db_area.bbox_south, 7.74024270965898);
         assert_eq!(db_area.bbox_east, 98.4806081271079);
         assert_eq!(db_area.bbox_north, 8.20412838698085);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_tags_should_reject_invalid_geojson_before_writing() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let original_geo_json = area.tags.get("geo_json").cloned();
+        let mut patch_set = Map::new();
+        patch_set.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Polygon",
+                "coordinates": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]],
+                "geometries": [{
+                    "type": "MultiPolygon",
+                    "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]
+                }]
+            }),
+        );
+        let res = super::patch_tags(&area.id.to_string(), patch_set, &pool).await;
+        assert!(
+            res.is_err(),
+            "expected patch_tags to reject malformed geo_json"
+        );
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(
+            db_area.tags.get("geo_json"),
+            original_geo_json.as_ref(),
+            "malformed geo_json must not have been written to the database",
+        );
         Ok(())
     }
 
