@@ -1,4 +1,5 @@
 use crate::db::main::element_event::schema::ElementEvent;
+use crate::db::main::user::schema::User;
 use crate::service;
 use crate::{
     db::{
@@ -121,6 +122,22 @@ pub async fn soft_delete_async(area_id_or_alias: impl Into<String>, pool: &Pool)
     let area_id_or_alias = area_id_or_alias.into();
     let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
     db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), pool).await
+}
+
+pub(crate) async fn check_geofence(user: &User, area_id_or_alias: &str, pool: &Pool) -> Result<()> {
+    if user.geofence.is_empty() {
+        return Ok(());
+    }
+    let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
+    if user.geofence.contains(&area.id) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Area {} is outside your geofence (allowed areas: {:?})",
+            area.id, user.geofence
+        )
+        .into())
+    }
 }
 
 pub async fn find_areas_by_lat_lon(lat: f64, lon: f64, pool: &Pool) -> Result<Vec<Area>> {
@@ -451,6 +468,7 @@ where
 mod test {
     use crate::db::main::area::schema::Area;
     use crate::db::main::test::pool;
+    use crate::db::main::user::schema::{Role, User};
     use crate::service::overpass::OverpassElement;
     use crate::{db, Result};
     use actix_web::test;
@@ -991,6 +1009,97 @@ mod test {
         .await?;
         let hits = super::find_areas_by_lat_lon(0.0, 0.0, &pool).await?;
         assert!(hits.is_empty());
+        Ok(())
+    }
+
+    const PHUKET: &str = r#"{
+        "type":"Feature",
+        "properties":{},
+        "geometry":{
+            "type":"Polygon",
+            "coordinates":[[
+                [98.2181205776469, 8.20412838698085],
+                [98.2181205776469, 7.74024270965898],
+                [98.4806081271079, 7.74024270965898],
+                [98.4806081271079, 8.20412838698085],
+                [98.2181205776469, 8.20412838698085]
+            ]]
+        }
+    }"#;
+
+    const LONDON: &str = r#"{
+        "type":"Feature",
+        "properties":{},
+        "geometry":{
+            "type":"Polygon",
+            "coordinates":[[
+                [-0.2, 51.45],
+                [-0.2, 51.55],
+                [ 0.0, 51.55],
+                [ 0.0, 51.45],
+                [-0.2, 51.45]
+            ]]
+        }
+    }"#;
+
+    async fn insert_area(
+        name: &str,
+        geo_json: serde_json::Value,
+        pool: &deadpool_sqlite::Pool,
+    ) -> Result<Area> {
+        let mut tags = Map::new();
+        tags.insert("name".into(), json!(name));
+        tags.insert("geo_json".into(), geo_json);
+        tags.insert("url_alias".into(), json!(name));
+        db::main::area::queries::insert(tags, pool).await
+    }
+
+    fn area_manager(geofence: Vec<i64>) -> User {
+        User {
+            id: 1,
+            name: "am".into(),
+            password: String::new(),
+            roles: vec![Role::AreaManager],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
+            geofence,
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    async fn check_geofence_with_empty_geofence_allows_any_area() -> Result<()> {
+        let pool = pool();
+        let user = area_manager(vec![]);
+        super::check_geofence(&user, "9999", &pool).await?;
+        Ok(())
+    }
+
+    #[test]
+    async fn check_geofence_with_geofence_allows_listed_area() -> Result<()> {
+        let pool = pool();
+        let phuket = insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+        let user = area_manager(vec![phuket.id]);
+        super::check_geofence(&user, "phuket", &pool).await?;
+        super::check_geofence(&user, &phuket.id.to_string(), &pool).await?;
+        Ok(())
+    }
+
+    #[test]
+    async fn check_geofence_with_geofence_rejects_unlisted_area() -> Result<()> {
+        let pool = pool();
+        let phuket = insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+        let london = insert_area("london", serde_json::from_str(LONDON).unwrap(), &pool).await?;
+        let user = area_manager(vec![phuket.id]);
+        let err = match super::check_geofence(&user, "london", &pool).await {
+            Ok(_) => panic!("expected geofence violation"),
+            Err(e) => e,
+        };
+        assert!(err.to_string().contains("outside your geofence"));
+        assert!(london.id != phuket.id);
         Ok(())
     }
 }

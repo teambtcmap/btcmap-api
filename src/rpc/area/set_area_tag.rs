@@ -1,5 +1,5 @@
 use crate::{
-    db::main::area::schema::Area,
+    db::{main::area::schema::Area, main::user::schema::User},
     service::{self},
     Result,
 };
@@ -39,7 +39,8 @@ impl From<Area> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
+    service::area::check_geofence(user, &params.id, pool).await?;
     let patch_set = Map::from_iter([(params.name.clone(), params.value.clone())]);
     service::area::patch_tags(&params.id, patch_set, pool)
         .await

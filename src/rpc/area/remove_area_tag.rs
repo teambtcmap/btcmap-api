@@ -1,5 +1,5 @@
 use crate::{
-    db::main::area::schema::Area,
+    db::{main::area::schema::Area, main::user::schema::User},
     service::{self},
     Result,
 };
@@ -38,7 +38,8 @@ impl From<Area> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
+    service::area::check_geofence(user, &params.id, pool).await?;
     service::area::remove_tag_async(params.id, &params.tag, pool)
         .await
         .map(Into::into)

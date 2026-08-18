@@ -1,4 +1,4 @@
-use crate::db::main::area::schema::Area;
+use crate::db::main::{area::schema::Area, user::schema::User};
 use crate::{service, Result};
 use deadpool_sqlite::Pool;
 use geojson::JsonObject;
@@ -34,7 +34,8 @@ impl From<Area> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
+    service::area::check_geofence(user, &params.id, pool).await?;
     service::area::soft_delete_async(params.id, pool)
         .await
         .map(Into::into)
@@ -42,85 +43,109 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
 
 #[cfg(test)]
 mod test {
-    use crate::Result;
-    use actix_web::test;
+    use super::run;
+    use crate::{
+        db::{
+            self,
+            main::test::pool,
+            main::user::schema::{Role, User},
+        },
+        Result,
+    };
+    use serde_json::{json, Map};
 
-    #[test]
-    async fn should_return_401_if_unauthorized() -> Result<()> {
-        //let state = mock_state().await;
-        //let url_alias = "test";
-        //let mut tags = Map::new();
-        //tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        //Area::insert(GeoJson::Feature(Feature::default()), tags, &state.conn)?;
-        //let app = test::init_service(
-        //    App::new()
-        //        .app_data(Data::from(state.pool))
-        //        .service(super::delete),
-        //)
-        //.await;
-        //let req = TestRequest::delete()
-        //    .uri(&format!("/{url_alias}"))
-        //    .to_request();
-        //let res = test::call_service(&app, req).await;
-        //assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-        Ok(())
+    fn am_user(geofence: Vec<i64>) -> User {
+        User {
+            id: 1,
+            name: "am".into(),
+            password: String::new(),
+            roles: vec![Role::AreaManager],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
+            geofence,
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+        }
+    }
+
+    async fn seed_area(pool: &deadpool_sqlite::Pool, alias: &str) -> Result<i64> {
+        let mut tags = Map::new();
+        tags.insert("geo_json".into(), json!({"type":"Polygon","coordinates":[[[0.0,0.0],[0.0,1.0],[1.0,1.0],[1.0,0.0],[0.0,0.0]]]}));
+        tags.insert("url_alias".into(), json!(alias));
+        tags.insert("name".into(), json!(alias));
+        Ok(db::main::area::queries::insert(tags, pool).await?.id)
     }
 
     #[test]
-    async fn delete_should_soft_delete_area() -> Result<()> {
-        //let state = mock_state().await;
-        //let admin_password = admin::service::mock_admin("test", &state.pool)
-        //    .await
-        //    .password;
-        //let url_alias = "test";
-        //let mut tags = Map::new();
-        //tags.insert("url_alias".into(), Value::String(url_alias.into()));
-        //Area::insert(
-        //    GeoJson::from_json_value(phuket_geo_json()).unwrap(),
-        //    tags,
-        //    &state.conn,
-        //)?;
-        //let area_element = Element::insert(
-        //    &OverpassElement {
-        //        lat: Some(7.979623499157051),
-        //        lon: Some(98.33448362485439),
-        //        ..OverpassElement::mock(1)
-        //    },
-        //    &state.conn,
-        //)?;
-        //let area_element = Element::set_tag(
-        //    area_element.id,
-        //    "areas",
-        //    &json!([{"name":"test"}]),
-        //    &state.conn,
-        //)?;
-        //assert!(
-        //    area_element
-        //        .tags
-        //        .get("areas")
-        //        .unwrap()
-        //        .as_array()
-        //        .unwrap()
-        //        .len()
-        //        == 1
-        //);
-        //let app = test::init_service(
-        //    App::new()
-        //        .app_data(Data::from(state.pool))
-        //        .service(super::delete),
-        //)
-        //.await;
-        //let req = TestRequest::delete()
-        //    .uri(&format!("/{url_alias}"))
-        //    .append_header(("Authorization", format!("Bearer {admin_password}")))
-        //    .to_request();
-        //let res = test::call_service(&app, req).await;
-        //assert_eq!(res.status(), StatusCode::OK);
-        //let area: Option<Area> = Area::select_by_alias(&url_alias, &state.conn)?;
-        //assert!(area.is_some());
-        //assert!(area.unwrap().deleted_at.is_some());
-        //let area_element = Area::select_by_id(1, &state.conn)?.unwrap();
-        //assert!(area_element.tags.get("areas").is_none());
-        Ok(())
+    fn area_manager_with_empty_geofence_can_delete_anywhere() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let area_id = seed_area(&pool, "anywhere").await?;
+            let user = am_user(vec![]);
+            let res = run(
+                super::Params {
+                    id: area_id.to_string(),
+                },
+                &user,
+                &pool,
+            )
+            .await?;
+            assert_eq!(res.id, area_id);
+            Ok::<(), crate::Error>(())
+        })
+    }
+
+    #[test]
+    fn area_manager_with_geofence_can_delete_fenced_area() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let area_id = seed_area(&pool, "fenced").await?;
+            let user = am_user(vec![area_id]);
+            let res = run(
+                super::Params {
+                    id: area_id.to_string(),
+                },
+                &user,
+                &pool,
+            )
+            .await?;
+            assert_eq!(res.id, area_id);
+            Ok::<(), crate::Error>(())
+        })
+    }
+
+    #[test]
+    fn area_manager_with_geofence_cannot_delete_unfenced_area() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let fenced = seed_area(&pool, "fenced").await?;
+            let other = seed_area(&pool, "other").await?;
+            let user = am_user(vec![fenced]);
+            let err = match run(
+                super::Params {
+                    id: other.to_string(),
+                },
+                &user,
+                &pool,
+            )
+            .await
+            {
+                Ok(_) => panic!("expected geofence violation"),
+                Err(e) => e,
+            };
+            assert!(err.to_string().contains("outside your geofence"));
+            Ok::<(), crate::Error>(())
+        })
     }
 }

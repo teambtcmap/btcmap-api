@@ -1,6 +1,6 @@
 use crate::{
-    db::{self, image::ImagePool, main::area::schema::Area},
-    Error, Result,
+    db::{self, image::ImagePool, main::area::schema::Area, main::user::schema::User},
+    service, Error, Result,
 };
 use base64::prelude::*;
 use deadpool_sqlite::Pool;
@@ -42,7 +42,8 @@ impl From<Area> for Res {
     }
 }
 
-pub async fn run(params: Params, pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
+pub async fn run(params: Params, user: &User, pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
+    service::area::check_geofence(user, &params.area_id, pool).await?;
     let area = db::main::area::queries::select_by_id_or_alias(&params.area_id, pool).await?;
     let image_type = params.image_type.as_deref().unwrap_or("square");
     let bytes = BASE64_STANDARD.decode(params.image_base64)?;

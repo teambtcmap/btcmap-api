@@ -26,7 +26,7 @@ pub struct RpcRequest {
     pub id: Value,
 }
 
-#[derive(Deserialize, PartialEq, Eq, VariantArray, Hash, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq, VariantArray, Hash, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
     // auth
@@ -215,6 +215,16 @@ impl Role {
         RpcMethod::Search,
     ];
 
+    const AREA_MANAGER_METHODS: &[RpcMethod] = &[
+        RpcMethod::AddArea,
+        RpcMethod::GetArea,
+        RpcMethod::SetAreaTag,
+        RpcMethod::RemoveAreaTag,
+        RpcMethod::SetAreaImage,
+        RpcMethod::RemoveArea,
+        RpcMethod::Search,
+    ];
+
     const DASHBOARD_METHODS: &[RpcMethod] = &[RpcMethod::Dashboard];
 
     fn allowed_methods(&self) -> Vec<RpcMethod> {
@@ -238,6 +248,11 @@ impl Role {
             Role::EventManager => Self::AUTHORIZED_METHODS
                 .iter()
                 .chain(Self::EVENT_MANAGER_METHODS.iter())
+                .cloned()
+                .collect(),
+            Role::AreaManager => Self::AUTHORIZED_METHODS
+                .iter()
+                .chain(Self::AREA_MANAGER_METHODS.iter())
                 .cloned()
                 .collect(),
             Role::Dashboard => Self::AUTHORIZED_METHODS
@@ -499,7 +514,7 @@ pub async fn handle(
         // area
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
-            super::area::add_area::run(params(req.params)?, &main_pool).await?,
+            super::area::add_area::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::GetArea => RpcResponse::from(
             req.id.clone(),
@@ -507,19 +522,26 @@ pub async fn handle(
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::area::set_area_tag::run(params(req.params)?, &main_pool).await?,
+            super::area::set_area_tag::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::area::remove_area_tag::run(params(req.params)?, &main_pool).await?,
+            super::area::remove_area_tag::run(params(req.params)?, user.unwrap(), &main_pool)
+                .await?,
         ),
         RpcMethod::SetAreaImage => RpcResponse::from(
             req.id.clone(),
-            super::area::set_area_image::run(params(req.params)?, &main_pool, &image_pool).await?,
+            super::area::set_area_image::run(
+                params(req.params)?,
+                user.unwrap(),
+                &main_pool,
+                &image_pool,
+            )
+            .await?,
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
-            super::area::remove_area::run(params(req.params)?, &main_pool).await?,
+            super::area::remove_area::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
@@ -1335,6 +1357,145 @@ mod test {
         assert_eq!(list.as_array().unwrap().len(), 1);
         assert!(list[0]["deleted_at"].is_string());
 
+        Ok(())
+    }
+
+    #[test]
+    async fn area_manager_permissions() -> Result<()> {
+        use std::collections::HashSet;
+        let methods: HashSet<RpcMethod> = Role::AreaManager.allowed_methods().into_iter().collect();
+        for method in [
+            RpcMethod::AddArea,
+            RpcMethod::GetArea,
+            RpcMethod::SetAreaTag,
+            RpcMethod::RemoveAreaTag,
+            RpcMethod::SetAreaImage,
+            RpcMethod::RemoveArea,
+            RpcMethod::Search,
+            // Auth-related methods every authorized role gets
+            RpcMethod::Whoami,
+            RpcMethod::ChangePassword,
+            RpcMethod::GetApiKeys,
+            RpcMethod::RevokeApiKey,
+            RpcMethod::Signout,
+        ] {
+            assert!(
+                methods.contains(&method),
+                "AreaManager should be able to call {method:?}"
+            );
+        }
+        for method in [
+            RpcMethod::SetElementTag,
+            RpcMethod::AddElementComment,
+            RpcMethod::GetWallets,
+            RpcMethod::SyncElements,
+            RpcMethod::CreateEvent,
+            RpcMethod::SetUserTag,
+            RpcMethod::SetUserGeofence,
+        ] {
+            assert!(
+                !methods.contains(&method),
+                "AreaManager should NOT be able to call {method:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn area_manager_can_call_add_area_with_no_geofence() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("alice", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::AreaManager],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "add_area",
+                "params": {
+                    "tags": {
+                        "name": "wonderland",
+                        "url_alias": "wonderland",
+                        "geo_json": {
+                            "type": "Polygon",
+                            "coordinates": [[[1.0, 1.0], [1.0, 2.0], [2.0, 2.0], [2.0, 1.0], [1.0, 1.0]]]
+                        }
+                    }
+                },
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert!(
+            res.error.is_none(),
+            "area_manager should be able to call add_area with no geofence; got {:?}",
+            res.error
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn area_manager_cannot_call_admin_only_method() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("alice", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::AreaManager],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "set_user_geofence",
+                "params": {"user_name": "bob", "geofence": []},
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert!(
+            res.error.is_some(),
+            "set_user_geofence should be rejected for area_manager"
+        );
         Ok(())
     }
 }
