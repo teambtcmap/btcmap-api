@@ -6,34 +6,8 @@
 
 ### Prerequisites
 
-1. **Install Rust** via [rustup](https://rust-lang.org/tools/install/):
-
-   ```
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
-
-   The project pins its Rust version in `rust-toolchain.toml` — rustup will automatically install and use the correct version.
-
-2. **Create the data directory** for the SQLite databases:
-
-   ```
-   mkdir -p ~/.local/share/btcmap
-   ```
-
-3. **Install sqlite3_rsync** (needed to fetch the production database):
-
-   ```
-   # macOS
-   brew install sqlite-rsync
-   ```
-
-4. **Configure SSH access** to the production server (needed for fetching data). Add to `~/.ssh/config`:
-
-   ```
-   Host btcmap-api
-     User root
-     Hostname <server-ip>
-   ```
+1. Linux or MacOS
+1. Standard Rust development environment
 
 ### Build
 
@@ -46,16 +20,6 @@ cargo build
 ```
 cargo test
 ```
-
-### Fetch Production Data
-
-The API needs a database to serve data. Fetch a copy of the production database:
-
-```
-./devtools fetch-main-db
-```
-
-This uses `sqlite3_rsync` to sync the main database from the production server.
 
 ### Run
 
