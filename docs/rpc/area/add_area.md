@@ -17,6 +17,13 @@ Common optional tags include `name` (display name) and `type` (`country`,
 `community`, `neighborhood`, etc.). `type` is also used by the
 [trending methods](get_trending_countries.md) to filter areas.
 
+## Restrictions
+
+Users with a non-empty geofence are blocked from creating new areas. If an
+area manager has been assigned a geofence, they must ask an admin to add new
+areas on their behalf. The handler rejects the call with the message
+`Cannot add new areas when your geofence is set (allowed areas: {...})`.
+
 ## Params
 
 ```json
@@ -77,6 +84,7 @@ Common optional tags include `name` (display name) and `type` (`country`,
 
 - Root
 - Admin
+- AreaManager (only when the caller has no geofence set)
 
 ## Examples
 
