@@ -82,11 +82,23 @@ areas on their behalf. The handler rejects the call with the message
 
 ## Allowed Roles
 
-- Root
-- Admin
-- AreaManager (only when the caller has no geofence set)
+- `root`
+- `admin`
+- `area_manager` (only when the caller has no geofence set)
 
 ## Examples
+
+### btcmap-cli
+
+```bash
+btcmap-cli area add \
+  --alias bangkok \
+  --geojson '{"type":"Polygon","coordinates":[[[100.49,13.75],[100.49,13.78],[100.52,13.78],[100.52,13.75],[100.49,13.75]]]}'
+```
+
+The CLI sets `url_alias` from `--alias`, mirrors it into the `name` tag, and
+forwards `--geojson` verbatim into the `geo_json` tag. The `type` tag can be
+set afterwards via `btcmap-cli area set-area-tag bangkok type '"community"'`.
 
 ### curl
 
