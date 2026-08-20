@@ -553,7 +553,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateAreasElementsMapping => RpcResponse::from(
             req.id.clone(),
-            super::generate_areas_elements_mapping::run(&main_pool).await?,
+            super::area::generate_areas_elements_mapping::run(&main_pool).await?,
         ),
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),

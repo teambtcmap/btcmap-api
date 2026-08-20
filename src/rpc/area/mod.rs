@@ -1,5 +1,6 @@
 pub mod add_area;
 pub mod generate_area_bboxes;
+pub mod generate_areas_elements_mapping;
 pub mod get_area;
 pub mod remove_area;
 pub mod remove_area_tag;
