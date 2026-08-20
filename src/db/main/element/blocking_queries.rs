@@ -192,7 +192,7 @@ pub fn select_with_opening_hours_without_humanization_by_area(
             FROM {table}
             INNER JOIN {area_element_table} ae ON ae.element_id = {table}.id AND ae.area_id = ?1 AND ae.deleted_at IS NULL
             WHERE json_extract({table}.{overpass_data}, '$.tags.opening_hours') IS NOT NULL
-            AND json_extract({table}.{tags}, '$.opening_hours:en:human_readable') IS NULL
+            AND json_extract({table}.{tags}, '$.opening_hours:en:humanized') IS NULL
             AND {table}.{deleted_at} IS NULL
             ORDER BY RANDOM()
             LIMIT ?2
@@ -210,6 +210,36 @@ pub fn select_with_opening_hours_without_humanization_by_area(
     );
     conn.prepare(&sql)?
         .query_map(params![area_id, limit], Element::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_active_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<Element>> {
+    let table = schema::TABLE_NAME;
+    let sql = format!(
+        r#"
+            SELECT {table}.{id}, {table}.{overpass_data}, {table}.{tags}, {table}.{lat}, {table}.{lon}, {table}.{created_at}, {table}.{updated_at}, {table}.{deleted_at}
+            FROM {table}
+            INNER JOIN {area_element_table} ae
+              ON ae.element_id = {table}.id
+             AND ae.area_id = ?1
+             AND ae.deleted_at IS NULL
+            WHERE {table}.{deleted_at} IS NULL
+            ORDER BY {table}.{updated_at}, {table}.{id}
+        "#,
+        table = table,
+        id = Columns::Id.as_ref(),
+        overpass_data = Columns::OverpassData.as_ref(),
+        tags = Columns::Tags.as_ref(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        deleted_at = Columns::DeletedAt.as_ref(),
+        area_element_table = area_element_schema::TABLE_NAME,
+    );
+    conn.prepare(&sql)?
+        .query_map(params![area_id], Element::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
@@ -749,6 +779,77 @@ mod test {
                 &conn,
             )?
         );
+        Ok(())
+    }
+
+    #[test]
+    fn select_active_by_area_id() -> Result<()> {
+        let conn = conn();
+        // area_element has FK on area_id and element_id; bypass so the test can
+        // exercise the JOIN without seeding real areas.
+        conn.pragma_update(None, "foreign_keys", false)?;
+
+        let area_1_active = super::insert(&OverpassElement::mock(1), &conn)?;
+        let area_1_dropped_link = super::insert(&OverpassElement::mock(2), &conn)?;
+        let area_1_deleted_element = super::insert(&OverpassElement::mock(3), &conn)?;
+        let area_2_element = super::insert(&OverpassElement::mock(4), &conn)?;
+        let unlinked_element = super::insert(&OverpassElement::mock(5), &conn)?;
+
+        let ae_active =
+            crate::db::main::area_element::blocking_queries::insert(1, area_1_active.id, &conn)?;
+        let ae_dropped = crate::db::main::area_element::blocking_queries::insert(
+            1,
+            area_1_dropped_link.id,
+            &conn,
+        )?;
+        let _ae_deleted_element = crate::db::main::area_element::blocking_queries::insert(
+            1,
+            area_1_deleted_element.id,
+            &conn,
+        )?;
+        let _ae_other_area =
+            crate::db::main::area_element::blocking_queries::insert(2, area_2_element.id, &conn)?;
+        // No area_element for unlinked_element.
+
+        // Soft-delete the dropped link; the underlying element is still alive.
+        crate::db::main::area_element::blocking_queries::set_deleted_at(
+            ae_dropped.id,
+            Some(&OffsetDateTime::now_utc()),
+            &conn,
+        )?;
+
+        // Soft-delete the element whose link itself is still alive; this is the
+        // exact "ae deleted, e alive" and "ae alive, e deleted" pair that the
+        // report previously miscounted.
+        super::set_deleted_at(
+            area_1_deleted_element.id,
+            Some(OffsetDateTime::now_utc()),
+            &conn,
+        )?;
+
+        let results = super::select_active_by_area_id(1, &conn)?;
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, area_1_active.id);
+
+        let results = super::select_active_by_area_id(2, &conn)?;
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, area_2_element.id);
+
+        // Unused area returns nothing.
+        assert!(super::select_active_by_area_id(99, &conn)?.is_empty());
+
+        // Touch ae_active so it isn't dropped by an "unused variable" lint.
+        assert!(ae_active.deleted_at.is_none());
+
+        // unlinked_element sanity: it really is unlinked.
+        assert!(
+            crate::db::main::area_element::blocking_queries::select_by_element_id(
+                unlinked_element.id,
+                &conn
+            )?
+            .is_empty()
+        );
+
         Ok(())
     }
 

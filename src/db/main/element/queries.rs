@@ -96,6 +96,13 @@ pub async fn select_with_opening_hours_without_humanization_by_area(
         .await?
 }
 
+pub async fn select_active_by_area_id(area_id: i64, pool: &Pool) -> Result<Vec<Element>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_active_by_area_id(area_id, conn))
+        .await?
+}
+
 pub async fn select_by_id_or_osm_id(id: impl Into<String>, pool: &Pool) -> Result<Element> {
     let id = id.into();
     pool.get()
