@@ -332,6 +332,9 @@ pub async fn get_comments(
     let area_elements = db::main::area_element::queries::select_by_area_id(area.id, pool).await?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
+        if area_element.deleted_at.is_some() {
+            continue;
+        }
         for comment in db::main::element_comment::queries::select_by_element_id(
             area_element.element_id,
             include_deleted,
@@ -473,6 +476,7 @@ mod test {
     use crate::{db, Result};
     use actix_web::test;
     use serde_json::{json, Map};
+    use time::OffsetDateTime;
 
     #[test]
     async fn insert() -> Result<()> {
@@ -872,6 +876,35 @@ mod test {
             Some(&comment),
             super::get_comments(&area, false, &pool).await?.first()
         );
+        Ok(())
+    }
+
+    #[test]
+    async fn get_comments_skips_soft_deleted_area_elements() -> Result<()> {
+        let pool = pool();
+        let linked = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let unlinked = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let linked_comment =
+            db::main::element_comment::queries::insert(linked.id, "kept", &pool).await?;
+        let _unlinked_comment =
+            db::main::element_comment::queries::insert(unlinked.id, "hidden", &pool).await?;
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let linked_ae = db::main::area_element::queries::insert(area.id, linked.id, &pool).await?;
+        let _unlinked_ae =
+            db::main::area_element::queries::insert(area.id, unlinked.id, &pool).await?;
+        db::main::area_element::queries::set_deleted_at(
+            _unlinked_ae.id,
+            Some(OffsetDateTime::now_utc()),
+            &pool,
+        )
+        .await?;
+        // Silence the unused-variable warning while keeping the binding that
+        // documents intent.
+        let _ = linked_ae;
+
+        let comments = super::get_comments(&area, false, &pool).await?;
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, linked_comment.id);
         Ok(())
     }
 
