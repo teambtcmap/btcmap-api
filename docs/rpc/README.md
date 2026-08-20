@@ -6,7 +6,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 
 - [Auth (STABLE)](auth.md) - Used to create and manage BTC Map accounts
 - [Events (STABLE)](event/README.md) - Event management API
-- [Area Methods (WIP)](area/README.md) - Methods for working with community and country data
+- [Areas (WIP)](area/README.md) - Manage community and country data
 - [Public Methods](public-methods.md) - Methods for client apps to use
 - [Element Methods](element-methods.md) - Methods for working with map elements
 - [User Methods](user-methods.md) - Methods for working with user data, including the `set_user_geofence` restriction on event managers
