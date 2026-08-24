@@ -46,8 +46,9 @@ Retrieves a single area by its numeric `id` or its `url_alias` tag.
 
 ## Allowed Roles
 
-- Root
-- Admin
+- `root`
+- `admin`
+- `area_manager`
 
 ## Examples
 
