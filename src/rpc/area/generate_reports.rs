@@ -22,10 +22,11 @@ pub struct Res {
 pub async fn run(pool: &Pool) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
     let res = generate_reports(pool).await?;
+    let finished_at = OffsetDateTime::now_utc();
     Ok(Res {
-        started_at: OffsetDateTime::now_utc(),
-        finished_at: OffsetDateTime::now_utc(),
-        time_s: (OffsetDateTime::now_utc() - started_at).as_seconds_f64(),
+        started_at,
+        finished_at,
+        time_s: (finished_at - started_at).as_seconds_f64(),
         new_reports: res as i64,
     })
 }
