@@ -557,7 +557,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),
-            super::generate_reports::run(&main_pool).await?,
+            super::area::generate_reports::run(&main_pool).await?,
         ),
         RpcMethod::GetAreaDashboard => RpcResponse::from(
             req.id.clone(),
