@@ -4,11 +4,11 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 
 ## Methods
 
-- [submit_place](submit_place.md): Adds new places to the map, or patches an existing one if `(origin, external_id)` is resubmitted.
-- [report_place](report_place.md): Submits a typed problem report against an existing place (e.g. outdated entry, missing payment method).
-- [get_submitted_place](get_submitted_place.md): Fetch previous submission details.
-- [revoke_submitted_place](revoke_submitted_place.md): Cancels a pending import or reports that a place no longer accepts Bitcoin.
 - [get_place_import_origins](get_place_import_origins.md): Lists the import origins configured on the server.
+- [get_submitted_place](get_submitted_place.md): Fetch previous submission details.
+- [report_place](report_place.md): Submits a typed problem report against an existing place (e.g. outdated entry, missing payment method).
+- [revoke_submitted_place](revoke_submitted_place.md): Cancels a pending import or reports that a place no longer accepts Bitcoin.
+- [submit_place](submit_place.md): Adds new places to the map, or patches an existing one if `(origin, external_id)` is resubmitted.
 
 ## Authentication
 
