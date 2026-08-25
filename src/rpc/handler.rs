@@ -89,6 +89,7 @@ pub enum RpcMethod {
     DeleteEvent,
     // Import
     SubmitPlace,
+    ReportPlace,
     GetSubmittedPlace,
     RevokeSubmittedPlace,
     SyncSubmittedPlaces,
@@ -170,6 +171,8 @@ impl Role {
         RpcMethod::DeleteEvent,
         // Admins can import places
         RpcMethod::SubmitPlace,
+        // Admins can submit place reports
+        RpcMethod::ReportPlace,
         // Admins can revoke imported places
         RpcMethod::RevokeSubmittedPlace,
         // Admins can query place submissions by id
@@ -202,6 +205,7 @@ impl Role {
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
         RpcMethod::SubmitPlace,
+        RpcMethod::ReportPlace,
         RpcMethod::RevokeSubmittedPlace,
         RpcMethod::GetSubmittedPlace,
     ];
@@ -663,6 +667,15 @@ pub async fn handle(
             RpcResponse::from(
                 req.id.clone(),
                 super::import::submit_place::run(params, &main_pool).await?,
+            )
+        }
+        RpcMethod::ReportPlace => {
+            let params: super::import::report_place::Params = params(req.params)?;
+            let token = &auth_token.as_ref().unwrap().0;
+            super::import::ensure_can_access_origin(effective_roles, token, &params.origin)?;
+            RpcResponse::from(
+                req.id.clone(),
+                super::import::report_place::run(params, &main_pool).await?,
             )
         }
         RpcMethod::GetSubmittedPlace => {

@@ -171,6 +171,18 @@ CREATE TABLE place_submission(
     closed_at TEXT,
     deleted_at TEXT
 ) STRICT;
+CREATE TABLE place_report(
+    id INTEGER PRIMARY KEY NOT NULL,
+    place_id INTEGER NOT NULL REFERENCES element(id),
+    origin_id INTEGER NOT NULL REFERENCES place_import_origin(id),
+    type TEXT NOT NULL,
+    extra_fields TEXT NOT NULL DEFAULT (json_object()),
+    ticket_url TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    closed_at TEXT,
+    deleted_at TEXT
+) STRICT;
 CREATE TRIGGER report_updated_at UPDATE OF area_id, date, tags, created_at, deleted_at ON report
 BEGIN
     UPDATE report SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -215,6 +227,10 @@ CREATE TRIGGER place_submission_updated_at UPDATE OF origin, external_id, lat, l
 BEGIN
     UPDATE place_submission SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
+CREATE TRIGGER place_report_updated_at UPDATE OF place_id, origin_id, type, extra_fields, ticket_url, created_at, closed_at, deleted_at ON place_report
+BEGIN
+    UPDATE place_report SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
 CREATE TRIGGER element_updated_at UPDATE OF overpass_data, tags, lat, lon, created_at, deleted_at ON element
 BEGIN
     UPDATE element SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -256,6 +272,7 @@ CREATE INDEX idx_area_bbox_south ON area(bbox_south);
 CREATE INDEX idx_area_bbox_east ON area(bbox_east);
 CREATE INDEX idx_area_bbox_north ON area(bbox_north);
 CREATE UNIQUE INDEX place_submission_origin_external_id ON place_submission(origin, external_id);
+CREATE INDEX place_report_place_id ON place_report(place_id);
 CREATE INDEX element_lat_lon ON element(lat, lon);
 CREATE INDEX place_submission_lat_lon ON place_submission(lat, lon);
 CREATE INDEX element_deleted_at ON element(deleted_at);
