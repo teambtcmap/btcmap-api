@@ -565,7 +565,7 @@ pub async fn handle(
         ),
         RpcMethod::GetAreaDashboard => RpcResponse::from(
             req.id.clone(),
-            super::get_area_dashboard::run(params(req.params)?, &main_pool).await?,
+            super::area::get_area_dashboard::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetUserActivity => RpcResponse::from(
             req.id.clone(),
