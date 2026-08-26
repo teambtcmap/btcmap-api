@@ -210,6 +210,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::place_issues::get)
                             .service(rest::v4::place_issues::get_by_id),
                     )
+                    .service(scope("place-submissions").service(rest::v4::place_submissions::get))
                     .service(
                         scope("place-comments")
                             .service(rest::v4::place_comments::get)

@@ -70,6 +70,31 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         .map_err(Into::into)
 }
 
+pub fn select_open_and_not_revoked_by_origin(
+    origin: &str,
+    conn: &Connection,
+) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {closed_at} IS NULL AND {revoked} = 0 AND {origin} = ?1
+            ORDER BY {updated_at} DESC, {id} DESC
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        closed_at = Columns::ClosedAt.as_ref(),
+        revoked = Columns::Revoked.as_ref(),
+        origin = Columns::Origin.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![origin], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_origin_counts_since(
     since: OffsetDateTime,
     conn: &Connection,
