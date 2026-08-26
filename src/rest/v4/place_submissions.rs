@@ -60,7 +60,7 @@ impl From<PlaceSubmission> for Item {
             category: val.category,
             name: val.name,
             extra_fields: val.extra_fields,
-            ticket_url: val.ticket_url,
+            ticket_url: val.ticket_url.map(humanize_ticket_url),
             revoked: val.revoked,
             created_at: val.created_at,
             updated_at: val.updated_at,
@@ -68,6 +68,10 @@ impl From<PlaceSubmission> for Item {
             deleted_at: val.deleted_at,
         }
     }
+}
+
+fn humanize_ticket_url(url: String) -> String {
+    url.replacen("/api/v1/repos", "", 1)
 }
 
 impl From<PlaceSubmission> for Json<Item> {
@@ -218,5 +222,68 @@ mod test {
         assert!(res.is_empty());
 
         Ok(())
+    }
+
+    #[test]
+    async fn get_rewrites_ticket_url_to_web_link() -> Result<()> {
+        let pool = pool();
+        let args = InsertArgs {
+            origin: "square".to_string(),
+            external_id: "url-rewrite".to_string(),
+            lat: 1.23,
+            lon: 4.56,
+            category: "cafe".to_string(),
+            name: "URL rewrite probe".to_string(),
+            extra_fields: Map::new(),
+        };
+        let submission = db::main::place_submission::queries::insert(args, &pool).await?;
+        let api_url = "https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/42";
+        db::main::place_submission::queries::set_ticket_url(
+            submission.id,
+            api_url.to_string(),
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+
+        assert_eq!(
+            "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/42",
+            res[0]["ticket_url"].as_str().unwrap(),
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn humanize_ticket_url_strips_api_prefix() {
+        assert_eq!(
+            "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/1",
+            super::humanize_ticket_url(
+                "https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/1".to_string(),
+            ),
+        );
+    }
+
+    #[test]
+    async fn humanize_ticket_url_leaves_non_gitea_urls_alone() {
+        let url = "https://example.com/issue/123".to_string();
+        assert_eq!(url.clone(), super::humanize_ticket_url(url));
+    }
+
+    #[test]
+    async fn humanize_ticket_url_strips_only_first_occurrence() {
+        assert_eq!(
+            "https://gitea.btcmap.org/foo/api/v1/repos/bar",
+            super::humanize_ticket_url(
+                "https://gitea.btcmap.org/api/v1/repos/foo/api/v1/repos/bar".to_string(),
+            ),
+        );
     }
 }

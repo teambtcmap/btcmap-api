@@ -37,7 +37,7 @@ Returns the list of place submissions that are not closed and not revoked, order
       "icon_url": "https://square-web-production-f.squarecdn.com/files/.../original.jpeg",
       "last_updated": "2026-08-25T02:25:48.649336835Z"
     },
-    "ticket_url": "https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/24272",
+    "ticket_url": "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/24272",
     "revoked": false,
     "created_at": "2026-08-25T02:25:35.917Z",
     "updated_at": "2026-08-25T02:35:01.334Z"
@@ -55,7 +55,7 @@ Returns the list of place submissions that are not closed and not revoked, order
 | `category`      | String              | OSM-style category for the place (e.g. `cafe`, `restaurant`, `bar_club_lounge`).                             |
 | `name`          | String              | Display name of the proposed place.                                                                          |
 | `extra_fields`  | Object (string→any) | Free-form, source-specific metadata (address, opening hours, icon URL, etc.).                              |
-| `ticket_url`    | String or null      | URL of the review ticket (e.g. Gitea issue) tracking the submission, or `null` if no ticket has been created. |
+| `ticket_url`    | String or null      | Human-readable URL of the review ticket (e.g. the Gitea issue page) tracking the submission, or `null` if no ticket has been created. Internally the DB stores the Gitea API URL (`…/api/v1/repos/owner/repo/issues/N`); the `/api/v1/repos` segment is stripped on the way out so clients receive a link that opens the issue page in a browser. |
 | `revoked`       | Boolean             | `true` if the source has retracted the submission. The endpoint never returns revoked rows.                  |
 | `created_at`    | ISO 8601 datetime   | When the submission was first received.                                                                      |
 | `updated_at`    | ISO 8601 datetime   | When the submission was last updated.                                                                        |
