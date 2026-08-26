@@ -50,7 +50,6 @@ If no report exists for the area yet, the call fails with a server error.
 ## Allowed Roles
 
 - Root
-- Admin
 
 ## Examples
 
