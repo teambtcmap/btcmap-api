@@ -4,7 +4,7 @@ use actix_http::h1;
 use actix_web::{
     dev::{self, forward_ready, Payload, Service, ServiceRequest, ServiceResponse, Transform},
     web::{Bytes, Data},
-    Error,
+    Error, HttpMessage,
 };
 use futures_util::future::LocalBoxFuture;
 use std::{
@@ -12,6 +12,12 @@ use std::{
     rc::Rc,
     time::Instant,
 };
+
+/// Inserted into the request extensions by handlers (or auth extractors)
+/// once a request has been authenticated. The logging middleware reads it
+/// back to record `user_id` in the `request` table.
+#[derive(Clone, Copy)]
+pub struct AuthenticatedUser(pub i64);
 
 pub struct Log;
 
@@ -83,6 +89,11 @@ where
                 .get("User-Agent")
                 .and_then(|h| h.to_str().ok())
                 .map(|s| s.to_owned());
+            let user_id = res
+                .request()
+                .extensions()
+                .get::<AuthenticatedUser>()
+                .map(|u| u.0);
             let path = res.request().path().to_owned();
             let method = res.request().method().as_str().to_owned();
             let query = res.request().uri().query();
@@ -94,7 +105,7 @@ where
                 InsertArgs {
                     ip: addr,
                     user_agent,
-                    user_id: None,
+                    user_id,
                     method,
                     path,
                     query: query.map(ToString::to_string),

@@ -1,5 +1,6 @@
 use crate::{
     db::{self, image::ImagePool, log::LogPool, main::user::schema::Role, main::MainPool},
+    service::log::AuthenticatedUser,
     Result,
 };
 use actix_web::{
@@ -11,7 +12,7 @@ use actix_web::{
     middleware::ErrorHandlerResponse,
     post,
     web::{Data, Json},
-    HttpRequest, HttpResponseBuilder,
+    HttpMessage, HttpRequest, HttpResponseBuilder,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -364,6 +365,7 @@ pub async fn handle(
     log_pool: Data<LogPool>,
 ) -> Result<Json<RpcResponse>> {
     let headers = req.headers();
+    let http_req = &req;
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
         let error_data = json!("Request body is not a valid JSON object");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
@@ -431,6 +433,11 @@ pub async fn handle(
 
         None => None,
     };
+
+    if let Some((_, user)) = auth_token.as_ref() {
+        http_req.extensions_mut()
+            .insert(AuthenticatedUser(user.id));
+    }
 
     let effective_roles = auth_token
         .as_ref()

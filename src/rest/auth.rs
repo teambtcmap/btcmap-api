@@ -2,7 +2,8 @@ use crate::db;
 use crate::db::main::access_token::schema::AccessToken;
 use crate::db::main::user::schema::User;
 use crate::db::main::MainPool;
-use actix_web::{dev::Payload, http::header, web::Data, FromRequest, HttpRequest};
+use crate::service::log::AuthenticatedUser;
+use actix_web::{dev::Payload, http::header, web::Data, FromRequest, HttpMessage, HttpRequest};
 use std::future::Future;
 use std::pin::Pin;
 
@@ -73,6 +74,8 @@ impl FromRequest for Auth {
                     token: None,
                 });
             };
+
+            req.extensions_mut().insert(AuthenticatedUser(user.id));
 
             Ok(Auth {
                 user: Some(user),
