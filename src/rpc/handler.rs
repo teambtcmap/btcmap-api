@@ -100,6 +100,7 @@ pub enum RpcMethod {
     AddElectrumServer,
     UpdateElectrumServer,
     RemoveElectrumServer,
+    PingElectrumServers,
     // Wallet
     GetWallets,
     AddWallet,
@@ -202,6 +203,8 @@ impl Role {
         RpcMethod::UpdateElectrumServer,
         // Admins can soft-delete electrum servers
         RpcMethod::RemoveElectrumServer,
+        // Admins can probe every configured electrum server with a JSON-RPC ping
+        RpcMethod::PingElectrumServers,
     ];
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
@@ -731,6 +734,10 @@ pub async fn handle(
         RpcMethod::RemoveElectrumServer => RpcResponse::from(
             req.id.clone(),
             super::electrum::remove_electrum_server::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::PingElectrumServers => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::ping_electrum_servers::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetWallets => RpcResponse::from(
             req.id.clone(),

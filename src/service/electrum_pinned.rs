@@ -129,6 +129,43 @@ impl PinnedClient {
         decode_results(&responses)
     }
 
+    /// Sends a `server.ping` JSON-RPC request and verifies the server replies
+    /// with a `null` result, matching the contract documented by
+    /// `electrum_client::ElectrumApi::ping`. Any other payload is rejected so
+    /// we don't silently treat half-broken servers as healthy.
+    pub fn ping(&mut self) -> Result<()> {
+        let request = json!({
+            "method": "server.ping",
+            "params": [],
+            "id": self.next_id(),
+        });
+        let body = serde_json::to_string(&request)
+            .map_err(|e| crate::Error::Other(format!("serialize request: {}", e)))?;
+        self.stream
+            .write_all(body.as_bytes())
+            .map_err(|e| crate::Error::Other(format!("write request: {}", e)))?;
+        self.stream
+            .write_all(b"\n")
+            .map_err(|e| crate::Error::Other(format!("write newline: {}", e)))?;
+        self.stream
+            .flush()
+            .map_err(|e| crate::Error::Other(format!("flush request: {}", e)))?;
+        let buf = self.read_one_response()?;
+        let response: Value = serde_json::from_str(buf.trim())
+            .map_err(|e| crate::Error::Other(format!("decode response: {}", e)))?;
+        if let Some(err) = response.get("error") {
+            return Err(crate::Error::Other(format!("server error: {}", err)));
+        }
+        match response.get("result") {
+            Some(Value::Null) => Ok(()),
+            Some(other) => Err(crate::Error::Other(format!(
+                "unexpected ping result: {}",
+                other
+            ))),
+            None => Err(crate::Error::Other("missing result field".into())),
+        }
+    }
+
     fn next_id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
