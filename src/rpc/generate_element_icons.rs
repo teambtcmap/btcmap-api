@@ -1241,6 +1241,10 @@ impl OverpassElement {
             icon_id = "pool"
         }
 
+        if leisure == "swimming_pool" {
+            icon_id = "pool"
+        }
+
         if leisure == "horse_riding" {
             icon_id = "bedroom_baby"
         }
