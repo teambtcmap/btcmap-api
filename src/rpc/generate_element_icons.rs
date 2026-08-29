@@ -1229,6 +1229,10 @@ impl OverpassElement {
             icon_id = "games"
         }
 
+        if leisure == "rage_room" {
+            icon_id = "destruction"
+        }
+
         if leisure == "dance" {
             icon_id = "nightlife"
         }
