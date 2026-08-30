@@ -949,6 +949,10 @@ impl OverpassElement {
             icon_id = "local_car_wash"
         }
 
+        if amenity == "vehicle_inspection" {
+            icon_id = "car_repair"
+        }
+
         if amenity == "nightclub" {
             icon_id = "nightlife"
         }
@@ -1085,6 +1089,10 @@ impl OverpassElement {
             icon_id = "restaurant"
         }
 
+        if amenity == "kitchen" {
+            icon_id = "restaurant"
+        }
+
         if amenity == "dive_centre" {
             icon_id = "scuba_diving"
         }
@@ -1177,6 +1185,10 @@ impl OverpassElement {
             icon_id = "science"
         }
 
+        if amenity == "parcel_locker" {
+            icon_id = "dresser"
+        }
+
         if leisure == "sports_centre" {
             icon_id = "fitness_center"
         }
@@ -1231,6 +1243,10 @@ impl OverpassElement {
 
         if leisure == "rage_room" {
             icon_id = "destruction"
+        }
+
+        if leisure == "adult_gaming_centre" {
+            icon_id = "casino"
         }
 
         if leisure == "dance" {
