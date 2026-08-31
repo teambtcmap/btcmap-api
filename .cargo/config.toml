@@ -1,10 +1,5 @@
 [build]
-rustflags = ["-C", "target-cpu=native"]
+rustflags = ["-C", "target-cpu=x86-64-v3"]
 
-# ts-rs writes the TypeScript bindings here (relative = resolved against the
-# repo root, not the invocation directory). The subdirectory keeps room for
-# bindings in other languages later. An explicitly set TS_RS_EXPORT_DIR (as
-# devtools export-ts-types does) still wins: cargo only applies this default
-# when the variable is unset.
 [env]
 TS_RS_EXPORT_DIR = { value = "bindings/ts", relative = true }
