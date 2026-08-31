@@ -506,7 +506,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_icons::run(params(req.params)?, &main_pool).await?,
+            super::element::generate_element_icons::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),

@@ -9,7 +9,6 @@ pub mod element;
 pub mod event;
 pub mod generate_area_icons;
 pub mod generate_element_categories;
-pub mod generate_element_icons;
 pub mod generate_element_issues;
 pub mod get_element_issues;
 pub mod get_most_active_users;
