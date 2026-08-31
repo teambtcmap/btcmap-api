@@ -4,14 +4,8 @@ use crate::{
     Result,
 };
 use deadpool_sqlite::Pool;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use time::OffsetDateTime;
-
-#[derive(Deserialize)]
-pub struct Params {
-    from_element_id: i64,
-    to_element_id: i64,
-}
 
 #[derive(Serialize)]
 pub struct Res {
@@ -27,26 +21,25 @@ pub struct UpdatedElement {
     pub new_icon: String,
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(pool: &Pool) -> Result<Res> {
     let started_at = OffsetDateTime::now_utc();
-    let updated_elements =
-        generate_element_icons(params.from_element_id, params.to_element_id, pool).await?;
+    let updated_elements = generate_element_icons(pool).await?;
     Ok(Res {
         updated_elements,
         time_s: (OffsetDateTime::now_utc() - started_at).as_seconds_f64(),
     })
 }
 
-async fn generate_element_icons(
-    from_element_id: i64,
-    to_element_id: i64,
-    pool: &Pool,
-) -> Result<Vec<UpdatedElement>> {
+async fn generate_element_icons(pool: &Pool) -> Result<Vec<UpdatedElement>> {
     let mut updated_elements = vec![];
-    for element_id in from_element_id..=to_element_id {
-        let Ok(element) = db::main::element::queries::select_by_id(element_id, pool).await else {
-            continue;
-        };
+    let elements = db::main::element::queries::select_updated_since(
+        OffsetDateTime::UNIX_EPOCH,
+        None,
+        true,
+        pool,
+    )
+    .await?;
+    for element in elements {
         let old_icon = element.tag("icon:android").as_str().unwrap_or_default();
         let new_icon = element.overpass_data.generate_android_icon();
         if old_icon != new_icon {
@@ -58,7 +51,7 @@ async fn generate_element_icons(
             )
             .await?;
             updated_elements.push(UpdatedElement {
-                id: element_id,
+                id: element.id,
                 osm_url: element.osm_url(),
                 old_icon: old_icon.into(),
                 new_icon,
@@ -1718,7 +1711,7 @@ mod test {
             &pool,
         )
         .await?;
-        super::generate_element_icons(1, 100, &pool).await?;
+        super::generate_element_icons(&pool).await?;
         let elements = db::main::element::queries::select_updated_since(
             OffsetDateTime::UNIX_EPOCH,
             None,

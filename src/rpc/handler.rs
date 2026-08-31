@@ -1,7 +1,7 @@
 use crate::{
     db::{self, image::ImagePool, log::LogPool, main::user::schema::Role, main::MainPool},
     service::log::AuthenticatedUser,
-    Result,
+    Error, Result,
 };
 use actix_web::{
     dev::ServiceResponse,
@@ -18,6 +18,14 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use strum::VariantArray;
+
+fn invalid_bearer_token_response() -> Json<RpcResponse> {
+    Json(RpcResponse::error(RpcError {
+        code: 1,
+        message: "Invalid bearer token".to_string(),
+        data: None,
+    }))
+}
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -413,9 +421,24 @@ pub async fn handle(
     let auth_token = match bearer_token {
         Some(bearer_token) => {
             let bearer_token =
-                db::main::access_token::queries::select_by_secret(bearer_token, &main_pool).await?;
-            let user =
-                db::main::user::queries::select_by_id(bearer_token.user_id, &main_pool).await?;
+                match db::main::access_token::queries::select_by_secret(bearer_token, &main_pool)
+                    .await
+                {
+                    Ok(token) => token,
+                    Err(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => {
+                        return Ok(invalid_bearer_token_response());
+                    }
+                    Err(e) => return Err(e),
+                };
+            let user = match db::main::user::queries::select_by_id(bearer_token.user_id, &main_pool)
+                .await
+            {
+                Ok(user) => user,
+                Err(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => {
+                    return Ok(invalid_bearer_token_response());
+                }
+                Err(e) => return Err(e),
+            };
             if bearer_token.roles.is_empty() {
                 if !allowed_methods(&user.roles).contains(&req.method) {
                     return Ok(Json(RpcResponse::error(RpcError {
@@ -506,7 +529,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
-            super::element::generate_element_icons::run(params(req.params)?, &main_pool).await?,
+            super::element::generate_element_icons::run(&main_pool).await?,
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
@@ -1023,7 +1046,42 @@ mod test {
         let err = second_res
             .error
             .expect("second signout with revoked token should fail");
-        assert_eq!(err.code, -32000);
+        assert_eq!(err.code, 1);
+        assert_eq!(err.message, "Invalid bearer token");
+        Ok(())
+    }
+
+    #[test]
+    async fn unknown_bearer_token_returns_friendly_error() -> Result<()> {
+        let pool = pool();
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer does-not-exist"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "whoami",
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        let err = res.error.expect("unknown token must fail");
+        assert_eq!(err.code, 1);
+        assert_eq!(err.message, "Invalid bearer token");
+        assert!(res.result.is_none());
         Ok(())
     }
 
