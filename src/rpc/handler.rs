@@ -438,8 +438,7 @@ pub async fn handle(
     };
 
     if let Some((_, user)) = auth_token.as_ref() {
-        http_req.extensions_mut()
-            .insert(AuthenticatedUser(user.id));
+        http_req.extensions_mut().insert(AuthenticatedUser(user.id));
     }
 
     let effective_roles = auth_token
