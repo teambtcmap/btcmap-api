@@ -48,7 +48,8 @@ curl 'https://api.btcmap.org/v4/search/?q=prague&lat=50.08&lon=14.43&limit=2'
       "id": 123,
       "name": "Prague",
       "alias": "prague",
-      "bbox": [14.22, 49.94, 14.71, 50.18]
+      "bbox": [14.22, 49.94, 14.71, 50.18],
+      "icon": "https://static.btcmap.org/images/areas/123.svg"
     },
     {
       "type": "place",
@@ -81,8 +82,9 @@ curl 'https://api.btcmap.org/v4/search/?q=prague&type_filter=place'
 
 Every result carries a `type` discriminator.
 
-`type: "area"` — `id`, `name`, `alias` (omitted when unset), and `bbox` as
-`[west, south, east, north]` (omitted when the area has no bounding box of its own).
+`type: "area"` — `id`, `name`, `alias` (omitted when unset), `bbox` as
+`[west, south, east, north]` (omitted when the area has no bounding box of its own), and
+`icon` (the `icon:square` tag, omitted when the area has no icon).
 
 `type: "place"` — the same object returned by [`/v4/places/search`](places.md#search): `id`,
 `lat`, `lon`, `icon`, `name`, plus the optional `address`, `opening_hours`, `comments`,

@@ -512,6 +512,7 @@ pub struct RankedArea {
     pub name: String,
     pub alias: Option<String>,
     pub bbox: Option<[f64; 4]>,
+    pub icon: Option<String>,
     pub rank: i64,
 }
 
@@ -543,10 +544,15 @@ fn word_patterns(words: &[String]) -> impl Iterator<Item = SqlValue> + '_ {
 pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Result<Vec<RankedArea>> {
     let words = split_words(query);
     let name = format!("json_extract({}, '$.name')", Columns::Tags.as_ref());
+    let icon = format!(
+        "json_extract({}, '$.icon:square')",
+        Columns::Tags.as_ref()
+    );
     let sql = format!(
         r#"
             SELECT {id}, {alias}, {bbox_west}, {bbox_south}, {bbox_east}, {bbox_north},
                    {name} AS name,
+                   {icon} AS icon,
               CASE
                 WHEN {name} = ?1 COLLATE NOCASE THEN 0
                 WHEN {name} LIKE ?2 ESCAPE '\' THEN 1
@@ -590,6 +596,7 @@ pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Resul
                 name: row.get("name")?,
                 alias: row.get(Columns::Alias.as_ref())?,
                 bbox: (bbox != WORLD_BBOX).then_some(bbox),
+                icon: row.get::<_, Option<String>>("icon")?,
                 rank: row.get("search_rank")?,
             })
         })?

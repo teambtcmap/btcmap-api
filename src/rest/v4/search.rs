@@ -51,6 +51,10 @@ pub struct SearchedArea {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub bbox: Option<[f64; 4]>,
+    /// `icon:square` from the area's tags. Absent when the area has no icon.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub icon: Option<String>,
 }
 
 /// `SearchedPlace` is boxed because it is an order of magnitude larger than
@@ -155,6 +159,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
                 name,
                 alias,
                 bbox,
+                icon,
                 rank,
             } = area;
             ranked.push(Ranked {
@@ -169,6 +174,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
                     name,
                     alias,
                     bbox,
+                    icon,
                 }),
             });
         }
@@ -294,9 +300,21 @@ mod test {
     }
 
     async fn insert_area(name: &str, alias: &str, pool: &MainPool) {
+        insert_area_with_icon(name, alias, None, pool).await;
+    }
+
+    async fn insert_area_with_icon(
+        name: &str,
+        alias: &str,
+        icon: Option<&str>,
+        pool: &MainPool,
+    ) {
         let mut tags = Map::new();
         tags.insert("name".into(), Value::String(name.into()));
         tags.insert("url_alias".into(), Value::String(alias.into()));
+        if let Some(icon) = icon {
+            tags.insert("icon:square".into(), Value::String(icon.into()));
+        }
         tags.insert(
             "geo_json".into(),
             json!({"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[9.99,53.55]}}),
@@ -415,6 +433,35 @@ mod test {
             .to_request();
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!("hamburg", res["results"][0]["alias"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn area_rows_carry_icon_when_set() -> Result<()> {
+        let pool = pool();
+        insert_area_with_icon("Hamburg", "hamburg", Some("https://example.com/de.svg"), &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&type_filter=area")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(
+            "https://example.com/de.svg",
+            res["results"][0]["icon"]
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn area_rows_omit_icon_when_unset() -> Result<()> {
+        let pool = pool();
+        insert_area("Hamburg", "hamburg", &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&type_filter=area")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert!(res["results"][0].get("icon").is_none());
         Ok(())
     }
 
