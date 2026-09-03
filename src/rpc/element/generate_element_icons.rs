@@ -391,7 +391,7 @@ impl OverpassElement {
         }
 
         if tourism == "information" {
-            icon_id = "info_outline";
+            icon_id = "info";
         }
 
         if tourism == "museum" {
@@ -647,7 +647,7 @@ impl OverpassElement {
         }
 
         if shop == "erotic" {
-            icon_id = "adult_content";
+            icon_id = "18_up_rating";
         }
 
         if shop == "confectionery" {
@@ -923,7 +923,7 @@ impl OverpassElement {
         }
 
         if amenity == "brothel" {
-            icon_id = "adult_content"
+            icon_id = "18_up_rating"
         }
 
         if amenity == "veterinary" {
@@ -1047,7 +1047,7 @@ impl OverpassElement {
         }
 
         if amenity == "stripclub" {
-            icon_id = "adult_content"
+            icon_id = "18_up_rating"
         }
 
         if amenity == "spa" {
