@@ -1,4 +1,5 @@
 use crate::{
+    db::main::area::schema::Area,
     db::{self},
     service::matrix::ROOM_PLACE_IMPORT,
     service::{self, matrix},
@@ -17,6 +18,29 @@ pub struct Res {
 }
 
 const LOCATION_SUBMISSION_LABEL_ID: i64 = 901;
+
+fn build_issue_title(areas: &[Area], name: &str) -> String {
+    let country = areas
+        .iter()
+        .find(|area| area.tags.get("type").and_then(|v| v.as_str()) == Some("country"));
+    let community = areas
+        .iter()
+        .find(|area| area.tags.get("type").and_then(|v| v.as_str()) == Some("community"));
+
+    let mut prefix = String::new();
+    if let Some(country) = country {
+        prefix.push_str(&format!("[{}]", country.alias().to_uppercase()));
+    }
+    if let Some(community) = community {
+        prefix.push_str(&format!("[{}]", community.name()));
+    }
+
+    if prefix.is_empty() {
+        name.to_string()
+    } else {
+        format!("{} {}", prefix, name)
+    }
+}
 
 pub async fn run(pool: &Pool) -> Result<Res> {
     let submissions =
@@ -44,7 +68,9 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         }
 
         if submission.ticket_url.is_none() {
-            let title = submission.name.to_string();
+            let areas =
+                service::area::find_areas_by_lat_lon(submission.lat, submission.lon, pool).await?;
+            let title = build_issue_title(&areas, &submission.name);
 
             let body = format!(
                 r#"
@@ -133,4 +159,69 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         issues_created,
         issues_closed,
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::build_issue_title;
+    use crate::db::main::area::schema::Area;
+    use serde_json::{Map, Value};
+    use time::OffsetDateTime;
+
+    fn area(area_type: &str, name: &str, alias: &str) -> Area {
+        let mut tags = Map::new();
+        tags.insert("type".into(), Value::String(area_type.into()));
+        tags.insert("name".into(), Value::String(name.into()));
+        tags.insert("url_alias".into(), Value::String(alias.into()));
+        Area {
+            id: 0,
+            alias: alias.into(),
+            bbox_west: 0.0,
+            bbox_south: 0.0,
+            bbox_east: 0.0,
+            bbox_north: 0.0,
+            tags,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn title_with_country_and_community() {
+        let areas = vec![
+            area("country", "Thailand", "th"),
+            area("community", "Phuket Bitcoin Community", "phuket"),
+        ];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe"),
+            "[TH][Phuket Bitcoin Community] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_with_country_only_uppercases_alias() {
+        let areas = vec![area("country", "Thailand", "th")];
+        assert_eq!(build_issue_title(&areas, "Some Cafe"), "[TH] Some Cafe");
+    }
+
+    #[test]
+    fn title_with_community_only_uses_name_as_is() {
+        let areas = vec![area("community", "Phuket Bitcoin Community", "phuket")];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe"),
+            "[Phuket Bitcoin Community] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_without_areas_falls_back_to_name() {
+        assert_eq!(build_issue_title(&[], "Some Cafe"), "Some Cafe");
+    }
+
+    #[test]
+    fn title_ignores_unrelated_area_types() {
+        let areas = vec![area("planet", "Earth", "earth")];
+        assert_eq!(build_issue_title(&areas, "Some Cafe"), "Some Cafe");
+    }
 }
