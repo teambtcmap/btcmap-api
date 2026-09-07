@@ -1,16 +1,24 @@
 use crate::db;
+use crate::db::main::place_submission::blocking_queries::InsertArgs;
 use crate::db::main::place_submission::schema::PlaceSubmission;
 use crate::db::main::MainPool;
+use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
+use crate::rest::error::RestApiErrorCode;
 use crate::rest::error::RestResult;
 use actix_web::get;
+use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Query;
+use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use time::OffsetDateTime;
+use uuid::Uuid;
+
+const ORIGIN: &str = "user";
 
 #[derive(Deserialize)]
 pub struct Args {
@@ -99,12 +107,86 @@ pub async fn get(args: Query<Args>, pool: Data<MainPool>) -> RestResult<Vec<Item
     .map_err(|_| RestApiError::database())?;
     Ok(Json(items.into_iter().map(Into::into).collect()))
 }
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PostPlaceSubmissionArgs")]
+pub struct PostArgs {
+    pub lat: f64,
+    pub lon: f64,
+    pub category: String,
+    pub name: String,
+    #[ts(type = "Record<string, unknown>")]
+    pub extra_fields: Option<JsonObject>,
+}
+
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PostPlaceSubmissionResponse")]
+pub struct PostResponse {
+    #[ts(type = "number")]
+    pub id: i64,
+    pub origin: String,
+}
+
+#[post("")]
+pub async fn post(
+    auth: Auth,
+    args: Json<PostArgs>,
+    pool: Data<MainPool>,
+) -> RestResult<PostResponse> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+
+    if !(-90.0..=90.0).contains(&args.lat) {
+        return Err(RestApiError::new(
+            RestApiErrorCode::InvalidInput,
+            "Latitude must be between -90 and 90",
+        ));
+    }
+
+    if !(-180.0..=180.0).contains(&args.lon) {
+        return Err(RestApiError::new(
+            RestApiErrorCode::InvalidInput,
+            "Longitude must be between -180 and 180",
+        ));
+    }
+
+    if args.category.trim().is_empty() {
+        return Err(RestApiError::invalid_input("category cannot be empty"));
+    }
+
+    if args.name.trim().is_empty() {
+        return Err(RestApiError::invalid_input("name cannot be empty"));
+    }
+
+    let extra_fields = args.extra_fields.clone().unwrap_or_default();
+
+    let insert_args = InsertArgs {
+        origin: ORIGIN.to_string(),
+        external_id: Uuid::new_v4().to_string(),
+        lat: args.lat,
+        lon: args.lon,
+        category: args.category.clone(),
+        name: args.name.clone(),
+        extra_fields,
+        submitted_by: Some(user.id),
+    };
+    let submission = db::main::place_submission::queries::insert(insert_args, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    Ok(Json(PostResponse {
+        id: submission.id,
+        origin: submission.origin,
+    }))
+}
 
 #[cfg(test)]
 mod test {
     use crate::db::main::place_submission::blocking_queries::InsertArgs;
     use crate::db::main::test::pool;
+    use crate::db::main::user::schema::Role;
     use crate::{db, Result};
+    use actix_web::http::header;
+    use actix_web::http::header::ContentType;
+    use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
@@ -294,5 +376,275 @@ mod test {
                 "https://gitea.btcmap.org/api/v1/repos/foo/api/v1/repos/bar".to_string(),
             ),
         );
+    }
+
+    async fn seed_user_with_token(pool: &crate::db::main::MainPool) -> Result<(i64, String)> {
+        let user = db::main::user::queries::insert("tester", "", pool).await?;
+        let secret = "test-secret".to_string();
+        db::main::access_token::queries::insert(
+            user.id,
+            String::new(),
+            secret.clone(),
+            vec![Role::User],
+            pool,
+        )
+        .await?;
+        Ok((user.id, secret))
+    }
+
+    #[test]
+    async fn post_requires_auth() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":1.0,"lon":2.0,"category":"cafe","name":"Cafe"}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_creates_submission() -> Result<()> {
+        let pool = pool();
+        let (user_id, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(
+                r#"{"lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe","extra_fields":{"website":"https://example.com"}}"#
+                    .as_bytes(),
+            )
+            .to_request();
+        let res: super::PostResponse = test::call_and_read_body_json(&app, req).await;
+
+        assert_eq!(res.id, 1);
+        assert_eq!(res.origin, "user");
+
+        let stored = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
+        assert_eq!(stored.origin, "user");
+        assert_eq!(stored.submitted_by, Some(user_id));
+        assert_eq!(stored.lat, 18.2649);
+        assert_eq!(stored.lon, 98.5013);
+        assert_eq!(stored.category, "cafe");
+        assert_eq!(stored.name, "Satoshi Cafe");
+        assert_eq!(
+            stored.extra_fields.get("website").and_then(|v| v.as_str()),
+            Some("https://example.com"),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_assigns_a_uuid_external_id_for_db_compat() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(
+                r#"{"lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe"}"#
+                    .as_bytes(),
+            )
+            .to_request();
+        let res: super::PostResponse = test::call_and_read_body_json(&app, req).await;
+
+        let stored = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
+        assert!(
+            uuid::Uuid::parse_str(&stored.external_id).is_ok(),
+            "expected stored external_id to be a UUID, got {:?}",
+            stored.external_id,
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_generates_unique_external_ids_across_calls() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":1.0,"lon":2.0,"category":"cafe","name":"First"}"#.as_bytes())
+            .to_request();
+        let first: super::PostResponse = test::call_and_read_body_json(&app, req).await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":3.0,"lon":4.0,"category":"cafe","name":"Second"}"#.as_bytes())
+            .to_request();
+        let second: super::PostResponse = test::call_and_read_body_json(&app, req).await;
+
+        assert_ne!(first.id, second.id);
+
+        let first_stored =
+            db::main::place_submission::queries::select_by_id(first.id, &pool).await?;
+        let second_stored =
+            db::main::place_submission::queries::select_by_id(second.id, &pool).await?;
+        assert_ne!(first_stored.external_id, second_stored.external_id);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_ignores_client_supplied_external_id() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(
+                r#"{"external_id":"client-supplied","lat":1.0,"lon":2.0,"category":"cafe","name":"Cafe"}"#
+                    .as_bytes(),
+            )
+            .to_request();
+        let res: super::PostResponse = test::call_and_read_body_json(&app, req).await;
+
+        let stored = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
+        assert_ne!(stored.external_id, "client-supplied");
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_out_of_range_lat() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":120.0,"lon":0.0,"category":"cafe","name":"Cafe"}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_out_of_range_lon() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":0.0,"lon":200.0,"category":"cafe","name":"Cafe"}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_empty_category() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":0.0,"lon":0.0,"category":"   ","name":"Cafe"}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_empty_name() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/place-submissions").service(super::post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/place-submissions")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":0.0,"lon":0.0,"category":"cafe","name":"   "}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
     }
 }
