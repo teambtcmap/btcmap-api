@@ -53,9 +53,9 @@ Additionally, a `extra_fields` object is available:
 
 ## Allowed Roles
 
-- root
-- admin
-- places_source
+- `root` — full access to every origin.
+- `admin` — full access to every origin.
+- `places_source` — limited to origins listed in the token's `import_origins`; use `*` as a wildcard.
 
 ## Examples
 
@@ -76,6 +76,6 @@ btcmap-cli submit-place --origin acme \
 curl --header 'Content-Type: application/json' \
   --header "Authorization: Bearer $ACCESS_TOKEN" \
   --request POST \
-  --data '{"jsonrpc":"2.0","method":"submit_place","params":{"origin":"acme","external_id":"15",lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe"},"id":1}' \
+  --data '{"jsonrpc":"2.0","method":"submit_place","params":{"origin":"acme","external_id":"15","lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe"},"id":1}' \
   https://api.btcmap.org/rpc
 ```

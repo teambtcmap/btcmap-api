@@ -662,6 +662,7 @@ mod test {
                     category: "cafe".to_string(),
                     name: "Place".to_string(),
                     extra_fields: serde_json::Map::new(),
+                    submitted_by: None,
                 },
                 &pool,
             )

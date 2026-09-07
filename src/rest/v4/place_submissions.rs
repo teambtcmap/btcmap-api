@@ -33,6 +33,9 @@ pub struct Item {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ticket_url: Option<String>,
     pub revoked: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub submitted_by: Option<i64>,
     #[serde(with = "time::serde::rfc3339")]
     #[ts(type = "string")]
     pub created_at: OffsetDateTime,
@@ -62,6 +65,7 @@ impl From<PlaceSubmission> for Item {
             extra_fields: val.extra_fields,
             ticket_url: val.ticket_url.map(humanize_ticket_url),
             revoked: val.revoked,
+            submitted_by: val.submitted_by,
             created_at: val.created_at,
             updated_at: val.updated_at,
             closed_at: val.closed_at,
@@ -132,6 +136,7 @@ mod test {
             category: "cafe".to_string(),
             name: "Open Place".to_string(),
             extra_fields: Map::new(),
+            submitted_by: None,
         };
         let open = db::main::place_submission::queries::insert(open_args, &pool).await?;
 
@@ -143,6 +148,7 @@ mod test {
             category: "cafe".to_string(),
             name: "Revoked Place".to_string(),
             extra_fields: Map::new(),
+            submitted_by: None,
         };
         let revoked = db::main::place_submission::queries::insert(revoked_args, &pool).await?;
         db::main::place_submission::queries::set_revoked(revoked.id, true, &pool).await?;
@@ -155,6 +161,7 @@ mod test {
             category: "cafe".to_string(),
             name: "Closed Place".to_string(),
             extra_fields: Map::new(),
+            submitted_by: None,
         };
         let closed = db::main::place_submission::queries::insert(closed_args, &pool).await?;
         db::main::place_submission::queries::set_closed_at(
@@ -194,6 +201,7 @@ mod test {
                 category: "cafe".to_string(),
                 name: format!("{origin} place"),
                 extra_fields: Map::new(),
+                submitted_by: None,
             };
             db::main::place_submission::queries::insert(args, &pool).await?;
         }
@@ -235,6 +243,7 @@ mod test {
             category: "cafe".to_string(),
             name: "URL rewrite probe".to_string(),
             extra_fields: Map::new(),
+            submitted_by: None,
         };
         let submission = db::main::place_submission::queries::insert(args, &pool).await?;
         let api_url = "https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/42";

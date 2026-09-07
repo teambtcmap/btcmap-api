@@ -13,13 +13,14 @@ pub struct InsertArgs {
     pub category: String,
     pub name: String,
     pub extra_fields: Map<String, Value>,
+    pub submitted_by: Option<i64>,
 }
 
 pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceSubmission> {
     let sql = format!(
         r#"
-            INSERT INTO {table} ({origin}, {external_id}, {lat}, {lon}, {category}, {name}, {extra_fields}) 
-            VALUES (:origin, :external_id, :lat, :lon, :category, :name, json(:extra_fields))
+            INSERT INTO {table} ({origin}, {external_id}, {lat}, {lon}, {category}, {name}, {extra_fields}, {submitted_by})
+            VALUES (:origin, :external_id, :lat, :lon, :category, :name, json(:extra_fields), :submitted_by)
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
@@ -30,6 +31,7 @@ pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceSubmission> {
         category = Columns::Category.as_ref(),
         name = Columns::Name.as_ref(),
         extra_fields = Columns::ExtraFields.as_ref(),
+        submitted_by = Columns::SubmittedBy.as_ref(),
         projection = PlaceSubmission::projection(),
     );
     conn.query_row(
@@ -42,6 +44,7 @@ pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceSubmission> {
             ":category": &args.category,
             ":name": &args.name,
             ":extra_fields": serde_json::to_string(&args.extra_fields)?,
+            ":submitted_by": args.submitted_by,
 
         },
         PlaceSubmission::mapper(),
@@ -334,6 +337,7 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields: extra_fields.clone(),
+            submitted_by: None,
         };
         let element = super::insert(&args, &conn)?;
 
@@ -372,6 +376,7 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields: extra_fields.clone(),
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
@@ -407,6 +412,7 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields: extra_fields.clone(),
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
@@ -448,6 +454,7 @@ mod test {
             category: "category".to_string(),
             name: "name".to_string(),
             extra_fields: JsonObject::new(),
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
@@ -484,6 +491,7 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields,
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
@@ -511,6 +519,7 @@ mod test {
                 category: "cafe".to_string(),
                 name: "Place".to_string(),
                 extra_fields: Map::new(),
+                submitted_by: None,
             };
             Ok(super::insert(&args, &conn)?.id)
         };

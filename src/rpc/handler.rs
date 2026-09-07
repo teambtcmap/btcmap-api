@@ -698,7 +698,7 @@ pub async fn handle(
             super::import::ensure_can_access_origin(effective_roles, token, &params.origin)?;
             RpcResponse::from(
                 req.id.clone(),
-                super::import::submit_place::run(params, &main_pool).await?,
+                super::import::submit_place::run(params, user.unwrap(), &main_pool).await?,
             )
         }
         RpcMethod::ReportPlace => {
@@ -1138,6 +1138,7 @@ mod test {
             category: "test".to_string(),
             name: "Square Place".to_string(),
             extra_fields: serde_json::Map::new(),
+            submitted_by: None,
         };
         db::main::place_submission::queries::insert(square_submission, &pool).await?;
 
@@ -1201,6 +1202,7 @@ mod test {
             category: "test".to_string(),
             name: "Square Place".to_string(),
             extra_fields: serde_json::Map::new(),
+            submitted_by: None,
         };
         db::main::place_submission::queries::insert(square_submission, &pool).await?;
 

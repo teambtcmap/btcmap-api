@@ -1,5 +1,6 @@
 use crate::{
     db::main::place_submission::blocking_queries::InsertArgs,
+    db::main::user::schema::User,
     db::{self},
     Result,
 };
@@ -25,7 +26,7 @@ pub struct Res {
     pub external_id: String,
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
     let extra_fields = params.extra_fields.unwrap_or_default();
 
     let existing_submission =
@@ -97,6 +98,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
                 category: params.category,
                 name: params.name,
                 extra_fields,
+                submitted_by: Some(user.id),
             };
             let new_submission = db::main::place_submission::queries::insert(args, pool).await?;
             Ok(Res {
@@ -116,6 +118,22 @@ mod test {
     };
     use actix_web::test;
 
+    fn mock_user() -> crate::db::main::user::schema::User {
+        crate::db::main::user::schema::User {
+            id: 42,
+            name: "tester".into(),
+            password: String::new(),
+            roles: vec![],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
+            geofence: vec![],
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+        }
+    }
+
     #[test]
     async fn submit_place() -> Result<()> {
         let params = super::Params {
@@ -129,12 +147,16 @@ mod test {
         };
 
         let pool = pool();
+        let user = mock_user();
 
-        let res = super::run(params.clone(), &pool).await?;
+        let res = super::run(params.clone(), &user, &pool).await?;
 
         assert_eq!(1, res.id);
         assert_eq!(params.origin, res.origin);
         assert_eq!(params.external_id, res.external_id);
+
+        let submission = db::main::place_submission::queries::select_by_id(res.id, &pool).await?;
+        assert_eq!(Some(user.id), submission.submitted_by);
 
         // handle repeated call
 
@@ -148,7 +170,7 @@ mod test {
             extra_fields: None,
         };
 
-        let res = super::run(new_params.clone(), &pool).await?;
+        let res = super::run(new_params.clone(), &user, &pool).await?;
 
         assert_eq!(1, res.id);
         assert_eq!(params.origin, res.origin);
@@ -164,6 +186,7 @@ mod test {
     #[test]
     async fn submit_place_allows_same_external_id_for_different_origins() -> Result<()> {
         let pool = pool();
+        let user = mock_user();
 
         let square_params = super::Params {
             origin: "square".into(),
@@ -184,8 +207,8 @@ mod test {
             extra_fields: None,
         };
 
-        let square_res = super::run(square_params, &pool).await?;
-        let coinos_res = super::run(coinos_params, &pool).await?;
+        let square_res = super::run(square_params, &user, &pool).await?;
+        let coinos_res = super::run(coinos_params, &user, &pool).await?;
 
         assert_ne!(square_res.id, coinos_res.id);
         assert_eq!("merchant-1", square_res.external_id);

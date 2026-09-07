@@ -35,9 +35,12 @@ You can use this method to look up the previously submitted data.
   "extra_fields": {
     "website": "https://satoshi.pub"
   },
-  "revoked": true
+  "revoked": true,
+  "submitted_by": 7
 }
 ```
+
+`submitted_by` is the `id` of the user who originally created the submission (see [`submit_place`](submit_place.md)). It is omitted from the response when not set — typically only on legacy rows created before this field existed.
 
 ## Allowed Roles
 

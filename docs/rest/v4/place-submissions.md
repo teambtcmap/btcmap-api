@@ -39,6 +39,7 @@ Returns the list of place submissions that are not closed and not revoked, order
     },
     "ticket_url": "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/24272",
     "revoked": false,
+    "submitted_by": 7,
     "created_at": "2026-08-25T02:25:35.917Z",
     "updated_at": "2026-08-25T02:35:01.334Z"
   }
@@ -57,6 +58,7 @@ Returns the list of place submissions that are not closed and not revoked, order
 | `extra_fields`  | Object (string→any) | Free-form, source-specific metadata (address, opening hours, icon URL, etc.).                              |
 | `ticket_url`    | String or null      | Human-readable URL of the review ticket (e.g. the Gitea issue page) tracking the submission, or `null` if no ticket has been created. Internally the DB stores the Gitea API URL (`…/api/v1/repos/owner/repo/issues/N`); the `/api/v1/repos` segment is stripped on the way out so clients receive a link that opens the issue page in a browser. |
 | `revoked`       | Boolean             | `true` if the source has retracted the submission. The endpoint never returns revoked rows.                  |
+| `submitted_by`  | Number or null      | `id` of the user who originally created the submission (see [`submit_place`](../../rpc/import/submit_place.md)). Omitted for legacy rows created before this field existed. |
 | `created_at`    | ISO 8601 datetime   | When the submission was first received.                                                                      |
 | `updated_at`    | ISO 8601 datetime   | When the submission was last updated.                                                                        |
 | `closed_at`     | ISO 8601 datetime   | When the submission was closed. Omitted while the submission is still open.                                  |

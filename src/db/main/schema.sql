@@ -166,6 +166,7 @@ CREATE TABLE place_submission(
     extra_fields TEXT NOT NULL DEFAULT (json_object()),
     ticket_url TEXT,
     revoked INTEGER NOT NULL DEFAULT 0,
+    submitted_by INTEGER REFERENCES "user"(id),
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     closed_at TEXT,
