@@ -544,10 +544,7 @@ fn word_patterns(words: &[String]) -> impl Iterator<Item = SqlValue> + '_ {
 pub fn select_by_search(query: &str, row_limit: i64, conn: &Connection) -> Result<Vec<RankedArea>> {
     let words = split_words(query);
     let name = format!("json_extract({}, '$.name')", Columns::Tags.as_ref());
-    let icon = format!(
-        "json_extract({}, '$.icon:square')",
-        Columns::Tags.as_ref()
-    );
+    let icon = format!("json_extract({}, '$.icon:square')", Columns::Tags.as_ref());
     let sql = format!(
         r#"
             SELECT {id}, {alias}, {bbox_west}, {bbox_south}, {bbox_east}, {bbox_north},
