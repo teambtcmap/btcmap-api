@@ -130,13 +130,146 @@ pub(crate) async fn check_geofence(user: &User, area_id_or_alias: &str, pool: &P
     }
     let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if user.geofence.contains(&area.id) {
-        Ok(())
-    } else {
-        Err(format!(
-            "Area {} is outside your geofence (allowed areas: {:?})",
-            area.id, user.geofence
-        )
-        .into())
+        return Ok(());
+    }
+    if area_is_contained_in_geofence(&area, &user.geofence, pool).await? {
+        return Ok(());
+    }
+    Err(format!(
+        "Area {} is outside your geofence (allowed areas: {:?})",
+        area.id, user.geofence
+    )
+    .into())
+}
+
+/// Checks whether `area` is spatially contained within any of the geofenced
+/// parent areas. This enables nested area access: geofencing a country-level
+/// area grants access to all communities within it without listing each one.
+async fn area_is_contained_in_geofence(
+    area: &Area,
+    geofence: &[i64],
+    pool: &Pool,
+) -> Result<bool> {
+    let child_geometries = area.geo_json_geometries()?;
+    let child_center = inner_centroid_of_geometries(&child_geometries);
+    let parents = db::main::area::queries::select_by_ids(geofence, pool).await?;
+    for parent in &parents {
+        if parent.deleted_at.is_some() {
+            continue;
+        }
+        let parent_geometries = parent.geo_json_geometries()?;
+        if point_is_inside_any(&child_center, &parent_geometries) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Returns a representative point from a list of geojson geometries.
+/// Computes the average of exterior ring vertices, verified to lie inside.
+/// Falls back to (0, 0) if no valid geometry found.
+fn inner_centroid_of_geometries(geometries: &[Geometry]) -> geo::Point {
+    for geom in geometries {
+        let pt = inner_centroid_of_geometry_value(&geom.value);
+        if pt != geo::Point::new(0.0, 0.0) {
+            return pt;
+        }
+    }
+    geo::Point::new(0.0, 0.0)
+}
+
+fn inner_centroid_of_geometry_value(value: &geojson::GeometryValue) -> geo::Point {
+    match value {
+        geojson::GeometryValue::Polygon { .. } => {
+            if let Ok(poly) = TryInto::<Polygon>::try_into(value) {
+                let coords: Vec<_> = poly.exterior().coords().collect();
+                if coords.is_empty() {
+                    return geo::Point::new(0.0, 0.0);
+                }
+                let x_sum: f64 = coords.iter().map(|c| c.x).sum();
+                let y_sum: f64 = coords.iter().map(|c| c.y).sum();
+                let n = coords.len() as f64;
+                let center = geo::point! { x: x_sum / n, y: y_sum / n };
+                if poly.contains(&center) {
+                    return center;
+                }
+            }
+            geo::Point::new(0.0, 0.0)
+        }
+        geojson::GeometryValue::MultiPolygon { .. } => {
+            if let Ok(multi_poly) = TryInto::<MultiPolygon>::try_into(value) {
+                if let Some(first_poly) = multi_poly.iter().next() {
+                    let coords: Vec<_> = first_poly.exterior().coords().collect();
+                    if !coords.is_empty() {
+                        let x_sum: f64 = coords.iter().map(|c| c.x).sum();
+                        let y_sum: f64 = coords.iter().map(|c| c.y).sum();
+                        let n = coords.len() as f64;
+                        let center = geo::point! { x: x_sum / n, y: y_sum / n };
+                        if first_poly.contains(&center) {
+                            return center;
+                        }
+                    }
+                }
+            }
+            geo::Point::new(0.0, 0.0)
+        }
+        _ => geo::Point::new(0.0, 0.0),
+    }
+}
+
+/// Returns true if `point` is inside any of the geometries.
+fn point_is_inside_any(point: &geo::Point, geometries: &[Geometry]) -> bool {
+    for geometry in geometries {
+        match &geometry.value {
+            geojson::GeometryValue::MultiPolygon { .. } => {
+                let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
+                if multi_poly.contains(point) {
+                    return true;
+                }
+            }
+            geojson::GeometryValue::Polygon { .. } => {
+                let poly: Polygon = (&geometry.value).try_into().unwrap();
+                if poly.contains(point) {
+                    return true;
+                }
+            }
+            _ => continue,
+        }
+    }
+    false
+}
+
+/// Checks whether a GeoJSON geometry (provided as a Value) is spatially
+/// contained within any of the geofenced parent areas. Used by `add_area`
+/// to allow area managers to create new communities inside their region.
+pub(crate) async fn geo_json_is_within_geofence(
+    geo_json: &Value,
+    geofence: &[i64],
+    pool: &Pool,
+) -> Result<bool> {
+    let geo_json_obj: GeoJson = serde_json::to_string(geo_json)?.parse()?;
+    let geometries = geojson_to_geometry_vec(geo_json_obj);
+    let parents = db::main::area::queries::select_by_ids(geofence, pool).await?;
+    for parent in &parents {
+        if parent.deleted_at.is_some() {
+            continue;
+        }
+        let parent_geometries = parent.geo_json_geometries()?;
+        for child_geom in &geometries {
+            let child_center = inner_centroid_of_geometry_value(&child_geom.value);
+            if point_is_inside_any(&child_center, &parent_geometries) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn geojson_to_geometry_vec(geo_json: GeoJson) -> Vec<Geometry> {
+    match geo_json {
+        GeoJson::FeatureCollection(v) => v.features.into_iter().filter_map(|f| f.geometry).collect(),
+        GeoJson::Feature(v) => v.geometry.into_iter().collect(),
+        GeoJson::Geometry(v) => vec![v],
     }
 }
 
@@ -1131,6 +1264,58 @@ mod test {
         };
         assert!(err.to_string().contains("outside your geofence"));
         assert!(london.id != phuket.id);
+        Ok(())
+    }
+
+    #[test]
+    async fn check_geofence_allows_nested_child_area_within_geofenced_parent() -> Result<()> {
+        let pool = pool();
+        let phuket = insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+        // Child area entirely within Phuket
+        let child_geo_json = r#"{
+            "type":"Feature",
+            "properties":{},
+            "geometry":{
+                "type":"Polygon",
+                "coordinates":[[
+                    [98.30, 7.90],
+                    [98.30, 7.85],
+                    [98.40, 7.85],
+                    [98.40, 7.90],
+                    [98.30, 7.90]
+                ]]
+            }
+        }"#;
+        let child = insert_area("phuket-community", serde_json::from_str(child_geo_json).unwrap(), &pool).await?;
+        let user = area_manager(vec![phuket.id]);
+        // child is not directly in the geofence list, but is nested within phuket
+        assert!(!user.geofence.contains(&child.id));
+        super::check_geofence(&user, "phuket-community", &pool).await?;
+        super::check_geofence(&user, &child.id.to_string(), &pool).await?;
+        Ok(())
+    }
+
+    #[test]
+    async fn geo_json_is_within_geofence_detects_containment() -> Result<()> {
+        let pool = pool();
+        let phuket = insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+        // A polygon that falls inside Phuket
+        let inside: serde_json::Value = serde_json::from_str(r#"{
+            "type":"Polygon",
+            "coordinates":[[
+                [98.30, 7.90],[98.30, 7.85],[98.40, 7.85],[98.40, 7.90],[98.30, 7.90]
+            ]]
+        }"#).unwrap();
+        // A polygon outside Phuket (far away)
+        let outside: serde_json::Value = serde_json::from_str(r#"{
+            "type":"Polygon",
+            "coordinates":[[
+                [100.0, 10.0],[100.0, 10.1],[100.1, 10.1],[100.1, 10.0],[100.0, 10.0]
+            ]]
+        }"#).unwrap();
+
+        assert!(super::geo_json_is_within_geofence(&inside, &[phuket.id], &pool).await?);
+        assert!(!super::geo_json_is_within_geofence(&outside, &[phuket.id], &pool).await?);
         Ok(())
     }
 }
