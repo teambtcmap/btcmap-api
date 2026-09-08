@@ -9,6 +9,7 @@ This document describes the endpoints for interacting with areas in REST API v4.
 - [Add Saved Area](#add-saved-area)
 - [Delete Saved Area](#delete-saved-area)
 - [Get Area Image](#get-area-image)
+- [Get Events by Area](events.md#get-events-by-area)
 
 ### Get Saved Areas
 

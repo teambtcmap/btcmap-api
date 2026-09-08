@@ -49,6 +49,19 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Event> {
         .await?
 }
 
+pub async fn select_by_bbox(
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+    pool: &Pool,
+) -> Result<Vec<Event>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_bbox(west, south, east, north, conn))
+        .await?
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn update(
     id: i64,

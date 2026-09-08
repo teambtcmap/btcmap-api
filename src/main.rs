@@ -236,6 +236,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::areas::delete_saved)
                             .service(rest::v4::areas::get_by_id_top_editors)
                             .service(rest::v4::areas::get_by_id_image)
+                            .service(rest::v4::events::get_by_area)
                             .service(rest::v4::areas::get_by_id)
                             .service(rest::v4::areas::get),
                     )

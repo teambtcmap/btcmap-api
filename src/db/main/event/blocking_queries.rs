@@ -135,6 +135,34 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Event> {
         .map_err(Into::into)
 }
 
+/// Cheap bbox pre-filter: events whose (lat, lon) point falls inside the
+/// supplied bounding box. The caller is still responsible for the precise
+/// geojson contains check on the returned candidates.
+pub fn select_by_bbox(
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+    conn: &Connection,
+) -> Result<Vec<Event>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            WHERE {DeletedAt} IS NULL
+              AND {Lat} >= ?2
+              AND {Lat} <= ?4
+              AND {Lon} >= ?1
+              AND {Lon} <= ?3
+        "#,
+        projection = Event::projection(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![west, south, east, north], Event::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn set_deleted_at(
     id: i64,
     deleted_at: Option<OffsetDateTime>,
@@ -413,6 +441,75 @@ mod test {
             Some(None),
             super::select_all(&conn)?.first().map(|it| it.deleted_at)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_bbox_returns_in_bounds_events() -> Result<()> {
+        let conn = conn();
+        let inside = super::insert(
+            None,
+            7.97,
+            98.33,
+            "inside",
+            "website",
+            Some(OffsetDateTime::now_utc()),
+            None,
+            None,
+            &conn,
+        )?;
+        super::insert(
+            None,
+            50.0,
+            1.0,
+            "outside",
+            "website",
+            Some(OffsetDateTime::now_utc()),
+            None,
+            None,
+            &conn,
+        )?;
+        let hits = super::select_by_bbox(98.0, 7.0, 99.0, 8.0, &conn)?;
+        assert_eq!(vec![inside], hits);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_bbox_excludes_deleted() -> Result<()> {
+        let conn = conn();
+        let event = super::insert(
+            None,
+            7.97,
+            98.33,
+            "deleted",
+            "website",
+            Some(OffsetDateTime::now_utc()),
+            None,
+            None,
+            &conn,
+        )?;
+        super::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &conn)?;
+        let hits = super::select_by_bbox(98.0, 7.0, 99.0, 8.0, &conn)?;
+        assert!(hits.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_bbox_is_inclusive_on_edges() -> Result<()> {
+        let conn = conn();
+        let event = super::insert(
+            None,
+            8.0,
+            98.0,
+            "on_edge",
+            "website",
+            Some(OffsetDateTime::now_utc()),
+            None,
+            None,
+            &conn,
+        )?;
+        let hits = super::select_by_bbox(98.0, 7.0, 99.0, 8.0, &conn)?;
+        assert_eq!(vec![event], hits);
         Ok(())
     }
 }
