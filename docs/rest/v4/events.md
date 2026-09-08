@@ -6,6 +6,7 @@ This document describes the endpoints for interacting with events in REST API v4
 
 - [Get Batch](#get-list)
 - [Get by ID](#get-by-id)
+- [Get Events by Area](#get-events-by-area)
 
 ### Get Batch
 
@@ -114,4 +115,80 @@ curl --request GET https://api.btcmap.org/v4/events/3 | jq
   "starts_at": "2025-08-07T19:00:00+07:00",
   "ends_at": null
 }
+```
+
+### Get Events by Area
+
+```bash
+curl 'https://api.btcmap.org/v4/areas/{id_or_alias}/events'
+```
+
+Returns all events whose `(lat, lon)` point lies inside the area's geometry.
+
+The area's `bbox_*` columns are used as a cheap pre-filter at the SQL level;
+each surviving candidate is then verified against the area's `geo_json`
+geometries with a precise point-in-polygon check.
+
+#### Path Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `id_or_alias` | String | `123` or `phuket` | **Required**. Area ID (numeric) or alias (url slug). |
+
+#### Query Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `from` | RFC 3339 datetime | `2025-01-01T00:00:00Z` | now (UTC) | Only include events with `starts_at >= from`. Lower the value to include past events. |
+| `to` | RFC 3339 datetime | `2025-12-31T23:59:59Z` | `2200-01-01T00:00:00Z` | Only include events with `starts_at <= to`. |
+
+Events without a `starts_at` are always returned (treated as open-ended).
+
+#### Examples
+
+##### Future events for an area (default behavior)
+
+```bash
+curl 'https://api.btcmap.org/v4/areas/phuket/events'
+```
+
+```json
+[
+  {
+    "id": 1,
+    "area_id": 1,
+    "lat": 7.8812324,
+    "lon": 98.3884695,
+    "name": "Phuket Bitcoin Meetup",
+    "website": "https://www.meetup.com/phuket-bitcoin-meetup/events/310120143/",
+    "starts_at": "2025-08-29T19:00:00+07:00",
+    "ends_at": null
+  }
+]
+```
+
+##### Past and future events within a date window
+
+```bash
+curl 'https://api.btcmap.org/v4/areas/phuket/events?from=2020-01-01T00:00:00Z&to=2030-01-01T00:00:00Z'
+```
+
+##### Resolving an area by alias
+
+```bash
+curl 'https://api.btcmap.org/v4/areas/grand-paris/events?from=2025-01-01T00:00:00Z'
+```
+
+##### 404 for an unknown area
+
+```bash
+curl -i 'https://api.btcmap.org/v4/areas/does-not-exist/events'
+# HTTP/1.1 404 Not Found
+```
+
+##### 400 for an unparseable date
+
+```bash
+curl -i 'https://api.btcmap.org/v4/areas/phuket/events?from=not-a-date'
+# HTTP/1.1 400 Bad Request
 ```

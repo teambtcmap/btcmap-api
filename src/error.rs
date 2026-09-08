@@ -19,6 +19,7 @@ pub enum Error {
     Blocking(actix_web::error::BlockingError),
     Matrix(String),
     Image(image::error::ImageError),
+    Electrum(electrum_client::Error),
 }
 
 impl Display for Error {
@@ -41,6 +42,7 @@ impl Display for Error {
             Error::Blocking(err) => err.fmt(f),
             Error::Matrix(err) => write!(f, "{}", err),
             Error::Image(err) => err.fmt(f),
+            Error::Electrum(err) => err.fmt(f),
         }
     }
 }
@@ -144,5 +146,11 @@ impl From<actix_web::error::BlockingError> for Error {
 impl From<image::error::ImageError> for Error {
     fn from(error: image::error::ImageError) -> Self {
         Error::Image(error)
+    }
+}
+
+impl From<electrum_client::Error> for Error {
+    fn from(error: electrum_client::Error) -> Self {
+        Error::Electrum(error)
     }
 }

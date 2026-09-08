@@ -13,13 +13,9 @@ static API_URL: &str = "https://overpass-api.de/api/interpreter";
 static USER_AGENT_VALUE: &str = "btcmap-api/1.0 (https://btcmap.org)";
 
 static QUERY: &str = r#"
-    [out:json][timeout:300];
-    area["name"="United States"]->.boundaryarea;
-    (
-      nwr["currency:XBT"=yes];
-      way["brand:wikidata"="Q7605233"]["disused:amenity"!~"."](area.boundaryarea);
-    );
-    out meta geom;
+[out:json][timeout:300];
+nwr["currency:XBT"=yes];
+out meta geom;
 "#;
 
 #[derive(Serialize, Deserialize)]
@@ -157,6 +153,30 @@ impl OverpassElement {
             user: Some("".into()),
             uid: Some(1),
             tags: Some(Map::new()),
+            bounds: None,
+            nodes: None,
+            geometry: None,
+            members: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn mock_with_tags(id: i64, tags: &[(&str, &str)]) -> OverpassElement {
+        let mut map = Map::new();
+        for (name, value) in tags {
+            map.insert((*name).into(), (*value).into());
+        }
+        OverpassElement {
+            r#type: "node".into(),
+            id,
+            lat: Some(0.0),
+            lon: Some(0.0),
+            timestamp: Some("".into()),
+            version: Some(1),
+            changeset: Some(1),
+            user: Some("".into()),
+            uid: Some(1),
+            tags: Some(map),
             bounds: None,
             nodes: None,
             geometry: None,

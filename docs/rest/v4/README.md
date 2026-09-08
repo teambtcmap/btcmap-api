@@ -10,11 +10,13 @@ The latest and recommended version of the BTCMap API, offering improved performa
 - **[Place Boosts](place-boosts.md)** - Fetch place boost quotes and submit boost intents.
 - **[Place Comments](place-comments.md)** - Fetch place comment quotes and submit comment intents.
 - **[Place Issues](place-issues.md)** - Fetch issues for places within an area.
+- **[Place Submissions](place-submissions.md)** - Fetch open, non-revoked place submissions (from external import sources like Square or CoinOS, or signed-in users) and submit new places as the `user` origin.
 - **[Events](events.md)** - Fetch events.
 - **[Activity](activity.md)** - Fetch a merged feed of place activity, optionally scoped to areas and/or places.
 - **[Invoices](invoices.md)** - Check invoice status for boosts, comments and other paywalled features.
 - **[Users](users.md)** - Get authenticated user information.  
 - **[Areas](areas.md)** - Fetch areas and manage saved areas.
+- **[Search](search.md)** - Search areas and places by name, address and any other OSM tag.
 ### Proposed
 - Need something extra? Let us know!
 

@@ -1,0 +1,1 @@
+ALTER TABLE place_submission ADD COLUMN submitted_by INTEGER REFERENCES "user"(id);

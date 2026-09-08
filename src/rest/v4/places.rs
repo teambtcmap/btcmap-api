@@ -76,54 +76,148 @@ pub struct SearchArgs {
     tag_value: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct SearchedPlace {
+    #[ts(type = "number")]
     pub id: i64,
     pub lat: f64,
     pub lon: f64,
     pub icon: String,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub opening_hours: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
     pub comments: Option<i64>,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
+    #[ts(type = "string | null")]
     pub verified_at: Option<OffsetDateTime>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub osm_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub phone: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub website: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub twitter: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub facebook: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub instagram: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub line: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "time::serde::rfc3339::option")]
+    #[ts(optional, type = "string")]
     pub boosted_until: Option<OffsetDateTime>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub required_app_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub image: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub payment_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "Record<string, string>")]
     pub localized_name: Option<Map<String, Value>>,
+}
+
+/// Type-export-only description of the dynamic place responses.
+/// `GET /v4/places` and `GET /v4/places/{id}` build their JSON at runtime
+/// from the `fields` query param, so every field except `id` is optional.
+/// Fields requested via the `osm:<tag>` passthrough appear as extra keys and
+/// cannot be typed statically. Kept in sync with `service::element::TAGS` by
+/// `place_type_covers_all_generate_tags_fields`.
+#[derive(ts_rs::TS)]
+#[ts(export)]
+#[allow(dead_code)]
+pub struct Place {
+    #[ts(type = "number")]
+    pub id: i64,
+    #[ts(optional)]
+    pub osm_id: Option<String>,
+    #[ts(optional)]
+    pub osm_url: Option<String>,
+    #[ts(optional)]
+    pub osm_edit_url: Option<String>,
+    #[ts(optional)]
+    pub lat: Option<f64>,
+    #[ts(optional)]
+    pub lon: Option<f64>,
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[ts(optional)]
+    pub address: Option<String>,
+    #[ts(optional)]
+    pub icon: Option<String>,
+    #[ts(optional)]
+    pub phone: Option<String>,
+    #[ts(optional)]
+    pub website: Option<String>,
+    #[ts(optional)]
+    pub twitter: Option<String>,
+    #[ts(optional)]
+    pub facebook: Option<String>,
+    #[ts(optional)]
+    pub instagram: Option<String>,
+    #[ts(optional)]
+    pub line: Option<String>,
+    #[ts(optional)]
+    pub email: Option<String>,
+    #[ts(optional)]
+    pub opening_hours: Option<String>,
+    #[ts(optional)]
+    pub boosted_until: Option<String>,
+    #[ts(optional)]
+    pub required_app_url: Option<String>,
+    #[ts(optional)]
+    pub created_at: Option<String>,
+    #[ts(optional)]
+    pub updated_at: Option<String>,
+    #[ts(optional)]
+    pub deleted_at: Option<String>,
+    #[ts(optional)]
+    pub verified_at: Option<String>,
+    #[ts(optional, type = "number")]
+    pub comments: Option<i64>,
+    #[ts(optional)]
+    pub description: Option<String>,
+    #[ts(optional)]
+    pub image: Option<String>,
+    #[ts(optional)]
+    pub payment_provider: Option<String>,
+    #[ts(optional)]
+    pub telegram: Option<String>,
+    #[ts(optional, type = "Record<string, string>")]
+    pub localized_name: Option<Map<String, Value>>,
+    #[ts(optional, type = "Record<string, string>")]
+    pub localized_opening_hours: Option<Map<String, Value>>,
 }
 
 #[get("/search")]
@@ -279,11 +373,14 @@ pub async fn get_by_id(
         })
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceComment")]
 pub struct Comment {
+    #[ts(type = "number")]
     pub id: i64,
     pub text: String,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
 }
 
@@ -311,18 +408,25 @@ pub async fn get_by_id_comments(id: Path<String>, pool: Data<MainPool>) -> Res<V
         .map_err(|_| RestApiError::database())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceActivity")]
 pub struct Activity {
+    #[ts(type = "number")]
     pub id: i64,
     pub r#type: String,
+    #[ts(type = "number | null")]
     pub user_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub user_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub user_tip: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
 }
 
@@ -357,14 +461,19 @@ pub async fn get_by_id_activity(id: Path<String>, pool: Data<MainPool>) -> Res<V
         .map_err(|_| RestApiError::database())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceArea")]
 pub struct AreaResponse {
+    #[ts(type = "number")]
     pub id: i64,
     pub alias: String,
+    #[ts(type = "Record<string, unknown>")]
     pub tags: Map<String, Value>,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
 }
 
@@ -389,9 +498,13 @@ pub async fn get_by_id_areas(
             _ => RestApiError::database(),
         })?;
 
-    let area_elements = db::main::area_element::queries::select_by_element_id(element.id, &pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
+    let area_elements = db::main::area_element::queries::select_by_element_id(
+        element.id,
+        args.include_deleted.unwrap_or(false),
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
 
     let mut areas: Vec<AreaResponse> = vec![];
 
@@ -472,6 +585,23 @@ pub async fn delete_saved(auth: Auth, path: Path<i64>, pool: Data<MainPool>) -> 
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(actix_web::web::Json(saved_places))
+}
+
+// Separate module: `mod test` below imports actix's `#[test]` macro, which
+// only accepts async fns; this is a plain sync test.
+#[cfg(test)]
+mod place_type_test {
+    #[test]
+    fn place_type_covers_all_generate_tags_fields() {
+        let decl = <super::Place as ts_rs::TS>::decl(&ts_rs::Config::default());
+        for tag in crate::service::element::TAGS {
+            assert!(
+                decl.contains(tag),
+                "Place is missing `{tag}` — TAGS gained a field; add it to the Place struct"
+            );
+        }
+        assert!(decl.contains("id"));
+    }
 }
 
 #[cfg(test)]
@@ -623,6 +753,40 @@ mod test {
                 .service(super::get_by_id_areas),
         )
         .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/areas?include_deleted=true", element.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(area.id, res[0]["id"].as_i64().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_areas_excludes_deleted_links_by_default() -> Result<()> {
+        let pool = pool();
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let link = db::main::area_element::queries::insert(area.id, element.id, &pool).await?;
+        db::main::area_element::queries::set_deleted_at(
+            link.id,
+            Some(OffsetDateTime::now_utc()),
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_id_areas),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/areas", element.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+
         let req = TestRequest::get()
             .uri(&format!("/{}/areas?include_deleted=true", element.id))
             .to_request();

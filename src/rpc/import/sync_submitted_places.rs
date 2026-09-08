@@ -1,4 +1,5 @@
 use crate::{
+    db::main::area::schema::Area,
     db::{self},
     service::matrix::ROOM_PLACE_IMPORT,
     service::{self, matrix},
@@ -14,11 +15,32 @@ pub struct Res {
     issues_pending: i64,
     issues_created: i64,
     issues_closed: i64,
-    revocations_processed: i64,
 }
 
 const LOCATION_SUBMISSION_LABEL_ID: i64 = 901;
-const LOCATION_REMOVAL_LABEL_ID: i64 = 904;
+
+fn build_issue_title(areas: &[Area], name: &str) -> String {
+    let country = areas
+        .iter()
+        .find(|area| area.tags.get("type").and_then(|v| v.as_str()) == Some("country"));
+    let community = areas
+        .iter()
+        .find(|area| area.tags.get("type").and_then(|v| v.as_str()) == Some("community"));
+
+    let mut prefix = String::new();
+    if let Some(country) = country {
+        prefix.push_str(&format!("[{}]", country.alias().to_uppercase()));
+    }
+    if let Some(community) = community {
+        prefix.push_str(&format!("[{}]", community.name()));
+    }
+
+    if prefix.is_empty() {
+        name.to_string()
+    } else {
+        format!("{} {}", prefix, name)
+    }
+}
 
 pub async fn run(pool: &Pool) -> Result<Res> {
     let submissions =
@@ -46,7 +68,9 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         }
 
         if submission.ticket_url.is_none() {
-            let title = submission.name.to_string();
+            let areas =
+                service::area::find_areas_by_lat_lon(submission.lat, submission.lon, pool).await?;
+            let title = build_issue_title(&areas, &submission.name);
 
             let body = format!(
                 r#"
@@ -130,152 +154,74 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         }
     }
 
-    let revoked_submissions =
-        db::main::place_submission::queries::select_revoked_with_ticket_url(pool).await?;
-    info!(
-        len = revoked_submissions.len(),
-        "fetched revoked submissions with tickets",
-    );
-
-    let mut revocations_processed = 0;
-
-    for submission in &revoked_submissions {
-        revocations_processed += process_revoked_submission(submission, pool).await as i64;
-    }
-
     Ok(Res {
         issues_pending: submissions.len() as i64 - issues_closed,
         issues_created,
         issues_closed,
-        revocations_processed,
     })
-}
-
-async fn process_revoked_submission(
-    submission: &db::main::place_submission::schema::PlaceSubmission,
-    pool: &Pool,
-) -> bool {
-    let ticket_url = submission.ticket_url.as_ref().unwrap();
-
-    let issue = match service::gitea::get_issue(ticket_url.clone(), pool).await {
-        Ok(Some(issue)) => issue,
-        Ok(None) => {
-            warn!(
-                submission_id = submission.id,
-                ticket_url = ticket_url,
-                "revoked submission's gitea ticket not found (404)"
-            );
-            return false;
-        }
-        Err(e) => {
-            warn!(
-                submission_id = submission.id,
-                ticket_url = ticket_url,
-                error = %e,
-                "failed to fetch gitea ticket for revoked submission"
-            );
-            return false;
-        }
-    };
-
-    if issue
-        .labels
-        .iter()
-        .any(|l| l.id == LOCATION_REMOVAL_LABEL_ID)
-    {
-        return false;
-    }
-
-    let removal_labels = build_removal_labels(&submission.origin, pool).await;
-
-    match issue.state.as_str() {
-        "open" => {
-            if let Err(e) = service::gitea::close_issue(ticket_url, pool).await {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to close gitea ticket for revoked submission"
-                );
-            }
-            if let Err(e) =
-                service::gitea::set_issue_labels(ticket_url, removal_labels.clone(), pool).await
-            {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to update gitea ticket labels for revoked submission"
-                );
-            }
-            if let Err(e) = service::gitea::add_issue_comment(
-                ticket_url,
-                "This location was revoked before being processed.",
-                pool,
-            )
-            .await
-            {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to add gitea comment for revoked submission"
-                );
-            }
-            true
-        }
-        "closed" => {
-            if let Err(e) = service::gitea::reopen_issue(ticket_url, pool).await {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to reopen gitea ticket for revoked submission"
-                );
-            }
-            if let Err(e) = service::gitea::set_issue_labels(ticket_url, removal_labels, pool).await
-            {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to update gitea ticket labels for revoked submission"
-                );
-            }
-            true
-        }
-        other => {
-            warn!(
-                submission_id = submission.id,
-                ticket_url = ticket_url,
-                state = other,
-                "unexpected gitea ticket state for revoked submission"
-            );
-            false
-        }
-    }
-}
-
-async fn build_removal_labels(origin: &str, pool: &Pool) -> Vec<i64> {
-    let mut labels = vec![LOCATION_REMOVAL_LABEL_ID];
-    if let Ok(Some(import_origin)) =
-        db::main::place_import_origin::queries::select_by_name(origin.to_string(), pool).await
-    {
-        if let Some(label_id) = import_origin.gitea_label_id {
-            labels.push(label_id);
-        }
-    }
-    labels
 }
 
 #[cfg(test)]
 mod test {
-    use crate::db::main::test::pool;
+    use super::build_issue_title;
+    use crate::db::main::area::schema::Area;
+    use serde_json::{Map, Value};
+    use time::OffsetDateTime;
 
-    #[actix_web::test]
-    async fn build_removal_labels_falls_back_to_default() {
-        let pool = pool();
-        let labels = super::build_removal_labels("unknown-origin", &pool).await;
-        assert_eq!(labels, vec![super::LOCATION_REMOVAL_LABEL_ID]);
+    fn area(area_type: &str, name: &str, alias: &str) -> Area {
+        let mut tags = Map::new();
+        tags.insert("type".into(), Value::String(area_type.into()));
+        tags.insert("name".into(), Value::String(name.into()));
+        tags.insert("url_alias".into(), Value::String(alias.into()));
+        Area {
+            id: 0,
+            alias: alias.into(),
+            bbox_west: 0.0,
+            bbox_south: 0.0,
+            bbox_east: 0.0,
+            bbox_north: 0.0,
+            tags,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn title_with_country_and_community() {
+        let areas = vec![
+            area("country", "Thailand", "th"),
+            area("community", "Phuket Bitcoin Community", "phuket"),
+        ];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe"),
+            "[TH][Phuket Bitcoin Community] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_with_country_only_uppercases_alias() {
+        let areas = vec![area("country", "Thailand", "th")];
+        assert_eq!(build_issue_title(&areas, "Some Cafe"), "[TH] Some Cafe");
+    }
+
+    #[test]
+    fn title_with_community_only_uses_name_as_is() {
+        let areas = vec![area("community", "Phuket Bitcoin Community", "phuket")];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe"),
+            "[Phuket Bitcoin Community] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_without_areas_falls_back_to_name() {
+        assert_eq!(build_issue_title(&[], "Some Cafe"), "Some Cafe");
+    }
+
+    #[test]
+    fn title_ignores_unrelated_area_types() {
+        let areas = vec![area("planet", "Earth", "earth")];
+        assert_eq!(build_issue_title(&areas, "Some Cafe"), "Some Cafe");
     }
 }

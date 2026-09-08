@@ -15,6 +15,7 @@ pub enum Columns {
     SavedPlaces,
     SavedAreas,
     Npub,
+    Geofence,
     CreatedAt,
     UpdatedAt,
     DeletedAt,
@@ -29,6 +30,7 @@ pub struct User {
     pub saved_places: Vec<i64>,
     pub saved_areas: Vec<i64>,
     pub npub: Option<String>,
+    pub geofence: Vec<i64>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -43,6 +45,7 @@ pub enum Role {
     Root,
     PlacesSource,
     EventManager,
+    AreaManager,
     Dashboard,
 }
 
@@ -54,6 +57,7 @@ impl fmt::Display for Role {
             Role::Root => write!(f, "root"),
             Role::PlacesSource => write!(f, "places_source"),
             Role::EventManager => write!(f, "event_manager"),
+            Role::AreaManager => write!(f, "area_manager"),
             Role::Dashboard => write!(f, "dashboard"),
         }
     }
@@ -71,6 +75,7 @@ impl User {
                 Columns::SavedPlaces,
                 Columns::SavedAreas,
                 Columns::Npub,
+                Columns::Geofence,
                 Columns::CreatedAt,
                 Columns::UpdatedAt,
                 Columns::DeletedAt,
@@ -92,6 +97,7 @@ impl User {
                 saved_places: Self::parse_saved_items(row.get(Columns::SavedPlaces.as_ref())?),
                 saved_areas: Self::parse_saved_items(row.get(Columns::SavedAreas.as_ref())?),
                 npub: row.get(Columns::Npub.as_ref())?,
+                geofence: Self::parse_saved_items(row.get(Columns::Geofence.as_ref())?),
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
                 updated_at: row.get(Columns::UpdatedAt.as_ref())?,
                 deleted_at: row.get(Columns::DeletedAt.as_ref())?,
@@ -132,6 +138,7 @@ impl FromStr for Role {
             "root" => Ok(Role::Root),
             "places_source" => Ok(Role::PlacesSource),
             "event_manager" => Ok(Role::EventManager),
+            "area_manager" => Ok(Role::AreaManager),
             "dashboard" => Ok(Role::Dashboard),
             _ => Err(format!("'{}' is not a valid Role", s)),
         }

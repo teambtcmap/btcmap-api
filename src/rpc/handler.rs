@@ -1,6 +1,7 @@
 use crate::{
-    db::{self, log::LogPool, main::user::schema::Role, main::MainPool},
-    Result,
+    db::{self, image::ImagePool, log::LogPool, main::user::schema::Role, main::MainPool},
+    service::log::AuthenticatedUser,
+    Error, Result,
 };
 use actix_web::{
     dev::ServiceResponse,
@@ -11,12 +12,20 @@ use actix_web::{
     middleware::ErrorHandlerResponse,
     post,
     web::{Data, Json},
-    HttpRequest, HttpResponseBuilder,
+    HttpMessage, HttpRequest, HttpResponseBuilder,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use strum::VariantArray;
+
+fn invalid_bearer_token_response() -> Json<RpcResponse> {
+    Json(RpcResponse::error(RpcError {
+        code: 1,
+        message: "Invalid bearer token".to_string(),
+        data: None,
+    }))
+}
 
 #[derive(Deserialize)]
 pub struct RpcRequest {
@@ -26,7 +35,7 @@ pub struct RpcRequest {
     pub id: Value,
 }
 
-#[derive(Deserialize, PartialEq, Eq, VariantArray, Hash, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq, VariantArray, Hash, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
     // auth
@@ -58,7 +67,7 @@ pub enum RpcMethod {
     GetArea,
     SetAreaTag,
     RemoveAreaTag,
-    SetAreaIcon,
+    SetAreaImage,
     RemoveArea,
     GetTrendingCountries,
     GetTrendingCommunities,
@@ -66,9 +75,11 @@ pub enum RpcMethod {
     GenerateReports,
     GetAreaDashboard,
     GenerateAreaBboxes,
+    GenerateAreaIcons,
     // user
     GetUserActivity,
     SetUserTag,
+    SetUserGeofence,
     RemoveUserTag,
     GetMostActiveUsers,
     // invoice
@@ -83,13 +94,26 @@ pub enum RpcMethod {
     CreateEvent,
     GetEvents,
     GetEvent,
+    UpdateEvent,
     DeleteEvent,
     // Import
     SubmitPlace,
+    ReportPlace,
     GetSubmittedPlace,
     RevokeSubmittedPlace,
     SyncSubmittedPlaces,
     GetPlaceImportOrigins,
+    // Electrum server
+    GetElectrumServers,
+    AddElectrumServer,
+    UpdateElectrumServer,
+    RemoveElectrumServer,
+    PingElectrumServers,
+    // Wallet
+    GetWallets,
+    AddWallet,
+    UpdateWallet,
+    RemoveWallet,
     // Matrix
     SendMatrixMessage,
     // Debug
@@ -131,24 +155,34 @@ impl Role {
         RpcMethod::SetAreaTag,
         // Admins can remove custom area tags
         RpcMethod::RemoveAreaTag,
-        // Admins can set and override area icons
-        RpcMethod::SetAreaIcon,
+        // Admins can set and override area images
+        RpcMethod::SetAreaImage,
         // Admins can remove any area
         RpcMethod::RemoveArea,
         // Admins can set and override custom user tags
         RpcMethod::SetUserTag,
         // Admins can remove custom user tags
         RpcMethod::RemoveUserTag,
+        // Admins can set the geofence that constrains where an event
+        // manager is allowed to create, edit or delete events
+        RpcMethod::SetUserGeofence,
         // Admins can request universal search
         RpcMethod::Search,
         // Admins can query user activity (TODO ask Rockedf if he still needs it)
         RpcMethod::GetUserActivity,
         // Admins can create events
         RpcMethod::CreateEvent,
+        // Admins can list all events
+        RpcMethod::GetEvents,
         // Admins can retreive events
         RpcMethod::GetEvent,
+        // Admins can update events
+        RpcMethod::UpdateEvent,
+        RpcMethod::DeleteEvent,
         // Admins can import places
         RpcMethod::SubmitPlace,
+        // Admins can submit place reports
+        RpcMethod::ReportPlace,
         // Admins can revoke imported places
         RpcMethod::RevokeSubmittedPlace,
         // Admins can query place submissions by id
@@ -161,18 +195,49 @@ impl Role {
         RpcMethod::GetTopClients,
         // Admins can query the analytics dashboard
         RpcMethod::Dashboard,
+        // Admins can query wallet balances for the xpubs configured in the conf table
+        RpcMethod::GetWallets,
+        // Admins can create wallets
+        RpcMethod::AddWallet,
+        // Admins can update wallets
+        RpcMethod::UpdateWallet,
+        // Admins can soft-delete wallets
+        RpcMethod::RemoveWallet,
+        // Admins can list electrum servers configured for wallet balance lookups
+        RpcMethod::GetElectrumServers,
+        // Admins can add electrum servers
+        RpcMethod::AddElectrumServer,
+        // Admins can update electrum servers
+        RpcMethod::UpdateElectrumServer,
+        // Admins can soft-delete electrum servers
+        RpcMethod::RemoveElectrumServer,
+        // Admins can probe every configured electrum server with a JSON-RPC ping
+        RpcMethod::PingElectrumServers,
     ];
 
     const PLACES_SOURCE_METHODS: &[RpcMethod] = &[
         RpcMethod::SubmitPlace,
+        RpcMethod::ReportPlace,
         RpcMethod::RevokeSubmittedPlace,
         RpcMethod::GetSubmittedPlace,
     ];
 
     const EVENT_MANAGER_METHODS: &[RpcMethod] = &[
         RpcMethod::CreateEvent,
+        RpcMethod::GetEvents,
         RpcMethod::GetEvent,
+        RpcMethod::UpdateEvent,
         RpcMethod::DeleteEvent,
+        RpcMethod::Search,
+    ];
+
+    const AREA_MANAGER_METHODS: &[RpcMethod] = &[
+        RpcMethod::AddArea,
+        RpcMethod::GetArea,
+        RpcMethod::SetAreaTag,
+        RpcMethod::RemoveAreaTag,
+        RpcMethod::SetAreaImage,
+        RpcMethod::RemoveArea,
         RpcMethod::Search,
     ];
 
@@ -199,6 +264,11 @@ impl Role {
             Role::EventManager => Self::AUTHORIZED_METHODS
                 .iter()
                 .chain(Self::EVENT_MANAGER_METHODS.iter())
+                .cloned()
+                .collect(),
+            Role::AreaManager => Self::AUTHORIZED_METHODS
+                .iter()
+                .chain(Self::AREA_MANAGER_METHODS.iter())
                 .cloned()
                 .collect(),
             Role::Dashboard => Self::AUTHORIZED_METHODS
@@ -302,9 +372,11 @@ pub async fn handle(
     req: HttpRequest,
     req_body: String,
     main_pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
     log_pool: Data<LogPool>,
 ) -> Result<Json<RpcResponse>> {
     let headers = req.headers();
+    let http_req = &req;
     let Ok(req) = serde_json::from_str::<Map<String, Value>>(&req_body) else {
         let error_data = json!("Request body is not a valid JSON object");
         return Ok(Json(RpcResponse::error(RpcError::parse_error(Some(
@@ -349,9 +421,24 @@ pub async fn handle(
     let auth_token = match bearer_token {
         Some(bearer_token) => {
             let bearer_token =
-                db::main::access_token::queries::select_by_secret(bearer_token, &main_pool).await?;
-            let user =
-                db::main::user::queries::select_by_id(bearer_token.user_id, &main_pool).await?;
+                match db::main::access_token::queries::select_by_secret(bearer_token, &main_pool)
+                    .await
+                {
+                    Ok(token) => token,
+                    Err(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => {
+                        return Ok(invalid_bearer_token_response());
+                    }
+                    Err(e) => return Err(e),
+                };
+            let user = match db::main::user::queries::select_by_id(bearer_token.user_id, &main_pool)
+                .await
+            {
+                Ok(user) => user,
+                Err(Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => {
+                    return Ok(invalid_bearer_token_response());
+                }
+                Err(e) => return Err(e),
+            };
             if bearer_token.roles.is_empty() {
                 if !allowed_methods(&user.roles).contains(&req.method) {
                     return Ok(Json(RpcResponse::error(RpcError {
@@ -372,6 +459,10 @@ pub async fn handle(
 
         None => None,
     };
+
+    if let Some((_, user)) = auth_token.as_ref() {
+        http_req.extensions_mut().insert(AuthenticatedUser(user.id));
+    }
 
     let effective_roles = auth_token
         .as_ref()
@@ -438,7 +529,7 @@ pub async fn handle(
         ),
         RpcMethod::GenerateElementIcons => RpcResponse::from(
             req.id.clone(),
-            super::generate_element_icons::run(params(req.params)?, &main_pool).await?,
+            super::element::generate_element_icons::run(&main_pool).await?,
         ),
         RpcMethod::GenerateElementCategories => RpcResponse::from(
             req.id.clone(),
@@ -459,27 +550,34 @@ pub async fn handle(
         // area
         RpcMethod::AddArea => RpcResponse::from(
             req.id.clone(),
-            super::area::add_area::run(params(req.params)?, &main_pool).await?,
+            super::area::add_area::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::GetArea => RpcResponse::from(
             req.id.clone(),
-            super::get_area::run(params(req.params)?, &main_pool).await?,
+            super::area::get_area::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SetAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::set_area_tag::run(params(req.params)?, &main_pool).await?,
+            super::area::set_area_tag::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::RemoveAreaTag => RpcResponse::from(
             req.id.clone(),
-            super::remove_area_tag::run(params(req.params)?, &main_pool).await?,
+            super::area::remove_area_tag::run(params(req.params)?, user.unwrap(), &main_pool)
+                .await?,
         ),
-        RpcMethod::SetAreaIcon => RpcResponse::from(
+        RpcMethod::SetAreaImage => RpcResponse::from(
             req.id.clone(),
-            super::set_area_icon::run(params(req.params)?, &main_pool).await?,
+            super::area::set_area_image::run(
+                params(req.params)?,
+                user.unwrap(),
+                &main_pool,
+                &image_pool,
+            )
+            .await?,
         ),
         RpcMethod::RemoveArea => RpcResponse::from(
             req.id.clone(),
-            super::remove_area::run(params(req.params)?, &main_pool).await?,
+            super::area::remove_area::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::GetTrendingCountries => RpcResponse::from(
             req.id.clone(),
@@ -491,15 +589,15 @@ pub async fn handle(
         ),
         RpcMethod::GenerateAreasElementsMapping => RpcResponse::from(
             req.id.clone(),
-            super::generate_areas_elements_mapping::run(&main_pool).await?,
+            super::area::generate_areas_elements_mapping::run(&main_pool).await?,
         ),
         RpcMethod::GenerateReports => RpcResponse::from(
             req.id.clone(),
-            super::generate_reports::run(&main_pool).await?,
+            super::area::generate_reports::run(&main_pool).await?,
         ),
         RpcMethod::GetAreaDashboard => RpcResponse::from(
             req.id.clone(),
-            super::get_area_dashboard::run(params(req.params)?, &main_pool).await?,
+            super::area::get_area_dashboard::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetUserActivity => RpcResponse::from(
             req.id.clone(),
@@ -508,6 +606,10 @@ pub async fn handle(
         RpcMethod::SetUserTag => RpcResponse::from(
             req.id.clone(),
             super::set_user_tag::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::SetUserGeofence => RpcResponse::from(
+            req.id.clone(),
+            super::set_user_geofence::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::RemoveUserTag => RpcResponse::from(
             req.id.clone(),
@@ -519,7 +621,11 @@ pub async fn handle(
         ),
         RpcMethod::GenerateAreaBboxes => RpcResponse::from(
             req.id.clone(),
-            super::area::generate_bboxes::run(&main_pool).await?,
+            super::area::generate_area_bboxes::run(&main_pool).await?,
+        ),
+        RpcMethod::GenerateAreaIcons => RpcResponse::from(
+            req.id.clone(),
+            super::generate_area_icons::run(&main_pool, &image_pool).await?,
         ),
         // auth
         RpcMethod::Signin => RpcResponse::from(
@@ -560,7 +666,7 @@ pub async fn handle(
         ),
         RpcMethod::Search => RpcResponse::from(
             req.id.clone(),
-            super::search::run(params(req.params)?, &main_pool).await?,
+            super::analytics::search::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetReport => RpcResponse::from(
             req.id.clone(),
@@ -568,19 +674,23 @@ pub async fn handle(
         ),
         RpcMethod::CreateEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::create_event::run(params(req.params)?, &main_pool).await?,
+            super::event::create_event::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::GetEvents => RpcResponse::from(
             req.id.clone(),
-            super::event::get_events::run(&main_pool).await?,
+            super::event::get_events::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::GetEvent => RpcResponse::from(
             req.id.clone(),
             super::event::get_event::run(params(req.params)?, &main_pool).await?,
         ),
+        RpcMethod::UpdateEvent => RpcResponse::from(
+            req.id.clone(),
+            super::event::update_event::run(params(req.params)?, user.unwrap(), &main_pool).await?,
+        ),
         RpcMethod::DeleteEvent => RpcResponse::from(
             req.id.clone(),
-            super::event::delete_event::run(params(req.params)?, &main_pool).await?,
+            super::event::delete_event::run(params(req.params)?, user.unwrap(), &main_pool).await?,
         ),
         RpcMethod::SubmitPlace => {
             let params: super::import::submit_place::Params = params(req.params)?;
@@ -588,7 +698,16 @@ pub async fn handle(
             super::import::ensure_can_access_origin(effective_roles, token, &params.origin)?;
             RpcResponse::from(
                 req.id.clone(),
-                super::import::submit_place::run(params, &main_pool).await?,
+                super::import::submit_place::run(params, user.unwrap(), &main_pool).await?,
+            )
+        }
+        RpcMethod::ReportPlace => {
+            let params: super::import::report_place::Params = params(req.params)?;
+            let token = &auth_token.as_ref().unwrap().0;
+            super::import::ensure_can_access_origin(effective_roles, token, &params.origin)?;
+            RpcResponse::from(
+                req.id.clone(),
+                super::import::report_place::run(params, &main_pool).await?,
             )
         }
         RpcMethod::GetSubmittedPlace => {
@@ -621,6 +740,42 @@ pub async fn handle(
         RpcMethod::GetPlaceImportOrigins => RpcResponse::from(
             req.id.clone(),
             super::import::get_place_import_origins::run(&main_pool).await?,
+        ),
+        RpcMethod::GetElectrumServers => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::get_electrum_servers::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::AddElectrumServer => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::add_electrum_server::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::UpdateElectrumServer => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::update_electrum_server::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::RemoveElectrumServer => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::remove_electrum_server::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::PingElectrumServers => RpcResponse::from(
+            req.id.clone(),
+            super::electrum::ping_electrum_servers::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::GetWallets => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::get_wallets::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::AddWallet => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::add_wallet::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::UpdateWallet => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::update_wallet::run(params(req.params)?, &main_pool).await?,
+        ),
+        RpcMethod::RemoveWallet => RpcResponse::from(
+            req.id.clone(),
+            super::wallet::remove_wallet::run(params(req.params)?, &main_pool).await?,
         ),
         RpcMethod::SendMatrixMessage => {
             super::matrix::send_matrix_message::run(params(req.params)?, &main_pool).await;
@@ -673,7 +828,8 @@ pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHa
 mod test {
     use super::*;
     use crate::{
-        db::log::test::pool as log_pool, db::main::test::pool, service::overpass::OverpassElement,
+        db::{image::test::pool as image_pool, log::test::pool as log_pool, main::test::pool},
+        service::overpass::OverpassElement,
     };
     use actix_web::{
         http::{header, StatusCode},
@@ -690,11 +846,13 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -716,18 +874,20 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "id": 1
             }))
@@ -743,18 +903,20 @@ mod test {
         db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "signup",
                 "params": {"username": "satoshi", "password": "ihsotasatoshi123"},
@@ -772,18 +934,20 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "add_area",
                 "params": {"name": "test"},
@@ -801,18 +965,20 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "1.0",
                 "method": "signup",
                 "params": {"username": "satoshi", "password": "ihsotasatoshi123"},
@@ -838,11 +1004,13 @@ mod test {
         .await?;
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .wrap(ErrorHandlers::new().default_handler(super::handle_rpc_error))
                 .service(scope("/").service(super::handle)),
         )
@@ -851,7 +1019,7 @@ mod test {
         let first_req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "signout",
                 "id": 1
@@ -867,7 +1035,7 @@ mod test {
         let second_req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "signout",
                 "id": 2
@@ -878,7 +1046,42 @@ mod test {
         let err = second_res
             .error
             .expect("second signout with revoked token should fail");
-        assert_eq!(err.code, -32000);
+        assert_eq!(err.code, 1);
+        assert_eq!(err.message, "Invalid bearer token");
+        Ok(())
+    }
+
+    #[test]
+    async fn unknown_bearer_token_returns_friendly_error() -> Result<()> {
+        let pool = pool();
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer does-not-exist"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "whoami",
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        let err = res.error.expect("unknown token must fail");
+        assert_eq!(err.code, 1);
+        assert_eq!(err.message, "Invalid bearer token");
+        assert!(res.result.is_none());
         Ok(())
     }
 
@@ -896,11 +1099,13 @@ mod test {
         .await?;
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -908,7 +1113,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "whoami",
                 "id": 1
@@ -933,6 +1138,7 @@ mod test {
             category: "test".to_string(),
             name: "Square Place".to_string(),
             extra_fields: serde_json::Map::new(),
+            submitted_by: None,
         };
         db::main::place_submission::queries::insert(square_submission, &pool).await?;
 
@@ -950,11 +1156,13 @@ mod test {
 
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -963,7 +1171,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer scoped_secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "get_submitted_place",
                 "params": {"id": 1, "origin": "coinos"},
@@ -994,6 +1202,7 @@ mod test {
             category: "test".to_string(),
             name: "Square Place".to_string(),
             extra_fields: serde_json::Map::new(),
+            submitted_by: None,
         };
         db::main::place_submission::queries::insert(square_submission, &pool).await?;
 
@@ -1011,11 +1220,13 @@ mod test {
 
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
@@ -1024,7 +1235,7 @@ mod test {
         let req = test::TestRequest::post()
             .uri("/")
             .insert_header((header::AUTHORIZATION, "Bearer scoped_secret"))
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "revoke_submitted_place",
                 "params": {"id": 1, "origin": "coinos"},
@@ -1055,18 +1266,20 @@ mod test {
         let pool = pool();
         let client: Option<Client> = None;
         let log_pool = log_pool();
+        let image_pool = image_pool();
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool))
                 .app_data(Data::new(client))
                 .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
                 .service(scope("/").service(super::handle)),
         )
         .await;
 
         let req = test::TestRequest::post()
             .uri("/")
-            .set_json(&json!({
+            .set_json(json!({
                 "jsonrpc": "2.0",
                 "method": "add_area",  // Requires admin role
                 "params": {"name": "test"},
@@ -1076,5 +1289,299 @@ mod test {
 
         let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
         assert!(res.error.is_some());
+    }
+
+    #[test]
+    async fn wallet_rpcs_require_admin() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("alice", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::User],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        for method in [
+            "get_wallets",
+            "add_wallet",
+            "update_wallet",
+            "remove_wallet",
+        ] {
+            let req = test::TestRequest::post()
+                .uri("/")
+                .insert_header((header::AUTHORIZATION, "Bearer secret"))
+                .set_json(json!({
+                    "jsonrpc": "2.0",
+                    "method": method,
+                    "id": 1
+                }))
+                .to_request();
+            let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+            assert!(
+                res.error.is_some(),
+                "method {method} should be rejected for non-admin user"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn wallet_crud_round_trip() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("root", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::Root],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let add_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "add_wallet",
+                "params": {
+                    "name": "spending",
+                    "xpub": "xpub0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                "id": 1
+            }))
+            .to_request();
+        let add_res: RpcResponse = test::call_and_read_body_json(&app, add_req).await;
+        assert!(add_res.error.is_none(), "add_wallet should succeed");
+        let wallet_id = add_res.result.unwrap()["id"].as_i64().unwrap();
+
+        let update_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "update_wallet",
+                "params": {
+                    "id": wallet_id,
+                    "name": "treasury"
+                },
+                "id": 2
+            }))
+            .to_request();
+        let update_res: RpcResponse = test::call_and_read_body_json(&app, update_req).await;
+        assert!(update_res.error.is_none(), "update_wallet should succeed");
+        assert_eq!(update_res.result.unwrap()["name"], "treasury");
+
+        let list_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "get_wallets",
+                "params": {},
+                "id": 3
+            }))
+            .to_request();
+        let list_res: RpcResponse = test::call_and_read_body_json(&app, list_req).await;
+        let list = list_res.result.unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 1);
+        assert_eq!(list[0]["name"], "treasury");
+
+        let remove_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "remove_wallet",
+                "params": { "id": wallet_id },
+                "id": 4
+            }))
+            .to_request();
+        let remove_res: RpcResponse = test::call_and_read_body_json(&app, remove_req).await;
+        assert!(remove_res.error.is_none(), "remove_wallet should succeed");
+        assert!(remove_res.result.unwrap()["deleted_at"].is_string());
+
+        let list_req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "get_wallets",
+                "params": { "include_deleted": true },
+                "id": 5
+            }))
+            .to_request();
+        let list_res: RpcResponse = test::call_and_read_body_json(&app, list_req).await;
+        let list = list_res.result.unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 1);
+        assert!(list[0]["deleted_at"].is_string());
+
+        Ok(())
+    }
+
+    #[test]
+    async fn area_manager_permissions() -> Result<()> {
+        use std::collections::HashSet;
+        let methods: HashSet<RpcMethod> = Role::AreaManager.allowed_methods().into_iter().collect();
+        for method in [
+            RpcMethod::AddArea,
+            RpcMethod::GetArea,
+            RpcMethod::SetAreaTag,
+            RpcMethod::RemoveAreaTag,
+            RpcMethod::SetAreaImage,
+            RpcMethod::RemoveArea,
+            RpcMethod::Search,
+            // Auth-related methods every authorized role gets
+            RpcMethod::Whoami,
+            RpcMethod::ChangePassword,
+            RpcMethod::GetApiKeys,
+            RpcMethod::RevokeApiKey,
+            RpcMethod::Signout,
+        ] {
+            assert!(
+                methods.contains(&method),
+                "AreaManager should be able to call {method:?}"
+            );
+        }
+        for method in [
+            RpcMethod::SetElementTag,
+            RpcMethod::AddElementComment,
+            RpcMethod::GetWallets,
+            RpcMethod::SyncElements,
+            RpcMethod::CreateEvent,
+            RpcMethod::SetUserTag,
+            RpcMethod::SetUserGeofence,
+        ] {
+            assert!(
+                !methods.contains(&method),
+                "AreaManager should NOT be able to call {method:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn area_manager_can_call_add_area_with_no_geofence() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("alice", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::AreaManager],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "add_area",
+                "params": {
+                    "tags": {
+                        "name": "wonderland",
+                        "url_alias": "wonderland",
+                        "geo_json": {
+                            "type": "Polygon",
+                            "coordinates": [[[1.0, 1.0], [1.0, 2.0], [2.0, 2.0], [2.0, 1.0], [1.0, 1.0]]]
+                        }
+                    }
+                },
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert!(
+            res.error.is_none(),
+            "area_manager should be able to call add_area with no geofence; got {:?}",
+            res.error
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn area_manager_cannot_call_admin_only_method() -> Result<()> {
+        let pool = pool();
+        let user = db::main::user::queries::insert("alice", "", &pool).await?;
+        let _ = db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::AreaManager],
+            &pool,
+        )
+        .await?;
+        let client: Option<Client> = None;
+        let log_pool = log_pool();
+        let image_pool = image_pool();
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .app_data(Data::new(client))
+                .app_data(Data::new(log_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/").service(super::handle)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({
+                "jsonrpc": "2.0",
+                "method": "set_user_geofence",
+                "params": {"user_name": "bob", "geofence": []},
+                "id": 1
+            }))
+            .to_request();
+
+        let res: RpcResponse = test::call_and_read_body_json(&app, req).await;
+        assert!(
+            res.error.is_some(),
+            "set_user_geofence should be rejected for area_manager"
+        );
+        Ok(())
     }
 }

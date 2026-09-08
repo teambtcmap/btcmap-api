@@ -20,14 +20,20 @@ pub struct GetTopEditorsArgs {
     limit: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct TopEditor {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub avatar_url: Option<String>,
+    #[ts(type = "number")]
     pub total_edits: i64,
+    #[ts(type = "number")]
     pub places_created: i64,
+    #[ts(type = "number")]
     pub places_updated: i64,
+    #[ts(type = "number")]
     pub places_deleted: i64,
     pub tip_url: Option<String>,
 }

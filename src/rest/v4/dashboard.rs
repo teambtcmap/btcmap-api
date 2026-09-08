@@ -10,22 +10,31 @@ use actix_web::{
 use serde::Serialize;
 use time::{Duration, OffsetDateTime};
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct Dashboard {
+    #[ts(type = "number")]
     pub total_merchants: i64,
     pub total_merchants_chart: Vec<ChartEntry>,
+    #[ts(type = "number")]
     pub verified_merchants_1y: i64,
     pub verified_merchants_1y_chart: Vec<ChartEntry>,
+    #[ts(type = "number")]
     pub total_exchanges: i64,
     pub total_exchanges_chart: Vec<ChartEntry>,
+    #[ts(type = "number")]
     pub verified_exchanges_1y: i64,
+    #[ts(type = "number")]
     pub total_areas: i64,
+    #[ts(type = "number")]
     pub verified_areas_1y: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct ChartEntry {
     pub date: String,
+    #[ts(type = "number")]
     pub value: i64,
 }
 

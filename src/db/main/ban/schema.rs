@@ -4,24 +4,14 @@ use time::OffsetDateTime;
 
 pub const TABLE_NAME: &str = "ban";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     Ip,
     Reason,
     StartAt,
     EndAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::Ip => "ip",
-            Columns::Reason => "reason",
-            Columns::StartAt => "start_at",
-            Columns::EndAt => "end_at",
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -46,7 +36,7 @@ impl Ban {
                 Columns::EndAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -55,11 +45,11 @@ impl Ban {
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Ban> {
         |row| {
             Ok(Ban {
-                id: row.get(Columns::Id.as_str())?,
-                ip: row.get(Columns::Ip.as_str())?,
-                reason: row.get(Columns::Reason.as_str())?,
-                start_at: row.get(Columns::StartAt.as_str())?,
-                end_at: row.get(Columns::EndAt.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                ip: row.get(Columns::Ip.as_ref())?,
+                reason: row.get(Columns::Reason.as_ref())?,
+                start_at: row.get(Columns::StartAt.as_ref())?,
+                end_at: row.get(Columns::EndAt.as_ref())?,
             })
         }
     }

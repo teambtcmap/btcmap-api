@@ -406,7 +406,7 @@ mod test {
         let element_3 =
             db::main::element::queries::insert(OverpassElement::mock(2702291726), &pool).await?;
         let res = super::sync_deleted_elements(
-            &vec![element_1.overpass_data, element_2.overpass_data],
+            &[element_1.overpass_data, element_2.overpass_data],
             &pool,
             &None,
         )

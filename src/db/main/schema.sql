@@ -79,11 +79,30 @@ CREATE TABLE invoice(
 CREATE TABLE conf(
     id INTEGER PRIMARY KEY NOT NULL,
     paywall_add_element_comment_price_sat INTEGER NOT NULL,
-    paywall_boost_element_30d_price_sat INTEGER NOT NULL,
-    paywall_boost_element_90d_price_sat INTEGER NOT NULL,
-    paywall_boost_element_365d_price_sat INTEGER NOT NULL
-, lnbits_invoice_key TEXT NOT NULL DEFAULT '', gitea_api_key TEXT NOT NULL DEFAULT '', matrix_bot_password TEXT NOT NULL DEFAULT '', lnd_invoices_macaroon TEXT NOT NULL DEFAULT '', ppq_key TEXT NOT NULL DEFAULT '', lnd_readonly_macaroon TEXT NOT NULL DEFAULT '') STRICT;
-INSERT INTO conf VALUES(1,500,5000,10000,30000,'','','','','','');
+    boost_element_prices TEXT NOT NULL DEFAULT '[]'
+, lnbits_invoice_key TEXT NOT NULL DEFAULT '', gitea_api_key TEXT NOT NULL DEFAULT '', matrix_bot_password TEXT NOT NULL DEFAULT '', lnd_invoices_macaroon TEXT NOT NULL DEFAULT '', ppq_key TEXT NOT NULL DEFAULT '', lnd_readonly_macaroon TEXT NOT NULL DEFAULT '', cors_origins TEXT NOT NULL DEFAULT '') STRICT;
+INSERT INTO conf VALUES(1,500,'[]','','','','','','','');
+CREATE TABLE wallet(
+    id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    xpub TEXT NOT NULL,
+    cached_balance_sats INTEGER NOT NULL DEFAULT 0,
+    cached_tx TEXT NOT NULL DEFAULT '[]',
+    cached_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    deleted_at TEXT
+) STRICT;
+CREATE TABLE electrum_server(
+    id INTEGER PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    url TEXT NOT NULL UNIQUE,
+    priority INTEGER NOT NULL DEFAULT 0,
+    spki_pin TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    deleted_at TEXT
+) STRICT;
 CREATE TABLE element_issue(
     id INTEGER PRIMARY KEY NOT NULL,
     element_id INTEGER NOT NULL REFERENCES element(id),
@@ -101,7 +120,7 @@ CREATE TABLE IF NOT EXISTS "user"(
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
-, saved_places TEXT NOT NULL DEFAULT '', saved_areas TEXT NOT NULL DEFAULT '', npub TEXT) STRICT;
+, saved_places TEXT NOT NULL DEFAULT '', saved_areas TEXT NOT NULL DEFAULT '', npub TEXT, geofence TEXT NOT NULL DEFAULT '') STRICT;
 CREATE TABLE access_token(
     id INTEGER PRIMARY KEY NOT NULL,
     user_id INTEGER NOT NULL REFERENCES "user"(id),
@@ -147,6 +166,19 @@ CREATE TABLE place_submission(
     extra_fields TEXT NOT NULL DEFAULT (json_object()),
     ticket_url TEXT,
     revoked INTEGER NOT NULL DEFAULT 0,
+    submitted_by INTEGER REFERENCES "user"(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    closed_at TEXT,
+    deleted_at TEXT
+) STRICT;
+CREATE TABLE place_report(
+    id INTEGER PRIMARY KEY NOT NULL,
+    place_id INTEGER NOT NULL REFERENCES element(id),
+    origin_id INTEGER NOT NULL REFERENCES place_import_origin(id),
+    type TEXT NOT NULL,
+    extra_fields TEXT NOT NULL DEFAULT (json_object()),
+    ticket_url TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     closed_at TEXT,
@@ -176,6 +208,14 @@ CREATE TRIGGER acess_token_updated_at UPDATE OF user_id, name, secret, roles, im
 BEGIN
     UPDATE access_token SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
+CREATE TRIGGER electrum_server_updated_at UPDATE OF name, url, priority, spki_pin, created_at, deleted_at ON electrum_server
+BEGIN
+    UPDATE electrum_server SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
+CREATE TRIGGER wallet_updated_at UPDATE OF name, xpub, cached_balance_sats, cached_tx, cached_at, created_at, deleted_at ON wallet
+BEGIN
+    UPDATE wallet SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
 CREATE TRIGGER element_event_updated_at UPDATE OF user_id, element_id, type, tags, created_at, deleted_at ON element_event
 BEGIN
     UPDATE element_event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -188,6 +228,10 @@ CREATE TRIGGER place_submission_updated_at UPDATE OF origin, external_id, lat, l
 BEGIN
     UPDATE place_submission SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
+CREATE TRIGGER place_report_updated_at UPDATE OF place_id, origin_id, type, extra_fields, ticket_url, created_at, closed_at, deleted_at ON place_report
+BEGIN
+    UPDATE place_report SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
 CREATE TRIGGER element_updated_at UPDATE OF overpass_data, tags, lat, lon, created_at, deleted_at ON element
 BEGIN
     UPDATE element SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -196,7 +240,7 @@ CREATE TRIGGER osm_user_updated_at UPDATE OF osm_data, tags, created_at, deleted
 BEGIN
     UPDATE osm_user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, npub, created_at, deleted_at ON user
+CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, saved_areas, npub, geofence, created_at, deleted_at ON user
 BEGIN
     UPDATE user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
@@ -229,10 +273,12 @@ CREATE INDEX idx_area_bbox_south ON area(bbox_south);
 CREATE INDEX idx_area_bbox_east ON area(bbox_east);
 CREATE INDEX idx_area_bbox_north ON area(bbox_north);
 CREATE UNIQUE INDEX place_submission_origin_external_id ON place_submission(origin, external_id);
+CREATE INDEX place_report_place_id ON place_report(place_id);
 CREATE INDEX element_lat_lon ON element(lat, lon);
 CREATE INDEX place_submission_lat_lon ON place_submission(lat, lon);
 CREATE INDEX element_deleted_at ON element(deleted_at);
 CREATE INDEX element_event_user_created_type ON element_event(user_id, created_at, type);
 CREATE INDEX element_event_type_created_at ON element_event(type, created_at);
 CREATE INDEX area_type ON area(json_extract(tags, '$.type'));
+CREATE INDEX event_lat_lon ON event(lat, lon);
 COMMIT;

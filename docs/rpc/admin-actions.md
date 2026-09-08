@@ -84,7 +84,7 @@ The following methods require admin authentication but do not have specific allo
 | `get_area` | Gets details of an area |
 | `set_area_tag` | Sets a tag on an area |
 | `remove_area_tag` | Removes a tag from an area |
-| `set_area_icon` | Sets an icon for an area |
+| `set_area_image` | Sets an image for an area |
 | `remove_area` | Removes an area |
 | `generate_areas_elements_mapping` | Generates mappings between areas and elements |
 | `generate_reports` | Generates reports |

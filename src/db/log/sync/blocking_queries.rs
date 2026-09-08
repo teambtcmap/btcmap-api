@@ -7,7 +7,7 @@ pub fn insert(conn: &Connection) -> Result<i64> {
         &format!(
             "INSERT INTO {table} (started_at) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ')) RETURNING {id}",
             table = schema::TABLE_NAME,
-            id = Columns::Id.as_str(),
+            id = Columns::Id.as_ref(),
         ),
         [],
         |row| row.get(0),
@@ -39,14 +39,14 @@ pub fn update(args: UpdateArgs, conn: &Connection) -> Result<()> {
             WHERE {col_id} = :id
           "#,
         table = schema::TABLE_NAME,
-        col_id = Columns::Id.as_str(),
-        col_finished_at = Columns::FinishedAt.as_str(),
-        col_duration_s = Columns::DurationS.as_str(),
-        col_overpass_response_time_s = Columns::OverpassResponseTimeS.as_str(),
-        col_elements_affected = Columns::ElementsAffected.as_str(),
-        col_elements_created = Columns::ElementsCreated.as_str(),
-        col_elements_updated = Columns::ElementsUpdated.as_str(),
-        col_elements_deleted = Columns::ElementsDeleted.as_str(),
+        col_id = Columns::Id.as_ref(),
+        col_finished_at = Columns::FinishedAt.as_ref(),
+        col_duration_s = Columns::DurationS.as_ref(),
+        col_overpass_response_time_s = Columns::OverpassResponseTimeS.as_ref(),
+        col_elements_affected = Columns::ElementsAffected.as_ref(),
+        col_elements_created = Columns::ElementsCreated.as_ref(),
+        col_elements_updated = Columns::ElementsUpdated.as_ref(),
+        col_elements_deleted = Columns::ElementsDeleted.as_ref(),
     );
     let elements_affected = args.elements_created + args.elements_updated + args.elements_deleted;
     conn.execute(
@@ -80,9 +80,9 @@ pub fn update_failed(args: UpdateFailedArgs, conn: &Connection) -> Result<()> {
             WHERE {col_id} = :id
           "#,
         table = schema::TABLE_NAME,
-        col_id = Columns::Id.as_str(),
-        col_failed_at = Columns::FailedAt.as_str(),
-        col_fail_reason = Columns::FailReason.as_str(),
+        col_id = Columns::Id.as_ref(),
+        col_failed_at = Columns::FailedAt.as_ref(),
+        col_fail_reason = Columns::FailReason.as_ref(),
     );
     conn.execute(
         &sql,
@@ -106,7 +106,7 @@ pub fn select_latest(limit: i64, conn: &Connection) -> Result<Vec<schema::Sync>>
         "#,
         projection = schema::Sync::projection(),
         table = schema::TABLE_NAME,
-        col_started_at = Columns::StartedAt.as_str(),
+        col_started_at = Columns::StartedAt.as_ref(),
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([limit], schema::Sync::mapper())?;

@@ -1,4 +1,5 @@
 use crate::db::main::element_event::schema::ElementEvent;
+use crate::db::main::user::schema::User;
 use crate::service;
 use crate::{
     db::{
@@ -36,6 +37,7 @@ pub struct Bbox {
 // but wat if an element was moved? It could change its area set... TODO
 pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
     let area = db::main::area::queries::insert(tags, pool).await?;
+    let area = sync_bbox(&area, pool).await?;
     let area_elements =
         service::area_element::get_elements_within_geometries(area.geo_json_geometries()?, pool)
             .await?;
@@ -55,17 +57,19 @@ pub async fn patch_tags(
     }
     let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
     if tags.contains_key("geo_json") {
+        serde_json::to_string(&tags["geo_json"])?
+            .parse::<GeoJson>()
+            .map_err(|_| "invalid geo_json")?;
         let mut affected_element_ids: HashSet<i64> = HashSet::new();
         for area_element in
-            db::main::area_element::queries::select_by_area_id(area.id, pool).await?
+            db::main::area_element::queries::select_by_area_id(area.id, true, pool).await?
         {
             let element =
                 db::main::element::queries::select_by_id(area_element.element_id, pool).await?;
             affected_element_ids.insert(element.id);
         }
         let area = db::main::area::queries::patch_tags(area.id, tags, pool).await?;
-        let area =
-            db::main::area::queries::set_bbox(area.id, -180.0, -90.0, 180.0, 90.0, pool).await?;
+        let area = sync_bbox(&area, pool).await?;
         let elements_in_new_bounds = service::area_element::get_elements_within_geometries(
             area.geo_json_geometries()?,
             pool,
@@ -83,6 +87,17 @@ pub async fn patch_tags(
     } else {
         db::main::area::queries::patch_tags(area.id, tags, pool).await
     }
+}
+
+async fn sync_bbox(area: &Area, pool: &Pool) -> Result<Area> {
+    let bbox = area.geo_json()?.bbox().unwrap_or(Bbox {
+        west: -180.0,
+        south: -90.0,
+        east: 180.0,
+        north: 90.0,
+    });
+    db::main::area::queries::set_bbox(area.id, bbox.west, bbox.south, bbox.east, bbox.north, pool)
+        .await
 }
 
 pub async fn remove_tag_async(
@@ -107,6 +122,22 @@ pub async fn soft_delete_async(area_id_or_alias: impl Into<String>, pool: &Pool)
     let area_id_or_alias = area_id_or_alias.into();
     let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
     db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), pool).await
+}
+
+pub(crate) async fn check_geofence(user: &User, area_id_or_alias: &str, pool: &Pool) -> Result<()> {
+    if user.geofence.is_empty() {
+        return Ok(());
+    }
+    let area = db::main::area::queries::select_by_id_or_alias(area_id_or_alias, pool).await?;
+    if user.geofence.contains(&area.id) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Area {} is outside your geofence (allowed areas: {:?})",
+            area.id, user.geofence
+        )
+        .into())
+    }
 }
 
 pub async fn find_areas_by_lat_lon(lat: f64, lon: f64, pool: &Pool) -> Result<Vec<Area>> {
@@ -210,7 +241,7 @@ pub async fn get_trending_areas(
     for event in &events {
         let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
-            db::main::area_element::queries::select_by_element_id(element.id, pool)
+            db::main::area_element::queries::select_by_element_id(element.id, false, pool)
                 .await?
                 .into_iter()
                 .map(|it| it.area_id)
@@ -232,7 +263,7 @@ pub async fn get_trending_areas(
     for comment in &comments {
         let element = db::main::element::queries::select_by_id(comment.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
-            db::main::area_element::queries::select_by_element_id(element.id, pool)
+            db::main::area_element::queries::select_by_element_id(element.id, false, pool)
                 .await?
                 .into_iter()
                 .map(|it| it.area_id)
@@ -298,7 +329,8 @@ pub async fn get_comments(
     include_deleted: bool,
     pool: &Pool,
 ) -> Result<Vec<ElementComment>> {
-    let area_elements = db::main::area_element::queries::select_by_area_id(area.id, pool).await?;
+    let area_elements =
+        db::main::area_element::queries::select_by_area_id(area.id, false, pool).await?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
         for comment in db::main::element_comment::queries::select_by_element_id(
@@ -437,10 +469,12 @@ where
 mod test {
     use crate::db::main::area::schema::Area;
     use crate::db::main::test::pool;
+    use crate::db::main::user::schema::{Role, User};
     use crate::service::overpass::OverpassElement;
     use crate::{db, Result};
     use actix_web::test;
     use serde_json::{json, Map};
+    use time::OffsetDateTime;
 
     #[test]
     async fn insert() -> Result<()> {
@@ -499,7 +533,7 @@ mod test {
         super::insert(tags, &pool).await?;
         assert_eq!(
             1,
-            db::main::area_element::queries::select_by_area_id(1, &pool)
+            db::main::area_element::queries::select_by_area_id(1, false, &pool)
                 .await?
                 .len()
         );
@@ -614,7 +648,7 @@ mod test {
         );
         assert_eq!(
             2,
-            db::main::area_element::queries::select_by_area_id(area.id, &pool)
+            db::main::area_element::queries::select_by_area_id(area.id, true, &pool)
                 .await?
                 .len()
         );
@@ -648,7 +682,7 @@ mod test {
         let area = super::patch_tags(&area.id.to_string(), tags, &pool).await?;
         assert_eq!(
             2,
-            db::main::area_element::queries::select_by_area_id(area.id, &pool)
+            db::main::area_element::queries::select_by_area_id(area.id, false, &pool)
                 .await?
                 .len()
         );
@@ -663,6 +697,133 @@ mod test {
                 .await?
                 .deleted_at
                 .is_none()
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn insert_should_set_bbox_from_geojson() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        );
+        let area = super::insert(tags, &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, 98.2181205776469);
+        assert_eq!(db_area.bbox_south, 7.74024270965898);
+        assert_eq!(db_area.bbox_east, 98.4806081271079);
+        assert_eq!(db_area.bbox_north, 8.20412838698085);
+        Ok(())
+    }
+
+    #[test]
+    async fn insert_should_fall_back_to_world_bbox_when_geojson_has_no_geometry() -> Result<()> {
+        let pool = pool();
+        let area = super::insert(Area::mock_tags(), &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, -180.0);
+        assert_eq!(db_area.bbox_south, -90.0);
+        assert_eq!(db_area.bbox_east, 180.0);
+        assert_eq!(db_area.bbox_north, 90.0);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_tags_should_update_bbox_for_new_geojson() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [0.0, 0.0],
+                        [0.0, 1.0],
+                        [1.0, 1.0],
+                        [1.0, 0.0],
+                        [0.0, 0.0]
+                    ]]
+                }
+            }),
+        );
+        let area = super::insert(tags, &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, 0.0);
+        assert_eq!(db_area.bbox_south, 0.0);
+        assert_eq!(db_area.bbox_east, 1.0);
+        assert_eq!(db_area.bbox_north, 1.0);
+        let mut patch_set = Map::new();
+        patch_set.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [98.2181205776469, 8.20412838698085],
+                        [98.2181205776469, 7.74024270965898],
+                        [98.4806081271079, 7.74024270965898],
+                        [98.4806081271079, 8.20412838698085],
+                        [98.2181205776469, 8.20412838698085]
+                    ]]
+                }
+            }),
+        );
+        super::patch_tags(&area.id.to_string(), patch_set, &pool).await?;
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(db_area.bbox_west, 98.2181205776469);
+        assert_eq!(db_area.bbox_south, 7.74024270965898);
+        assert_eq!(db_area.bbox_east, 98.4806081271079);
+        assert_eq!(db_area.bbox_north, 8.20412838698085);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_tags_should_reject_invalid_geojson_before_writing() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let original_geo_json = area.tags.get("geo_json").cloned();
+        let mut patch_set = Map::new();
+        patch_set.insert(
+            "geo_json".into(),
+            json!({
+                "type": "Polygon",
+                "coordinates": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]],
+                "geometries": [{
+                    "type": "MultiPolygon",
+                    "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]
+                }]
+            }),
+        );
+        let res = super::patch_tags(&area.id.to_string(), patch_set, &pool).await;
+        assert!(
+            res.is_err(),
+            "expected patch_tags to reject malformed geo_json"
+        );
+        let db_area = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(
+            db_area.tags.get("geo_json"),
+            original_geo_json.as_ref(),
+            "malformed geo_json must not have been written to the database",
         );
         Ok(())
     }
@@ -713,6 +874,35 @@ mod test {
             Some(&comment),
             super::get_comments(&area, false, &pool).await?.first()
         );
+        Ok(())
+    }
+
+    #[test]
+    async fn get_comments_skips_soft_deleted_area_elements() -> Result<()> {
+        let pool = pool();
+        let linked = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let unlinked = db::main::element::queries::insert(OverpassElement::mock(2), &pool).await?;
+        let linked_comment =
+            db::main::element_comment::queries::insert(linked.id, "kept", &pool).await?;
+        let _unlinked_comment =
+            db::main::element_comment::queries::insert(unlinked.id, "hidden", &pool).await?;
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let linked_ae = db::main::area_element::queries::insert(area.id, linked.id, &pool).await?;
+        let _unlinked_ae =
+            db::main::area_element::queries::insert(area.id, unlinked.id, &pool).await?;
+        db::main::area_element::queries::set_deleted_at(
+            _unlinked_ae.id,
+            Some(OffsetDateTime::now_utc()),
+            &pool,
+        )
+        .await?;
+        // Silence the unused-variable warning while keeping the binding that
+        // documents intent.
+        let _ = linked_ae;
+
+        let comments = super::get_comments(&area, false, &pool).await?;
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, linked_comment.id);
         Ok(())
     }
 
@@ -850,6 +1040,97 @@ mod test {
         .await?;
         let hits = super::find_areas_by_lat_lon(0.0, 0.0, &pool).await?;
         assert!(hits.is_empty());
+        Ok(())
+    }
+
+    const PHUKET: &str = r#"{
+        "type":"Feature",
+        "properties":{},
+        "geometry":{
+            "type":"Polygon",
+            "coordinates":[[
+                [98.2181205776469, 8.20412838698085],
+                [98.2181205776469, 7.74024270965898],
+                [98.4806081271079, 7.74024270965898],
+                [98.4806081271079, 8.20412838698085],
+                [98.2181205776469, 8.20412838698085]
+            ]]
+        }
+    }"#;
+
+    const LONDON: &str = r#"{
+        "type":"Feature",
+        "properties":{},
+        "geometry":{
+            "type":"Polygon",
+            "coordinates":[[
+                [-0.2, 51.45],
+                [-0.2, 51.55],
+                [ 0.0, 51.55],
+                [ 0.0, 51.45],
+                [-0.2, 51.45]
+            ]]
+        }
+    }"#;
+
+    async fn insert_area(
+        name: &str,
+        geo_json: serde_json::Value,
+        pool: &deadpool_sqlite::Pool,
+    ) -> Result<Area> {
+        let mut tags = Map::new();
+        tags.insert("name".into(), json!(name));
+        tags.insert("geo_json".into(), geo_json);
+        tags.insert("url_alias".into(), json!(name));
+        db::main::area::queries::insert(tags, pool).await
+    }
+
+    fn area_manager(geofence: Vec<i64>) -> User {
+        User {
+            id: 1,
+            name: "am".into(),
+            password: String::new(),
+            roles: vec![Role::AreaManager],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
+            geofence,
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    async fn check_geofence_with_empty_geofence_allows_any_area() -> Result<()> {
+        let pool = pool();
+        let user = area_manager(vec![]);
+        super::check_geofence(&user, "9999", &pool).await?;
+        Ok(())
+    }
+
+    #[test]
+    async fn check_geofence_with_geofence_allows_listed_area() -> Result<()> {
+        let pool = pool();
+        let phuket = insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+        let user = area_manager(vec![phuket.id]);
+        super::check_geofence(&user, "phuket", &pool).await?;
+        super::check_geofence(&user, &phuket.id.to_string(), &pool).await?;
+        Ok(())
+    }
+
+    #[test]
+    async fn check_geofence_with_geofence_rejects_unlisted_area() -> Result<()> {
+        let pool = pool();
+        let phuket = insert_area("phuket", serde_json::from_str(PHUKET).unwrap(), &pool).await?;
+        let london = insert_area("london", serde_json::from_str(LONDON).unwrap(), &pool).await?;
+        let user = area_manager(vec![phuket.id]);
+        let err = match super::check_geofence(&user, "london", &pool).await {
+            Ok(_) => panic!("expected geofence violation"),
+            Err(e) => e,
+        };
+        assert!(err.to_string().contains("outside your geofence"));
+        assert!(london.id != phuket.id);
         Ok(())
     }
 }

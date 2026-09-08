@@ -5,6 +5,8 @@ use time::{format_description::well_known::Rfc3339, Date, OffsetDateTime};
 
 pub const TABLE_NAME: &str = "report";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     AreaId,
@@ -13,20 +15,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::AreaId => "area_id",
-            Columns::Date => "date",
-            Columns::Tags => "tags",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -54,7 +42,7 @@ impl Report {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -62,7 +50,7 @@ impl Report {
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Report> {
         |row: &_| {
-            let tags: String = row.get(Columns::Tags.as_str())?;
+            let tags: String = row.get(Columns::Tags.as_ref())?;
             let tags = serde_json::from_str(&tags).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     2,
@@ -71,13 +59,13 @@ impl Report {
                 )
             })?;
             Ok(Report {
-                id: row.get(Columns::Id.as_str())?,
-                area_id: row.get(Columns::AreaId.as_str())?,
-                date: row.get(Columns::Date.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
+                area_id: row.get(Columns::AreaId.as_ref())?,
+                date: row.get(Columns::Date.as_ref())?,
                 tags,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }
@@ -136,5 +124,33 @@ impl Report {
             }
             None => 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Columns, Report};
+
+    #[test]
+    fn columns_as_ref() {
+        assert_eq!(Columns::Id.as_ref(), "id");
+        assert_eq!(Columns::AreaId.as_ref(), "area_id");
+        assert_eq!(Columns::Date.as_ref(), "date");
+        assert_eq!(Columns::Tags.as_ref(), "tags");
+        assert_eq!(Columns::CreatedAt.as_ref(), "created_at");
+        assert_eq!(Columns::UpdatedAt.as_ref(), "updated_at");
+        assert_eq!(Columns::DeletedAt.as_ref(), "deleted_at");
+    }
+
+    #[test]
+    fn projection_contains_all_columns() {
+        let projection = Report::projection();
+        assert!(projection.contains("id"));
+        assert!(projection.contains("area_id"));
+        assert!(projection.contains("date"));
+        assert!(projection.contains("tags"));
+        assert!(projection.contains("created_at"));
+        assert!(projection.contains("updated_at"));
+        assert!(projection.contains("deleted_at"));
     }
 }

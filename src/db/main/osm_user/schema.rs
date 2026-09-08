@@ -6,6 +6,8 @@ use time::OffsetDateTime;
 
 pub const NAME: &str = "osm_user";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     OsmData,
@@ -13,19 +15,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::OsmData => "osm_data",
-            Columns::Tags => "tags",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -51,7 +40,7 @@ impl OsmUser {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -59,8 +48,8 @@ impl OsmUser {
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
         |row: &Row| -> rusqlite::Result<Self> {
-            let osm_data: String = row.get(Columns::OsmData.as_str())?;
-            let tags: String = row.get(Columns::Tags.as_str())?;
+            let osm_data: String = row.get(Columns::OsmData.as_ref())?;
+            let tags: String = row.get(Columns::Tags.as_ref())?;
             let osm_data = serde_json::from_str(&osm_data).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     1,
@@ -77,13 +66,39 @@ impl OsmUser {
             })?;
 
             Ok(Self {
-                id: row.get(Columns::Id.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
                 osm_data,
                 tags,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Columns, OsmUser};
+
+    #[test]
+    fn columns_as_ref() {
+        assert_eq!(Columns::Id.as_ref(), "id");
+        assert_eq!(Columns::OsmData.as_ref(), "osm_data");
+        assert_eq!(Columns::Tags.as_ref(), "tags");
+        assert_eq!(Columns::CreatedAt.as_ref(), "created_at");
+        assert_eq!(Columns::UpdatedAt.as_ref(), "updated_at");
+        assert_eq!(Columns::DeletedAt.as_ref(), "deleted_at");
+    }
+
+    #[test]
+    fn projection_contains_all_columns() {
+        let projection = OsmUser::projection();
+        assert!(projection.contains("id"));
+        assert!(projection.contains("osm_data"));
+        assert!(projection.contains("tags"));
+        assert!(projection.contains("created_at"));
+        assert!(projection.contains("updated_at"));
+        assert!(projection.contains("deleted_at"));
     }
 }

@@ -89,6 +89,7 @@ mod test {
             category: category.into(),
             name: name.into(),
             extra_fields,
+            submitted_by: None,
         };
         let submission = db::main::place_submission::queries::insert(args, &pool).await?;
 

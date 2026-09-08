@@ -8,6 +8,8 @@ use crate::service::overpass::OverpassElement;
 
 pub const TABLE_NAME: &str = "element";
 
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum Columns {
     Id,
     OverpassData,
@@ -17,21 +19,6 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
-}
-
-impl Columns {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Columns::Id => "id",
-            Columns::OverpassData => "overpass_data",
-            Columns::Tags => "tags",
-            Columns::Lat => "lat",
-            Columns::Lon => "lon",
-            Columns::CreatedAt => "created_at",
-            Columns::UpdatedAt => "updated_at",
-            Columns::DeletedAt => "deleted_at",
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -61,7 +48,7 @@ impl Element {
                 Columns::DeletedAt,
             ]
             .iter()
-            .map(Columns::as_str)
+            .map(AsRef::as_ref)
             .collect::<Vec<_>>()
             .join(", ")
         })
@@ -69,7 +56,7 @@ impl Element {
 
     pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Element> {
         |row| {
-            let overpass_data: String = row.get(Columns::OverpassData.as_str())?;
+            let overpass_data: String = row.get(Columns::OverpassData.as_ref())?;
             let overpass_data = serde_json::from_str(&overpass_data).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     1,
@@ -78,7 +65,7 @@ impl Element {
                 )
             })?;
 
-            let tags: String = row.get(Columns::Tags.as_str())?;
+            let tags: String = row.get(Columns::Tags.as_ref())?;
             let tags = serde_json::from_str(&tags).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     2,
@@ -88,14 +75,14 @@ impl Element {
             })?;
 
             Ok(Element {
-                id: row.get(Columns::Id.as_str())?,
+                id: row.get(Columns::Id.as_ref())?,
                 overpass_data,
                 tags,
-                lat: row.get(Columns::Lat.as_str())?,
-                lon: row.get(Columns::Lon.as_str())?,
-                created_at: row.get(Columns::CreatedAt.as_str())?,
-                updated_at: row.get(Columns::UpdatedAt.as_str())?,
-                deleted_at: row.get(Columns::DeletedAt.as_str())?,
+                lat: row.get(Columns::Lat.as_ref())?,
+                lon: row.get(Columns::Lon.as_ref())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+                updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                deleted_at: row.get(Columns::DeletedAt.as_ref())?,
             })
         }
     }

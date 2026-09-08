@@ -7,12 +7,14 @@ use rest::error::{RestApiError, RestApiErrorCode};
 mod error;
 use std::env;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 mod feed;
 mod rpc;
+use crate::db::main::conf::schema::Conf;
 use crate::service::log::Log;
 use actix_web::web::{scope, Data};
 mod db;
@@ -24,32 +26,29 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// CORS middleware for the API.
 ///
-/// Allowed origins are read from the `BTCMAP_API_CORS_ORIGINS` env var:
-/// - unset or `*` (the default): every origin is allowed
-/// - comma-separated list of origins: only those are allowed
+/// Allowed origins are read from the `conf.cors_origins` DB column (a
+/// comma-separated list):
+/// - empty (the default): every origin is allowed
+/// - one or more entries: only those origins are allowed
 ///
 /// The middleware always allows every method and every header, and caches
 /// preflight responses for 1 hour, which is enough for any other browser
 /// client to use the API without CORS errors.
-fn build_cors() -> Cors {
+fn build_cors(conf: &Conf) -> Cors {
     let mut cors = Cors::default()
         .allow_any_method()
         .allow_any_header()
         .max_age(3600);
 
-    match env::var("BTCMAP_API_CORS_ORIGINS") {
-        Ok(value) if value.trim() == "*" => cors.allow_any_origin(),
-        Ok(value) => {
-            for origin in value.split(',') {
-                let origin = origin.trim();
-                if !origin.is_empty() {
-                    cors = cors.allowed_origin(origin);
-                }
-            }
-            cors
+    if conf.cors_origins.is_empty() {
+        cors = cors.allow_any_origin();
+    } else {
+        for origin in &conf.cors_origins {
+            cors = cors.allowed_origin(origin);
         }
-        Err(_) => cors.allow_any_origin(),
     }
+
+    cors
 }
 
 #[actix_web::main]
@@ -70,10 +69,12 @@ async fn main() -> Result<()> {
     let api_base_url =
         env::var("BTCMAP_API_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
 
-    check_areas_without_icon_square(&main_pool).await;
-    backfill_og_image_metadata(&image_pool).await;
-
     service::matrix::init(&main_pool);
+    // Cancellation token shared with every long-lived background task so we
+    // can break out of their loops before the actix runtime drops on SIGTERM.
+    // See the note in `service::wallet_cache::init` for why this matters.
+    let shutdown = CancellationToken::new();
+    service::wallet_cache::init(&main_pool, shutdown.clone());
 
     HttpServer::new(move || {
         App::new()
@@ -81,11 +82,12 @@ async fn main() -> Result<()> {
             .wrap(NormalizePath::trim())
             .wrap(Compress::default())
             .wrap(from_fn(service::ban::check_if_banned))
-            .wrap(build_cors())
+            .wrap(build_cors(&conf))
             .app_data(Data::new(main_pool.clone()))
             .app_data(Data::new(image_pool.clone()))
             .app_data(Data::new(log_pool.clone()))
             .app_data(Data::new(conf.clone()))
+            .app_data(web::PayloadConfig::new(64 * 1024 * 1024))
             .app_data(Data::new(rest::nostr_auth::ApiBaseUrl(
                 api_base_url.clone(),
             )))
@@ -209,6 +211,11 @@ async fn main() -> Result<()> {
                             .service(rest::v4::place_issues::get_by_id),
                     )
                     .service(
+                        scope("place-submissions")
+                            .service(rest::v4::place_submissions::post)
+                            .service(rest::v4::place_submissions::get),
+                    )
+                    .service(
                         scope("place-comments")
                             .service(rest::v4::place_comments::get)
                             .service(rest::v4::place_comments::get_quote)
@@ -228,6 +235,8 @@ async fn main() -> Result<()> {
                             .service(rest::v4::areas::post_saved)
                             .service(rest::v4::areas::delete_saved)
                             .service(rest::v4::areas::get_by_id_top_editors)
+                            .service(rest::v4::areas::get_by_id_image)
+                            .service(rest::v4::events::get_by_area)
                             .service(rest::v4::areas::get_by_id)
                             .service(rest::v4::areas::get),
                     )
@@ -255,6 +264,10 @@ async fn main() -> Result<()> {
     .run()
     .await?;
 
+    // Signal background tasks to exit so they don't keep the actix runtime's
+    // blocking pool alive while the runtime is being dropped.
+    shutdown.cancel();
+
     Ok(())
 }
 
@@ -271,204 +284,28 @@ fn init_env() {
         .init();
 }
 
-async fn backfill_og_image_metadata(image_pool: &deadpool_sqlite::Pool) {
-    use crate::db::image::og::queries;
-    use image::ImageReader;
-    use std::io::Cursor;
-
-    let pending = match queries::select_all_with_zero_metadata(image_pool).await {
-        Ok(rows) => rows,
-        Err(e) => {
-            tracing::error!("Failed to load og images for metadata backfill: {}", e);
-            return;
-        }
-    };
-
-    if pending.is_empty() {
-        tracing::info!("All cached og images already have metadata recorded");
-        return;
-    }
-
-    tracing::warn!(
-        count = pending.len(),
-        "Backfilling metadata for cached og images"
-    );
-
-    let mut updated = 0usize;
-    let mut failed = 0usize;
-    for row in pending {
-        let size = row.image_data.len() as i64;
-        let dims = ImageReader::new(Cursor::new(&row.image_data))
-            .with_guessed_format()
-            .ok()
-            .and_then(|reader| reader.into_dimensions().ok());
-
-        let Some((width, height)) = dims else {
-            failed += 1;
-            tracing::error!(
-                element_id = row.element_id,
-                "Failed to parse dimensions of cached og image"
-            );
-            continue;
-        };
-
-        match queries::update_metadata(
-            row.element_id,
-            width as i64,
-            height as i64,
-            size,
-            image_pool,
-        )
-        .await
-        {
-            Ok(1) => updated += 1,
-            Ok(_) => {
-                failed += 1;
-                tracing::warn!(
-                    element_id = row.element_id,
-                    "og image row vanished before metadata backfill"
-                );
-            }
-            Err(e) => {
-                failed += 1;
-                tracing::error!(
-                    element_id = row.element_id,
-                    error = %e,
-                    "Failed to backfill og image metadata"
-                );
-            }
-        }
-    }
-
-    tracing::warn!(updated, failed, "og image metadata backfill finished");
-}
-
-async fn check_areas_without_icon_square(pool: &deadpool_sqlite::Pool) {
-    use crate::db::main::area::queries;
-    use reqwest::Client;
-    use serde_json::Map;
-    use serde_json::Value;
-
-    match queries::select_without_icon_square(pool).await {
-        Ok(areas) => {
-            if areas.is_empty() {
-                tracing::warn!("All non-deleted areas have icon:square tag");
-                return;
-            }
-
-            let names: Vec<_> = areas.iter().map(|a| a.name()).collect();
-            tracing::warn!(
-                "Found {} non-deleted areas without icon:square tag: {:?}",
-                areas.len(),
-                names
-            );
-
-            let client = Client::new();
-
-            for area in areas {
-                let alias = area.alias();
-                tracing::warn!("Checking area '{}' with alias '{}'", area.name(), alias);
-
-                if alias.len() != 2 || !alias.chars().all(|c| c.is_ascii_lowercase()) {
-                    tracing::warn!(
-                        "Skipping area '{}': alias '{}' is not a two-letter lowercase code",
-                        area.name(),
-                        alias
-                    );
-                    continue;
-                }
-
-                let url = format!("https://static.btcmap.org/images/countries/{}.svg", alias);
-                tracing::warn!("Checking URL: {}", url);
-
-                match client.get(&url).send().await {
-                    Ok(response) => {
-                        let status = response.status();
-                        tracing::warn!("URL {} returned status {}", url, status);
-
-                        if !status.is_success() {
-                            tracing::warn!(
-                                "Skipping area '{}': URL {} returned non-success status {}",
-                                area.name(),
-                                url,
-                                status
-                            );
-                            continue;
-                        }
-
-                        let content_type = response
-                            .headers()
-                            .get("content-type")
-                            .and_then(|v| v.to_str().ok())
-                            .unwrap_or("");
-                        tracing::warn!("Content-Type: {}", content_type);
-
-                        if !content_type.contains("svg") {
-                            tracing::warn!(
-                                "Skipping area '{}': URL {} returned content-type '{}' instead of SVG",
-                                area.name(),
-                                url,
-                                content_type
-                            );
-                            continue;
-                        }
-
-                        tracing::warn!(
-                            "Saving icon:square URL '{}' for area '{}'",
-                            url,
-                            area.name()
-                        );
-
-                        let mut tags = Map::new();
-                        tags.insert("icon:square".to_string(), Value::String(url.clone()));
-
-                        match queries::patch_tags(area.id, tags, pool).await {
-                            Ok(_) => {
-                                tracing::warn!(
-                                    "Successfully saved icon:square for area '{}'",
-                                    area.name()
-                                );
-                            }
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Failed to save icon:square for area '{}': {}",
-                                    area.name(),
-                                    e
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to fetch URL {}: {}", url, e);
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            tracing::error!("Failed to check areas without icon:square tag: {}", e);
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
+    use super::build_cors;
+    use crate::db::main::conf::schema::Conf;
     use actix_web::http::header::HeaderValue;
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use actix_web::{test, App};
-    use std::env;
 
-    use super::build_cors;
+    fn conf_with(origins: &[&str]) -> Conf {
+        Conf {
+            cors_origins: origins.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
 
     #[test]
     async fn cors_preflight_succeeds_with_any_origin() {
-        // SAFETY: tests in the same module run on the same thread by default,
-        // and we only ever set this once per test.
-        unsafe {
-            env::set_var("BTCMAP_API_CORS_ORIGINS", "*");
-        }
+        // Empty `cors_origins` is the default and means "allow any origin".
+        let conf = conf_with(&[]);
 
-        let app = test::init_service(App::new().wrap(build_cors())).await;
+        let app = test::init_service(App::new().wrap(build_cors(&conf))).await;
         let req = TestRequest::default()
             .method(actix_web::http::Method::OPTIONS)
             .uri("/rpc")
@@ -498,12 +335,9 @@ mod test {
 
     #[test]
     async fn cors_preflight_succeeds_for_allowed_origin() {
-        // SAFETY: see the note in the other test.
-        unsafe {
-            env::set_var("BTCMAP_API_CORS_ORIGINS", "https://allowed.example.com");
-        }
+        let conf = conf_with(&["https://allowed.example.com"]);
 
-        let app = test::init_service(App::new().wrap(build_cors())).await;
+        let app = test::init_service(App::new().wrap(build_cors(&conf))).await;
         let req = TestRequest::default()
             .method(actix_web::http::Method::OPTIONS)
             .uri("/rpc")
@@ -529,12 +363,9 @@ mod test {
 
     #[test]
     async fn cors_preflight_rejects_disallowed_origin() {
-        // SAFETY: see the note in the other test.
-        unsafe {
-            env::set_var("BTCMAP_API_CORS_ORIGINS", "https://allowed.example.com");
-        }
+        let conf = conf_with(&["https://allowed.example.com"]);
 
-        let app = test::init_service(App::new().wrap(build_cors())).await;
+        let app = test::init_service(App::new().wrap(build_cors(&conf))).await;
         let req = TestRequest::default()
             .method(actix_web::http::Method::OPTIONS)
             .uri("/rpc")

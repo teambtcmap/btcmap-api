@@ -25,6 +25,8 @@ pub struct Res {
     pub name: String,
     pub extra_fields: JsonObject,
     pub revoked: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submitted_by: Option<i64>,
 }
 
 pub async fn run(params: Params, roles: &[Role], token: &AccessToken, pool: &Pool) -> Result<Res> {
@@ -59,5 +61,6 @@ pub async fn run(params: Params, roles: &[Role], token: &AccessToken, pool: &Poo
         name: submission.name,
         extra_fields: submission.extra_fields,
         revoked: submission.revoked,
+        submitted_by: submission.submitted_by,
     })
 }

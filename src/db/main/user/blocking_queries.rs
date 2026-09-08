@@ -221,6 +221,28 @@ pub fn set_npub(id: i64, npub: Option<String>, conn: &Connection) -> Result<User
     .map_err(Into::into)
 }
 
+pub fn set_geofence(id: i64, geofence: &[i64], conn: &Connection) -> Result<User> {
+    let geofence: String = geofence
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    conn.query_row(
+        &format!(
+            r#"
+                UPDATE {TABLE}
+                SET {Geofence} = ?1
+                WHERE {Id} = ?2
+                RETURNING {projection}
+            "#,
+            projection = User::projection(),
+        ),
+        params![geofence, id],
+        User::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 pub struct UserStats {
     pub total: i64,
     pub new_1d: i64,
@@ -378,6 +400,20 @@ mod test {
         super::set_npub(admin_id.id, Some("npub1test123".to_string()), &conn)?;
         super::set_npub(admin_id.id, None, &conn)?;
         assert_eq!(None, super::select_by_id(admin_id.id, &conn)?.npub);
+        Ok(())
+    }
+
+    #[test]
+    fn set_geofence() -> Result<()> {
+        let conn = conn();
+        let admin_id = super::insert("name", "pwd", &conn)?.id;
+        let geofence = vec![1, 5, 14];
+        super::set_geofence(admin_id, &geofence, &conn)?;
+        assert_eq!(geofence, super::select_by_id(admin_id, &conn)?.geofence);
+
+        let empty: Vec<i64> = vec![];
+        super::set_geofence(admin_id, &empty, &conn)?;
+        assert!(super::select_by_id(admin_id, &conn)?.geofence.is_empty());
         Ok(())
     }
 }
