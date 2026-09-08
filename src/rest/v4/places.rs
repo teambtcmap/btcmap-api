@@ -498,9 +498,13 @@ pub async fn get_by_id_areas(
             _ => RestApiError::database(),
         })?;
 
-    let area_elements = db::main::area_element::queries::select_by_element_id(element.id, &pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
+    let area_elements = db::main::area_element::queries::select_by_element_id(
+        element.id,
+        args.include_deleted.unwrap_or(false),
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
 
     let mut areas: Vec<AreaResponse> = vec![];
 
@@ -749,6 +753,40 @@ mod test {
                 .service(super::get_by_id_areas),
         )
         .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/areas?include_deleted=true", element.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(area.id, res[0]["id"].as_i64().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_areas_excludes_deleted_links_by_default() -> Result<()> {
+        let pool = pool();
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let area = db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let link = db::main::area_element::queries::insert(area.id, element.id, &pool).await?;
+        db::main::area_element::queries::set_deleted_at(
+            link.id,
+            Some(OffsetDateTime::now_utc()),
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_id_areas),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/areas", element.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+
         let req = TestRequest::get()
             .uri(&format!("/{}/areas?include_deleted=true", element.id))
             .to_request();

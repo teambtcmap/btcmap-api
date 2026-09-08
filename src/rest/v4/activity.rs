@@ -147,13 +147,12 @@ pub async fn get(
     if !areas.is_empty() || !places.is_empty() {
         let mut combined_elements: HashSet<i64> = HashSet::new();
         for area in &areas {
-            let area_elements = db::main::area_element::queries::select_by_area_id(*area, &pool)
-                .await
-                .map_err(|_| RestApiError::database())?;
+            let area_elements =
+                db::main::area_element::queries::select_by_area_id(*area, false, &pool)
+                    .await
+                    .map_err(|_| RestApiError::database())?;
             for area_element in area_elements {
-                if area_element.deleted_at.is_none() {
-                    combined_elements.insert(area_element.element_id);
-                }
+                combined_elements.insert(area_element.element_id);
             }
         }
         for place_id in &places {

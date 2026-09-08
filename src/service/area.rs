@@ -62,7 +62,7 @@ pub async fn patch_tags(
             .map_err(|_| "invalid geo_json")?;
         let mut affected_element_ids: HashSet<i64> = HashSet::new();
         for area_element in
-            db::main::area_element::queries::select_by_area_id(area.id, pool).await?
+            db::main::area_element::queries::select_by_area_id(area.id, true, pool).await?
         {
             let element =
                 db::main::element::queries::select_by_id(area_element.element_id, pool).await?;
@@ -241,7 +241,7 @@ pub async fn get_trending_areas(
     for event in &events {
         let element = db::main::element::queries::select_by_id(event.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
-            db::main::area_element::queries::select_by_element_id(element.id, pool)
+            db::main::area_element::queries::select_by_element_id(element.id, false, pool)
                 .await?
                 .into_iter()
                 .map(|it| it.area_id)
@@ -263,7 +263,7 @@ pub async fn get_trending_areas(
     for comment in &comments {
         let element = db::main::element::queries::select_by_id(comment.element_id, pool).await?;
         let element_area_ids: Vec<i64> =
-            db::main::area_element::queries::select_by_element_id(element.id, pool)
+            db::main::area_element::queries::select_by_element_id(element.id, false, pool)
                 .await?
                 .into_iter()
                 .map(|it| it.area_id)
@@ -329,12 +329,10 @@ pub async fn get_comments(
     include_deleted: bool,
     pool: &Pool,
 ) -> Result<Vec<ElementComment>> {
-    let area_elements = db::main::area_element::queries::select_by_area_id(area.id, pool).await?;
+    let area_elements =
+        db::main::area_element::queries::select_by_area_id(area.id, false, pool).await?;
     let mut comments: Vec<ElementComment> = vec![];
     for area_element in area_elements {
-        if area_element.deleted_at.is_some() {
-            continue;
-        }
         for comment in db::main::element_comment::queries::select_by_element_id(
             area_element.element_id,
             include_deleted,
@@ -535,7 +533,7 @@ mod test {
         super::insert(tags, &pool).await?;
         assert_eq!(
             1,
-            db::main::area_element::queries::select_by_area_id(1, &pool)
+            db::main::area_element::queries::select_by_area_id(1, false, &pool)
                 .await?
                 .len()
         );
@@ -650,7 +648,7 @@ mod test {
         );
         assert_eq!(
             2,
-            db::main::area_element::queries::select_by_area_id(area.id, &pool)
+            db::main::area_element::queries::select_by_area_id(area.id, true, &pool)
                 .await?
                 .len()
         );
@@ -684,7 +682,7 @@ mod test {
         let area = super::patch_tags(&area.id.to_string(), tags, &pool).await?;
         assert_eq!(
             2,
-            db::main::area_element::queries::select_by_area_id(area.id, &pool)
+            db::main::area_element::queries::select_by_area_id(area.id, false, &pool)
                 .await?
                 .len()
         );

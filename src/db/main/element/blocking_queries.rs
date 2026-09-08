@@ -845,6 +845,7 @@ mod test {
         assert!(
             crate::db::main::area_element::blocking_queries::select_by_element_id(
                 unlinked_element.id,
+                true,
                 &conn
             )?
             .is_empty()

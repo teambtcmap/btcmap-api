@@ -51,12 +51,21 @@ pub fn select_updated_since(
         .map_err(Into::into)
 }
 
-pub fn select_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
+pub fn select_by_area_id(
+    area_id: i64,
+    include_deleted: bool,
+    conn: &Connection,
+) -> Result<Vec<AreaElement>> {
+    let include_deleted_sql = if include_deleted {
+        ""
+    } else {
+        "AND deleted_at IS NULL"
+    };
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {area_id} = ?1
+            WHERE {area_id} = ?1 {include_deleted_sql}
             ORDER BY {updated_at}, {id}
         "#,
         projection = AreaElement::projection(),
@@ -71,12 +80,21 @@ pub fn select_by_area_id(area_id: i64, conn: &Connection) -> Result<Vec<AreaElem
         .map_err(Into::into)
 }
 
-pub fn select_by_element_id(element_id: i64, conn: &Connection) -> Result<Vec<AreaElement>> {
+pub fn select_by_element_id(
+    element_id: i64,
+    include_deleted: bool,
+    conn: &Connection,
+) -> Result<Vec<AreaElement>> {
+    let include_deleted_sql = if include_deleted {
+        ""
+    } else {
+        "AND deleted_at IS NULL"
+    };
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {element_id} = ?1
+            WHERE {element_id} = ?1 {include_deleted_sql}
             ORDER BY {updated_at}, {id}
         "#,
         projection = AreaElement::projection(),
@@ -287,19 +305,19 @@ mod tests {
         let _item4 = super::set_updated_at(_item4.id, &now, &conn)?;
 
         // Test for area_id = 1
-        let results = super::select_by_area_id(1, &conn)?;
+        let results = super::select_by_area_id(1, true, &conn)?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, 1); // Older updated_at comes first
         assert_eq!(results[1].id, 3);
 
         // Test for area_id = 2
-        let results = super::select_by_area_id(2, &conn)?;
+        let results = super::select_by_area_id(2, true, &conn)?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, 2);
         assert_eq!(results[1].id, 4);
 
         // Test for non-existent area_id
-        let results = super::select_by_area_id(99, &conn)?;
+        let results = super::select_by_area_id(99, true, &conn)?;
         assert_eq!(results.len(), 0);
 
         Ok(())
@@ -320,7 +338,7 @@ mod tests {
         super::insert(1, 3, &conn)?;
         super::set_updated_at(3, &now, &conn)?;
 
-        let results = super::select_by_area_id(1, &conn)?;
+        let results = super::select_by_area_id(1, true, &conn)?;
         assert_eq!(results.len(), 3);
         // Should be ordered by id since updated_at is the same
         assert_eq!(results[0].id, 1);
@@ -333,7 +351,7 @@ mod tests {
     #[test]
     fn select_by_area_id_empty_db() -> Result<()> {
         let conn = conn();
-        let results = super::select_by_area_id(10, &conn)?;
+        let results = super::select_by_area_id(10, true, &conn)?;
         assert_eq!(results.len(), 0);
         Ok(())
     }
@@ -356,19 +374,19 @@ mod tests {
         let _item4 = super::set_updated_at(_item4.id, &now, &conn)?;
 
         // Test for element_id = 1
-        let results = super::select_by_element_id(1, &conn)?;
+        let results = super::select_by_element_id(1, true, &conn)?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, 1); // Older updated_at comes first
         assert_eq!(results[1].id, 3);
 
         // Test for element_id = 2
-        let results = super::select_by_element_id(2, &conn)?;
+        let results = super::select_by_element_id(2, true, &conn)?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, 2);
         assert_eq!(results[1].id, 4);
 
         // Test for non-existent element_id
-        let results = super::select_by_element_id(99, &conn)?;
+        let results = super::select_by_element_id(99, true, &conn)?;
         assert_eq!(results.len(), 0);
 
         Ok(())
@@ -389,7 +407,7 @@ mod tests {
         super::insert(3, 1, &conn)?;
         super::set_updated_at(1, &now, &conn)?;
 
-        let results = super::select_by_element_id(1, &conn)?;
+        let results = super::select_by_element_id(1, true, &conn)?;
         assert_eq!(results.len(), 3);
         // Should be ordered by id since updated_at is the same
         assert_eq!(results[0].id, 1);
@@ -402,8 +420,50 @@ mod tests {
     #[test]
     fn select_by_element_id_empty_db() -> Result<()> {
         let conn = conn();
-        let results = super::select_by_element_id(10, &conn)?;
+        let results = super::select_by_element_id(10, true, &conn)?;
         assert_eq!(results.len(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_element_id_filters_deleted_by_default() -> Result<()> {
+        let conn = conn();
+        conn.pragma_update(None, "foreign_keys", false)?;
+
+        let active = super::insert(1, 1, &conn)?;
+        let removed = super::insert(2, 1, &conn)?;
+        super::set_deleted_at(removed.id, Some(&OffsetDateTime::now_utc()), &conn)?;
+
+        // Excluding deleted: only the active link surfaces.
+        let visible = super::select_by_element_id(1, false, &conn)?;
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].id, active.id);
+
+        // Including deleted: both rows are returned.
+        let all = super::select_by_element_id(1, true, &conn)?;
+        assert_eq!(all.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_area_id_filters_deleted_by_default() -> Result<()> {
+        let conn = conn();
+        conn.pragma_update(None, "foreign_keys", false)?;
+
+        let active = super::insert(1, 1, &conn)?;
+        let removed = super::insert(1, 2, &conn)?;
+        super::set_deleted_at(removed.id, Some(&OffsetDateTime::now_utc()), &conn)?;
+
+        // Excluding deleted: only the active link surfaces.
+        let visible = super::select_by_area_id(1, false, &conn)?;
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].id, active.id);
+
+        // Including deleted: both rows are returned.
+        let all = super::select_by_area_id(1, true, &conn)?;
+        assert_eq!(all.len(), 2);
+
         Ok(())
     }
 
