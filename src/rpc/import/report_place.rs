@@ -1,5 +1,6 @@
 use crate::{
     db::main::place_report::blocking_queries::InsertArgs,
+    db::main::user::schema::User,
     db::{self},
     Result,
 };
@@ -23,7 +24,7 @@ pub struct Res {
     pub r#type: String,
 }
 
-pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
+pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
     let extra_fields = params.extra_fields.unwrap_or_default();
 
     let origin =
@@ -37,7 +38,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         r#type: params.r#type,
         extra_fields,
         ticket_url: None,
-        submitted_by: None,
+        submitted_by: Some(user.id),
     };
     let new_report = db::main::place_report::queries::insert(args, pool).await?;
     Ok(Res {
@@ -57,9 +58,26 @@ mod test {
     use actix_web::test;
     use serde_json::{Map, Value};
 
+    fn mock_user() -> crate::db::main::user::schema::User {
+        crate::db::main::user::schema::User {
+            id: 42,
+            name: "tester".into(),
+            password: String::new(),
+            roles: vec![],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
+            geofence: vec![],
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+        }
+    }
+
     #[test]
     async fn report_place() -> Result<()> {
         let pool = pool();
+        let user = mock_user();
 
         let params = super::Params {
             origin: "square".into(),
@@ -68,7 +86,7 @@ mod test {
             extra_fields: None,
         };
 
-        let res = super::run(params.clone(), &pool).await?;
+        let res = super::run(params.clone(), &user, &pool).await?;
 
         assert_eq!(params.origin, res.origin);
         assert_eq!(params.place_id, res.place_id);
@@ -78,6 +96,7 @@ mod test {
         assert!(report.ticket_url.is_none());
         assert!(report.extra_fields.is_empty());
         assert_eq!(1, report.origin_id);
+        assert_eq!(Some(user.id), report.submitted_by);
 
         Ok(())
     }
@@ -85,6 +104,7 @@ mod test {
     #[test]
     async fn report_place_stores_extra_fields() -> Result<()> {
         let pool = pool();
+        let user = mock_user();
 
         let mut extra = Map::new();
         extra.insert("comment".into(), Value::String("had lunch there".into()));
@@ -96,7 +116,7 @@ mod test {
             extra_fields: Some(extra.clone()),
         };
 
-        let res = super::run(params.clone(), &pool).await?;
+        let res = super::run(params.clone(), &user, &pool).await?;
         let report = db::main::place_report::queries::select_by_id(res.id, &pool).await?;
         assert_eq!(extra, report.extra_fields);
         Ok(())
@@ -105,6 +125,7 @@ mod test {
     #[test]
     async fn report_place_creates_a_new_row_on_every_call() -> Result<()> {
         let pool = pool();
+        let user = mock_user();
 
         let params = super::Params {
             origin: "square".into(),
@@ -113,9 +134,9 @@ mod test {
             extra_fields: None,
         };
 
-        let first = super::run(params.clone(), &pool).await?;
-        let second = super::run(params.clone(), &pool).await?;
-        let third = super::run(params, &pool).await?;
+        let first = super::run(params.clone(), &user, &pool).await?;
+        let second = super::run(params.clone(), &user, &pool).await?;
+        let third = super::run(params, &user, &pool).await?;
 
         assert_ne!(first.id, second.id);
         assert_ne!(second.id, third.id);
@@ -126,6 +147,7 @@ mod test {
     #[test]
     async fn report_place_allows_same_place_id_for_different_origins() -> Result<()> {
         let pool = pool();
+        let user = mock_user();
 
         let square_params = super::Params {
             origin: "square".into(),
@@ -140,8 +162,8 @@ mod test {
             extra_fields: None,
         };
 
-        let square_res = super::run(square_params, &pool).await?;
-        let coinos_res = super::run(coinos_params, &pool).await?;
+        let square_res = super::run(square_params, &user, &pool).await?;
+        let coinos_res = super::run(coinos_params, &user, &pool).await?;
 
         assert_ne!(square_res.id, coinos_res.id);
         assert_eq!(42, square_res.place_id);
@@ -153,6 +175,7 @@ mod test {
     #[test]
     async fn report_place_allows_same_origin_for_different_types() -> Result<()> {
         let pool = pool();
+        let user = mock_user();
 
         let outdated_params = super::Params {
             origin: "square".into(),
@@ -167,8 +190,8 @@ mod test {
             extra_fields: None,
         };
 
-        let outdated_res = super::run(outdated_params, &pool).await?;
-        let missing_res = super::run(missing_params, &pool).await?;
+        let outdated_res = super::run(outdated_params, &user, &pool).await?;
+        let missing_res = super::run(missing_params, &user, &pool).await?;
 
         assert_ne!(outdated_res.id, missing_res.id);
         assert_eq!("verification", outdated_res.r#type);
@@ -180,6 +203,7 @@ mod test {
     #[test]
     async fn report_place_unknown_origin_rejected() -> Result<()> {
         let pool = pool();
+        let user = mock_user();
 
         let params = super::Params {
             origin: "not-configured".into(),
@@ -188,7 +212,7 @@ mod test {
             extra_fields: None,
         };
 
-        let res = super::run(params, &pool).await;
+        let res = super::run(params, &user, &pool).await;
         assert!(res.is_err());
         Ok(())
     }

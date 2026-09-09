@@ -707,7 +707,7 @@ pub async fn handle(
             super::import::ensure_can_access_origin(effective_roles, token, &params.origin)?;
             RpcResponse::from(
                 req.id.clone(),
-                super::import::report_place::run(params, &main_pool).await?,
+                super::import::report_place::run(params, user.unwrap(), &main_pool).await?,
             )
         }
         RpcMethod::GetSubmittedPlace => {
