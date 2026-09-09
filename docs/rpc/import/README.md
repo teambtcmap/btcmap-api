@@ -9,9 +9,14 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 - [report_place](report_place.md): Submits a typed problem report against an existing place (e.g. outdated entry, missing payment method).
 - [revoke_submitted_place](revoke_submitted_place.md): Cancels a pending import or reports that a place no longer accepts Bitcoin.
 - [submit_place](submit_place.md): Adds new places to the map, or patches an existing one if `(origin, external_id)` is resubmitted.
+- [sync_place_reports](sync_place_reports.md): Pushes open place reports to the BTC Map Gitea issue tracker for reviewer triage.
 
 ## Authentication
 
 We provide bearer tokens for all trusted sources, you just need to include your token in HTTP request headers.
 
 Places-source tokens are scoped with an `import_origins` JSON array. Use the source origin, for example `["coinos"]`, to restrict a token to one vendor. Use `["*"]` for a token that can manage submissions for all origins.
+
+## Admin-only maintenance
+
+Sync-style methods (such as `sync_place_reports`) are restricted to `root` and `admin` tokens; `places_source` tokens can call `submit_place`, `report_place`, `get_submitted_place`, and `revoke_submitted_place`, but cannot drive sync runs themselves.

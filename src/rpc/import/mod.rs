@@ -3,6 +3,7 @@ pub mod get_submitted_place;
 pub mod report_place;
 pub mod revoke_submitted_place;
 pub mod submit_place;
+pub mod sync_place_reports;
 pub mod sync_submitted_places;
 
 use crate::db::main::{access_token::schema::AccessToken, user::schema::Role};

@@ -102,6 +102,7 @@ pub enum RpcMethod {
     GetSubmittedPlace,
     RevokeSubmittedPlace,
     SyncSubmittedPlaces,
+    SyncPlaceReports,
     GetPlaceImportOrigins,
     // Electrum server
     GetElectrumServers,
@@ -189,6 +190,8 @@ impl Role {
         RpcMethod::GetSubmittedPlace,
         // Admins can list configured import origins
         RpcMethod::GetPlaceImportOrigins,
+        // Admins can sync pending place reports to Gitea
+        RpcMethod::SyncPlaceReports,
         // Admins can get daily infrastructure report
         RpcMethod::GetDailyInfraReport,
         // Admins can get top clients report
@@ -736,6 +739,10 @@ pub async fn handle(
         RpcMethod::SyncSubmittedPlaces => RpcResponse::from(
             req.id.clone(),
             super::import::sync_submitted_places::run(&main_pool).await?,
+        ),
+        RpcMethod::SyncPlaceReports => RpcResponse::from(
+            req.id.clone(),
+            super::import::sync_place_reports::run(&main_pool).await?,
         ),
         RpcMethod::GetPlaceImportOrigins => RpcResponse::from(
             req.id.clone(),

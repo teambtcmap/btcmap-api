@@ -19,6 +19,23 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<Option<ImportOrig
         .map_err(Into::into)
 }
 
+pub fn select_by_id(id: i64, conn: &Connection) -> Result<Option<ImportOrigin>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {id} = ?1
+        "#,
+        projection = ImportOrigin::projection(),
+        table = schema::TABLE_NAME,
+        id = Columns::Id.as_ref(),
+    );
+    conn.prepare(&sql)?
+        .query_row(params![id], ImportOrigin::mapper())
+        .optional()
+        .map_err(Into::into)
+}
+
 pub fn select_all(conn: &Connection) -> Result<Vec<ImportOrigin>> {
     let sql = format!(
         r#"
@@ -64,6 +81,30 @@ mod test {
     fn select_by_name_missing() -> Result<()> {
         let conn = conn();
         let origin = super::select_by_name("does-not-exist", &conn)?;
+        assert_eq!(None, origin);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id_round_trips_seeded_origin() -> Result<()> {
+        let conn = conn();
+        let origin = super::select_by_id(1, &conn)?;
+        assert_eq!(
+            Some(ImportOrigin {
+                id: 1,
+                name: "square".to_string(),
+                gitea_sync_enabled: true,
+                gitea_label_id: Some(1307),
+            }),
+            origin
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_id_missing_returns_none() -> Result<()> {
+        let conn = conn();
+        let origin = super::select_by_id(999, &conn)?;
         assert_eq!(None, origin);
         Ok(())
     }
