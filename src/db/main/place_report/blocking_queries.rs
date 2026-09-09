@@ -9,13 +9,14 @@ pub struct InsertArgs {
     pub r#type: String,
     pub extra_fields: Map<String, Value>,
     pub ticket_url: Option<String>,
+    pub submitted_by: Option<i64>,
 }
 
 pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceReport> {
     let sql = format!(
         r#"
-            INSERT INTO {table} ({place_id}, {origin_id}, {type}, {extra_fields}, {ticket_url})
-            VALUES (:place_id, :origin_id, :type, json(:extra_fields), :ticket_url)
+            INSERT INTO {table} ({place_id}, {origin_id}, {type}, {extra_fields}, {ticket_url}, {submitted_by})
+            VALUES (:place_id, :origin_id, :type, json(:extra_fields), :ticket_url, :submitted_by)
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
@@ -24,6 +25,7 @@ pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceReport> {
         type = Columns::Type.as_ref(),
         extra_fields = Columns::ExtraFields.as_ref(),
         ticket_url = Columns::TicketUrl.as_ref(),
+        submitted_by = Columns::SubmittedBy.as_ref(),
         projection = PlaceReport::projection(),
     );
     conn.query_row(
@@ -34,6 +36,7 @@ pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceReport> {
             ":type": &args.r#type,
             ":extra_fields": serde_json::to_string(&args.extra_fields)?,
             ":ticket_url": &args.ticket_url,
+            ":submitted_by": args.submitted_by,
         },
         PlaceReport::mapper(),
     )
@@ -75,6 +78,7 @@ mod test {
             r#type: "verification".to_string(),
             extra_fields: extra_fields.clone(),
             ticket_url: Some("https://example.com/ticket/1".to_string()),
+            submitted_by: None,
         };
         let report = super::insert(&args, &conn)?;
         assert_eq!(args.place_id, report.place_id);
@@ -82,6 +86,7 @@ mod test {
         assert_eq!(args.r#type, report.r#type);
         assert_eq!(extra_fields, report.extra_fields);
         assert_eq!(args.ticket_url, report.ticket_url);
+        assert_eq!(args.submitted_by, report.submitted_by);
         assert!(report.closed_at.is_none());
         assert!(report.deleted_at.is_none());
 
@@ -99,6 +104,7 @@ mod test {
             r#type: "verification".to_string(),
             extra_fields: Map::new(),
             ticket_url: None,
+            submitted_by: None,
         };
 
         let first = super::insert(&args, &conn)?;

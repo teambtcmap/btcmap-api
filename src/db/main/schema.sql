@@ -179,6 +179,7 @@ CREATE TABLE place_report(
     type TEXT NOT NULL,
     extra_fields TEXT NOT NULL DEFAULT (json_object()),
     ticket_url TEXT,
+    submitted_by INTEGER REFERENCES "user"(id),
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     closed_at TEXT,
@@ -228,7 +229,7 @@ CREATE TRIGGER place_submission_updated_at UPDATE OF origin, external_id, lat, l
 BEGIN
     UPDATE place_submission SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER place_report_updated_at UPDATE OF place_id, origin_id, type, extra_fields, ticket_url, created_at, closed_at, deleted_at ON place_report
+CREATE TRIGGER place_report_updated_at UPDATE OF place_id, origin_id, type, extra_fields, ticket_url, submitted_by, created_at, closed_at, deleted_at ON place_report
 BEGIN
     UPDATE place_report SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;

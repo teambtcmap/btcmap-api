@@ -37,6 +37,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
         r#type: params.r#type,
         extra_fields,
         ticket_url: None,
+        submitted_by: None,
     };
     let new_report = db::main::place_report::queries::insert(args, pool).await?;
     Ok(Res {
