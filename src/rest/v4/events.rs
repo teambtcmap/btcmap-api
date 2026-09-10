@@ -20,18 +20,24 @@ use time::format_description::well_known::Rfc3339;
 use time::macros::datetime;
 use time::OffsetDateTime;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, rename = "Event")]
 pub struct Item {
+    #[ts(type = "number")]
     pub id: i64,
+    #[ts(optional)]
     pub area_id: Option<i64>,
     pub lat: f64,
     pub lon: f64,
     pub name: String,
     pub website: String,
+    #[ts(type = "string")]
     #[serde(with = "time::serde::rfc3339")]
     pub starts_at: OffsetDateTime,
+    #[ts(type = "string", optional)]
     #[serde(with = "time::serde::rfc3339::option")]
     pub ends_at: Option<OffsetDateTime>,
+    #[ts(optional)]
     pub cron_schedule: Option<String>,
 }
 
@@ -146,7 +152,11 @@ pub async fn get_by_area(
 /// the area unless at least one of the area's geometries reports it as
 /// contained. The bbox pre-filter has already discarded obvious misses; this
 /// loop only runs on the survivors.
-fn event_point_in_geometries(lon: f64, lat: f64, geometries: &[GeoJsonGeometry]) -> bool {
+pub(crate) fn event_point_in_geometries(
+    lon: f64,
+    lat: f64,
+    geometries: &[GeoJsonGeometry],
+) -> bool {
     if geometries.is_empty() {
         return false;
     }

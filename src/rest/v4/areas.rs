@@ -4,6 +4,7 @@ use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
+use crate::rest::v4::events::{event_point_in_geometries, Item as EventItem};
 use crate::rest::v4::top_editors::{
     extract_tip_url, far_future, parse_date, validate_limit, TopEditor, EXCLUDED_USER_IDS,
 };
@@ -13,6 +14,7 @@ use actix_web::{
     delete, get, post, put, web::Data, web::Json, web::Path, web::Query, HttpResponse,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use time::OffsetDateTime;
 
 #[derive(Deserialize)]
@@ -32,13 +34,14 @@ pub struct AreaSearchResult {
     pub url_alias: String,
     pub icon: Option<String>,
     pub website_url: String,
+    pub upcoming_events: Vec<EventItem>,
 }
 
 #[get("")]
 pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaSearchResult>> {
     let type_filter = args.r#type.clone();
 
-    let areas = if let (Some(lat), Some(lon)) = (args.lat, args.lon) {
+    let (areas, attach_events) = if let (Some(lat), Some(lon)) = (args.lat, args.lon) {
         if !(-90.0..=90.0).contains(&lat) {
             return Err(RestApiError::new(
                 RestApiErrorCode::InvalidInput,
@@ -53,16 +56,18 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
             ));
         }
 
-        service::area::find_areas_by_lat_lon(lat, lon, &pool)
+        let areas = service::area::find_areas_by_lat_lon(lat, lon, &pool)
             .await
-            .map_err(|_| RestApiError::database())?
+            .map_err(|_| RestApiError::database())?;
+        (areas, true)
     } else {
-        db::main::area::queries::select(None, false, None, &pool)
+        let areas = db::main::area::queries::select(None, false, None, &pool)
             .await
-            .map_err(|_| RestApiError::database())?
+            .map_err(|_| RestApiError::database())?;
+        (areas, false)
     };
 
-    let results: Vec<AreaSearchResult> = areas
+    let filtered: Vec<_> = areas
         .into_iter()
         .filter(|area| {
             if let Some(ref filter_type) = type_filter {
@@ -73,6 +78,18 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
             }
             true
         })
+        .collect();
+
+    let events_by_area = if attach_events {
+        upcoming_events_by_area(&filtered, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?
+    } else {
+        HashMap::new()
+    };
+
+    let results: Vec<AreaSearchResult> = filtered
+        .into_iter()
         .map(|area| {
             let r#type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
             let singular_type = if let Some(stripped) = r#type.strip_suffix("ies") {
@@ -83,6 +100,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
                 r#type.to_string()
             };
             let url_alias = area.alias();
+            let upcoming_events = events_by_area.get(&area.id).cloned().unwrap_or_default();
             AreaSearchResult {
                 id: area.id,
                 name: area.name(),
@@ -94,11 +112,50 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string()),
                 website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
+                upcoming_events,
             }
         })
         .collect();
 
     Ok(Json(results))
+}
+
+async fn upcoming_events_by_area(
+    areas: &[crate::db::main::area::schema::Area],
+    pool: &MainPool,
+) -> crate::Result<HashMap<i64, Vec<EventItem>>> {
+    let mut map: HashMap<i64, Vec<EventItem>> = HashMap::new();
+    if areas.is_empty() {
+        return Ok(map);
+    }
+
+    let mut west = f64::INFINITY;
+    let mut south = f64::INFINITY;
+    let mut east = f64::NEG_INFINITY;
+    let mut north = f64::NEG_INFINITY;
+    for area in areas {
+        west = west.min(area.bbox_west);
+        south = south.min(area.bbox_south);
+        east = east.max(area.bbox_east);
+        north = north.max(area.bbox_north);
+    }
+
+    let candidates =
+        db::main::event::queries::select_upcoming_by_bbox(west, south, east, north, pool).await?;
+
+    for area in areas {
+        let geometries = area.geo_json_geometries().unwrap_or_default();
+        let events: Vec<EventItem> = candidates
+            .iter()
+            .filter(|event| event_point_in_geometries(event.lon, event.lat, &geometries))
+            .map(|event| EventItem::from(event.clone()))
+            .collect();
+        if !events.is_empty() {
+            map.insert(area.id, events);
+        }
+    }
+
+    Ok(map)
 }
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
@@ -190,6 +247,7 @@ pub async fn get_saved(auth: Auth, pool: Data<MainPool>) -> Res<Vec<AreaSearchRe
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string()),
                 website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
+                upcoming_events: vec![],
             }
         })
         .collect();
@@ -471,6 +529,7 @@ mod test {
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use serde_json::json;
+    use time::macros::datetime;
 
     #[test]
     async fn search_invalid_lat_returns_400() -> Result<()> {
@@ -547,6 +606,166 @@ mod test {
 
         assert!(!res.is_empty());
         assert_eq!(res[0].name, "Phuket");
+        Ok(())
+    }
+
+    fn phuket_polygon() -> serde_json::Value {
+        json!({
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[
+                    [98.21, 7.74],
+                    [98.49, 7.74],
+                    [98.49, 8.21],
+                    [98.21, 8.21],
+                    [98.21, 7.74]
+                ]]
+            }
+        })
+    }
+
+    fn phuket_area_tags(name: &str) -> serde_json::Map<String, serde_json::Value> {
+        let mut tags = Area::mock_tags();
+        tags.insert("name".into(), json!(name));
+        tags.insert("type".into(), json!("country"));
+        tags.insert("geo_json".into(), phuket_polygon());
+        tags
+    }
+
+    #[test]
+    async fn search_by_lat_lon_attaches_upcoming_event_inside_polygon() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let event = db::main::event::queries::insert(
+            None,
+            7.97,
+            98.33,
+            "future_event".to_string(),
+            "https://example.com".to_string(),
+            Some(datetime!(2099-01-01 0:00 UTC)),
+            None,
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?lat=7.9&lon=98.3").to_request();
+        let res: Vec<AreaSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].id, area.id);
+        assert_eq!(res[0].upcoming_events.len(), 1);
+        assert_eq!(res[0].upcoming_events[0].id, event.id);
+        Ok(())
+    }
+
+    #[test]
+    async fn search_by_lat_lon_omits_event_outside_polygon() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        db::main::event::queries::insert(
+            None,
+            51.5,
+            -0.1,
+            "london".to_string(),
+            "https://example.com".to_string(),
+            Some(datetime!(2099-01-01 0:00 UTC)),
+            None,
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?lat=7.9&lon=98.3").to_request();
+        let res: Vec<AreaSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert!(res[0].upcoming_events.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn search_by_lat_lon_omits_past_event() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        db::main::event::queries::insert(
+            None,
+            7.97,
+            98.33,
+            "past".to_string(),
+            "https://example.com".to_string(),
+            Some(datetime!(2020-01-01 0:00 UTC)),
+            None,
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?lat=7.9&lon=98.3").to_request();
+        let res: Vec<AreaSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert!(res[0].upcoming_events.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn search_by_lat_lon_omits_event_without_starts_at() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        db::main::event::queries::insert(
+            None,
+            7.97,
+            98.33,
+            "no_starts_at".to_string(),
+            "https://example.com".to_string(),
+            None,
+            None,
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?lat=7.9&lon=98.3").to_request();
+        let res: Vec<AreaSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert!(res[0].upcoming_events.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn search_without_lat_lon_returns_empty_upcoming_events() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/").to_request();
+        let res: Vec<AreaSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert!(res[0].upcoming_events.is_empty());
         Ok(())
     }
 

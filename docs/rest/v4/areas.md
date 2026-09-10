@@ -157,12 +157,25 @@ curl 'https://api.btcmap.org/v4/areas?lat=7.9&lon=98.3'
 ```json
 [
   {
-    "id": 456,
-    "name": "Phuket Bitcoin Meetup",
+    "id": 671,
+    "name": "Phuket Bitcoin",
     "type": "community",
     "url_alias": "bitcoin-powerhouse",
-    "icon": "https://static.btcmap.org/images/areas/671.jpg",
-    "website_url": "https://btcmap.org/community/bitcoin-powerhouse"
+    "icon": "https://static.btcmap.org/images/areas/671_square.jpg",
+    "website_url": "https://btcmap.org/community/bitcoin-powerhouse",
+    "upcoming_events": [
+      {
+        "id": 122,
+        "area_id": 671,
+        "lat": 7.899971135374869,
+        "lon": 98.36758749588596,
+        "name": "Central Bitcoin Meetup",
+        "website": "https://www.meetup.com/phuket-bitcoin-meetup/",
+        "starts_at": "2026-09-25T19:00:00Z",
+        "ends_at": "2026-09-25T22:00:00Z",
+        "cron_schedule": null
+      }
+    ]
   }
 ]
 ```
@@ -177,6 +190,23 @@ curl 'https://api.btcmap.org/v4/areas?lat=7.9&lon=98.3'
 | `url_alias` | String | `paris` | URL-friendly identifier for the area. |
 | `icon` | String or null | `https://static.btcmap.org/images/areas/123.png` | Square icon URL for the area, if set. |
 | `website_url` | String | `https://btcmap.org/country/th` | URL to the BTC Map page for this area. |
+| `upcoming_events` | Array of Event | `[]` | Upcoming events whose location falls inside this area's geometry. Only populated when `lat` and `lon` are provided; events without `starts_at` are excluded. See [Event](#event-object) below. |
+
+#### Event Object
+
+Each entry in `upcoming_events` matches the [Events API](events.md) response shape.
+
+| Name | Type | Example | Description |
+|------|------|---------|-------------|
+| `id` | Number | `122` | Event ID. |
+| `area_id` | Number or null | `671` | ID of the linked area, if any. Most events do not have this set. |
+| `lat` | Number | `7.9` | Event latitude. |
+| `lon` | Number | `98.3` | Event longitude. |
+| `name` | String | `Central Bitcoin Meetup` | Event name. |
+| `website` | String | `https://example.com` | Event website. |
+| `starts_at` | String (RFC 3339) | `2026-09-25T19:00:00Z` | Event start time. |
+| `ends_at` | String (RFC 3339) or null | `2026-09-25T22:00:00Z` | Event end time, if set. |
+| `cron_schedule` | String or null | `null` | Cron expression for recurring events, if set. |
 
 ### Get Area
 

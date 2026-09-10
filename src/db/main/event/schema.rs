@@ -22,7 +22,7 @@ pub enum Columns {
 }
 
 #[allow(dead_code)]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Event {
     pub id: i64,
     pub area_id: Option<i64>,

@@ -163,6 +163,39 @@ pub fn select_by_bbox(
         .map_err(Into::into)
 }
 
+/// Bbox pre-filter for upcoming events. Drops rows whose `starts_at` is
+/// missing or in the past so callers can use the result as a final list
+/// without re-checking timestamps. The caller is still responsible for the
+/// precise geojson contains check on the returned candidates.
+pub fn select_upcoming_by_bbox(
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+    conn: &Connection,
+) -> Result<Vec<Event>> {
+    let now = OffsetDateTime::now_utc().format(&Rfc3339)?;
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            WHERE {DeletedAt} IS NULL
+              AND {StartsAt} IS NOT NULL
+              AND {StartsAt} != ''
+              AND {StartsAt} >= ?5
+              AND {Lat} >= ?2
+              AND {Lat} <= ?4
+              AND {Lon} >= ?1
+              AND {Lon} <= ?3
+        "#,
+        projection = Event::projection(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![west, south, east, north, now], Event::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn set_deleted_at(
     id: i64,
     deleted_at: Option<OffsetDateTime>,
