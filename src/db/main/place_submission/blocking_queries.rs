@@ -98,6 +98,27 @@ pub fn select_open_and_not_revoked_by_origin(
         .map_err(Into::into)
 }
 
+pub fn select_revoked_with_ticket_url(conn: &Connection) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {revoked} = 1 AND {ticket_url} IS NOT NULL
+            ORDER BY {updated_at} DESC, {id} DESC
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        revoked = Columns::Revoked.as_ref(),
+        ticket_url = Columns::TicketUrl.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_origin_counts_since(
     since: OffsetDateTime,
     conn: &Connection,
@@ -586,6 +607,52 @@ mod test {
 
         let counts = super::select_origin_counts_since(datetime!(2030-01-01 00:00 UTC), &conn)?;
         assert!(counts.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_revoked_with_ticket_url_filters_revoked_with_tickets() -> Result<()> {
+        let conn = conn();
+
+        let insert = |external_id: &str| -> Result<i64> {
+            let args = InsertArgs {
+                origin: "square".to_string(),
+                external_id: external_id.to_string(),
+                lat: 1.0,
+                lon: 2.0,
+                category: "cafe".to_string(),
+                name: "Place".to_string(),
+                extra_fields: Map::new(),
+                submitted_by: None,
+            };
+            Ok(super::insert(&args, &conn)?.id)
+        };
+
+        let revoked_with_ticket = insert("1")?;
+        let revoked_without_ticket = insert("2")?;
+        let pending_with_ticket = insert("3")?;
+        let pending_without_ticket = insert("4")?;
+
+        super::set_revoked(revoked_with_ticket, true, &conn)?;
+        super::set_ticket_url(
+            revoked_with_ticket,
+            "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/1".to_string(),
+            &conn,
+        )?;
+        super::set_revoked(revoked_without_ticket, true, &conn)?;
+        super::set_ticket_url(
+            pending_with_ticket,
+            "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/3".to_string(),
+            &conn,
+        )?;
+
+        let _ = pending_without_ticket;
+
+        let submissions = super::select_revoked_with_ticket_url(&conn)?;
+
+        assert_eq!(1, submissions.len());
+        assert_eq!(revoked_with_ticket, submissions[0].id);
 
         Ok(())
     }

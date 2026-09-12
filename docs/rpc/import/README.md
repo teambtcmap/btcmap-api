@@ -10,6 +10,7 @@ The RPC API provides a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) int
 - [revoke_submitted_place](revoke_submitted_place.md): Cancels a pending import or reports that a place no longer accepts Bitcoin.
 - [submit_place](submit_place.md): Adds new places to the map, or patches an existing one if `(origin, external_id)` is resubmitted.
 - [sync_place_reports](sync_place_reports.md): Pushes open place reports to the BTC Map Gitea issue tracker for reviewer triage.
+- [sync_submitted_places](sync_submitted_places.md): Pushes pending place submissions to the BTC Map Gitea issue tracker and applies revocations to their tickets.
 
 ## Authentication
 
