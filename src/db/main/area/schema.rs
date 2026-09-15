@@ -85,11 +85,30 @@ impl Area {
     }
 
     pub fn name(&self) -> String {
+        self.localized_tag("name", None)
+    }
+
+    pub fn localized_tag(&self, base: &str, lang: Option<&str>) -> String {
+        match lang {
+            Some(lang) => {
+                let mut value = self.tag(&format!("{base}:{lang}"));
+                if value.is_empty() && lang != "en" {
+                    value = self.tag(&format!("{base}:en"));
+                }
+                if value.is_empty() {
+                    value = self.tag(base);
+                }
+                value.to_string()
+            }
+            None => self.tag(base).to_string(),
+        }
+    }
+
+    fn tag(&self, name: &str) -> &str {
         self.tags
-            .get("name")
-            .map(|it| it.as_str().unwrap_or_default())
+            .get(name)
+            .and_then(|it| it.as_str())
             .unwrap_or_default()
-            .into()
     }
 
     pub fn alias(&self) -> String {

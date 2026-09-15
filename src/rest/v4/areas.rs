@@ -172,11 +172,21 @@ pub struct GetByIdRes {
     pub description: String,
 }
 
+#[derive(Deserialize)]
+pub struct GetByIdArgs {
+    pub lang: Option<String>,
+}
+
 #[get("{id}")]
-pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Res<GetByIdRes> {
+pub async fn get_by_id(
+    id: Path<String>,
+    args: Query<GetByIdArgs>,
+    pool: Data<MainPool>,
+) -> Res<GetByIdRes> {
     if id.len() > 128 {
         return Err(RestApiError::invalid_input("id too long"));
     }
+    let lang = args.lang.as_deref().map(|l| &l[..2.min(l.len())]);
     let area = db::main::area::queries::select_by_id_or_alias(id.into_inner(), &pool)
         .await
         .map_err(|e| match e {
@@ -192,15 +202,9 @@ pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Res<GetByIdRes
         r#type.to_string()
     };
     let url_alias = area.alias();
-    let description = area
-        .tags
-        .get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
     Ok(Json(GetByIdRes {
         id: area.id,
-        name: area.name(),
+        name: area.localized_tag("name", lang),
         r#type: r#type.to_string(),
         url_alias: url_alias.clone(),
         icon: area
@@ -214,7 +218,7 @@ pub async fn get_by_id(id: Path<String>, pool: Data<MainPool>) -> Res<GetByIdRes
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
-        description,
+        description: area.localized_tag("description", lang),
     }))
 }
 
@@ -818,6 +822,71 @@ mod test {
         let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.name, "Phuket");
         assert_eq!(res.description, "A beautiful island in Thailand");
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_localizes_name_and_description() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert("name".into(), json!("Phuket"));
+        tags.insert("name:en".into(), json!("Phuket EN"));
+        tags.insert("name:ru".into(), json!("Пхукет"));
+        tags.insert("type".into(), json!("country"));
+        tags.insert("description".into(), json!("A beautiful island"));
+        tags.insert("description:en".into(), json!("English description"));
+        tags.insert("description:ru".into(), json!("Красивый остров"));
+        let area = db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/areas").service(super::get_by_id)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}?lang=ru", area.id))
+            .to_request();
+        let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.name, "Пхукет");
+        assert_eq!(res.description, "Красивый остров");
+
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}?lang=fr", area.id))
+            .to_request();
+        let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.name, "Phuket EN");
+        assert_eq!(res.description, "English description");
+
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}", area.id))
+            .to_request();
+        let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.name, "Phuket");
+        assert_eq!(res.description, "A beautiful island");
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_falls_back_to_base_tag() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert("name".into(), json!("Phuket"));
+        tags.insert("type".into(), json!("country"));
+        tags.insert("description".into(), json!("A beautiful island"));
+        let area = db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/areas").service(super::get_by_id)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}?lang=ru", area.id))
+            .to_request();
+        let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.name, "Phuket");
+        assert_eq!(res.description, "A beautiful island");
         Ok(())
     }
 

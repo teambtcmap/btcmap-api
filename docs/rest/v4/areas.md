@@ -222,6 +222,12 @@ Retrieves a specific area by its ID or alias (url slug).
 |-----------|------|---------|---------|-------------|
 | `id` | String | `123` or `grand-paris` | - | **Required**. Area ID (numeric) or alias (url slug). |
 
+#### Query Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `lang` | String | `ru` | - | Two-letter language code. Localized `name:<lang>`/`description:<lang>` tags are preferred, falling back to `name:en`/`description:en` and then the base `name`/`description` tag. |
+
 #### Examples
 
 ##### Get Area by ID
