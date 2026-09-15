@@ -49,10 +49,10 @@ Events with no `starts_at` (permanent events) are always included regardless of 
 ### btcmap-cli
 
 ```bash
-btcmap-cli get-events
-btcmap-cli get-events --include-past
-btcmap-cli get-events --include-deleted
-btcmap-cli get-events --include-past --include-deleted
+btcmap-cli event get-events
+btcmap-cli event get-events --include-past
+btcmap-cli event get-events --include-deleted
+btcmap-cli event get-events --include-past --include-deleted
 ```
 
 ### curl

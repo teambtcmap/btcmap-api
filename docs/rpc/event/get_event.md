@@ -40,7 +40,7 @@ Retreives an event by id
 ### btcmap-cli
 
 ```bash
-btcmap-cli get-event 1
+btcmap-cli event get-event 1
 ```
 
 ### curl

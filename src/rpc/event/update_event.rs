@@ -22,10 +22,22 @@ mod optional_rfc3339 {
     }
 }
 
+mod optional {
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        Ok(Some(Option::<T>::deserialize(deserializer)?))
+    }
+}
+
 #[derive(Deserialize)]
 pub struct Params {
     pub id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional::deserialize")]
     pub area_id: Option<Option<i64>>,
     #[serde(default)]
     lat: Option<f64>,
@@ -39,7 +51,7 @@ pub struct Params {
     starts_at: Option<Option<OffsetDateTime>>,
     #[serde(default, deserialize_with = "optional_rfc3339::deserialize")]
     ends_at: Option<Option<OffsetDateTime>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional::deserialize")]
     cron_schedule: Option<Option<String>>,
 }
 
@@ -324,20 +336,26 @@ mod test {
     fn parses_null_as_clear() {
         let v = json!({
             "id": 1,
+            "area_id": null,
             "starts_at": null,
             "ends_at": null,
+            "cron_schedule": null,
         });
         let p: super::Params = serde_json::from_value(v).unwrap();
+        assert_eq!(p.area_id, Some(None));
         assert_eq!(p.starts_at, Some(None));
         assert_eq!(p.ends_at, Some(None));
+        assert_eq!(p.cron_schedule, Some(None));
     }
 
     #[test]
     fn omits_field() {
         let v = json!({ "id": 1, "name": "renamed" });
         let p: super::Params = serde_json::from_value(v).unwrap();
+        assert_eq!(p.area_id, None);
         assert_eq!(p.starts_at, None);
         assert_eq!(p.ends_at, None);
+        assert_eq!(p.cron_schedule, None);
         assert_eq!(p.name.as_deref(), Some("renamed"));
     }
 

@@ -69,7 +69,14 @@ and event manager callers. An empty geofence means unrestricted.
 ### btcmap-cli
 
 ```bash
-btcmap-cli update-event 1 --name 'Phuket Bitcoin Meetup (renamed)'
+btcmap-cli event update-event 1 --name 'Phuket Bitcoin Meetup (renamed)'
+```
+
+To clear a nullable field instead of setting it, use the matching `--clear-*` flag:
+
+```bash
+# Unlink the event from its area and drop its fixed schedule
+btcmap-cli event update-event 1 --clear-area-id --clear-starts-at --clear-ends-at --clear-cron-schedule
 ```
 
 ### curl

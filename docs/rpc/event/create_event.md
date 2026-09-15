@@ -40,6 +40,8 @@ For a one-off event without a fixed end time, you may provide only the `starts_a
 
 The optional `cron_schedule` field accepts a cron expression that describes when the event recurs. It is used internally to refresh upcoming event instances and may be omitted for one-off events.
 
+The optional `area_id` field links the event to a [community area](../area/README.md). It is mainly relevant for [`event_manager`](../user-methods.md#set_user_geofence) callers, who must keep events inside their geofence either by linking an `area_id` in the fence or by placing `(lat, lon)` inside a fenced area.
+
 ## Result Format
 
 ```json
@@ -68,7 +70,7 @@ means unrestricted.
 ### btcmap-cli
 
 ```bash
-btcmap-cli create-event --name 'Chiang Mai Weekly Meetup' \
+btcmap-cli event create-event --name 'Chiang Mai Weekly Meetup' \
   --lat 18.7822 \
   --lon 98.9942 \
   --website 'https://www.meetup.com/bitcoinsinchiangmai/' \

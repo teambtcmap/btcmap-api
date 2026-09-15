@@ -40,7 +40,7 @@ and event manager callers. An empty geofence means unrestricted.
 ### btcmap-cli
 
 ```bash
-btcmap-cli delete-event 1
+btcmap-cli event delete-event 1
 ```
 
 ### curl
