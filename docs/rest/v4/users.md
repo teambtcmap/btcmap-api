@@ -40,6 +40,7 @@ curl https://api.btcmap.org/v4/users/me \
   "roles": ["user", "admin"],
   "saved_places": [{"id": 1, "name": "Bitcoin Cafe"}],
   "saved_areas": [{"id": 2, "name": "Downtown District"}],
+  "geofence": [],
   "npub": "npub1..."
 }
 ```
@@ -51,6 +52,7 @@ curl https://api.btcmap.org/v4/users/me \
 | roles | Array  | List of user roles (e.g., "user", "admin", "root") |
 | saved_places | Array | List of saved places with `id` and `name` fields |
 | saved_areas | Array | List of saved areas with `id` and `name` fields |
+| geofence | Array of Numbers | Area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
 | npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
 
 ### Create User
@@ -133,13 +135,23 @@ curl -X POST https://api.btcmap.org/v4/users/satoshi/tokens \
 
 ```json
 {
-  "token": "550e8400-e29b-41d4-a716-446655440000"
+  "token": "550e8400-e29b-41d4-a716-446655440000",
+  "user": {
+    "id": 124,
+    "name": "satoshi",
+    "roles": ["user"],
+    "saved_places": [{"id": 1, "name": "Bitcoin Cafe"}],
+    "saved_areas": [{"id": 2, "name": "Downtown District"}],
+    "geofence": [],
+    "npub": null
+  }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | token | String | New authentication token (UUID v4) |
+| user | Object | Authenticated user (same shape as [Get Authenticated User](#get-authenticated-user)) |
 
 ### Change Password
 
@@ -214,6 +226,7 @@ Returns the authenticated user (same shape as [Get Authenticated User](#get-auth
   "roles": ["user"],
   "saved_places": [],
   "saved_areas": [],
+  "geofence": [],
   "npub": null
 }
 ```
@@ -225,6 +238,7 @@ Returns the authenticated user (same shape as [Get Authenticated User](#get-auth
 | roles | Array  | List of user roles |
 | saved_places | Array | Always empty on this endpoint |
 | saved_areas | Array | Always empty on this endpoint |
+| geofence | Array of Numbers | Area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
 | npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
 
 ### Get Linked Nostr Identity
