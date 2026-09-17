@@ -33,7 +33,11 @@ pub struct Item {
     #[serde(with = "time::serde::rfc3339")]
     pub starts_at: OffsetDateTime,
     #[ts(type = "string", optional)]
-    #[serde(with = "time::serde::rfc3339::option")]
+    #[serde(
+        with = "time::serde::rfc3339::option",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub ends_at: Option<OffsetDateTime>,
 }
 
@@ -233,6 +237,7 @@ mod test {
         assert_eq!(event.id, res.first().unwrap()["id"].as_i64().unwrap());
         assert!(res.first().unwrap().get("area_id").is_none());
         assert!(res.first().unwrap().get("cron_schedule").is_none());
+        assert!(res.first().unwrap().get("ends_at").is_none());
         Ok(())
     }
 

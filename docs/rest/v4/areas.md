@@ -202,7 +202,7 @@ Each entry in `upcoming_events` matches the [Events API](events.md) response sha
 | `name` | String | `Central Bitcoin Meetup` | Event name. |
 | `website` | String | `https://example.com` | Event website. |
 | `starts_at` | String (RFC 3339) | `2026-09-25T19:00:00Z` | Event start time. |
-| `ends_at` | String (RFC 3339) or null | `2026-09-25T22:00:00Z` | Event end time, if set. |
+| `ends_at` | String (RFC 3339), omitted when absent | `2026-09-25T22:00:00Z` | Event end time, if set. |
 
 ### Get Area
 

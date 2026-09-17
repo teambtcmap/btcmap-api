@@ -26,7 +26,7 @@ Retrieves a list of all non-deleted events with future start dates. Events witho
 | `name` | String | Name of the event. |
 | `website` | String | Website URL for the event. |
 | `starts_at` | ISO 8601 datetime | Start time of the event. |
-| `ends_at` | ISO 8601 datetime or null | End time of the event, if it has an end time. |
+| `ends_at` | ISO 8601 datetime (omitted when absent) | End time of the event, if it has an end time. |
 
 #### Examples:
 
@@ -44,8 +44,7 @@ curl --request GET https://api.btcmap.org/v4/events | jq
     "lon": 98.3884695,
     "name": "Phuket Bitcoin Meetup",
     "website": "https://www.meetup.com/phuket-bitcoin-meetup/events/310120143/",
-    "starts_at": "2025-08-29T19:00:00+07:00",
-    "ends_at": null
+    "starts_at": "2025-08-29T19:00:00+07:00"
   },
   {
     "id": 2,
@@ -62,8 +61,7 @@ curl --request GET https://api.btcmap.org/v4/events | jq
     "lon": 98.99429178234963,
     "name": "Weekly Bitcoin Mixer",
     "website": "https://www.meetup.com/bitcoinsinchiangmai/",
-    "starts_at": "2025-08-07T19:00:00+07:00",
-    "ends_at": null
+    "starts_at": "2025-08-07T19:00:00+07:00"
   },
   {
     "id": 4,
@@ -71,8 +69,7 @@ curl --request GET https://api.btcmap.org/v4/events | jq
     "lon": 115.14280433620284,
     "name": "Bitcoin Indonesia Conference 2025",
     "website": "https://bitcoinindonesia.xyz/bitcoin-indonesia-conference-2025/",
-    "starts_at": "2025-09-05T10:00:00+08:00",
-    "ends_at": null
+    "starts_at": "2025-09-05T10:00:00+08:00"
   }
 ]
 ```
@@ -106,8 +103,7 @@ curl --request GET https://api.btcmap.org/v4/events/3 | jq
   "lon": 98.99429178234963,
   "name": "Weekly Bitcoin Mixer",
   "website": "https://www.meetup.com/bitcoinsinchiangmai/",
-  "starts_at": "2025-08-07T19:00:00+07:00",
-  "ends_at": null
+  "starts_at": "2025-08-07T19:00:00+07:00"
 }
 ```
 
@@ -154,8 +150,7 @@ curl 'https://api.btcmap.org/v4/areas/phuket/events'
     "lon": 98.3884695,
     "name": "Phuket Bitcoin Meetup",
     "website": "https://www.meetup.com/phuket-bitcoin-meetup/events/310120143/",
-    "starts_at": "2025-08-29T19:00:00+07:00",
-    "ends_at": null
+    "starts_at": "2025-08-29T19:00:00+07:00"
   }
 ]
 ```
