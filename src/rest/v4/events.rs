@@ -25,8 +25,6 @@ use time::OffsetDateTime;
 pub struct Item {
     #[ts(type = "number")]
     pub id: i64,
-    #[ts(optional)]
-    pub area_id: Option<i64>,
     pub lat: f64,
     pub lon: f64,
     pub name: String,
@@ -37,22 +35,18 @@ pub struct Item {
     #[ts(type = "string", optional)]
     #[serde(with = "time::serde::rfc3339::option")]
     pub ends_at: Option<OffsetDateTime>,
-    #[ts(optional)]
-    pub cron_schedule: Option<String>,
 }
 
 impl From<Event> for Item {
     fn from(val: Event) -> Self {
         Item {
             id: val.id,
-            area_id: val.area_id,
             lat: val.lat,
             lon: val.lon,
             name: val.name,
             website: val.website,
             starts_at: val.starts_at.unwrap_or(OffsetDateTime::UNIX_EPOCH),
             ends_at: val.ends_at,
-            cron_schedule: val.cron_schedule,
         }
     }
 }
@@ -237,7 +231,8 @@ mod test {
         let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(1, res.len());
         assert_eq!(event.id, res.first().unwrap()["id"].as_i64().unwrap());
-        assert_eq!(1, res.first().unwrap()["area_id"].as_i64().unwrap());
+        assert!(res.first().unwrap().get("area_id").is_none());
+        assert!(res.first().unwrap().get("cron_schedule").is_none());
         Ok(())
     }
 
@@ -337,7 +332,8 @@ mod test {
         let req = TestRequest::get().uri("/1").to_request();
         let res: JsonObject = test::call_and_read_body_json(&app, req).await;
         assert_eq!(event.id, res["id"].as_i64().unwrap());
-        assert_eq!(1, res["area_id"].as_i64().unwrap());
+        assert!(res.get("area_id").is_none());
+        assert!(res.get("cron_schedule").is_none());
         Ok(())
     }
 

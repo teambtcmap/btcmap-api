@@ -166,14 +166,12 @@ curl 'https://api.btcmap.org/v4/areas?lat=7.9&lon=98.3'
     "upcoming_events": [
       {
         "id": 122,
-        "area_id": 671,
         "lat": 7.899971135374869,
         "lon": 98.36758749588596,
         "name": "Central Bitcoin Meetup",
         "website": "https://www.meetup.com/phuket-bitcoin-meetup/",
         "starts_at": "2026-09-25T19:00:00Z",
-        "ends_at": "2026-09-25T22:00:00Z",
-        "cron_schedule": null
+        "ends_at": "2026-09-25T22:00:00Z"
       }
     ]
   }
@@ -199,14 +197,12 @@ Each entry in `upcoming_events` matches the [Events API](events.md) response sha
 | Name | Type | Example | Description |
 |------|------|---------|-------------|
 | `id` | Number | `122` | Event ID. |
-| `area_id` | Number or null | `671` | ID of the linked area, if any. Most events do not have this set. |
 | `lat` | Number | `7.9` | Event latitude. |
 | `lon` | Number | `98.3` | Event longitude. |
 | `name` | String | `Central Bitcoin Meetup` | Event name. |
 | `website` | String | `https://example.com` | Event website. |
 | `starts_at` | String (RFC 3339) | `2026-09-25T19:00:00Z` | Event start time. |
 | `ends_at` | String (RFC 3339) or null | `2026-09-25T22:00:00Z` | Event end time, if set. |
-| `cron_schedule` | String or null | `null` | Cron expression for recurring events, if set. |
 
 ### Get Area
 
