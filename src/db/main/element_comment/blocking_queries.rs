@@ -47,7 +47,7 @@ pub fn select_updated_since(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {updated_at} > :updated_since {include_deleted_sql}
+            WHERE julianday({updated_at}) > julianday(:updated_since) {include_deleted_sql}
             ORDER BY {updated_at}, {id}
             LIMIT :limit
         "#,
@@ -97,7 +97,7 @@ pub fn select_created_between(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {created_at} > ?1 AND {created_at} < ?2
+            WHERE julianday({created_at}) > julianday(?1) AND julianday({created_at}) < julianday(?2)
             ORDER BY {updated_at}, {id}
         "#,
         projection = ElementComment::projection(),
@@ -130,7 +130,7 @@ pub fn select_created_between_for_area(
                 WHERE area_id = ?1 AND deleted_at IS NULL
             )
             AND {deleted_at} IS NULL
-            AND {created_at} > ?2 AND {created_at} < ?3
+            AND julianday({created_at}) > julianday(?2) AND julianday({created_at}) < julianday(?3)
             ORDER BY {created_at} DESC
         "#,
         projection = ElementComment::projection(),
@@ -284,6 +284,7 @@ pub fn set_deleted_at(
 #[cfg(test)]
 mod test {
     use crate::{db::main::test::conn, Result};
+    use time::macros::datetime;
     use time::{Duration, OffsetDateTime};
 
     #[test]
@@ -325,6 +326,35 @@ mod test {
         let results = super::select_updated_since(&OffsetDateTime::now_utc(), false, None, &conn)?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, comment2.id);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since_compares_by_instant_not_text() -> Result<()> {
+        let conn = conn();
+        // Disable foreign keys for this test
+        conn.pragma_update(None, "foreign_keys", false)?;
+
+        let comment = super::insert(1, "Test", &conn)?;
+        // Production writes milliseconds with `strftime('%Y-%m-%dT%H:%M:%fZ')`,
+        // so the stored value keeps all three digits. The bound is rendered by
+        // `time` as "2024-01-01T10:00:00.5Z" (trailing zero trimmed), which
+        // sorts before ".550Z" as text and used to drop the row.
+        conn.execute(
+            "UPDATE element_comment SET updated_at = '2024-01-01T10:00:00.550Z' WHERE id = ?1",
+            [comment.id],
+        )?;
+
+        let results = super::select_updated_since(
+            &datetime!(2024-01-01 10:00:00.500 UTC),
+            true,
+            None,
+            &conn,
+        )?;
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, comment.id);
 
         Ok(())
     }
