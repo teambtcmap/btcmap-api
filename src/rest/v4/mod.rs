@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod areas;
+pub mod auth;
 pub mod communities;
 pub mod countries;
 pub mod dashboard;
