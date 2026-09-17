@@ -78,6 +78,18 @@ mod test {
         Ok(db::main::area::queries::insert(tags, pool).await?.id)
     }
 
+    async fn seed_area_at(
+        pool: &deadpool_sqlite::Pool,
+        alias: &str,
+        geo_json_str: &str,
+    ) -> Result<i64> {
+        let mut tags = Map::new();
+        tags.insert("geo_json".into(), serde_json::from_str(geo_json_str)?);
+        tags.insert("url_alias".into(), json!(alias));
+        tags.insert("name".into(), json!(alias));
+        Ok(db::main::area::queries::insert(tags, pool).await?.id)
+    }
+
     #[test]
     fn area_manager_with_empty_geofence_can_delete_anywhere() -> Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -130,7 +142,13 @@ mod test {
         rt.block_on(async {
             let pool = pool();
             let fenced = seed_area(&pool, "fenced").await?;
-            let other = seed_area(&pool, "other").await?;
+            // Use a polygon far from the fenced area (at [0,0]-[1,1])
+            let other = seed_area_at(
+                &pool,
+                "other",
+                r#"{"type":"Polygon","coordinates":[[[10.0,10.0],[10.0,11.0],[11.0,11.0],[11.0,10.0],[10.0,10.0]]]}"#,
+            )
+            .await?;
             let user = am_user(vec![fenced]);
             let err = match run(
                 super::Params {
