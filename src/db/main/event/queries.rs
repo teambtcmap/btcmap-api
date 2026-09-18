@@ -51,6 +51,20 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Event> {
         .await?
 }
 
+pub async fn select_updated_since(
+    updated_since: OffsetDateTime,
+    include_deleted: bool,
+    limit: Option<i64>,
+    pool: &Pool,
+) -> Result<Vec<Event>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_updated_since(&updated_since, include_deleted, limit, conn)
+        })
+        .await?
+}
+
 pub async fn select_by_bbox(
     west: f64,
     south: f64,

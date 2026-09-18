@@ -39,6 +39,25 @@ pub struct Item {
         skip_serializing_if = "Option::is_none"
     )]
     pub ends_at: Option<OffsetDateTime>,
+    // Present only on delta responses (`updated_since` supplied) so a sync
+    // client can advance its cursor. Omitted from the legacy full snapshot.
+    #[ts(type = "string", optional)]
+    #[serde(
+        with = "time::serde::rfc3339::option",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub updated_at: Option<OffsetDateTime>,
+    // Present only on delta responses that include tombstones
+    // (`include_deleted=true`). Omitted otherwise, including the legacy
+    // full snapshot.
+    #[ts(type = "string", optional)]
+    #[serde(
+        with = "time::serde::rfc3339::option",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub deleted_at: Option<OffsetDateTime>,
 }
 
 impl From<Event> for Item {
@@ -51,6 +70,21 @@ impl From<Event> for Item {
             website: val.website,
             starts_at: val.starts_at.unwrap_or(OffsetDateTime::UNIX_EPOCH),
             ends_at: val.ends_at,
+            updated_at: None,
+            deleted_at: None,
+        }
+    }
+}
+
+impl Item {
+    /// Delta representation: exposes `updated_at` (sync cursor) and
+    /// `deleted_at` (tombstone). Non-deleted rows serialize `deleted_at` as
+    /// absent because of `skip_serializing_if`.
+    fn from_delta(val: Event) -> Self {
+        Item {
+            updated_at: Some(val.updated_at),
+            deleted_at: val.deleted_at,
+            ..Item::from(val)
         }
     }
 }
@@ -61,19 +95,54 @@ pub struct GetByAreaArgs {
     pub to: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct GetArgs {
+    /// When present, switch to delta semantics: return every row with
+    /// `updated_at` after this instant, including past events, so a sync
+    /// client can page through the change log. When absent, the legacy full
+    /// snapshot is returned unchanged.
+    #[serde(default)]
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_since: Option<OffsetDateTime>,
+    limit: Option<i64>,
+    include_deleted: Option<bool>,
+}
+
 #[get("")]
-pub async fn get(pool: Data<MainPool>) -> RestResult<Vec<Item>> {
-    let items = db::main::event::queries::select_all(&pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
-    let items: Vec<Event> = items
-        .into_iter()
-        .filter(|it| {
-            it.deleted_at.is_none()
-                && (it.starts_at.is_none() || it.starts_at > Some(OffsetDateTime::now_utc()))
-        })
-        .collect();
-    Ok(Json(items.into_iter().map(|it| it.into()).collect()))
+pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> RestResult<Vec<Item>> {
+    match args.updated_since {
+        // Legacy full snapshot: identical to the pre-delta response. Existing
+        // clients that don't request `updated_since` keep seeing only upcoming,
+        // non-deleted events and no `updated_at`/`deleted_at` fields.
+        None => {
+            let items = db::main::event::queries::select_all(&pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
+            let items: Vec<Event> = items
+                .into_iter()
+                .filter(|it| {
+                    it.deleted_at.is_none()
+                        && (it.starts_at.is_none()
+                            || it.starts_at > Some(OffsetDateTime::now_utc()))
+                })
+                .collect();
+            Ok(Json(items.into_iter().map(Into::into).collect()))
+        }
+        // Delta change log: deliberately skip the upcoming filter so edits and
+        // tombstones of already-started events are still observable. The client
+        // prunes past events locally.
+        Some(updated_since) => {
+            let items = db::main::event::queries::select_updated_since(
+                updated_since,
+                args.include_deleted.unwrap_or(false),
+                args.limit,
+                &pool,
+            )
+            .await
+            .map_err(|_| RestApiError::database())?;
+            Ok(Json(items.into_iter().map(Item::from_delta).collect()))
+        }
+    }
 }
 
 #[get("{id}")]
@@ -238,6 +307,153 @@ mod test {
         assert!(res.first().unwrap().get("area_id").is_none());
         assert!(res.first().unwrap().get("cron_schedule").is_none());
         assert!(res.first().unwrap().get("ends_at").is_none());
+        // Backward compatibility: the full snapshot must not grow the new
+        // delta-only fields.
+        assert!(res.first().unwrap().get("updated_at").is_none());
+        assert!(res.first().unwrap().get("deleted_at").is_none());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_includes_past_events_unlike_snapshot() -> Result<()> {
+        let pool = pool();
+        let past = db::main::event::queries::insert(
+            None,
+            1.23,
+            4.56,
+            "past_event".to_string(),
+            "https://example.com".to_string(),
+            Some(datetime!(2020-01-01 0:00 UTC)),
+            None,
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Snapshot drops the past event...
+        let req = TestRequest::get().uri("/").to_request();
+        let snapshot: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(snapshot.is_empty());
+
+        // ...while the delta change log keeps it and exposes updated_at.
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let delta: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, delta.len());
+        assert_eq!(past.id, delta[0]["id"].as_i64().unwrap());
+        assert!(delta[0].get("updated_at").is_some());
+        assert!(delta[0].get("deleted_at").is_none());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_excludes_unchanged_events() -> Result<()> {
+        let pool = pool();
+        db::main::event::queries::insert(
+            None,
+            1.23,
+            4.56,
+            "future".to_string(),
+            "https://example.com".to_string(),
+            Some(datetime!(2099-01-01 0:00 UTC)),
+            None,
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/?updated_since=2100-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_deleted_only_with_include_deleted() -> Result<()> {
+        let pool = pool();
+        let event = db::main::event::queries::insert(
+            None,
+            1.23,
+            4.56,
+            "deleted".to_string(),
+            "https://example.com".to_string(),
+            Some(datetime!(2099-01-01 0:00 UTC)),
+            None,
+            None,
+            &pool,
+        )
+        .await?;
+        db::main::event::queries::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Delta without tombstones: the soft-deleted row is invisible.
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let hidden: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(hidden.is_empty());
+
+        // Delta with tombstones: the row is returned with deleted_at set.
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z&include_deleted=true")
+            .to_request();
+        let tombstones: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, tombstones.len());
+        assert_eq!(event.id, tombstones[0]["id"].as_i64().unwrap());
+        assert!(tombstones[0].get("deleted_at").is_some());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_respects_limit() -> Result<()> {
+        let pool = pool();
+        for name in ["one", "two", "three"] {
+            db::main::event::queries::insert(
+                None,
+                1.23,
+                4.56,
+                name.to_string(),
+                "https://example.com".to_string(),
+                Some(datetime!(2099-01-01 0:00 UTC)),
+                None,
+                None,
+                &pool,
+            )
+            .await?;
+        }
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z&limit=2")
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
         Ok(())
     }
 

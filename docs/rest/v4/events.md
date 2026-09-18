@@ -17,7 +17,17 @@ which matches them by name alongside areas and places.
 curl --request GET https://api.btcmap.org/v4/events
 ```
 
-Retrieves a list of all non-deleted events with future start dates. Events without a start date are also included.
+Retrieves a list of events. By default this is a full snapshot of all non-deleted
+events with future start dates (events without a start date are also included).
+Supplying `updated_since` switches to delta sync, described below.
+
+#### Query Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `updated_since` | RFC 3339 datetime | `2025-01-01T00:00:00Z` | absent | Enables **delta sync**: returns every event with `updated_at` after this instant. When omitted, the legacy full snapshot is returned. |
+| `limit` | Integer | `1000` | unlimited | Maximum number of events to return in delta mode. |
+| `include_deleted` | Boolean | `true` | `false` | Include soft-deleted events so clients can apply tombstones. Only meaningful together with `updated_since`. |
 
 #### Response Fields
 
@@ -30,6 +40,27 @@ Retrieves a list of all non-deleted events with future start dates. Events witho
 | `website` | String | Website URL for the event. |
 | `starts_at` | ISO 8601 datetime | Start time of the event. |
 | `ends_at` | ISO 8601 datetime (omitted when absent) | End time of the event, if it has an end time. |
+| `updated_at` | ISO 8601 datetime (delta mode only) | When the event was last changed. Omitting `updated_since` leaves it out so existing clients see an unchanged payload. |
+| `deleted_at` | ISO 8601 datetime (delta mode only, omitted when not deleted) | Soft-deletion time. Only returned with `updated_since` and `include_deleted=true`. |
+
+#### Delta Sync
+
+Delta mode is meant for clients that keep a local cache:
+
+- The response is ordered by `updated_at`, then `id`, and each item carries
+  `updated_at` so the client can advance its cursor.
+- With `include_deleted=true`, soft-deleted events are returned with
+  `deleted_at` set; the client should delete those rows locally. Non-deleted
+  events omit `deleted_at`.
+- Unlike the full snapshot, delta mode **does not** filter out events whose
+  `starts_at` is in the past. A change log must still report edits and
+  deletions of already-started events, so clients should filter or prune past
+  events locally.
+
+> **Cursor paging:** the cursor is a strict `updated_at` comparison. If a full
+> page shares a single `updated_at` value, retry with a larger `limit`; the same
+> strategy is used by [`/v4/places`](places.md) and
+> [`/v4/place-comments`](place-comments.md).
 
 #### Examples:
 
@@ -76,6 +107,38 @@ curl --request GET https://api.btcmap.org/v4/events | jq
   }
 ]
 ```
+
+##### Sync changes since a cursor
+
+```bash
+curl 'https://api.btcmap.org/v4/events?updated_since=2025-01-01T00:00:00Z&limit=1000&include_deleted=true' | jq
+```
+
+```json
+[
+  {
+    "id": 5,
+    "lat": 51.5074,
+    "lon": -0.1278,
+    "name": "London Bitcoin Meetup",
+    "website": "https://example.com/london",
+    "starts_at": "2025-02-01T18:00:00Z",
+    "updated_at": "2025-01-15T09:30:00Z"
+  },
+  {
+    "id": 6,
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "name": "Paris Bitcoin Meetup",
+    "website": "https://example.com/paris",
+    "starts_at": "2025-03-01T18:00:00Z",
+    "updated_at": "2025-01-16T11:00:00Z",
+    "deleted_at": "2025-01-16T11:00:00Z"
+  }
+]
+```
+
+The second item is a tombstone: delete it locally rather than displaying it.
 
 ### Get by ID
 

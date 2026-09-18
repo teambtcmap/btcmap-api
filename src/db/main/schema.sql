@@ -282,4 +282,5 @@ CREATE INDEX element_event_user_created_type ON element_event(user_id, created_a
 CREATE INDEX element_event_type_created_at ON element_event(type, created_at);
 CREATE INDEX area_type ON area(json_extract(tags, '$.type'));
 CREATE INDEX event_lat_lon ON event(lat, lon);
+CREATE INDEX event_updated_at ON event(updated_at, id);
 COMMIT;

@@ -138,6 +138,48 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Event> {
         .map_err(Into::into)
 }
 
+/// Delta query for sync clients: every row whose `updated_at` is strictly after
+/// `updated_since`, ordered so a client can page through with a timestamp
+/// cursor (the caller widens the window when a full page shares one timestamp,
+/// exactly like the element and comment delta queries).
+///
+/// Unlike the full snapshot in [`select_all`], this deliberately does not drop
+/// past events: a change log must still surface edits and deletions of events
+/// that have already started. Soft-deleted rows are returned only when
+/// `include_deleted` is set, so a client can apply tombstones.
+pub fn select_updated_since(
+    updated_since: &OffsetDateTime,
+    include_deleted: bool,
+    limit: Option<i64>,
+    conn: &Connection,
+) -> Result<Vec<Event>> {
+    let deleted_filter = if include_deleted {
+        ""
+    } else {
+        "AND deleted_at IS NULL"
+    };
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            WHERE julianday({UpdatedAt}) > julianday(:updated_since) {deleted_filter}
+            ORDER BY {UpdatedAt}, {Id}
+            LIMIT :limit
+        "#,
+        projection = Event::projection(),
+    );
+    conn.prepare(&sql)?
+        .query_map(
+            named_params! {
+                ":updated_since": updated_since.format(&Rfc3339)?,
+                ":limit": limit.unwrap_or(i64::MAX),
+            },
+            Event::mapper(),
+        )?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 /// Cheap bbox pre-filter: events whose (lat, lon) point falls inside the
 /// supplied bounding box. The caller is still responsible for the precise
 /// geojson contains check on the returned candidates.
@@ -353,8 +395,11 @@ mod test {
         db::main::{area::schema::Area, test::conn},
         Result,
     };
+    use rusqlite::params;
     use rusqlite::Connection;
+    use time::format_description::well_known::Rfc3339;
     use time::macros::datetime;
+    use time::Duration;
     use time::OffsetDateTime;
 
     #[test]
@@ -803,6 +848,115 @@ mod test {
         }
 
         assert_eq!(3, super::count_by_search("Bitcoin", &conn)?);
+        Ok(())
+    }
+
+    /// Pins `updated_at` directly so cursor tests don't depend on wall-clock
+    /// resolution between inserts. The `event_updated_at` trigger only fires on
+    /// other columns, so this does not recurse.
+    fn set_updated_at(id: i64, updated_at: OffsetDateTime, conn: &Connection) -> Result<()> {
+        conn.execute(
+            "UPDATE event SET updated_at = ?2 WHERE id = ?1",
+            params![id, updated_at.format(&Rfc3339)?],
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since_filters_by_cursor() -> Result<()> {
+        let conn = conn();
+        let now = OffsetDateTime::now_utc();
+        let old = super::insert(None, 1.0, 1.0, "old", "website", None, None, None, &conn)?;
+        set_updated_at(old.id, now - Duration::hours(1), &conn)?;
+        let new = super::insert(None, 2.0, 2.0, "new", "website", None, None, None, &conn)?;
+        set_updated_at(new.id, now + Duration::hours(1), &conn)?;
+
+        let results = super::select_updated_since(&now, false, None, &conn)?;
+        assert_eq!(
+            vec![new.id],
+            results.into_iter().map(|it| it.id).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since_compares_by_instant_not_text() -> Result<()> {
+        let conn = conn();
+        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, None, &conn)?;
+        conn.execute(
+            "UPDATE event SET updated_at = '2024-01-01T10:00:00.550Z' WHERE id = ?1",
+            params![event.id],
+        )?;
+
+        // The bound is rendered by `time` as "...10:00:00.5Z" (trailing zero
+        // trimmed), which sorts before ".550Z" as text. The cursor is compared
+        // by instant, so the row must still be returned.
+        let results = super::select_updated_since(
+            &datetime!(2024-01-01 10:00:00.500 UTC),
+            false,
+            None,
+            &conn,
+        )?;
+
+        assert_eq!(1, results.len());
+        assert_eq!(event.id, results[0].id);
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since_deleted_rows_only_when_included() -> Result<()> {
+        let conn = conn();
+        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, None, &conn)?;
+        super::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &conn)?;
+
+        let without = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, None, &conn)?;
+        assert!(without.is_empty());
+
+        let included = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, true, None, &conn)?;
+        assert_eq!(1, included.len());
+        assert!(included[0].deleted_at.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since_respects_limit_and_orders_by_updated_at() -> Result<()> {
+        let conn = conn();
+        let base = OffsetDateTime::UNIX_EPOCH + Duration::days(1);
+        let first = super::insert(None, 1.0, 1.0, "first", "website", None, None, None, &conn)?;
+        set_updated_at(first.id, base, &conn)?;
+        let second = super::insert(None, 2.0, 2.0, "second", "website", None, None, None, &conn)?;
+        set_updated_at(second.id, base + Duration::hours(1), &conn)?;
+        let third = super::insert(None, 3.0, 3.0, "third", "website", None, None, None, &conn)?;
+        set_updated_at(third.id, base + Duration::hours(2), &conn)?;
+
+        let page = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, Some(2), &conn)?;
+        assert_eq!(
+            vec![first.id, second.id],
+            page.into_iter().map(|it| it.id).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since_includes_past_events() -> Result<()> {
+        let conn = conn();
+        let past = super::insert(
+            None,
+            1.0,
+            1.0,
+            "past",
+            "website",
+            Some(datetime!(2020-01-01 0:00 UTC)),
+            None,
+            None,
+            &conn,
+        )?;
+
+        let results = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, None, &conn)?;
+        assert_eq!(
+            vec![past.id],
+            results.into_iter().map(|it| it.id).collect::<Vec<_>>()
+        );
         Ok(())
     }
 }
