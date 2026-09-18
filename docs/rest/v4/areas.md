@@ -219,9 +219,9 @@ curl 'https://api.btcmap.org/v4/areas?lat=48.8566&lon=2.3522&fields=id'
 
 ### Sync Areas
 
-Incrementally fetch area changes for an offline cache. Raw `tags` (including the
-large `geo_json` polygon) are never returned; the only geometry field available
-is `bbox`.
+Incrementally fetch area changes for an offline cache. Raw `tags` are never
+returned; geometry is available through `bbox` (compact) or the full `geo_json`
+polygon, which is only sent when explicitly requested in `fields`.
 
 ```bash
 curl 'https://api.btcmap.org/v4/areas?fields=id,name,type,url_alias,icon,bbox,updated_at
@@ -254,6 +254,7 @@ Unknown field names are ignored. `id` is always returned.
 | `website_url` | String | URL to the BTC Map page for this area. |
 | `description` | String | Area description, localized with `lang`. |
 | `bbox` | Array of 4 numbers | `[west, south, east, north]`, omitted when the area has no bbox of its own. |
+| `geo_json` | Object | Full GeoJSON geometry/feature/feature collection, exactly as stored. Omitted when the area has no geometry. Large; request it only when the client needs the polygon itself. |
 | `created_at` | String (RFC 3339) | Creation timestamp. |
 | `updated_at` | String (RFC 3339) | Last update timestamp; use as the next `updated_since` cursor. |
 | `deleted_at` | String (RFC 3339) | Tombstone timestamp. Present only for deleted areas when tombstones are included. |

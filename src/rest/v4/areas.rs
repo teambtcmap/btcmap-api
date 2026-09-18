@@ -66,8 +66,9 @@ pub struct AreaSearchResult {
 
 /// Delta sync payload. Every field except `id` is optional and omitted unless
 /// the caller asked for it in `fields`, so a client only pays for the columns
-/// it stores. Raw tags are deliberately not exposed: the only geometry-related
-/// field is `bbox`, which avoids shipping the (large) `geo_json` polygon.
+/// it stores. Raw tags are never exposed; geometry is available through `bbox`
+/// (compact, for map placement) and `geo_json` (the full polygon, only sent
+/// when explicitly requested because it can be large).
 #[derive(Default, Serialize, Deserialize, ts_rs::TS)]
 #[ts(export)]
 pub struct AreaDelta {
@@ -99,6 +100,11 @@ pub struct AreaDelta {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub bbox: Option<[f64; 4]>,
+    /// Full GeoJSON geometry exactly as stored in the area's tags. Only sent
+    /// when explicitly requested via `fields` because polygons can be large.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "Record<string, unknown>")]
+    pub geo_json: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "time::serde::rfc3339::option", default)]
     #[ts(optional, type = "string")]
@@ -114,7 +120,8 @@ pub struct AreaDelta {
 }
 
 /// Fields accepted by `AreaDelta`. Anything else in `fields` is ignored, and
-/// `id` is always present. Deliberately excludes raw tags and `geo_json`.
+/// `id` is always present. Deliberately excludes raw tags: geometry is exposed
+/// through `bbox` and `geo_json` only.
 const DELTA_FIELDS: &[&str] = &[
     "name",
     "type",
@@ -124,6 +131,7 @@ const DELTA_FIELDS: &[&str] = &[
     "website_url",
     "description",
     "bbox",
+    "geo_json",
     "created_at",
     "updated_at",
     "deleted_at",
@@ -186,6 +194,7 @@ fn area_delta(area: &Area, fields: &[&str], lang: Option<&str>) -> AreaDelta {
             "website_url" => delta.website_url = Some(area_website_url(area)),
             "description" => delta.description = Some(area.localized_tag("description", lang)),
             "bbox" => delta.bbox = area_bbox(area),
+            "geo_json" => delta.geo_json = area.tags.get("geo_json").cloned(),
             "created_at" => delta.created_at = Some(area.created_at),
             "updated_at" => delta.updated_at = Some(area.updated_at),
             "deleted_at" => delta.deleted_at = area.deleted_at,
@@ -1891,6 +1900,43 @@ mod test {
             .to_request();
         let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(delta_keys(&res[0]), vec!["id"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_geo_json_present_when_requested() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,geo_json&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(delta_keys(&res[0]), vec!["geo_json", "id"]);
+        assert_eq!(res[0]["geo_json"], phuket_polygon());
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_geo_json_omitted_unless_requested() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,name,bbox&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert!(!res[0].as_object().unwrap().contains_key("geo_json"));
         Ok(())
     }
 

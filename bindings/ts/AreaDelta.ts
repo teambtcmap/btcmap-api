@@ -3,12 +3,18 @@
 /**
  * Delta sync payload. Every field except `id` is optional and omitted unless
  * the caller asked for it in `fields`, so a client only pays for the columns
- * it stores. Raw tags are deliberately not exposed: the only geometry-related
- * field is `bbox`, which avoids shipping the (large) `geo_json` polygon.
+ * it stores. Raw tags are never exposed; geometry is available through `bbox`
+ * (compact, for map placement) and `geo_json` (the full polygon, only sent
+ * when explicitly requested because it can be large).
  */
 export type AreaDelta = { id: number, name?: string, type?: string, url_alias?: string, icon?: string, icon_wide?: string, website_url?: string, description?: string, 
 /**
  * `[west, south, east, north]`. Omitted when the area has no bbox of its
  * own, i.e. the stored columns still hold the whole-world default.
  */
-bbox?: [number, number, number, number], created_at?: string, updated_at?: string, deleted_at?: string, };
+bbox?: [number, number, number, number], 
+/**
+ * Full GeoJSON geometry exactly as stored in the area's tags. Only sent
+ * when explicitly requested via `fields` because polygons can be large.
+ */
+geo_json?: Record<string, unknown>, created_at?: string, updated_at?: string, deleted_at?: string, };

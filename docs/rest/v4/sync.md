@@ -44,9 +44,9 @@ Key Parameters:
 
 Areas (countries and communities) support the same incremental sync, though
 there is no CDN snapshot for them. Fetch a full snapshot once with `fields`,
-then page changes with `updated_since`. Raw tags and geometry are not returned;
-request `bbox` if the map needs to place an area. See
-[Areas](areas.md#sync-areas).
+then page changes with `updated_since`. Raw tags are not returned; request
+`bbox` to place an area, or `geo_json` when the client needs the full polygon.
+See [Areas](areas.md#sync-areas).
 
 ```bash
 curl 'https://api.btcmap.org/v4/areas?fields=id,name,type,url_alias,icon,bbox,updated_at
