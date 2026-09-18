@@ -2,6 +2,9 @@
 
 This document describes the endpoints for interacting with events in REST API v4.
 
+Upcoming events are also returned by the combined [`/v4/search`](search.md) endpoint,
+which matches them by name alongside areas and places.
+
 ## Available Endpoints
 
 - [Get Batch](#get-list)

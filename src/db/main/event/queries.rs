@@ -5,6 +5,8 @@ use crate::{
 use deadpool_sqlite::Pool;
 use time::OffsetDateTime;
 
+pub use super::blocking_queries::RankedEvent;
+
 #[allow(clippy::too_many_arguments)]
 pub async fn insert(
     area_id: Option<i64>,
@@ -74,6 +76,25 @@ pub async fn select_upcoming_by_bbox(
         .interact(move |conn| {
             blocking_queries::select_upcoming_by_bbox(west, south, east, north, conn)
         })
+        .await?
+}
+
+pub async fn select_by_search(
+    query: String,
+    location: Option<(f64, f64)>,
+    row_limit: i64,
+    pool: &Pool,
+) -> Result<Vec<RankedEvent>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_search(&query, location, row_limit, conn))
+        .await?
+}
+
+pub async fn count_by_search(query: String, pool: &Pool) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::count_by_search(&query, conn))
         .await?
 }
 

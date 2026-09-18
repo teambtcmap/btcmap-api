@@ -1,9 +1,11 @@
 use crate::db;
 use crate::db::main::area::queries::RankedArea;
 use crate::db::main::element::queries::RankedElement;
+use crate::db::main::event::queries::RankedEvent;
 use crate::db::main::MainPool;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
+use crate::rest::v4::events::Item;
 use crate::rest::v4::places::SearchedPlace;
 use actix_web::{get, web::Data, web::Json, web::Query};
 use serde::{Deserialize, Serialize};
@@ -58,13 +60,16 @@ pub struct SearchedArea {
 }
 
 /// `SearchedPlace` is boxed because it is an order of magnitude larger than
-/// `SearchedArea`, and clippy's `large_enum_variant` would otherwise fire.
+/// `SearchedArea`, and clippy's `large_enum_variant` would otherwise fire. The
+/// event variant reuses the `/v4/events` item so both endpoints return the same
+/// object.
 #[derive(Serialize, ts_rs::TS)]
 #[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SearchResult {
     Area(SearchedArea),
     Place(Box<SearchedPlace>),
+    Event(Box<Item>),
 }
 
 #[derive(Serialize, ts_rs::TS)]
@@ -87,12 +92,13 @@ pub struct PaginationInfo {
     pub total: u32,
 }
 
-/// One candidate row plus its global sort key. Areas carry `kind = 0` so they
-/// precede places at equal rank; `distance` only ever applies to places. `id` is
-/// the final, unique tiebreaker so the merged order is total and identical
-/// between the independent SQL runs that serve consecutive pages — without it,
-/// rows tied on every other key can shuffle and be skipped or duplicated across
-/// page boundaries. It mirrors the `id` term each side's SQL `ORDER BY` ends on.
+/// One candidate row plus its global sort key. Areas carry `kind = 0`, places
+/// `kind = 1` and events `kind = 2`, so at equal rank they stay in that order;
+/// `distance` only ever applies to places and events. `id` is the final, unique
+/// tiebreaker so the merged order is total and identical between the
+/// independent SQL runs that serve consecutive pages — without it, rows tied on
+/// every other key can shuffle and be skipped or duplicated across page
+/// boundaries. It mirrors the `id` term each side's SQL `ORDER BY` ends on.
 struct Ranked {
     rank: i64,
     kind: u8,
@@ -114,14 +120,15 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
         ));
     }
 
-    let (want_area, want_place) = match args.type_filter.as_deref() {
-        None => (true, true),
-        Some("area") => (true, false),
-        Some("place") => (false, true),
+    let (want_area, want_place, want_event) = match args.type_filter.as_deref() {
+        None => (true, true, true),
+        Some("area") => (true, false, false),
+        Some("place") => (false, true, false),
+        Some("event") => (false, false, true),
         Some(_) => {
             return Err(RestApiError::new(
                 RestApiErrorCode::InvalidInput,
-                "type_filter must be 'area' or 'place'",
+                "type_filter must be 'area', 'place' or 'event'",
             ))
         }
     };
@@ -218,6 +225,33 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
         }
     }
 
+    if want_event {
+        let events =
+            db::main::event::queries::select_by_search(query.clone(), location, row_limit, &pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
+        total += db::main::event::queries::count_by_search(query.clone(), &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+        for RankedEvent { event, rank } in events {
+            let distance = match location {
+                Some((lat, lon)) => (event.lat - lat).powi(2) + (event.lon - lon).powi(2),
+                None => 0.0,
+            };
+            let name = event.name.clone();
+            let id = event.id;
+            ranked.push(Ranked {
+                rank,
+                kind: 2,
+                distance,
+                name_len: name.chars().count(),
+                name,
+                id,
+                result: SearchResult::Event(Box::new(event.into())),
+            });
+        }
+    }
+
     ranked.sort_by(|a, b| {
         a.rank
             .cmp(&b.rank)
@@ -264,6 +298,7 @@ mod test {
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
     use serde_json::{json, Map, Value};
+    use time::macros::datetime;
 
     #[test]
     async fn has_next_page_stops_at_the_offset_cap() {
@@ -315,6 +350,42 @@ mod test {
             json!({"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[9.99,53.55]}}),
         );
         db::main::area::queries::insert(tags, pool).await.unwrap();
+    }
+
+    async fn insert_event(id: i64, name: &str, lat: f64, lon: f64, pool: &MainPool) {
+        insert_event_with_start(
+            id,
+            name,
+            lat,
+            lon,
+            Some(datetime!(2999-01-01 0:00 UTC)),
+            pool,
+        )
+        .await;
+    }
+
+    async fn insert_event_with_start(
+        id: i64,
+        name: &str,
+        lat: f64,
+        lon: f64,
+        starts_at: Option<time::OffsetDateTime>,
+        pool: &MainPool,
+    ) {
+        let event = db::main::event::queries::insert(
+            None,
+            lat,
+            lon,
+            name.to_string(),
+            "https://example.com".to_string(),
+            starts_at,
+            None,
+            None,
+            pool,
+        )
+        .await
+        .unwrap();
+        assert_eq!(id, event.id);
     }
 
     async fn status(uri: &str, pool: MainPool) -> u16 {
@@ -578,6 +649,146 @@ mod test {
         let res: Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!("Near", res["results"][0]["name"]);
         assert_eq!("Far", res["results"][1]["name"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn finds_events_by_name() -> Result<()> {
+        let pool = pool();
+        insert_event(1, "Bitcoin Meetup", 53.5, 9.9, &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=bitcoin&type_filter=event")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res["results"].as_array().unwrap().len());
+        let row = &res["results"][0];
+        assert_eq!("event", row["type"]);
+        assert_eq!("Bitcoin Meetup", row["name"]);
+        assert_eq!(53.5, row["lat"]);
+        assert_eq!(9.9, row["lon"]);
+        assert_eq!(1, res["total_count"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn default_search_includes_events() -> Result<()> {
+        let pool = pool();
+        insert_area("Hamburg", "hamburg", &pool).await;
+        insert_place(1, &[("name", "Hamburg")], 53.5, 9.9, &pool).await;
+        insert_event(1, "Hamburg", 53.5, 9.9, &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get().uri("/search?q=hamburg").to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(3, res["total_count"]);
+        let types = res["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|it| it["type"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(vec!["area", "place", "event"], types);
+        Ok(())
+    }
+
+    #[test]
+    async fn type_filter_event_excludes_areas_and_places() -> Result<()> {
+        let pool = pool();
+        insert_area("Hamburg", "hamburg", &pool).await;
+        insert_place(1, &[("name", "Hamburg")], 53.5, 9.9, &pool).await;
+        insert_event(1, "Hamburg", 53.5, 9.9, &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=hamburg&type_filter=event")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res["total_count"]);
+        assert_eq!("event", res["results"][0]["type"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn events_are_excluded_when_past_or_deleted() -> Result<()> {
+        let pool = pool();
+        insert_event_with_start(
+            1,
+            "Bitcoin Past",
+            53.5,
+            9.9,
+            Some(datetime!(2020-01-01 0:00 UTC)),
+            &pool,
+        )
+        .await;
+        insert_event(2, "Bitcoin Future", 53.5, 9.9, &pool).await;
+        let deleted = db::main::event::queries::insert(
+            None,
+            53.5,
+            9.9,
+            "Bitcoin Deleted".to_string(),
+            "https://example.com".to_string(),
+            Some(datetime!(2999-01-01 0:00 UTC)),
+            None,
+            None,
+            &pool,
+        )
+        .await
+        .unwrap();
+        db::main::event::queries::set_deleted_at(
+            deleted.id,
+            Some(time::OffsetDateTime::now_utc()),
+            &pool,
+        )
+        .await?;
+
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=bitcoin&type_filter=event")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res["total_count"]);
+        assert_eq!("Bitcoin Future", res["results"][0]["name"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn nearer_event_wins_a_rank_tie() -> Result<()> {
+        let pool = pool();
+        insert_event(1, "Bitcoin Meetup", 60.0, 9.9, &pool).await;
+        insert_event(2, "Bitcoin Meetup", 53.6, 9.9, &pool).await;
+        let app = app!(pool);
+        let req = TestRequest::get()
+            .uri("/search?q=bitcoin&type_filter=event&lat=53.5&lon=9.9")
+            .to_request();
+        let res: Value = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res["results"].as_array().unwrap().len());
+        assert_eq!(2, res["results"][0]["id"]);
+        assert_eq!(1, res["results"][1]["id"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn pagination_covers_events_exactly_once() -> Result<()> {
+        let pool = pool();
+        for id in 1..=3 {
+            insert_event(id, "Bitcoin Meetup", 53.5, 9.9, &pool).await;
+        }
+        let app = app!(pool);
+
+        let mut seen = Vec::new();
+        for offset in 0..3 {
+            let req = TestRequest::get()
+                .uri(&format!(
+                    "/search?q=bitcoin&type_filter=event&limit=1&offset={offset}"
+                ))
+                .to_request();
+            let page: Value = test::call_and_read_body_json(&app, req).await;
+            let rows = page["results"].as_array().unwrap();
+            assert_eq!(1, rows.len(), "page at offset {offset}");
+            seen.push(rows[0]["id"].as_i64().unwrap());
+        }
+
+        seen.sort_unstable();
+        assert_eq!(vec![1, 2, 3], seen);
         Ok(())
     }
 }

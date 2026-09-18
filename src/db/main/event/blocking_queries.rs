@@ -1,7 +1,10 @@
+use crate::service::search::{escape_like, split_words};
 use crate::{
     db::main::event::schema::{self, Event},
     Result,
 };
+use rusqlite::params_from_iter;
+use rusqlite::types::Value as SqlValue;
 use rusqlite::{named_params, params, Connection, ToSql};
 use schema::Columns::*;
 use schema::TABLE;
@@ -196,6 +199,115 @@ pub fn select_upcoming_by_bbox(
         .map_err(Into::into)
 }
 
+#[derive(Debug, PartialEq)]
+pub struct RankedEvent {
+    pub event: Event,
+    pub rank: i64,
+}
+
+/// Matches `query` against the event name only. Every whitespace word must
+/// match the name, soft-deleted events are dropped, and only future or undated
+/// events survive, mirroring what `GET /v4/events` returns. `starts_at` is the
+/// RFC 3339 `TEXT` column, compared lexicographically like
+/// [`select_upcoming_by_bbox`].
+fn search_predicate(word_count: usize, now_param: usize, first_word_param: usize) -> String {
+    let mut words = String::new();
+    for i in 0..word_count {
+        let param = first_word_param + i;
+        words.push_str(&format!(
+            r#"
+            AND {Name} LIKE ?{param} ESCAPE '\'"#
+        ));
+    }
+    format!(
+        "{DeletedAt} IS NULL
+         AND ({StartsAt} IS NULL OR {StartsAt} = '' OR {StartsAt} >= ?{now_param}){words}"
+    )
+}
+
+fn word_patterns(words: &[String]) -> impl Iterator<Item = SqlValue> + '_ {
+    words
+        .iter()
+        .map(|word| SqlValue::Text(format!("%{}%", escape_like(word))))
+}
+
+/// Ranked name search over future or undated events. `location` breaks rank
+/// ties by proximity, exactly as the element and area searches do.
+pub fn select_by_search(
+    query: &str,
+    location: Option<(f64, f64)>,
+    row_limit: i64,
+    conn: &Connection,
+) -> Result<Vec<RankedEvent>> {
+    let words = split_words(query);
+    let first_word_param = 8;
+    let limit_param = first_word_param + words.len();
+    let sql = format!(
+        r#"
+            SELECT {projection},
+              CASE
+                WHEN {Name} = ?1 COLLATE NOCASE THEN 0
+                WHEN {Name} LIKE ?2 ESCAPE '\' THEN 1
+                WHEN {Name} LIKE ?3 ESCAPE '\' THEN 2
+                ELSE 3
+              END AS search_rank
+            FROM {TABLE}
+            WHERE {predicate}
+            ORDER BY search_rank,
+                     CASE WHEN ?6 = 1
+                          THEN ({Lat} - ?4) * ({Lat} - ?4) + ({Lon} - ?5) * ({Lon} - ?5)
+                          ELSE 0 END,
+                     LENGTH({Name}),
+                     {Name},
+                     {Id}
+            LIMIT ?{limit_param}
+        "#,
+        projection = Event::projection(),
+        predicate = search_predicate(words.len(), 7, first_word_param),
+    );
+
+    let escaped = escape_like(query);
+    let (lat, lon, has_location) = match location {
+        Some((lat, lon)) => (lat, lon, 1),
+        None => (0.0, 0.0, 0),
+    };
+    let now = OffsetDateTime::now_utc().format(&Rfc3339)?;
+    let mut values = vec![
+        SqlValue::Text(query.to_string()),
+        SqlValue::Text(format!("{escaped}%")),
+        SqlValue::Text(format!("%{escaped}%")),
+        SqlValue::Real(lat),
+        SqlValue::Real(lon),
+        SqlValue::Integer(has_location),
+        SqlValue::Text(now),
+    ];
+    values.extend(word_patterns(&words));
+    values.push(SqlValue::Integer(row_limit));
+
+    conn.prepare(&sql)?
+        .query_map(params_from_iter(values), |row| {
+            Ok(RankedEvent {
+                event: Event::mapper()(row)?,
+                rank: row.get("search_rank")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn count_by_search(query: &str, conn: &Connection) -> Result<i64> {
+    let words = split_words(query);
+    let sql = format!(
+        "SELECT COUNT(*) FROM {TABLE} WHERE {predicate}",
+        predicate = search_predicate(words.len(), 1, 2),
+    );
+    let now = OffsetDateTime::now_utc().format(&Rfc3339)?;
+    let mut values = vec![SqlValue::Text(now)];
+    values.extend(word_patterns(&words));
+    conn.query_row(&sql, params_from_iter(values), |row| row.get(0))
+        .map_err(Into::into)
+}
+
 pub fn set_deleted_at(
     id: i64,
     deleted_at: Option<OffsetDateTime>,
@@ -241,6 +353,8 @@ mod test {
         db::main::{area::schema::Area, test::conn},
         Result,
     };
+    use rusqlite::Connection;
+    use time::macros::datetime;
     use time::OffsetDateTime;
 
     #[test]
@@ -543,6 +657,152 @@ mod test {
         )?;
         let hits = super::select_by_bbox(98.0, 7.0, 99.0, 8.0, &conn)?;
         assert_eq!(vec![event], hits);
+        Ok(())
+    }
+
+    fn insert_named(
+        name: &str,
+        starts_at: Option<OffsetDateTime>,
+        lat: f64,
+        lon: f64,
+        conn: &Connection,
+    ) -> Result<i64> {
+        Ok(super::insert(None, lat, lon, name, "website", starts_at, None, None, conn)?.id)
+    }
+
+    #[test]
+    fn search_ranks_exact_above_prefix_above_infix() -> Result<()> {
+        let conn = conn();
+        insert_named("Bitcoin", None, 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
+        insert_named("Meetup Bitcoin", None, 0.0, 0.0, &conn)?;
+
+        let ranked = super::select_by_search("Bitcoin", None, 100, &conn)?;
+
+        assert_eq!(
+            vec![0, 1, 2],
+            ranked.iter().map(|it| it.rank).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec!["Bitcoin", "Bitcoin Meetup", "Meetup Bitcoin"],
+            ranked
+                .iter()
+                .map(|it| it.event.name.as_str())
+                .collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn search_breaks_rank_ties_by_distance() -> Result<()> {
+        let conn = conn();
+        let far = insert_named("Bitcoin Meetup", None, 10.0, 0.0, &conn)?;
+        let near = insert_named("Bitcoin Meetup", None, 0.1, 0.0, &conn)?;
+
+        let ranked = super::select_by_search("Bitcoin", Some((0.0, 0.0)), 100, &conn)?;
+
+        assert_eq!(
+            vec![near, far],
+            ranked.iter().map(|it| it.event.id).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn search_is_case_insensitive() -> Result<()> {
+        let conn = conn();
+        insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
+
+        assert_eq!(
+            1,
+            super::select_by_search("bItCoIn", None, 100, &conn)?.len()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn search_requires_every_word() -> Result<()> {
+        let conn = conn();
+        insert_named("Bitcoin Paris Meetup", None, 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin Berlin Meetup", None, 0.0, 0.0, &conn)?;
+
+        let ranked = super::select_by_search("bitcoin paris", None, 100, &conn)?;
+
+        assert_eq!(1, ranked.len());
+        assert_eq!("Bitcoin Paris Meetup", ranked[0].event.name);
+        Ok(())
+    }
+
+    #[test]
+    fn search_excludes_deleted() -> Result<()> {
+        let conn = conn();
+        let event = insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
+        super::set_deleted_at(event, Some(OffsetDateTime::now_utc()), &conn)?;
+
+        assert!(super::select_by_search("Bitcoin", None, 100, &conn)?.is_empty());
+        assert_eq!(0, super::count_by_search("Bitcoin", &conn)?);
+        Ok(())
+    }
+
+    #[test]
+    fn search_excludes_past_and_keeps_undated() -> Result<()> {
+        let conn = conn();
+        insert_named(
+            "Event Past",
+            Some(datetime!(2020-01-01 0:00 UTC)),
+            0.0,
+            0.0,
+            &conn,
+        )?;
+        let future = insert_named(
+            "Event Future",
+            Some(datetime!(2999-01-01 0:00 UTC)),
+            0.0,
+            0.0,
+            &conn,
+        )?;
+        let undated = insert_named("Event Undated", None, 0.0, 0.0, &conn)?;
+
+        let ids = super::select_by_search("Event", None, 100, &conn)?
+            .into_iter()
+            .map(|it| it.event.id)
+            .collect::<Vec<_>>();
+
+        assert_eq!(2, ids.len());
+        assert!(ids.contains(&future));
+        assert!(ids.contains(&undated));
+        Ok(())
+    }
+
+    #[test]
+    fn search_respects_row_limit() -> Result<()> {
+        let conn = conn();
+        for name in ["Bitcoin One", "Bitcoin Two", "Bitcoin Three"] {
+            insert_named(name, None, 0.0, 0.0, &conn)?;
+        }
+
+        assert_eq!(2, super::select_by_search("Bitcoin", None, 2, &conn)?.len());
+        Ok(())
+    }
+
+    #[test]
+    fn search_escapes_like_wildcards() -> Result<()> {
+        let conn = conn();
+        insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
+
+        assert!(super::select_by_search("%", None, 100, &conn)?.is_empty());
+        assert_eq!(0, super::count_by_search("%", &conn)?);
+        Ok(())
+    }
+
+    #[test]
+    fn count_by_search_counts_all_matches() -> Result<()> {
+        let conn = conn();
+        for name in ["Bitcoin One", "Bitcoin Two", "Bitcoin Three", "Ethereum"] {
+            insert_named(name, None, 0.0, 0.0, &conn)?;
+        }
+
+        assert_eq!(3, super::count_by_search("Bitcoin", &conn)?);
         Ok(())
     }
 }

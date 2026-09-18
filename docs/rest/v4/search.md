@@ -4,9 +4,10 @@
 curl 'https://api.btcmap.org/v4/search/?q=prague'
 ```
 
-Searches areas and places in one call. Places match against **every OSM tag value**, so a
-query for a city name finds the places whose address is in that city, and localized `name:*`
-tags are searched for free. Areas match on their name and URL alias.
+Searches areas, places and events in one call. Places match against **every OSM tag
+value**, so a query for a city name finds the places whose address is in that city, and
+localized `name:*` tags are searched for free. Areas match on their name and URL alias.
+Events match on their name only.
 
 Every whitespace-separated word must match, though different words may match different tags:
 `q=prague cafe` finds a place with `addr:city=Prague` and `cuisine=cafe`.
@@ -20,17 +21,20 @@ Every whitespace-separated word must match, though different words may match dif
 | `lon`         | Number | -       | Optional. Must be paired with `lat`.                                     |
 | `limit`       | Number | `20`    | Capped at 100.                                                           |
 | `offset`      | Number | `0`     | Capped at 10000.                                                         |
-| `type_filter` | String | -       | `area` or `place`. Omit to search both.                                  |
+| `type_filter` | String | -       | `area`, `place` or `event`. Omit to search all three.              |
 
 ## Ordering
 
 Results are ranked by an exact name match, then a name prefix match, then a name substring
-match, then a match on any other tag. At equal rank, areas precede places, and — when `lat`
-and `lon` are supplied — nearer places precede farther ones.
+match, then a match on any other tag. At equal rank, areas precede places, then events, and —
+when `lat` and `lon` are supplied — nearer places and events precede farther ones.
 
 Supplying `lat` and `lon` matters more than it looks. A query like `prague` matches many
 places that no place is actually *named*, so they all share the lowest rank. Without a
 location to break the tie, the `limit` selects among them by name length.
+
+Events are filtered the same way [`GET /v4/events`](events.md) filters them: soft-deleted
+events are excluded, and only events that are upcoming or have no start date are returned.
 
 ## Examples
 
@@ -89,6 +93,9 @@ Every result carries a `type` discriminator.
 `type: "place"` — the same object returned by [`/v4/places/search`](places.md#search): `id`,
 `lat`, `lon`, `icon`, `name`, plus the optional `address`, `opening_hours`, `comments`,
 `verified_at`, `osm_id`, `phone`, `website`, `localized_name` and friends.
+
+`type: "event"` — the same object returned by [`/v4/events`](events.md#get-list): `id`,
+`lat`, `lon`, `name`, `website`, `starts_at` and optional `ends_at`.
 
 ## Notes
 
