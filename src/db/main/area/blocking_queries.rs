@@ -44,9 +44,13 @@ pub fn select(
     limit: Option<i64>,
     conn: &Connection,
 ) -> Result<Vec<Area>> {
+    // Compare as instants rather than as strings. `updated_at` is stored in a
+    // fixed UTC format today, but a string comparison silently depends on that
+    // and on the precision/offset of the caller-supplied cursor. `julianday`
+    // matches how elements, events and comments filter their delta queries.
     let updated_since_sql = match updated_since {
         Some(updated_since) => format!(
-            "AND {updated_at} > '{updated_since}'",
+            "AND julianday({updated_at}) > julianday('{updated_since}')",
             updated_at = Columns::UpdatedAt.as_ref(),
             updated_since = updated_since.format(&Rfc3339)?
         ),

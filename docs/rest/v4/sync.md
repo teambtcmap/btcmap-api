@@ -40,6 +40,20 @@ Key Parameters:
 - `updated_since`: Sync anchor timestamp.
 - `include_deleted`: Required to evict stale records.
 
+## Areas
+
+Areas (countries and communities) support the same incremental sync, though
+there is no CDN snapshot for them. Fetch a full snapshot once with `fields`,
+then page changes with `updated_since`. Raw tags and geometry are not returned;
+request `bbox` if the map needs to place an area. See
+[Areas](areas.md#sync-areas).
+
+```bash
+curl 'https://api.btcmap.org/v4/areas?fields=id,name,type,url_alias,icon,bbox,updated_at
+  &updated_since=2025-06-11T00:00:00Z
+  &include_deleted=true'
+```
+
 ## Example Sync Flow
 
 ```bash

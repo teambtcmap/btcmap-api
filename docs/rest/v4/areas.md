@@ -204,6 +204,91 @@ Each entry in `upcoming_events` matches the [Events API](events.md) response sha
 | `starts_at` | String (RFC 3339) | `2026-09-25T19:00:00Z` | Event start time. |
 | `ends_at` | String (RFC 3339), omitted when absent | `2026-09-25T22:00:00Z` | Event end time, if set. |
 
+The endpoint has two mutually exclusive modes, selected by the query parameters:
+
+- **Search mode** (the default): pass any of `lat`, `lon` or `type` and get the
+  `AreaSearchResult` shape documented above.
+- **Sync mode**: pass any of `fields`, `updated_since`, `limit` or
+  `include_deleted` to page through the area change log.
+
+Mixing a search parameter with a sync parameter returns `400 invalid_input`:
+
+```bash
+curl 'https://api.btcmap.org/v4/areas?lat=48.8566&lon=2.3522&fields=id'
+```
+
+### Sync Areas
+
+Incrementally fetch area changes for an offline cache. Raw `tags` (including the
+large `geo_json` polygon) are never returned; the only geometry field available
+is `bbox`.
+
+```bash
+curl 'https://api.btcmap.org/v4/areas?fields=id,name,type,url_alias,icon,bbox,updated_at
+  &updated_since=2025-06-11T00:00:00Z
+  &include_deleted=true'
+```
+
+#### Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `fields` | String | `id,name,updated_at` | `id` | Comma-separated field projection. Only these fields are returned, plus `id`. See [Sync Fields](#sync-fields). |
+| `updated_since` | String (RFC 3339) | `2025-06-11T00:00:00Z` | `1970-01-01T00:00:00Z` | Return areas whose `updated_at` is strictly after this instant. Omit it for a full snapshot. |
+| `limit` | Number | `1000` | unlimited | Maximum number of areas to return. |
+| `include_deleted` | Boolean | `true` | `false` | Include soft-deleted areas (tombstones). Implied when `deleted_at` is in `fields`. |
+| `lang` | String | `ru` | base tag | Two-letter language code used to localize `name` and `description`. |
+
+#### Sync Fields
+
+Unknown field names are ignored. `id` is always returned.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Number | BTC Map Area ID. |
+| `name` | String | Area name, localized with `lang` when its `name:<lang>` tag exists. |
+| `type` | String | Area type (country, community, etc.). |
+| `url_alias` | String | URL-friendly identifier for the area. |
+| `icon` | String | Square icon URL (`icon:square`), omitted when unset. |
+| `icon_wide` | String | Wide icon URL (`icon:wide`), omitted when unset. |
+| `website_url` | String | URL to the BTC Map page for this area. |
+| `description` | String | Area description, localized with `lang`. |
+| `bbox` | Array of 4 numbers | `[west, south, east, north]`, omitted when the area has no bbox of its own. |
+| `created_at` | String (RFC 3339) | Creation timestamp. |
+| `updated_at` | String (RFC 3339) | Last update timestamp; use as the next `updated_since` cursor. |
+| `deleted_at` | String (RFC 3339) | Tombstone timestamp. Present only for deleted areas when tombstones are included. |
+
+#### Examples
+
+A sync request for the fields a map needs:
+
+```bash
+curl 'https://api.btcmap.org/v4/areas?fields=id,name,type,icon,bbox&updated_since=2025-06-11T00:00:00Z'
+```
+
+```json
+[
+  {
+    "id": 123,
+    "name": "Grand Paris",
+    "type": "community",
+    "icon": "https://static.btcmap.org/images/communities/grand-paris.jpg",
+    "bbox": [2.22, 48.81, 2.47, 48.91]
+  }
+]
+```
+
+An empty `fields` returns only `id`, which is enough to detect new and changed
+areas:
+
+```bash
+curl 'https://api.btcmap.org/v4/areas?updated_since=2025-06-11T00:00:00Z'
+```
+
+```json
+[{ "id": 123 }]
+```
+
 ### Get Area
 
 ```

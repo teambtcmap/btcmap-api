@@ -1,5 +1,6 @@
 use crate::db;
 use crate::db::image::ImagePool;
+use crate::db::main::area::schema::Area;
 use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
@@ -22,6 +23,32 @@ pub struct SearchArgs {
     pub lat: Option<f64>,
     pub lon: Option<f64>,
     pub r#type: Option<String>,
+    /// Field projection for incremental sync mode. Supplying any of `fields`,
+    /// `updated_since`, `limit` or `include_deleted` selects sync mode. Only the
+    /// requested fields are returned, plus `id`; an omitted or empty `fields`
+    /// returns just `id`.
+    pub fields: Option<String>,
+    #[serde(default)]
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub updated_since: Option<OffsetDateTime>,
+    pub limit: Option<i64>,
+    pub include_deleted: Option<bool>,
+    pub lang: Option<String>,
+}
+
+impl SearchArgs {
+    /// Search fields select the pre-existing coordinate search mode.
+    fn has_search_fields(&self) -> bool {
+        self.lat.is_some() || self.lon.is_some() || self.r#type.is_some()
+    }
+
+    /// Sync fields select incremental sync mode.
+    fn has_sync_fields(&self) -> bool {
+        self.fields.is_some()
+            || self.updated_since.is_some()
+            || self.limit.is_some()
+            || self.include_deleted.is_some()
+    }
 }
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
@@ -37,8 +64,153 @@ pub struct AreaSearchResult {
     pub upcoming_events: Vec<EventItem>,
 }
 
+/// Delta sync payload. Every field except `id` is optional and omitted unless
+/// the caller asked for it in `fields`, so a client only pays for the columns
+/// it stores. Raw tags are deliberately not exposed: the only geometry-related
+/// field is `bbox`, which avoids shipping the (large) `geo_json` polygon.
+#[derive(Default, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct AreaDelta {
+    #[ts(type = "number")]
+    pub id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub url_alias: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub icon: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub icon_wide: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub website_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub description: Option<String>,
+    /// `[west, south, east, north]`. Omitted when the area has no bbox of its
+    /// own, i.e. the stored columns still hold the whole-world default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub bbox: Option<[f64; 4]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "time::serde::rfc3339::option", default)]
+    #[ts(optional, type = "string")]
+    pub created_at: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "time::serde::rfc3339::option", default)]
+    #[ts(optional, type = "string")]
+    pub updated_at: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "time::serde::rfc3339::option", default)]
+    #[ts(optional, type = "string")]
+    pub deleted_at: Option<OffsetDateTime>,
+}
+
+/// Fields accepted by `AreaDelta`. Anything else in `fields` is ignored, and
+/// `id` is always present. Deliberately excludes raw tags and `geo_json`.
+const DELTA_FIELDS: &[&str] = &[
+    "name",
+    "type",
+    "url_alias",
+    "icon",
+    "icon_wide",
+    "website_url",
+    "description",
+    "bbox",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+];
+
+/// The `bbox_*` columns default to the whole world, which is indistinguishable
+/// from "never set". Reported as `None` rather than inviting a client to treat
+/// an area as covering the entire planet.
+const WORLD_BBOX: [f64; 4] = [-180.0, -90.0, 180.0, 90.0];
+
+fn area_type(area: &Area) -> String {
+    area.tags
+        .get("type")
+        .and_then(|it| it.as_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn area_icon(area: &Area, tag: &str) -> Option<String> {
+    area.tags
+        .get(tag)
+        .and_then(|it| it.as_str())
+        .map(str::to_string)
+}
+
+fn area_website_url(area: &Area) -> String {
+    let r#type = area_type(area);
+    let singular_type = if let Some(stripped) = r#type.strip_suffix("ies") {
+        format!("{}y", stripped)
+    } else if let Some(stripped) = r#type.strip_suffix('s') {
+        stripped.to_string()
+    } else {
+        r#type
+    };
+    format!("https://btcmap.org/{}/{}", singular_type, area.alias())
+}
+
+fn area_bbox(area: &Area) -> Option<[f64; 4]> {
+    let bbox = [
+        area.bbox_west,
+        area.bbox_south,
+        area.bbox_east,
+        area.bbox_north,
+    ];
+    (bbox != WORLD_BBOX).then_some(bbox)
+}
+
+fn area_delta(area: &Area, fields: &[&str], lang: Option<&str>) -> AreaDelta {
+    let mut delta = AreaDelta {
+        id: area.id,
+        ..Default::default()
+    };
+    for field in fields.iter().filter(|it| DELTA_FIELDS.contains(*it)) {
+        match *field {
+            "name" => delta.name = Some(area.localized_tag("name", lang)),
+            "type" => delta.r#type = Some(area_type(area)),
+            "url_alias" => delta.url_alias = Some(area.alias()),
+            "icon" => delta.icon = area_icon(area, "icon:square"),
+            "icon_wide" => delta.icon_wide = area_icon(area, "icon:wide"),
+            "website_url" => delta.website_url = Some(area_website_url(area)),
+            "description" => delta.description = Some(area.localized_tag("description", lang)),
+            "bbox" => delta.bbox = area_bbox(area),
+            "created_at" => delta.created_at = Some(area.created_at),
+            "updated_at" => delta.updated_at = Some(area.updated_at),
+            "deleted_at" => delta.deleted_at = area.deleted_at,
+            _ => {}
+        }
+    }
+    delta
+}
+
 #[get("")]
-pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaSearchResult>> {
+pub async fn get(
+    args: Query<SearchArgs>,
+    pool: Data<MainPool>,
+) -> Result<HttpResponse, RestApiError> {
+    // The two parameter sets are mutually exclusive. Reject a request that mixes
+    // them up front rather than silently picking a winner.
+    if args.has_search_fields() && args.has_sync_fields() {
+        return Err(RestApiError::invalid_input(
+            "search and sync parameters cannot be combined",
+        ));
+    }
+    if args.has_sync_fields() {
+        return Ok(HttpResponse::Ok().json(sync(&args, &pool).await?));
+    }
+
     let type_filter = args.r#type.clone();
 
     let (areas, attach_events) = if let (Some(lat), Some(lon)) = (args.lat, args.lon) {
@@ -71,8 +243,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
         .into_iter()
         .filter(|area| {
             if let Some(ref filter_type) = type_filter {
-                let area_type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                if area_type != filter_type {
+                if area_type(area) != *filter_type {
                     return false;
                 }
             }
@@ -90,34 +261,47 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<Vec<AreaS
 
     let results: Vec<AreaSearchResult> = filtered
         .into_iter()
-        .map(|area| {
-            let r#type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            let singular_type = if let Some(stripped) = r#type.strip_suffix("ies") {
-                format!("{}y", stripped)
-            } else if let Some(stripped) = r#type.strip_suffix('s') {
-                stripped.to_string()
-            } else {
-                r#type.to_string()
-            };
-            let url_alias = area.alias();
-            let upcoming_events = events_by_area.get(&area.id).cloned().unwrap_or_default();
-            AreaSearchResult {
-                id: area.id,
-                name: area.name(),
-                r#type: r#type.to_string(),
-                url_alias: url_alias.clone(),
-                icon: area
-                    .tags
-                    .get("icon:square")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
-                website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
-                upcoming_events,
-            }
+        .map(|area| AreaSearchResult {
+            id: area.id,
+            name: area.name(),
+            r#type: area_type(&area),
+            url_alias: area.alias(),
+            icon: area_icon(&area, "icon:square"),
+            website_url: area_website_url(&area),
+            upcoming_events: events_by_area.get(&area.id).cloned().unwrap_or_default(),
         })
         .collect();
 
-    Ok(Json(results))
+    Ok(HttpResponse::Ok().json(results))
+}
+
+/// Incremental sync path. Returns only the fields requested in `fields` (plus
+/// `id`), filtered by `updated_since` and paged by `limit`. Callers never reach
+/// here with search fields set: the handler rejects mixed requests, since a
+/// `type` filter applied after `limit` would corrupt pages.
+async fn sync(args: &SearchArgs, pool: &Data<MainPool>) -> Res<Vec<AreaDelta>> {
+    let fields: Vec<&str> = args
+        .fields
+        .as_deref()
+        .unwrap_or("")
+        .split(',')
+        .filter(|it| !it.is_empty())
+        .collect();
+    let updated_since = args.updated_since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
+    let include_deleted = args.include_deleted.unwrap_or(false) || fields.contains(&"deleted_at");
+    let lang = args.lang.as_deref().map(|l| &l[..2.min(l.len())]);
+
+    let areas =
+        db::main::area::queries::select(Some(updated_since), include_deleted, args.limit, pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+
+    Ok(Json(
+        areas
+            .iter()
+            .map(|area| area_delta(area, &fields, lang))
+            .collect(),
+    ))
 }
 
 async fn upcoming_events_by_area(
@@ -1435,5 +1619,300 @@ mod test {
             (50, 50),
             super::fit_dimensions(50, 50, Some(200), Some(200))
         );
+    }
+
+    fn delta_keys(value: &serde_json::Value) -> Vec<String> {
+        let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+        keys.sort_unstable();
+        keys
+    }
+
+    #[test]
+    async fn search_mode_keeps_legacy_response_shape() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?lat=7.9&lon=98.3").to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        let obj = res[0].as_object().unwrap();
+        assert!(obj.contains_key("upcoming_events"));
+        assert!(obj.contains_key("website_url"));
+        assert!(!obj.contains_key("updated_at"));
+        Ok(())
+    }
+
+    #[test]
+    async fn search_mode_accepts_type_only() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?type=country").to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert!(res[0].as_object().unwrap().contains_key("upcoming_events"));
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_conflicting_search_and_sync_params_returns_400() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        for uri in [
+            "/?lat=1&lon=2&fields=id",
+            "/?type=community&fields=id",
+            "/?lon=0&limit=1",
+            "/?lat=1&include_deleted=true",
+        ] {
+            let req = TestRequest::get().uri(uri).to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(res.status(), 400, "expected 400 for {uri}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_returns_only_requested_fields() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,name,updated_at&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert_eq!(delta_keys(&res[0]), vec!["id", "name", "updated_at"]);
+        assert_eq!(res[0]["name"], "Phuket");
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_without_fields_returns_only_id() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert_eq!(delta_keys(&res[0]), vec!["id"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_ignores_unknown_fields() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,bogus&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(delta_keys(&res[0]), vec!["id"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_fields_without_updated_since_is_full_snapshot() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get().uri("/?fields=id,name").to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert_eq!(delta_keys(&res[0]), vec!["id", "name"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_respects_updated_since() -> Result<()> {
+        let pool = pool();
+        let old = db::main::area::queries::insert(phuket_area_tags("Old"), &pool).await?;
+        db::main::area::queries::set_updated_at(old.id, datetime!(2020-01-01 0:00 UTC), &pool)
+            .await?;
+        let new = db::main::area::queries::insert(phuket_area_tags("New"), &pool).await?;
+        db::main::area::queries::set_updated_at(new.id, datetime!(2021-01-01 0:00 UTC), &pool)
+            .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id&updated_since=2020-06-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0]["id"], new.id);
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_excludes_deleted_by_default() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags("Gone"), &pool).await?;
+        db::main::area::queries::set_deleted_at(
+            area.id,
+            Some(datetime!(2021-01-01 0:00 UTC)),
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_includes_tombstones_when_requested() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags("Gone"), &pool).await?;
+        db::main::area::queries::set_deleted_at(
+            area.id,
+            Some(datetime!(2021-01-01 0:00 UTC)),
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,deleted_at&include_deleted=true&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert!(res[0].as_object().unwrap().contains_key("deleted_at"));
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_deleted_at_field_enables_tombstones() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags("Gone"), &pool).await?;
+        db::main::area::queries::set_deleted_at(
+            area.id,
+            Some(datetime!(2021-01-01 0:00 UTC)),
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,deleted_at&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.len(), 1);
+        assert!(res[0].as_object().unwrap().contains_key("deleted_at"));
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_bbox_present_when_set() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        db::main::area::queries::set_bbox(area.id, 1.0, 2.0, 3.0, 4.0, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,bbox&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res[0]["bbox"], json!([1.0, 2.0, 3.0, 4.0]));
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_bbox_omitted_when_world() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(Area::mock_tags(), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,bbox&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(delta_keys(&res[0]), vec!["id"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_localizes_name() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert("name".into(), json!("Phuket"));
+        tags.insert("name:ru".into(), json!("Пхукет"));
+        tags.insert("type".into(), json!("country"));
+        db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,name&lang=ru&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res[0]["name"], "Пхукет");
+        Ok(())
     }
 }
