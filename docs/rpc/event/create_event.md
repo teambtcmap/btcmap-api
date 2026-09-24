@@ -13,14 +13,13 @@ You can add Bitcoin-related events on BTC Map via this method. Most events are e
   "name": "Chiang Mai Weekly Meetup",
   "website": "https://www.meetup.com/bitcoinsinchiangmai/",
   "starts_at": "2025-08-28T19:00:00+07:00",
-  "ends_at": null,
-  "cron_schedule": null
+  "ends_at": null
 }
 ```
 
 We don't keep a lot of data about events due to our lack of maintaining capacity. That's why every eligeble event should have it's own website where users can look up all the details.
 
-Most events are recurring and held at a fixed location. In these cases, `starts_at`, `ends_at`, and `cron_schedule` can all be omitted. The `website` link should direct users to a page with the up-to-date schedule, such as a dedicated event series website or a Meetup.com profile. The event will be displayed permanently (until it is deleted via `delete_event`), so hosts of fixed-location meetups only need to add the event once.
+Most events are recurring and held at a fixed location. In these cases, `starts_at` and `ends_at` can both be omitted. The `website` link should direct users to a page with the up-to-date schedule, such as a dedicated event series website or a Meetup.com profile. The event will be displayed permanently (until it is deleted via `delete_event`), so hosts of fixed-location meetups only need to add the event once.
 
 Example of a permanent event with no fixed schedule:
 
@@ -31,14 +30,29 @@ Example of a permanent event with no fixed schedule:
   "name": "Chiang Mai Bitcoin Meetup",
   "website": "https://www.meetup.com/bitcoinsinchiangmai/",
   "starts_at": null,
-  "ends_at": null,
-  "cron_schedule": null
+  "ends_at": null
 }
 ```
 
 For a one-off event without a fixed end time, you may provide only the `starts_at` parameter.
 
-The optional `cron_schedule` field accepts a cron expression that describes when the event recurs. It is used internally to refresh upcoming event instances and may be omitted for one-off events.
+### Timestamps and timezones
+
+`starts_at` and `ends_at` accept two forms:
+
+- **With an explicit UTC offset** (RFC 3339), including `Z` for UTC:
+  `"2025-08-28T19:00:00+07:00"` or `"2025-08-28T12:00:00Z"`. The offset is stored
+  as given, so `Z` always means UTC. This is the original behaviour.
+- **As a floating local time** with no offset: `"2025-08-28T19:00:00"`. Because a
+  local time is ambiguous on its own, the `timezone` parameter is then required.
+
+The optional `timezone` field accepts either an IANA zone name (e.g.
+`Europe/Berlin`) or `"auto"`, which infers the zone from the event's `(lat, lon)`.
+The server resolves the offset for that specific date, so daylight saving is
+handled. Provide either explicit offsets or a `timezone`, not both.
+
+The inferred or supplied zone is echoed back in the response so the caller can
+verify what was applied.
 
 The optional `area_id` field links the event to a [community area](../area/README.md). It is mainly relevant for [`event_manager`](../user-methods.md#set_user_geofence) callers, who must keep events inside their geofence either by linking an `area_id` in the fence or by placing `(lat, lon)` inside a fenced area.
 
@@ -46,9 +60,15 @@ The optional `area_id` field links the event to a [community area](../area/READM
 
 ```json
 {
-  "id": 514
+  "id": 514,
+  "starts_at": "2025-08-28T19:00:00+07:00",
+  "ends_at": null,
+  "timezone": "Asia/Bangkok"
 }
 ```
+
+`timezone` is the zone applied to floating timestamps, or `null` when the
+timestamps carried their own offsets.
 
 ## Allowed Roles
 
@@ -79,10 +99,22 @@ btcmap-cli event create-event --name 'Chiang Mai Weekly Meetup' \
 
 ### curl
 
+Explicit offset:
+
 ```bash
 curl --header 'Content-Type: application/json' \
   --header "Authorization: Bearer $ACCESS_TOKEN" \
   --request POST \
-  --data '{"jsonrpc":"2.0","method":"create_event","params":{"lat":18.7822,"lon":98.9942,"name":"Chiang Mai Weekly Meetup","website":"https://www.meetup.com/bitcoinsinchiangmai/","starts_at":"2025-08-28T19:00:00+07:00","ends_at":null,"cron_schedule":null},"id":1}' \
+  --data '{"jsonrpc":"2.0","method":"create_event","params":{"lat":18.7822,"lon":98.9942,"name":"Chiang Mai Weekly Meetup","website":"https://www.meetup.com/bitcoinsinchiangmai/","starts_at":"2025-08-28T19:00:00+07:00","ends_at":null},"id":1}' \
+  https://api.btcmap.org/rpc
+```
+
+Floating local time with an inferred timezone:
+
+```bash
+curl --header 'Content-Type: application/json' \
+  --header "Authorization: Bearer $ACCESS_TOKEN" \
+  --request POST \
+  --data '{"jsonrpc":"2.0","method":"create_event","params":{"lat":18.7822,"lon":98.9942,"name":"Chiang Mai Weekly Meetup","website":"https://www.meetup.com/bitcoinsinchiangmai/","starts_at":"2025-08-28T19:00:00","timezone":"auto"},"id":1}' \
   https://api.btcmap.org/rpc
 ```

@@ -843,7 +843,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -874,7 +873,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -903,7 +901,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2020-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -930,7 +927,6 @@ mod test {
             98.33,
             "no_starts_at".to_string(),
             "https://example.com".to_string(),
-            None,
             None,
             None,
             &pool,

@@ -380,7 +380,6 @@ mod test {
             "https://example.com".to_string(),
             starts_at,
             None,
-            None,
             pool,
         )
         .await
@@ -727,7 +726,6 @@ mod test {
             "Bitcoin Deleted".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2999-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )

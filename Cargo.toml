@@ -58,6 +58,18 @@ serde_json = { version = "1.0.149", default-features = false, features = ["prese
 # https://github.com/time-rs/time/blob/main/CHANGELOG.md
 time = { version = "0.3.47", default-features = false, features = ["macros", "serde-well-known"] }
 
+# Converts (lon, lat) coordinates to an IANA timezone name entirely offline.
+# It bundles ~4 MB of tz boundary data; `clap` (a default CLI-only dependency)
+# is disabled to keep the server binary lean.
+# https://github.com/ringsaturn/tzf-rs/releases
+tzf-rs = { version = "2.1.2", default-features = false, features = ["bundled"] }
+
+# IANA timezone database integration for the `time` crate, so a local
+# wall-clock time plus a zone name can be turned into a concrete UTC offset
+# (DST aware). Bundles the tz database behind its default `db` feature.
+# https://github.com/Yuri6037/time-tz/releases
+time-tz = "2.0.0"
+
 # Async logging infra
 # https://github.com/tokio-rs/tracing/releases
 tracing = { version = "0.1.44", default-features = false }

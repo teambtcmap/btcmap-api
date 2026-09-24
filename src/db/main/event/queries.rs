@@ -16,23 +16,12 @@ pub async fn insert(
     website: String,
     starts_at: Option<OffsetDateTime>,
     ends_at: Option<OffsetDateTime>,
-    cron_schedule: Option<String>,
     pool: &Pool,
 ) -> Result<Event> {
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::insert(
-                area_id,
-                lat,
-                lon,
-                &name,
-                &website,
-                starts_at,
-                ends_at,
-                cron_schedule.as_deref(),
-                conn,
-            )
+            blocking_queries::insert(area_id, lat, lon, &name, &website, starts_at, ends_at, conn)
         })
         .await?
 }
@@ -122,7 +111,6 @@ pub async fn update(
     website: Option<String>,
     starts_at: Option<Option<OffsetDateTime>>,
     ends_at: Option<Option<OffsetDateTime>>,
-    cron_schedule: Option<Option<String>>,
     pool: &Pool,
 ) -> Result<Event> {
     pool.get()
@@ -137,7 +125,6 @@ pub async fn update(
                 website.as_deref(),
                 starts_at,
                 ends_at,
-                cron_schedule.as_ref().map(|inner| inner.as_deref()),
                 conn,
             )
         })

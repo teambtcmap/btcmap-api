@@ -1,24 +1,21 @@
 use crate::{
-    db::{self, main::event::schema::Event, main::user::schema::User},
+    db::{self, main::user::schema::User},
+    service::timezone::{self, EventTime},
     Result,
 };
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-mod optional_rfc3339 {
-    use serde::{de::Error, Deserialize, Deserializer};
-    use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+mod optional_event_time {
+    use crate::service::timezone::EventTime;
+    use serde::{Deserialize, Deserializer};
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Option<OffsetDateTime>>, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Option<EventTime>>, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let opt = Option::<String>::deserialize(deserializer)?;
-        Ok(Some(match opt {
-            None => None,
-            Some(s) => Some(OffsetDateTime::parse(&s, &Rfc3339).map_err(D::Error::custom)?),
-        }))
+        Ok(Some(Option::<EventTime>::deserialize(deserializer)?))
     }
 }
 
@@ -47,12 +44,14 @@ pub struct Params {
     name: Option<String>,
     #[serde(default)]
     website: Option<String>,
-    #[serde(default, deserialize_with = "optional_rfc3339::deserialize")]
-    starts_at: Option<Option<OffsetDateTime>>,
-    #[serde(default, deserialize_with = "optional_rfc3339::deserialize")]
-    ends_at: Option<Option<OffsetDateTime>>,
-    #[serde(default, deserialize_with = "optional::deserialize")]
-    cron_schedule: Option<Option<String>>,
+    #[serde(default, deserialize_with = "optional_event_time::deserialize")]
+    starts_at: Option<Option<EventTime>>,
+    #[serde(default, deserialize_with = "optional_event_time::deserialize")]
+    ends_at: Option<Option<EventTime>>,
+    /// Either "auto" (infer from lat/lon) or an IANA zone name. Required when a
+    /// provided timestamp has no UTC offset.
+    #[serde(default)]
+    timezone: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -66,24 +65,9 @@ pub struct Res {
     starts_at: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
-    cron_schedule: Option<String>,
     pub area_id: Option<i64>,
-}
-
-impl From<Event> for Res {
-    fn from(event: Event) -> Self {
-        Res {
-            id: event.id,
-            lat: event.lat,
-            lon: event.lon,
-            name: event.name,
-            website: event.website,
-            starts_at: event.starts_at,
-            ends_at: event.ends_at,
-            cron_schedule: event.cron_schedule,
-            area_id: event.area_id,
-        }
-    }
+    /// The timezone applied to floating timestamps in this request, if any.
+    timezone: Option<String>,
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
@@ -91,20 +75,36 @@ pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
     let lat = params.lat.unwrap_or(event.lat);
     let lon = params.lon.unwrap_or(event.lon);
     super::geofence::check(user, lat, lon, pool).await?;
-    db::main::event::queries::update(
+    let (starts_at, ends_at, timezone) = timezone::resolve_update_times(
+        params.starts_at,
+        params.ends_at,
+        params.timezone.as_deref(),
+        lat,
+        lon,
+    )?;
+    let event = db::main::event::queries::update(
         params.id,
         params.area_id,
         params.lat,
         params.lon,
         params.name,
         params.website,
-        params.starts_at,
-        params.ends_at,
-        params.cron_schedule,
+        starts_at,
+        ends_at,
         pool,
     )
-    .await
-    .map(Into::into)
+    .await?;
+    Ok(Res {
+        id: event.id,
+        lat: event.lat,
+        lon: event.lon,
+        name: event.name,
+        website: event.website,
+        starts_at: event.starts_at,
+        ends_at: event.ends_at,
+        area_id: event.area_id,
+        timezone,
+    })
 }
 
 #[cfg(test)]
@@ -122,6 +122,8 @@ mod test {
     };
     use serde_json::{json, Map};
     use time::macros::datetime;
+
+    use crate::service::timezone::EventTime;
 
     // A small Phuket-shaped polygon used as the fenced (parent) area.
     const PHUKET: &str = r#"{
@@ -185,7 +187,6 @@ mod test {
                 "https://example.com".into(),
                 None,
                 None,
-                None,
                 &pool,
             )
             .await?;
@@ -200,7 +201,7 @@ mod test {
                     website: None,
                     starts_at: None,
                     ends_at: None,
-                    cron_schedule: None,
+                    timezone: None,
                 },
                 &user,
                 &pool,
@@ -241,7 +242,6 @@ mod test {
                 "https://example.com".into(),
                 None,
                 None,
-                None,
                 &pool,
             )
             .await?;
@@ -256,7 +256,7 @@ mod test {
                     website: None,
                     starts_at: None,
                     ends_at: None,
-                    cron_schedule: None,
+                    timezone: None,
                 },
                 &user,
                 &pool,
@@ -285,7 +285,6 @@ mod test {
                 "https://example.com".into(),
                 None,
                 None,
-                None,
                 &pool,
             )
             .await?;
@@ -301,7 +300,7 @@ mod test {
                     website: None,
                     starts_at: None,
                     ends_at: None,
-                    cron_schedule: None,
+                    timezone: None,
                 },
                 &user,
                 &pool,
@@ -328,8 +327,28 @@ mod test {
             "ends_at": "2026-08-20T22:00:00Z",
         });
         let p: super::Params = serde_json::from_value(v).unwrap();
-        assert_eq!(p.starts_at, Some(Some(datetime!(2026-08-20 19:00:00 UTC))));
-        assert_eq!(p.ends_at, Some(Some(datetime!(2026-08-20 22:00:00 UTC))));
+        assert_eq!(
+            p.starts_at,
+            Some(Some(EventTime::Absolute(
+                datetime!(2026-08-20 19:00:00 UTC)
+            )))
+        );
+        assert_eq!(
+            p.ends_at,
+            Some(Some(EventTime::Absolute(
+                datetime!(2026-08-20 22:00:00 UTC)
+            )))
+        );
+    }
+
+    #[test]
+    fn parses_floating_timestamp() {
+        let v = json!({
+            "id": 1,
+            "starts_at": "2026-08-20T19:00:00",
+        });
+        let p: super::Params = serde_json::from_value(v).unwrap();
+        assert!(matches!(p.starts_at, Some(Some(EventTime::Local(_)))));
     }
 
     #[test]
@@ -339,13 +358,13 @@ mod test {
             "area_id": null,
             "starts_at": null,
             "ends_at": null,
-            "cron_schedule": null,
+            "timezone": null,
         });
         let p: super::Params = serde_json::from_value(v).unwrap();
         assert_eq!(p.area_id, Some(None));
         assert_eq!(p.starts_at, Some(None));
         assert_eq!(p.ends_at, Some(None));
-        assert_eq!(p.cron_schedule, Some(None));
+        assert_eq!(p.timezone, None);
     }
 
     #[test]
@@ -355,7 +374,7 @@ mod test {
         assert_eq!(p.area_id, None);
         assert_eq!(p.starts_at, None);
         assert_eq!(p.ends_at, None);
-        assert_eq!(p.cron_schedule, None);
+        assert_eq!(p.timezone, None);
         assert_eq!(p.name.as_deref(), Some("renamed"));
     }
 

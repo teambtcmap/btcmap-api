@@ -18,6 +18,7 @@ pub mod overpass;
 pub mod ppq;
 pub mod search;
 pub mod sync;
+pub mod timezone;
 pub mod user;
 pub mod wallet;
 pub mod wallet_cache;

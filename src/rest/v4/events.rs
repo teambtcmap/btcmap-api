@@ -290,7 +290,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -305,7 +304,6 @@ mod test {
         assert_eq!(1, res.len());
         assert_eq!(event.id, res.first().unwrap()["id"].as_i64().unwrap());
         assert!(res.first().unwrap().get("area_id").is_none());
-        assert!(res.first().unwrap().get("cron_schedule").is_none());
         assert!(res.first().unwrap().get("ends_at").is_none());
         // Backward compatibility: the full snapshot must not grow the new
         // delta-only fields.
@@ -324,7 +322,6 @@ mod test {
             "past_event".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2020-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )
@@ -364,7 +361,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -393,7 +389,6 @@ mod test {
             "deleted".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )
@@ -437,7 +432,6 @@ mod test {
                 "https://example.com".to_string(),
                 Some(datetime!(2099-01-01 0:00 UTC)),
                 None,
-                None,
                 &pool,
             )
             .await?;
@@ -468,7 +462,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -497,7 +490,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2020-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -508,7 +500,6 @@ mod test {
             "future_event".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )
@@ -540,7 +531,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -554,7 +544,6 @@ mod test {
         let res: JsonObject = test::call_and_read_body_json(&app, req).await;
         assert_eq!(event.id, res["id"].as_i64().unwrap());
         assert!(res.get("area_id").is_none());
-        assert!(res.get("cron_schedule").is_none());
         Ok(())
     }
 
@@ -624,7 +613,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -654,7 +642,6 @@ mod test {
             "london".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )
@@ -688,7 +675,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -721,7 +707,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2020-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -751,7 +736,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2020-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -762,7 +746,6 @@ mod test {
             "future".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )
@@ -794,7 +777,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2024-06-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -805,7 +787,6 @@ mod test {
             "too_late".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )
@@ -839,7 +820,6 @@ mod test {
             "deleted".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )
@@ -876,7 +856,6 @@ mod test {
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
             None,
-            None,
             &pool,
         )
         .await?;
@@ -908,7 +887,6 @@ mod test {
             "alias_test".to_string(),
             "https://example.com".to_string(),
             Some(datetime!(2099-01-01 0:00 UTC)),
-            None,
             None,
             &pool,
         )

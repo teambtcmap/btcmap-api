@@ -68,7 +68,6 @@ mod test {
             "https://example.com".to_string(),
             None,
             None,
-            None,
             pool,
         )
         .await?;

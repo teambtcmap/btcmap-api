@@ -1,5 +1,6 @@
 use crate::{
-    db::{self, main::event::schema::Event, main::user::schema::User},
+    db::{self, main::user::schema::User},
+    service::timezone::{self, EventTime},
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -13,39 +14,54 @@ pub struct Params {
     lon: f64,
     name: String,
     website: String,
-    #[serde(with = "time::serde::rfc3339::option")]
-    starts_at: Option<OffsetDateTime>,
-    #[serde(with = "time::serde::rfc3339::option")]
-    ends_at: Option<OffsetDateTime>,
-    cron_schedule: Option<String>,
+    #[serde(default)]
+    starts_at: Option<EventTime>,
+    #[serde(default)]
+    ends_at: Option<EventTime>,
+    /// Either "auto" (infer from lat/lon) or an IANA zone name. Only needed for
+    /// floating timestamps that have no UTC offset.
+    #[serde(default)]
+    timezone: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct Res {
     pub id: i64,
-}
-
-impl From<Event> for Res {
-    fn from(event: Event) -> Self {
-        Res { id: event.id }
-    }
+    #[serde(with = "time::serde::rfc3339::option")]
+    starts_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    ends_at: Option<OffsetDateTime>,
+    /// The timezone that was applied to floating timestamps, echoed back so the
+    /// caller can verify what the server inferred.
+    timezone: Option<String>,
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
     super::geofence::check(user, params.lat, params.lon, pool).await?;
-    db::main::event::queries::insert(
+    let (starts_at, ends_at, timezone) = timezone::resolve_create_times(
+        params.starts_at,
+        params.ends_at,
+        params.timezone.as_deref(),
+        params.lat,
+        params.lon,
+    )?;
+    let event = db::main::event::queries::insert(
         params.area_id,
         params.lat,
         params.lon,
         params.name,
         params.website,
-        params.starts_at,
-        params.ends_at,
-        params.cron_schedule,
+        starts_at,
+        ends_at,
         pool,
     )
-    .await
-    .map(Into::into)
+    .await?;
+    Ok(Res {
+        id: event.id,
+        starts_at: event.starts_at,
+        ends_at: event.ends_at,
+        timezone,
+    })
 }
 
 #[cfg(test)]
@@ -130,7 +146,7 @@ mod test {
             website: "https://example.com".into(),
             starts_at: None,
             ends_at: None,
-            cron_schedule: None,
+            timezone: None,
         }
     }
 

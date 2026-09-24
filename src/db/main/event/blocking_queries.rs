@@ -19,13 +19,12 @@ pub fn insert(
     website: &str,
     starts_at: Option<OffsetDateTime>,
     ends_at: Option<OffsetDateTime>,
-    cron_schedule: Option<&str>,
     conn: &Connection,
 ) -> Result<Event> {
     let sql = format!(
         r#"
-            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt}, {CronSchedule})
-            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at, :cron_schedule)
+            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt})
+            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at)
             RETURNING {projection}
         "#,
         projection = Event::projection(),
@@ -38,7 +37,6 @@ pub fn insert(
         ":website": website,
         ":starts_at": starts_at,
         ":ends_at": ends_at,
-        ":cron_schedule": cron_schedule,
     };
     conn.query_row(&sql, params, Event::mapper())
         .map_err(Into::into)
@@ -68,7 +66,6 @@ pub fn update(
     website: Option<&str>,
     starts_at: Option<Option<OffsetDateTime>>,
     ends_at: Option<Option<OffsetDateTime>>,
-    cron_schedule: Option<Option<&str>>,
     conn: &Connection,
 ) -> Result<Event> {
     let mut sets: Vec<String> = Vec::new();
@@ -101,10 +98,6 @@ pub fn update(
     if let Some(v) = &ends_at {
         sets.push(format!("{EndsAt} = :ends_at"));
         sql_params.push((":ends_at", v));
-    }
-    if let Some(v) = &cron_schedule {
-        sets.push(format!("{CronSchedule} = :cron_schedule"));
-        sql_params.push((":cron_schedule", v));
     }
 
     if sets.is_empty() {
@@ -413,7 +406,6 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
-            Some("0 0 * * * *"),
             &conn,
         )?;
         assert_eq!(Some(&event), super::select_all(&conn)?.first());
@@ -431,7 +423,6 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
-            Some("0 0 * * * *"),
             &conn,
         )?;
         let updated = super::update(
@@ -443,7 +434,6 @@ mod test {
             Some("https://example.com"),
             Some(None),
             Some(None),
-            Some(None),
             &conn,
         )?;
         assert_eq!(updated.id, event.id);
@@ -453,7 +443,6 @@ mod test {
         assert_eq!(updated.website, "https://example.com");
         assert!(updated.starts_at.is_none());
         assert!(updated.ends_at.is_none());
-        assert!(updated.cron_schedule.is_none());
         assert!(updated.updated_at >= event.updated_at);
         Ok(())
     }
@@ -469,7 +458,6 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
-            Some("0 0 * * * *"),
             &conn,
         )?;
         let updated = super::update(
@@ -478,7 +466,6 @@ mod test {
             None,
             None,
             Some("renamed"),
-            None,
             None,
             None,
             None,
@@ -491,7 +478,6 @@ mod test {
         assert_eq!(updated.website, "website");
         assert_eq!(updated.starts_at, event.starts_at);
         assert_eq!(updated.ends_at, event.ends_at);
-        assert_eq!(updated.cron_schedule, event.cron_schedule);
         assert!(updated.updated_at >= event.updated_at);
         Ok(())
     }
@@ -499,12 +485,10 @@ mod test {
     #[test]
     fn update_no_fields_returns_existing() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, None, &conn)?;
+        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
         let original_updated_at = event.updated_at;
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let returned = super::update(
-            event.id, None, None, None, None, None, None, None, None, &conn,
-        )?;
+        let returned = super::update(event.id, None, None, None, None, None, None, None, &conn)?;
         assert_eq!(returned.id, event.id);
         assert_eq!(returned.name, "name");
         assert_eq!(
@@ -518,13 +502,12 @@ mod test {
     fn update_area_id() -> Result<()> {
         let conn = conn();
         let area = crate::db::main::area::blocking_queries::insert(Area::mock_tags(), &conn)?;
-        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, None, &conn)?;
+        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
         assert_eq!(event.area_id, None);
 
         let updated = super::update(
             event.id,
             Some(Some(area.id)),
-            None,
             None,
             None,
             None,
@@ -544,7 +527,6 @@ mod test {
             None,
             None,
             None,
-            None,
             &conn,
         )?;
         assert_eq!(updated.area_id, None);
@@ -555,14 +537,14 @@ mod test {
     #[test]
     fn update_missing_row() {
         let conn = conn();
-        let res = super::update(999, None, None, None, None, None, None, None, None, &conn);
+        let res = super::update(999, None, None, None, None, None, None, None, &conn);
         assert!(res.is_err());
     }
 
     #[test]
     fn insert_null_started_at() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, None, &conn)?;
+        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
         assert_eq!(Some(&event), super::select_all(&conn)?.first());
         Ok(())
     }
@@ -578,7 +560,6 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
-            None,
             &conn,
         )?;
         let event_2 = super::insert(
@@ -589,7 +570,6 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
-            None,
             &conn,
         )?;
         let event_3 = super::insert(
@@ -599,7 +579,6 @@ mod test {
             "name",
             "website",
             Some(OffsetDateTime::now_utc()),
-            None,
             None,
             &conn,
         )?;
@@ -617,7 +596,6 @@ mod test {
             "name",
             "website",
             Some(OffsetDateTime::now_utc()),
-            None,
             None,
             &conn,
         )?;
@@ -647,7 +625,6 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
-            None,
             &conn,
         )?;
         super::insert(
@@ -657,7 +634,6 @@ mod test {
             "outside",
             "website",
             Some(OffsetDateTime::now_utc()),
-            None,
             None,
             &conn,
         )?;
@@ -676,7 +652,6 @@ mod test {
             "deleted",
             "website",
             Some(OffsetDateTime::now_utc()),
-            None,
             None,
             &conn,
         )?;
@@ -697,7 +672,6 @@ mod test {
             "website",
             Some(OffsetDateTime::now_utc()),
             None,
-            None,
             &conn,
         )?;
         let hits = super::select_by_bbox(98.0, 7.0, 99.0, 8.0, &conn)?;
@@ -712,7 +686,7 @@ mod test {
         lon: f64,
         conn: &Connection,
     ) -> Result<i64> {
-        Ok(super::insert(None, lat, lon, name, "website", starts_at, None, None, conn)?.id)
+        Ok(super::insert(None, lat, lon, name, "website", starts_at, None, conn)?.id)
     }
 
     #[test]
@@ -866,9 +840,9 @@ mod test {
     fn select_updated_since_filters_by_cursor() -> Result<()> {
         let conn = conn();
         let now = OffsetDateTime::now_utc();
-        let old = super::insert(None, 1.0, 1.0, "old", "website", None, None, None, &conn)?;
+        let old = super::insert(None, 1.0, 1.0, "old", "website", None, None, &conn)?;
         set_updated_at(old.id, now - Duration::hours(1), &conn)?;
-        let new = super::insert(None, 2.0, 2.0, "new", "website", None, None, None, &conn)?;
+        let new = super::insert(None, 2.0, 2.0, "new", "website", None, None, &conn)?;
         set_updated_at(new.id, now + Duration::hours(1), &conn)?;
 
         let results = super::select_updated_since(&now, false, None, &conn)?;
@@ -882,7 +856,7 @@ mod test {
     #[test]
     fn select_updated_since_compares_by_instant_not_text() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, None, &conn)?;
+        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, &conn)?;
         conn.execute(
             "UPDATE event SET updated_at = '2024-01-01T10:00:00.550Z' WHERE id = ?1",
             params![event.id],
@@ -906,7 +880,7 @@ mod test {
     #[test]
     fn select_updated_since_deleted_rows_only_when_included() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, None, &conn)?;
+        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, &conn)?;
         super::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &conn)?;
 
         let without = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, None, &conn)?;
@@ -922,11 +896,11 @@ mod test {
     fn select_updated_since_respects_limit_and_orders_by_updated_at() -> Result<()> {
         let conn = conn();
         let base = OffsetDateTime::UNIX_EPOCH + Duration::days(1);
-        let first = super::insert(None, 1.0, 1.0, "first", "website", None, None, None, &conn)?;
+        let first = super::insert(None, 1.0, 1.0, "first", "website", None, None, &conn)?;
         set_updated_at(first.id, base, &conn)?;
-        let second = super::insert(None, 2.0, 2.0, "second", "website", None, None, None, &conn)?;
+        let second = super::insert(None, 2.0, 2.0, "second", "website", None, None, &conn)?;
         set_updated_at(second.id, base + Duration::hours(1), &conn)?;
-        let third = super::insert(None, 3.0, 3.0, "third", "website", None, None, None, &conn)?;
+        let third = super::insert(None, 3.0, 3.0, "third", "website", None, None, &conn)?;
         set_updated_at(third.id, base + Duration::hours(2), &conn)?;
 
         let page = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, Some(2), &conn)?;
@@ -947,7 +921,6 @@ mod test {
             "past",
             "website",
             Some(datetime!(2020-01-01 0:00 UTC)),
-            None,
             None,
             &conn,
         )?;
