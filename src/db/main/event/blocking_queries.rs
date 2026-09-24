@@ -17,7 +17,7 @@ pub fn insert(
     lon: f64,
     name: &str,
     website: &str,
-    starts_at: Option<OffsetDateTime>,
+    starts_at: OffsetDateTime,
     ends_at: Option<OffsetDateTime>,
     conn: &Connection,
 ) -> Result<Event> {
@@ -64,7 +64,7 @@ pub fn update(
     lon: Option<f64>,
     name: Option<&str>,
     website: Option<&str>,
-    starts_at: Option<Option<OffsetDateTime>>,
+    starts_at: Option<OffsetDateTime>,
     ends_at: Option<Option<OffsetDateTime>>,
     conn: &Connection,
 ) -> Result<Event> {
@@ -201,10 +201,10 @@ pub fn select_by_bbox(
         .map_err(Into::into)
 }
 
-/// Bbox pre-filter for upcoming events. Drops rows whose `starts_at` is
-/// missing or in the past so callers can use the result as a final list
-/// without re-checking timestamps. The caller is still responsible for the
-/// precise geojson contains check on the returned candidates.
+/// Bbox pre-filter for upcoming events. Drops rows whose `starts_at` is in
+/// the past so callers can use the result as a final list without re-checking
+/// timestamps. The caller is still responsible for the precise geojson
+/// contains check on the returned candidates.
 pub fn select_upcoming_by_bbox(
     west: f64,
     south: f64,
@@ -218,8 +218,6 @@ pub fn select_upcoming_by_bbox(
             SELECT {projection}
             FROM {TABLE}
             WHERE {DeletedAt} IS NULL
-              AND {StartsAt} IS NOT NULL
-              AND {StartsAt} != ''
               AND {StartsAt} >= ?5
               AND {Lat} >= ?2
               AND {Lat} <= ?4
@@ -241,7 +239,7 @@ pub struct RankedEvent {
 }
 
 /// Matches `query` against the event name only. Every whitespace word must
-/// match the name, soft-deleted events are dropped, and only future or undated
+/// match the name, soft-deleted events are dropped, and only future
 /// events survive, mirroring what `GET /v4/events` returns. `starts_at` is the
 /// RFC 3339 `TEXT` column, compared lexicographically like
 /// [`select_upcoming_by_bbox`].
@@ -256,7 +254,7 @@ fn search_predicate(word_count: usize, now_param: usize, first_word_param: usize
     }
     format!(
         "{DeletedAt} IS NULL
-         AND ({StartsAt} IS NULL OR {StartsAt} = '' OR {StartsAt} >= ?{now_param}){words}"
+         AND {StartsAt} >= ?{now_param}{words}"
     )
 }
 
@@ -404,7 +402,7 @@ mod test {
             4.56,
             "name",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -421,7 +419,7 @@ mod test {
             4.56,
             "name",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -432,7 +430,7 @@ mod test {
             Some(0.12),
             Some("renamed"),
             Some("https://example.com"),
-            Some(None),
+            None,
             Some(None),
             &conn,
         )?;
@@ -441,7 +439,7 @@ mod test {
         assert_eq!(updated.lon, 0.12);
         assert_eq!(updated.name, "renamed");
         assert_eq!(updated.website, "https://example.com");
-        assert!(updated.starts_at.is_none());
+        assert_eq!(updated.starts_at, event.starts_at);
         assert!(updated.ends_at.is_none());
         assert!(updated.updated_at >= event.updated_at);
         Ok(())
@@ -456,7 +454,7 @@ mod test {
             4.56,
             "name",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -485,7 +483,16 @@ mod test {
     #[test]
     fn update_no_fields_returns_existing() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
+        let event = super::insert(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            &conn,
+        )?;
         let original_updated_at = event.updated_at;
         std::thread::sleep(std::time::Duration::from_millis(10));
         let returned = super::update(event.id, None, None, None, None, None, None, None, &conn)?;
@@ -502,7 +509,16 @@ mod test {
     fn update_area_id() -> Result<()> {
         let conn = conn();
         let area = crate::db::main::area::blocking_queries::insert(Area::mock_tags(), &conn)?;
-        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
+        let event = super::insert(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            &conn,
+        )?;
         assert_eq!(event.area_id, None);
 
         let updated = super::update(
@@ -542,14 +558,6 @@ mod test {
     }
 
     #[test]
-    fn insert_null_started_at() -> Result<()> {
-        let conn = conn();
-        let event = super::insert(None, 1.23, 4.56, "name", "website", None, None, &conn)?;
-        assert_eq!(Some(&event), super::select_all(&conn)?.first());
-        Ok(())
-    }
-
-    #[test]
     fn select_all() -> Result<()> {
         let conn = conn();
         let event_1 = super::insert(
@@ -558,7 +566,7 @@ mod test {
             4.56,
             "name",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -568,7 +576,7 @@ mod test {
             4.56,
             "name",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -578,7 +586,7 @@ mod test {
             4.56,
             "name",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -595,7 +603,7 @@ mod test {
             4.56,
             "name",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -623,7 +631,7 @@ mod test {
             98.33,
             "inside",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -633,7 +641,7 @@ mod test {
             1.0,
             "outside",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -651,7 +659,7 @@ mod test {
             98.33,
             "deleted",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -670,7 +678,7 @@ mod test {
             98.0,
             "on_edge",
             "website",
-            Some(OffsetDateTime::now_utc()),
+            OffsetDateTime::now_utc(),
             None,
             &conn,
         )?;
@@ -681,7 +689,7 @@ mod test {
 
     fn insert_named(
         name: &str,
-        starts_at: Option<OffsetDateTime>,
+        starts_at: OffsetDateTime,
         lat: f64,
         lon: f64,
         conn: &Connection,
@@ -689,12 +697,16 @@ mod test {
         Ok(super::insert(None, lat, lon, name, "website", starts_at, None, conn)?.id)
     }
 
+    fn future_start() -> OffsetDateTime {
+        datetime!(2999-01-01 0:00 UTC)
+    }
+
     #[test]
     fn search_ranks_exact_above_prefix_above_infix() -> Result<()> {
         let conn = conn();
-        insert_named("Bitcoin", None, 0.0, 0.0, &conn)?;
-        insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
-        insert_named("Meetup Bitcoin", None, 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin", future_start(), 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin Meetup", future_start(), 0.0, 0.0, &conn)?;
+        insert_named("Meetup Bitcoin", future_start(), 0.0, 0.0, &conn)?;
 
         let ranked = super::select_by_search("Bitcoin", None, 100, &conn)?;
 
@@ -715,8 +727,8 @@ mod test {
     #[test]
     fn search_breaks_rank_ties_by_distance() -> Result<()> {
         let conn = conn();
-        let far = insert_named("Bitcoin Meetup", None, 10.0, 0.0, &conn)?;
-        let near = insert_named("Bitcoin Meetup", None, 0.1, 0.0, &conn)?;
+        let far = insert_named("Bitcoin Meetup", future_start(), 10.0, 0.0, &conn)?;
+        let near = insert_named("Bitcoin Meetup", future_start(), 0.1, 0.0, &conn)?;
 
         let ranked = super::select_by_search("Bitcoin", Some((0.0, 0.0)), 100, &conn)?;
 
@@ -730,7 +742,7 @@ mod test {
     #[test]
     fn search_is_case_insensitive() -> Result<()> {
         let conn = conn();
-        insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin Meetup", future_start(), 0.0, 0.0, &conn)?;
 
         assert_eq!(
             1,
@@ -742,8 +754,8 @@ mod test {
     #[test]
     fn search_requires_every_word() -> Result<()> {
         let conn = conn();
-        insert_named("Bitcoin Paris Meetup", None, 0.0, 0.0, &conn)?;
-        insert_named("Bitcoin Berlin Meetup", None, 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin Paris Meetup", future_start(), 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin Berlin Meetup", future_start(), 0.0, 0.0, &conn)?;
 
         let ranked = super::select_by_search("bitcoin paris", None, 100, &conn)?;
 
@@ -755,7 +767,7 @@ mod test {
     #[test]
     fn search_excludes_deleted() -> Result<()> {
         let conn = conn();
-        let event = insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
+        let event = insert_named("Bitcoin Meetup", future_start(), 0.0, 0.0, &conn)?;
         super::set_deleted_at(event, Some(OffsetDateTime::now_utc()), &conn)?;
 
         assert!(super::select_by_search("Bitcoin", None, 100, &conn)?.is_empty());
@@ -764,32 +776,23 @@ mod test {
     }
 
     #[test]
-    fn search_excludes_past_and_keeps_undated() -> Result<()> {
+    fn search_excludes_past() -> Result<()> {
         let conn = conn();
         insert_named(
             "Event Past",
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             0.0,
             0.0,
             &conn,
         )?;
-        let future = insert_named(
-            "Event Future",
-            Some(datetime!(2999-01-01 0:00 UTC)),
-            0.0,
-            0.0,
-            &conn,
-        )?;
-        let undated = insert_named("Event Undated", None, 0.0, 0.0, &conn)?;
+        let future = insert_named("Event Future", future_start(), 0.0, 0.0, &conn)?;
 
         let ids = super::select_by_search("Event", None, 100, &conn)?
             .into_iter()
             .map(|it| it.event.id)
             .collect::<Vec<_>>();
 
-        assert_eq!(2, ids.len());
-        assert!(ids.contains(&future));
-        assert!(ids.contains(&undated));
+        assert_eq!(vec![future], ids);
         Ok(())
     }
 
@@ -797,7 +800,7 @@ mod test {
     fn search_respects_row_limit() -> Result<()> {
         let conn = conn();
         for name in ["Bitcoin One", "Bitcoin Two", "Bitcoin Three"] {
-            insert_named(name, None, 0.0, 0.0, &conn)?;
+            insert_named(name, future_start(), 0.0, 0.0, &conn)?;
         }
 
         assert_eq!(2, super::select_by_search("Bitcoin", None, 2, &conn)?.len());
@@ -807,7 +810,7 @@ mod test {
     #[test]
     fn search_escapes_like_wildcards() -> Result<()> {
         let conn = conn();
-        insert_named("Bitcoin Meetup", None, 0.0, 0.0, &conn)?;
+        insert_named("Bitcoin Meetup", future_start(), 0.0, 0.0, &conn)?;
 
         assert!(super::select_by_search("%", None, 100, &conn)?.is_empty());
         assert_eq!(0, super::count_by_search("%", &conn)?);
@@ -818,7 +821,7 @@ mod test {
     fn count_by_search_counts_all_matches() -> Result<()> {
         let conn = conn();
         for name in ["Bitcoin One", "Bitcoin Two", "Bitcoin Three", "Ethereum"] {
-            insert_named(name, None, 0.0, 0.0, &conn)?;
+            insert_named(name, future_start(), 0.0, 0.0, &conn)?;
         }
 
         assert_eq!(3, super::count_by_search("Bitcoin", &conn)?);
@@ -840,9 +843,27 @@ mod test {
     fn select_updated_since_filters_by_cursor() -> Result<()> {
         let conn = conn();
         let now = OffsetDateTime::now_utc();
-        let old = super::insert(None, 1.0, 1.0, "old", "website", None, None, &conn)?;
+        let old = super::insert(
+            None,
+            1.0,
+            1.0,
+            "old",
+            "website",
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &conn,
+        )?;
         set_updated_at(old.id, now - Duration::hours(1), &conn)?;
-        let new = super::insert(None, 2.0, 2.0, "new", "website", None, None, &conn)?;
+        let new = super::insert(
+            None,
+            2.0,
+            2.0,
+            "new",
+            "website",
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &conn,
+        )?;
         set_updated_at(new.id, now + Duration::hours(1), &conn)?;
 
         let results = super::select_updated_since(&now, false, None, &conn)?;
@@ -856,7 +877,16 @@ mod test {
     #[test]
     fn select_updated_since_compares_by_instant_not_text() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, &conn)?;
+        let event = super::insert(
+            None,
+            1.0,
+            1.0,
+            "name",
+            "website",
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &conn,
+        )?;
         conn.execute(
             "UPDATE event SET updated_at = '2024-01-01T10:00:00.550Z' WHERE id = ?1",
             params![event.id],
@@ -880,7 +910,16 @@ mod test {
     #[test]
     fn select_updated_since_deleted_rows_only_when_included() -> Result<()> {
         let conn = conn();
-        let event = super::insert(None, 1.0, 1.0, "name", "website", None, None, &conn)?;
+        let event = super::insert(
+            None,
+            1.0,
+            1.0,
+            "name",
+            "website",
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &conn,
+        )?;
         super::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &conn)?;
 
         let without = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, None, &conn)?;
@@ -896,11 +935,38 @@ mod test {
     fn select_updated_since_respects_limit_and_orders_by_updated_at() -> Result<()> {
         let conn = conn();
         let base = OffsetDateTime::UNIX_EPOCH + Duration::days(1);
-        let first = super::insert(None, 1.0, 1.0, "first", "website", None, None, &conn)?;
+        let first = super::insert(
+            None,
+            1.0,
+            1.0,
+            "first",
+            "website",
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &conn,
+        )?;
         set_updated_at(first.id, base, &conn)?;
-        let second = super::insert(None, 2.0, 2.0, "second", "website", None, None, &conn)?;
+        let second = super::insert(
+            None,
+            2.0,
+            2.0,
+            "second",
+            "website",
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &conn,
+        )?;
         set_updated_at(second.id, base + Duration::hours(1), &conn)?;
-        let third = super::insert(None, 3.0, 3.0, "third", "website", None, None, &conn)?;
+        let third = super::insert(
+            None,
+            3.0,
+            3.0,
+            "third",
+            "website",
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &conn,
+        )?;
         set_updated_at(third.id, base + Duration::hours(2), &conn)?;
 
         let page = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, Some(2), &conn)?;
@@ -920,7 +986,7 @@ mod test {
             1.0,
             "past",
             "website",
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             None,
             &conn,
         )?;

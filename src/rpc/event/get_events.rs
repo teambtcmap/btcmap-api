@@ -13,8 +13,8 @@ pub struct Res {
     pub lon: f64,
     pub name: String,
     pub website: String,
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub starts_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub starts_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     pub ends_at: Option<OffsetDateTime>,
     pub area_id: Option<i64>,
@@ -49,8 +49,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Vec<Res>> {
     let events: Vec<Event> = events
         .into_iter()
         .filter(|it| {
-            (include_deleted || it.deleted_at.is_none())
-                && (include_past || it.starts_at.is_none() || it.starts_at > Some(now))
+            (include_deleted || it.deleted_at.is_none()) && (include_past || it.starts_at > now)
         })
         .collect();
     Ok(events.into_iter().map(Into::into).collect())

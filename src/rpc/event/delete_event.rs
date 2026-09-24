@@ -37,6 +37,7 @@ mod test {
         Result,
     };
     use serde_json::{json, Map};
+    use time::macros::datetime;
 
     fn em_user(geofence: Vec<i64>) -> crate::db::main::user::schema::User {
         crate::db::main::user::schema::User {
@@ -66,7 +67,7 @@ mod test {
             lon,
             "meetup".to_string(),
             "https://example.com".to_string(),
-            None,
+            datetime!(2999-01-01 0:00 UTC),
             None,
             pool,
         )

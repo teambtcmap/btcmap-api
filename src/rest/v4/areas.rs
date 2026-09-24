@@ -841,7 +841,7 @@ mod test {
             98.33,
             "future_event".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -871,7 +871,7 @@ mod test {
             -0.1,
             "london".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -899,35 +899,7 @@ mod test {
             98.33,
             "past".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2020-01-01 0:00 UTC)),
-            None,
-            &pool,
-        )
-        .await?;
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(pool))
-                .service(scope("/").service(super::get)),
-        )
-        .await;
-        let req = TestRequest::get().uri("/?lat=7.9&lon=98.3").to_request();
-        let res: Vec<AreaSearchResult> = test::call_and_read_body_json(&app, req).await;
-        assert_eq!(res.len(), 1);
-        assert!(res[0].upcoming_events.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    async fn search_by_lat_lon_omits_event_without_starts_at() -> Result<()> {
-        let pool = pool();
-        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
-        db::main::event::queries::insert(
-            None,
-            7.97,
-            98.33,
-            "no_starts_at".to_string(),
-            "https://example.com".to_string(),
-            None,
+            datetime!(2020-01-01 0:00 UTC),
             None,
             &pool,
         )

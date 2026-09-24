@@ -14,8 +14,7 @@ pub struct Params {
     lon: f64,
     name: String,
     website: String,
-    #[serde(default)]
-    starts_at: Option<EventTime>,
+    starts_at: EventTime,
     #[serde(default)]
     ends_at: Option<EventTime>,
     /// Either "auto" (infer from lat/lon) or an IANA zone name. Only needed for
@@ -27,8 +26,8 @@ pub struct Params {
 #[derive(Serialize)]
 pub struct Res {
     pub id: i64,
-    #[serde(with = "time::serde::rfc3339::option")]
-    starts_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339")]
+    starts_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
     /// The timezone that was applied to floating timestamps, echoed back so the
@@ -77,6 +76,7 @@ mod test {
         Result,
     };
     use serde_json::{json, Map};
+    use time::macros::datetime;
 
     const PHUKET: &str = r#"{
         "type":"Feature",
@@ -144,10 +144,23 @@ mod test {
             lon,
             name: "Bitcoin meetup".into(),
             website: "https://example.com".into(),
-            starts_at: None,
+            starts_at: crate::service::timezone::EventTime::Absolute(datetime!(
+                2999-01-01 0:00 UTC
+            )),
             ends_at: None,
             timezone: None,
         }
+    }
+
+    #[test]
+    fn requires_starts_at() {
+        let v = json!({
+            "lat": 1.0,
+            "lon": 2.0,
+            "name": "Bitcoin meetup",
+            "website": "https://example.com",
+        });
+        assert!(serde_json::from_value::<super::Params>(v).is_err());
     }
 
     #[test]

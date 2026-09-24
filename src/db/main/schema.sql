@@ -154,7 +154,7 @@ CREATE TABLE event(
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
-, starts_at TEXT, area_id INTEGER REFERENCES area(id)) STRICT;
+, starts_at TEXT NOT NULL, area_id INTEGER REFERENCES area(id)) STRICT;
 CREATE TABLE place_submission(
     id INTEGER PRIMARY KEY NOT NULL,
     origin TEXT NOT NULL,

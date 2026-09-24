@@ -61,8 +61,8 @@ pub struct Res {
     lon: f64,
     name: String,
     website: String,
-    #[serde(with = "time::serde::rfc3339::option")]
-    starts_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339")]
+    starts_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
     pub area_id: Option<i64>,
@@ -185,7 +185,7 @@ mod test {
                 -0.1,
                 "meetup".into(),
                 "https://example.com".into(),
-                None,
+                datetime!(2999-01-01 0:00 UTC),
                 None,
                 &pool,
             )
@@ -240,7 +240,7 @@ mod test {
                 98.33,
                 "meetup".into(),
                 "https://example.com".into(),
-                None,
+                datetime!(2999-01-01 0:00 UTC),
                 None,
                 &pool,
             )
@@ -283,7 +283,7 @@ mod test {
                 98.33,
                 "meetup".into(),
                 "https://example.com".into(),
-                None,
+                datetime!(2999-01-01 0:00 UTC),
                 None,
                 &pool,
             )

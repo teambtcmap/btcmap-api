@@ -96,28 +96,24 @@ fn local_to_utc(zone_name: &str, local: PrimitiveDateTime) -> Result<OffsetDateT
 const CONFLICT: &str = "Provide either explicit UTC offsets or a timezone, not both";
 const NEEDS_ZONE: &str =
     "Timestamps without an offset need a timezone (e.g. \"timezone\": \"auto\")";
+const STARTS_REQUIRED: &str = "starts_at is required and cannot be cleared";
 
 /// Resolves `create_event` timestamps. Backward compatible: an explicit offset
 /// (including `Z`) is stored verbatim, exactly as before. A floating local time
 /// requires a `timezone`, which is used to compute the offset. Returns the
 /// resolved instants plus the zone that was applied (echoed in the response).
+/// `starts_at` is mandatory: every event must have a start time.
 pub fn resolve_create_times(
-    starts_at: Option<EventTime>,
+    starts_at: EventTime,
     ends_at: Option<EventTime>,
     timezone: Option<&str>,
     lat: f64,
     lon: f64,
-) -> Result<(
-    Option<OffsetDateTime>,
-    Option<OffsetDateTime>,
-    Option<String>,
-)> {
-    let has_local = [starts_at, ends_at]
-        .iter()
-        .any(|it| matches!(it, Some(EventTime::Local(_))));
-    let has_absolute = [starts_at, ends_at]
-        .iter()
-        .any(|it| matches!(it, Some(EventTime::Absolute(_))));
+) -> Result<(OffsetDateTime, Option<OffsetDateTime>, Option<String>)> {
+    let has_local =
+        matches!(starts_at, EventTime::Local(_)) || matches!(ends_at, Some(EventTime::Local(_)));
+    let has_absolute = matches!(starts_at, EventTime::Absolute(_))
+        || matches!(ends_at, Some(EventTime::Absolute(_)));
 
     if has_local && has_absolute {
         return Err(Error::Other(CONFLICT.into()));
@@ -131,26 +127,33 @@ pub fn resolve_create_times(
 
     if has_local {
         let zone = resolve_zone_name(timezone.unwrap(), lat, lon)?;
-        let resolve = |it: Option<EventTime>| -> Result<Option<OffsetDateTime>> {
-            match it {
-                Some(EventTime::Local(local)) => Ok(Some(local_to_utc(&zone, local)?)),
-                _ => Ok(None),
-            }
+        let starts = match starts_at {
+            EventTime::Local(local) => local_to_utc(&zone, local)?,
+            EventTime::Absolute(_) => unreachable!("guarded by has_local/has_absolute"),
         };
-        return Ok((resolve(starts_at)?, resolve(ends_at)?, Some(zone)));
+        let ends = match ends_at {
+            Some(EventTime::Local(local)) => Some(local_to_utc(&zone, local)?),
+            _ => None,
+        };
+        return Ok((starts, ends, Some(zone)));
     }
 
-    let absolute = |it: Option<EventTime>| match it {
+    let starts = match starts_at {
+        EventTime::Absolute(datetime) => datetime,
+        EventTime::Local(_) => unreachable!("guarded by has_local/has_absolute"),
+    };
+    let ends = match ends_at {
         Some(EventTime::Absolute(datetime)) => Some(datetime),
         _ => None,
     };
-    Ok((absolute(starts_at), absolute(ends_at), None))
+    Ok((starts, ends, None))
 }
 
 /// Resolves `update_event` timestamps. Each field is tri-state: `None` leaves it
 /// untouched, `Some(None)` clears it, `Some(Some(value))` sets it. Since the
 /// zone is not persisted, floating timestamps rely on the `timezone` provided in
-/// this request. Returns the resolved fields plus the zone used, if any.
+/// this request. `starts_at` cannot be cleared: `Some(None)` is rejected.
+/// Returns the resolved fields plus the zone used, if any.
 pub fn resolve_update_times(
     starts_at: FieldUpdate<EventTime>,
     ends_at: FieldUpdate<EventTime>,
@@ -158,10 +161,14 @@ pub fn resolve_update_times(
     lat: f64,
     lon: f64,
 ) -> Result<(
-    FieldUpdate<OffsetDateTime>,
+    Option<OffsetDateTime>,
     FieldUpdate<OffsetDateTime>,
     Option<String>,
 )> {
+    if matches!(starts_at, Some(None)) {
+        return Err(Error::Other(STARTS_REQUIRED.into()));
+    }
+
     let values = [&starts_at, &ends_at];
     let has_local = values
         .iter()
@@ -181,7 +188,20 @@ pub fn resolve_update_times(
         None
     };
 
-    let resolve = |it: Option<Option<EventTime>>| -> Result<Option<Option<OffsetDateTime>>> {
+    let resolve_starts = |it: Option<Option<EventTime>>| -> Result<Option<OffsetDateTime>> {
+        match it {
+            None => Ok(None),
+            Some(None) => Err(Error::Other(STARTS_REQUIRED.into())),
+            Some(Some(EventTime::Absolute(datetime))) => Ok(Some(datetime)),
+            Some(Some(EventTime::Local(local))) => {
+                let zone = zone
+                    .as_deref()
+                    .ok_or_else(|| Error::Other(NEEDS_ZONE.into()))?;
+                Ok(Some(local_to_utc(zone, local)?))
+            }
+        }
+    };
+    let resolve_ends = |it: Option<Option<EventTime>>| -> Result<Option<Option<OffsetDateTime>>> {
         match it {
             None => Ok(None),
             Some(None) => Ok(Some(None)),
@@ -194,7 +214,7 @@ pub fn resolve_update_times(
             }
         }
     };
-    Ok((resolve(starts_at)?, resolve(ends_at)?, zone))
+    Ok((resolve_starts(starts_at)?, resolve_ends(ends_at)?, zone))
 }
 
 #[cfg(test)]
@@ -214,8 +234,8 @@ mod test {
     #[test]
     fn absolute_timestamps_are_untouched() -> Result<()> {
         let input = EventTime::Absolute(datetime!(2026-07-15 19:00 +07:00));
-        let (starts, ends, zone) = resolve_create_times(Some(input), None, None, 13.75, 100.5)?;
-        assert_eq!(Some(datetime!(2026-07-15 19:00 +07:00)), starts);
+        let (starts, ends, zone) = resolve_create_times(input, None, None, 13.75, 100.5)?;
+        assert_eq!(datetime!(2026-07-15 19:00 +07:00), starts);
         assert_eq!(None, ends);
         assert_eq!(None, zone);
         Ok(())
@@ -224,9 +244,8 @@ mod test {
     #[test]
     fn auto_infers_zone_from_coordinates() -> Result<()> {
         // Bangkok in July is UTC+07:00.
-        let (starts, _, zone) =
-            resolve_create_times(Some(local(19)), None, Some("auto"), 13.75, 100.5)?;
-        assert_eq!(Some(datetime!(2026-07-15 19:00 +07:00)), starts);
+        let (starts, _, zone) = resolve_create_times(local(19), None, Some("auto"), 13.75, 100.5)?;
+        assert_eq!(datetime!(2026-07-15 19:00 +07:00), starts);
         assert_eq!(Some("Asia/Bangkok".to_string()), zone);
         Ok(())
     }
@@ -235,29 +254,26 @@ mod test {
     fn named_zone_handles_dst() -> Result<()> {
         // Berlin in July is UTC+02:00 (CEST).
         let (starts, _, zone) =
-            resolve_create_times(Some(local(19)), None, Some("Europe/Berlin"), 52.5, 13.4)?;
-        assert_eq!(Some(datetime!(2026-07-15 19:00 +02:00)), starts);
+            resolve_create_times(local(19), None, Some("Europe/Berlin"), 52.5, 13.4)?;
+        assert_eq!(datetime!(2026-07-15 19:00 +02:00), starts);
         assert_eq!(Some("Europe/Berlin".to_string()), zone);
         Ok(())
     }
 
     #[test]
     fn floating_without_zone_is_rejected() {
-        assert!(resolve_create_times(Some(local(19)), None, None, 13.75, 100.5).is_err());
+        assert!(resolve_create_times(local(19), None, None, 13.75, 100.5).is_err());
     }
 
     #[test]
     fn absolute_with_zone_is_rejected() {
         let input = EventTime::Absolute(datetime!(2026-07-15 19:00 +07:00));
-        assert!(resolve_create_times(Some(input), None, Some("auto"), 13.75, 100.5).is_err());
+        assert!(resolve_create_times(input, None, Some("auto"), 13.75, 100.5).is_err());
     }
 
     #[test]
     fn unknown_zone_is_rejected() {
-        assert!(
-            resolve_create_times(Some(local(19)), None, Some("Mars/Olympus"), 13.75, 100.5)
-                .is_err()
-        );
+        assert!(resolve_create_times(local(19), None, Some("Mars/Olympus"), 13.75, 100.5).is_err());
     }
 
     #[test]
@@ -270,6 +286,11 @@ mod test {
     }
 
     #[test]
+    fn update_rejects_clearing_starts_at() {
+        assert!(resolve_update_times(Some(None), None, None, 13.75, 100.5).is_err());
+    }
+
+    #[test]
     fn update_resolves_floating_time_with_zone() -> Result<()> {
         let (starts, _, zone) = resolve_update_times(
             Some(Some(local(19))),
@@ -278,7 +299,7 @@ mod test {
             52.5,
             13.4,
         )?;
-        assert_eq!(Some(Some(datetime!(2026-07-15 19:00 +02:00))), starts);
+        assert_eq!(Some(datetime!(2026-07-15 19:00 +02:00)), starts);
         assert_eq!(Some("Europe/Berlin".to_string()), zone);
         Ok(())
     }

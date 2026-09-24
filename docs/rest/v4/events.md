@@ -18,8 +18,8 @@ curl --request GET https://api.btcmap.org/v4/events
 ```
 
 Retrieves a list of events. By default this is a full snapshot of all non-deleted
-events with future start dates (events without a start date are also included).
-Supplying `updated_since` switches to delta sync, described below.
+events with future start dates. Supplying `updated_since` switches to delta sync,
+described below.
 
 #### Query Parameters
 
@@ -197,8 +197,6 @@ geometries with a precise point-in-polygon check.
 |-----------|------|---------|---------|-------------|
 | `from` | RFC 3339 datetime | `2025-01-01T00:00:00Z` | now (UTC) | Only include events with `starts_at >= from`. Lower the value to include past events. |
 | `to` | RFC 3339 datetime | `2025-12-31T23:59:59Z` | `2200-01-01T00:00:00Z` | Only include events with `starts_at <= to`. |
-
-Events without a `starts_at` are always returned (treated as open-ended).
 
 #### Examples
 

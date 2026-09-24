@@ -68,7 +68,7 @@ impl From<Event> for Item {
             lon: val.lon,
             name: val.name,
             website: val.website,
-            starts_at: val.starts_at.unwrap_or(OffsetDateTime::UNIX_EPOCH),
+            starts_at: val.starts_at,
             ends_at: val.ends_at,
             updated_at: None,
             deleted_at: None,
@@ -120,11 +120,7 @@ pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> RestResult<Vec<I
                 .map_err(|_| RestApiError::database())?;
             let items: Vec<Event> = items
                 .into_iter()
-                .filter(|it| {
-                    it.deleted_at.is_none()
-                        && (it.starts_at.is_none()
-                            || it.starts_at > Some(OffsetDateTime::now_utc()))
-                })
+                .filter(|it| it.deleted_at.is_none() && it.starts_at > OffsetDateTime::now_utc())
                 .collect();
             Ok(Json(items.into_iter().map(Into::into).collect()))
         }
@@ -202,10 +198,8 @@ pub async fn get_by_area(
             if event.deleted_at.is_some() {
                 return false;
             }
-            if let Some(starts_at) = event.starts_at {
-                if starts_at < from || starts_at > to {
-                    return false;
-                }
+            if event.starts_at < from || event.starts_at > to {
+                return false;
             }
             event_point_in_geometries(event.lon, event.lat, &geometries)
         })
@@ -288,7 +282,7 @@ mod test {
             4.56,
             "name".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -321,7 +315,7 @@ mod test {
             4.56,
             "past_event".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -359,7 +353,7 @@ mod test {
             4.56,
             "future".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -388,7 +382,7 @@ mod test {
             4.56,
             "deleted".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -430,7 +424,7 @@ mod test {
                 4.56,
                 name.to_string(),
                 "https://example.com".to_string(),
-                Some(datetime!(2099-01-01 0:00 UTC)),
+                datetime!(2099-01-01 0:00 UTC),
                 None,
                 &pool,
             )
@@ -460,7 +454,7 @@ mod test {
             4.56,
             "name".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -488,7 +482,7 @@ mod test {
             4.56,
             "past_event".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -499,7 +493,7 @@ mod test {
             10.11,
             "future_event".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -529,7 +523,7 @@ mod test {
             4.56,
             "name".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -611,7 +605,7 @@ mod test {
             98.33,
             "inside".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -641,7 +635,7 @@ mod test {
             -0.1,
             "london".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -673,7 +667,7 @@ mod test {
             98.25,
             "sea".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -705,7 +699,7 @@ mod test {
             98.33,
             "past".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -734,7 +728,7 @@ mod test {
             98.33,
             "past".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -745,7 +739,7 @@ mod test {
             98.33,
             "future".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -775,7 +769,7 @@ mod test {
             98.33,
             "in_window".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2024-06-01 0:00 UTC)),
+            datetime!(2024-06-01 0:00 UTC),
             None,
             &pool,
         )
@@ -786,7 +780,7 @@ mod test {
             98.33,
             "too_late".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -819,7 +813,7 @@ mod test {
             98.33,
             "deleted".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -854,7 +848,7 @@ mod test {
             98.33,
             "orphan".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -886,7 +880,7 @@ mod test {
             98.33,
             "alias_test".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )

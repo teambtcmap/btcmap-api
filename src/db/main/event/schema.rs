@@ -29,7 +29,7 @@ pub struct Event {
     pub lon: f64,
     pub name: String,
     pub website: String,
-    pub starts_at: Option<OffsetDateTime>,
+    pub starts_at: OffsetDateTime,
     pub ends_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,

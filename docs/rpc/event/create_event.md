@@ -19,22 +19,7 @@ You can add Bitcoin-related events on BTC Map via this method. Most events are e
 
 We don't keep a lot of data about events due to our lack of maintaining capacity. That's why every eligeble event should have it's own website where users can look up all the details.
 
-Most events are recurring and held at a fixed location. In these cases, `starts_at` and `ends_at` can both be omitted. The `website` link should direct users to a page with the up-to-date schedule, such as a dedicated event series website or a Meetup.com profile. The event will be displayed permanently (until it is deleted via `delete_event`), so hosts of fixed-location meetups only need to add the event once.
-
-Example of a permanent event with no fixed schedule:
-
-```json
-{
-  "lat": 18.7822,
-  "lon": 98.9942,
-  "name": "Chiang Mai Bitcoin Meetup",
-  "website": "https://www.meetup.com/bitcoinsinchiangmai/",
-  "starts_at": null,
-  "ends_at": null
-}
-```
-
-For a one-off event without a fixed end time, you may provide only the `starts_at` parameter.
+Most events are recurring and held at a fixed location. `starts_at` is required: every event must have a start time. The `website` link should direct users to a page with the up-to-date schedule, such as a dedicated event series website or a Meetup.com profile. For recurring events, set `starts_at` to the next scheduled occurrence. `ends_at` is optional and may be omitted for an event without a fixed end time.
 
 ### Timestamps and timezones
 

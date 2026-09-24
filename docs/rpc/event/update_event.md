@@ -4,7 +4,7 @@
 
 Partially updates an existing event. Only the fields you send are changed; omitted fields are left untouched. This means a single-field rename, a coordinate fix, or a schedule tweak all use the same call.
 
-For the nullable fields (`area_id`, `starts_at`, `ends_at`), pass an explicit `null` to clear the value. Omitting the field keeps whatever is currently stored. For the non-nullable fields (`lat`, `lon`, `name`, `website`), sending `null` is also treated as "leave unchanged" — pass an actual value to overwrite.
+For the nullable fields (`area_id`, `ends_at`), pass an explicit `null` to clear the value. Omitting the field keeps whatever is currently stored. `starts_at` is required and cannot be cleared: passing `null` is an error, and omitting it leaves the stored value unchanged. For the non-nullable fields (`lat`, `lon`, `name`, `website`), sending `null` is also treated as "leave unchanged" — pass an actual value to overwrite.
 
 The event's `id` cannot be changed via this endpoint. The response returns the event as it looks after the update. If no field is supplied (only `id`), the call is a no-op and returns the existing row without bumping `updated_at`.
 
@@ -25,7 +25,7 @@ The event's `id` cannot be changed via this endpoint. The response returns the e
 | `lon`       | number         | Optional. Longitude in decimal degrees. Omit to leave unchanged.                                  |
 | `name`      | string         | Optional. Display name of the event. Omit to leave unchanged.                                    |
 | `website`   | string         | Optional. URL with up-to-date event details. Omit to leave unchanged.                            |
-| `starts_at` | string \| null | Optional. Start time. Pass `null` to clear (permanent event with no fixed schedule).             |
+| `starts_at` | string         | Optional. Start time. Cannot be cleared; omit to leave unchanged.                                |
 | `ends_at`   | string \| null | Optional. End time. Pass `null` to clear.                                                        |
 | `timezone`  | string         | Optional. `"auto"` or an IANA zone name. Required when a timestamp you send has no UTC offset.    |
 
@@ -85,9 +85,11 @@ btcmap-cli event update-event 1 --name 'Phuket Bitcoin Meetup (renamed)'
 To clear a nullable field instead of setting it, use the matching `--clear-*` flag:
 
 ```bash
-# Unlink the event from its area and drop its fixed schedule
-btcmap-cli event update-event 1 --clear-area-id --clear-starts-at --clear-ends-at
+# Unlink the event from its area and drop its end time
+btcmap-cli event update-event 1 --clear-area-id --clear-ends-at
 ```
+
+`starts_at` cannot be cleared — every event must keep a start time.
 
 ### curl
 

@@ -188,7 +188,7 @@ curl 'https://api.btcmap.org/v4/areas?lat=7.9&lon=98.3'
 | `url_alias` | String | `paris` | URL-friendly identifier for the area. |
 | `icon` | String or null | `https://static.btcmap.org/images/areas/123.png` | Square icon URL for the area, if set. |
 | `website_url` | String | `https://btcmap.org/country/th` | URL to the BTC Map page for this area. |
-| `upcoming_events` | Array of Event | `[]` | Upcoming events whose location falls inside this area's geometry. Only populated when `lat` and `lon` are provided; events without `starts_at` are excluded. See [Event](#event-object) below. |
+| `upcoming_events` | Array of Event | `[]` | Upcoming events whose location falls inside this area's geometry. Only populated when `lat` and `lon` are provided. See [Event](#event-object) below. |
 
 #### Event Object
 

@@ -264,7 +264,7 @@ mod test {
 
         assert_eq!(1, res.len());
         assert_eq!(open.id, res[0]["id"].as_i64().unwrap());
-        assert_eq!(false, res[0]["revoked"].as_bool().unwrap());
+        assert!(!res[0]["revoked"].as_bool().unwrap());
         assert!(res[0]["closed_at"].is_null());
 
         Ok(())

@@ -353,15 +353,7 @@ mod test {
     }
 
     async fn insert_event(id: i64, name: &str, lat: f64, lon: f64, pool: &MainPool) {
-        insert_event_with_start(
-            id,
-            name,
-            lat,
-            lon,
-            Some(datetime!(2999-01-01 0:00 UTC)),
-            pool,
-        )
-        .await;
+        insert_event_with_start(id, name, lat, lon, datetime!(2999-01-01 0:00 UTC), pool).await;
     }
 
     async fn insert_event_with_start(
@@ -369,7 +361,7 @@ mod test {
         name: &str,
         lat: f64,
         lon: f64,
-        starts_at: Option<time::OffsetDateTime>,
+        starts_at: time::OffsetDateTime,
         pool: &MainPool,
     ) {
         let event = db::main::event::queries::insert(
@@ -714,7 +706,7 @@ mod test {
             "Bitcoin Past",
             53.5,
             9.9,
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             &pool,
         )
         .await;
@@ -725,7 +717,7 @@ mod test {
             9.9,
             "Bitcoin Deleted".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2999-01-01 0:00 UTC)),
+            datetime!(2999-01-01 0:00 UTC),
             None,
             &pool,
         )

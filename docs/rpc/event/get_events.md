@@ -18,8 +18,6 @@ Retrieves events. By default, soft-deleted and past events are excluded.
 | `include_past`    | boolean | `false` | When `true`, events whose `starts_at` is in the past are included.                              |
 | `include_deleted` | boolean | `false` | When `true`, soft-deleted events (those with a non-null `deleted_at`) are included.             |
 
-Events with no `starts_at` (permanent events) are always included regardless of `include_past`, since they have no notion of being past.
-
 ## Result Format
 
 ```json
@@ -56,7 +54,7 @@ btcmap-cli event get-events --include-past --include-deleted
 
 ### curl
 
-Default (only upcoming and permanent events):
+Default (only upcoming events):
 
 ```bash
 curl --header 'Content-Type: application/json' \
