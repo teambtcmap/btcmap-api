@@ -9,11 +9,11 @@ use time::{
 };
 use tracing::info;
 
-static API_URL: &str = "https://overpass-api.de/api/interpreter";
+static API_URL: &str = "https://overpass.btcmap.org/api/interpreter";
 static USER_AGENT_VALUE: &str = "btcmap-api/1.0 (https://btcmap.org)";
 
 static QUERY: &str = r#"
-[out:json][timeout:300];
+[out:json][timeout:600];
 nwr["currency:XBT"=yes];
 out meta geom;
 "#;
