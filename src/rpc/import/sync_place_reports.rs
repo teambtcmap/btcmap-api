@@ -1,6 +1,8 @@
 use crate::{
     db::main::area::schema::Area,
+    db::main::place_report::schema::PlaceReport,
     db::{self},
+    service::issue_body::{additional_fields, extra_value, field},
     service::matrix::ROOM_PLACE_IMPORT,
     service::{self, matrix},
     Result,
@@ -47,6 +49,30 @@ fn build_issue_title(areas: &[Area], name: &str, report_type: &str) -> String {
     }
 }
 
+/// `extra_fields` is free-form. The comment is the one field with a documented
+/// meaning for reviewers; anything else is listed verbatim as key pairs.
+const COMMENT_KEYS: &[&str] = &["comment", "notes"];
+
+/// The report's free-form extras as readable lines, so a reviewer never has to
+/// read pasted JSON.
+fn build_human_section(report: &PlaceReport) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    if let Some(value) = extra_value(&report.extra_fields, COMMENT_KEYS) {
+        lines.push(field("Comment", &value));
+    }
+
+    let additional = additional_fields(&report.extra_fields, COMMENT_KEYS);
+    if !additional.is_empty() {
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+        lines.push("Additional fields:".to_string());
+        lines.extend(additional);
+    }
+
+    lines.join("\n")
+}
+
 pub async fn run(pool: &Pool) -> Result<Res> {
     let reports = db::main::place_report::queries::select_open_and_not_deleted(pool).await?;
     info!(
@@ -91,9 +117,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 Place id: {place_id}
                 Type: {type}
 
-                Extra fields:
-
-                {extra_fields}
+                {human_section}
 
                 OpenStreetMap viewer link: https://www.openstreetmap.org/#map=21/{lat}/{lon}
 
@@ -108,7 +132,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 origin = import_origin.name,
                 place_id = report.place_id,
                 type = report.r#type,
-                extra_fields = serde_json::to_string_pretty(&report.extra_fields)?,
+                human_section = build_human_section(report),
                 lat = element.lat(),
                 lon = element.lon(),
             );
@@ -165,10 +189,30 @@ pub async fn run(pool: &Pool) -> Result<Res> {
 
 #[cfg(test)]
 mod test {
-    use super::{build_issue_title, needs_removal_label};
+    use super::{build_human_section, build_issue_title, needs_removal_label};
     use crate::db::main::area::schema::Area;
+    use crate::db::main::place_report::schema::PlaceReport;
     use serde_json::{Map, Value};
     use time::OffsetDateTime;
+
+    fn report(extra_fields: Vec<(&str, Value)>) -> PlaceReport {
+        PlaceReport {
+            id: 2,
+            place_id: 16815,
+            origin_id: 1,
+            r#type: "refused_sats".into(),
+            extra_fields: extra_fields
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect::<Map<String, Value>>(),
+            ticket_url: None,
+            submitted_by: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            closed_at: None,
+            deleted_at: None,
+        }
+    }
 
     fn area(area_type: &str, name: &str, alias: &str) -> Area {
         let mut tags = Map::new();
@@ -243,5 +287,36 @@ mod test {
         assert!(!needs_removal_label("verified"));
         assert!(!needs_removal_label("verification"));
         assert!(!needs_removal_label(""));
+    }
+
+    #[test]
+    fn human_section_renders_comment() {
+        let report = report(vec![("comment", Value::String("refused sats".into()))]);
+
+        assert_eq!(build_human_section(&report), "Comment: refused sats");
+    }
+
+    #[test]
+    fn human_section_lists_other_fields_as_key_pairs() {
+        let report = report(vec![
+            ("comment", Value::String("refused sats".into())),
+            ("severity", Value::String("high".into())),
+            ("location", serde_json::json!({ "lat": 1.5, "lon": -2.5 })),
+        ]);
+
+        assert_eq!(
+            build_human_section(&report),
+            "\
+Comment: refused sats
+
+Additional fields:
+location: lat=1.5, lon=-2.5
+severity: high"
+        );
+    }
+
+    #[test]
+    fn human_section_is_empty_without_extra_fields() {
+        assert_eq!(build_human_section(&report(vec![])), "");
     }
 }
