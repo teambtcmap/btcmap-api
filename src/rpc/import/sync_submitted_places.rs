@@ -2,7 +2,7 @@ use crate::{
     db::main::area::schema::Area,
     db::main::place_submission::schema::PlaceSubmission,
     db::{self},
-    service::issue_body::{additional_fields, extra_value, field, humanize_list},
+    service::issue_body::{additional_fields, extra_value, field, humanize_list, single_line},
     service::matrix::ROOM_PLACE_IMPORT,
     service::{self, matrix},
     Result,
@@ -59,9 +59,11 @@ const CONTACT_KEYS: &[&str] = &["contact", "email"];
 const NOTES_KEYS: &[&str] = &["notes", "comment", "description"];
 const DESCRIPTION_KEYS: &[&str] = &["description"];
 
-/// Every `extra_fields` key consumed by the human-friendly section. Whatever is
-/// left over is listed verbatim under "Additional fields" so a source can keep
-/// sending extra data without it being silently dropped.
+/// Every `extra_fields` key consumed by the human-friendly section or the OSM
+/// tag block. Whatever is left over is listed verbatim under "Additional
+/// fields" so a source can keep sending extra data without it being silently
+/// dropped. `osm:<tag>` passthrough keys are consumed dynamically and don't
+/// appear here.
 const CONSUMED_KEY_GROUPS: &[&[&str]] = &[
     ENGLISH_NAME_KEYS,
     ADDRESS_KEYS,
@@ -118,7 +120,13 @@ fn build_human_section(submission: &PlaceSubmission) -> String {
         lines.extend(group);
     }
 
-    let additional = additional_fields(&submission.extra_fields, &CONSUMED_KEY_GROUPS.concat());
+    let mut consumed: Vec<&str> = CONSUMED_KEY_GROUPS.concat();
+    consumed.extend(
+        osm_tag_passthrough(submission)
+            .into_iter()
+            .map(|(key, _)| key),
+    );
+    let additional = additional_fields(&submission.extra_fields, &consumed);
     if !additional.is_empty() {
         if !lines.is_empty() {
             lines.push(String::new());
@@ -163,38 +171,71 @@ fn is_email(value: &str) -> bool {
     !local.is_empty() && !domain.is_empty() && !domain.contains('@') && domain.contains('.')
 }
 
+/// `(extra_fields key, value)` for entries using the documented `osm:<tag>`
+/// passthrough (e.g. `osm:addr:city`) and holding a non-empty value. Sorted by
+/// key so the issue body is stable regardless of JSON ordering.
+fn osm_tag_passthrough(submission: &PlaceSubmission) -> Vec<(&str, String)> {
+    let mut res: Vec<(&str, String)> = submission
+        .extra_fields
+        .iter()
+        .filter_map(|(key, value)| {
+            let tag = key.strip_prefix("osm:")?;
+            if tag.is_empty() {
+                return None;
+            }
+            Some((key.as_str(), single_line(value)?))
+        })
+        .collect();
+    res.sort();
+    res
+}
+
+/// Appends a tag unless its key is already present, so a field mapped from the
+/// canonical key wins over an `osm:<tag>` passthrough and no key appears twice.
+fn push_tag(tags: &mut Vec<(String, String)>, key: &str, value: String) {
+    if !tags.iter().any(|(existing, _)| existing == key) {
+        tags.push((key.to_string(), value));
+    }
+}
+
 /// OSM tags a tagger can paste straight into their editor's tag paste, built
-/// only from values the source actually sent.
+/// from the values the source actually sent: the canonical `extra_fields` keys
+/// plus any `osm:<tag>` passthrough.
 fn build_osm_tags(submission: &PlaceSubmission) -> String {
     let extra = |keys: &[&str]| extra_value(&submission.extra_fields, keys);
 
-    let mut tags: Vec<(&str, String)> = vec![("name", submission.name.clone())];
+    let mut tags: Vec<(String, String)> = vec![("name".to_string(), submission.name.clone())];
     if let Some(value) = extra(ENGLISH_NAME_KEYS) {
-        tags.push(("name:en", value));
+        push_tag(&mut tags, "name:en", value);
     }
     if let Some(value) = extra(ADDRESS_KEYS) {
-        tags.push(("addr:full", value));
+        push_tag(&mut tags, "addr:full", value);
     }
     if let Some(value) = extra(PHONE_KEYS) {
-        tags.push(("phone", value));
+        push_tag(&mut tags, "phone", value);
     }
     if let Some(value) = extra(OPENING_HOURS_KEYS) {
-        tags.push(("opening_hours", value));
+        push_tag(&mut tags, "opening_hours", value);
     }
     if let Some(value) = extra(WEBSITE_KEYS) {
-        tags.push(("website", value));
+        push_tag(&mut tags, "website", value);
     }
     if let Some(value) = extra(CONTACT_KEYS) {
         let key = if is_email(&value) { "email" } else { "contact" };
-        tags.push((key, value));
+        push_tag(&mut tags, key, value);
     }
     if let Some(value) = extra(DESCRIPTION_KEYS) {
-        tags.push(("description", value));
+        push_tag(&mut tags, "description", value);
     }
-    tags.extend(payment_tags(extra(PAYMENT_METHODS_KEYS).as_deref()));
+    for (key, value) in payment_tags(extra(PAYMENT_METHODS_KEYS).as_deref()) {
+        push_tag(&mut tags, key, value);
+    }
+    for (key, value) in osm_tag_passthrough(submission) {
+        push_tag(&mut tags, key.strip_prefix("osm:").unwrap_or(key), value);
+    }
     // A submission only exists because the merchant accepts Bitcoin, and this
     // is the one tag a tagger must not forget.
-    tags.push(("currency:XBT", "yes".to_string()));
+    push_tag(&mut tags, "currency:XBT", "yes".to_string());
 
     tags.iter()
         .map(|(key, value)| format!("{}={}", key, value))
@@ -588,5 +629,77 @@ currency:XBT=yes"
         ));
         assert!(!body.contains("To verify this imported place:"));
         assert!(!body.contains("Extra fields:"));
+    }
+
+    #[test]
+    fn osm_tags_pass_through_osm_prefixed_fields() {
+        let submission = submission(
+            "Satoshi Cafe",
+            "cafe",
+            &[
+                ("osm:addr:housenumber", "938"),
+                ("osm:addr:street", "Ocean Blvd"),
+                ("osm:addr:city", "Coronado"),
+                ("osm:payment:onchain", "yes"),
+                ("osm:payment:lightning", "yes"),
+            ],
+        );
+
+        assert_eq!(
+            build_osm_tags(&submission),
+            "\
+name=Satoshi Cafe
+addr:city=Coronado
+addr:housenumber=938
+addr:street=Ocean Blvd
+payment:lightning=yes
+payment:onchain=yes
+currency:XBT=yes"
+        );
+    }
+
+    #[test]
+    fn osm_tags_prefer_mapped_fields_over_osm_passthrough() {
+        let submission = submission(
+            "Satoshi Cafe",
+            "cafe",
+            &[
+                ("payment_methods", "onchain"),
+                ("osm:payment:onchain", "no"),
+            ],
+        );
+
+        assert_eq!(
+            build_osm_tags(&submission),
+            "\
+name=Satoshi Cafe
+payment:onchain=yes
+currency:XBT=yes"
+        );
+    }
+
+    #[test]
+    fn human_section_omits_passed_through_osm_tags() {
+        let submission = submission(
+            "Satoshi Cafe",
+            "cafe",
+            &[
+                ("osm:addr:city", "Coronado"),
+                (
+                    "osm_edit_url",
+                    "https://www.openstreetmap.org/edit#map=19/17.8960777/101.6562147",
+                ),
+            ],
+        );
+
+        assert_eq!(
+            build_human_section(&submission),
+            "\
+Name (local): Satoshi Cafe
+Category: cafe
+
+Additional fields:
+osm_edit_url: https://www.openstreetmap.org/edit#map=19/17.8960777/101.6562147"
+        );
     }
 }
