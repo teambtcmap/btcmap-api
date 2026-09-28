@@ -253,6 +253,8 @@ Unknown field names are ignored. `id` is always returned.
 | `icon_wide` | String | Wide icon URL (`icon:wide`), omitted when unset. |
 | `website_url` | String | URL to the BTC Map page for this area. |
 | `description` | String | Area description, localized with `lang`. |
+| `localized_name` | Object | Every `name:<lang>` tag whose language suffix is exactly two characters, keyed by that code (e.g. `{"en": "Paris", "fr": "Paris"}`). Omitted when the area has none. Lets an offline client pick the name itself instead of a round trip per language. |
+| `localized_description` | Object | Every `description:<lang>` tag whose language suffix is exactly two characters, keyed by that code. Omitted when the area has none. Mirrors `localized_name`. |
 | `bbox` | Array of 4 numbers | `[west, south, east, north]`, omitted when the area has no bbox of its own. |
 | `geo_json` | Object | Full GeoJSON geometry/feature/feature collection, exactly as stored. Omitted when the area has no geometry. Large; request it only when the client needs the polygon itself. |
 | `created_at` | String (RFC 3339) | Creation timestamp. |

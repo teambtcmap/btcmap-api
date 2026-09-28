@@ -15,6 +15,7 @@ use actix_web::{
     delete, get, post, put, web::Data, web::Json, web::Path, web::Query, HttpResponse,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use time::OffsetDateTime;
 
@@ -95,6 +96,18 @@ pub struct AreaDelta {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub description: Option<String>,
+    /// Every `name:<lang>` tag whose language suffix is exactly two characters,
+    /// keyed by that code. Lets an offline client pick the right name itself
+    /// instead of paying for a round trip per language. The singular `name`
+    /// above stays the base tag unless `lang` is passed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "Record<string, string>")]
+    pub localized_name: Option<Map<String, Value>>,
+    /// Every `description:<lang>` tag whose language suffix is exactly two
+    /// characters, keyed by that code. Mirrors `localized_name`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "Record<string, string>")]
+    pub localized_description: Option<Map<String, Value>>,
     /// `[west, south, east, north]`. Omitted when the area has no bbox of its
     /// own, i.e. the stored columns still hold the whole-world default.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -130,6 +143,8 @@ const DELTA_FIELDS: &[&str] = &[
     "icon_wide",
     "website_url",
     "description",
+    "localized_name",
+    "localized_description",
     "bbox",
     "geo_json",
     "created_at",
@@ -193,6 +208,10 @@ fn area_delta(area: &Area, fields: &[&str], lang: Option<&str>) -> AreaDelta {
             "icon_wide" => delta.icon_wide = area_icon(area, "icon:wide"),
             "website_url" => delta.website_url = Some(area_website_url(area)),
             "description" => delta.description = Some(area.localized_tag("description", lang)),
+            "localized_name" => delta.localized_name = area.localized_tags("name"),
+            "localized_description" => {
+                delta.localized_description = area.localized_tags("description")
+            }
             "bbox" => delta.bbox = area_bbox(area),
             "geo_json" => delta.geo_json = area.tags.get("geo_json").cloned(),
             "created_at" => delta.created_at = Some(area.created_at),
@@ -1927,6 +1946,83 @@ mod test {
             .to_request();
         let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res[0]["name"], "Пхукет");
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_localized_name_and_description_collect_two_letter_tags() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert("name".into(), json!("Phuket"));
+        tags.insert("name:en".into(), json!("Phuket EN"));
+        tags.insert("name:ru".into(), json!("Пхукет"));
+        // Three-letter and empty suffix tags are not localized entries and must
+        // not leak into the map.
+        tags.insert("name:deu".into(), json!("Phuket DEU"));
+        tags.insert("name:".into(), json!("Phuket XX"));
+        tags.insert("type".into(), json!("country"));
+        tags.insert("description".into(), json!("A beautiful island"));
+        tags.insert("description:ru".into(), json!("Красивый остров"));
+        db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,localized_name,localized_description&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(
+            res[0]["localized_name"],
+            json!({"en": "Phuket EN", "ru": "Пхукет"})
+        );
+        assert_eq!(
+            res[0]["localized_description"],
+            json!({"ru": "Красивый остров"})
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_localized_fields_omitted_when_requested_but_absent() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,localized_name,localized_description&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(delta_keys(&res[0]), vec!["id"]);
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_omits_localized_fields_unless_requested() -> Result<()> {
+        let pool = pool();
+        let mut tags = phuket_area_tags("Phuket");
+        tags.insert("name:ru".into(), json!("Пхукет"));
+        tags.insert("description:ru".into(), json!("Красивый остров"));
+        db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,name,description&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        let obj = res[0].as_object().unwrap();
+        assert!(!obj.contains_key("localized_name"));
+        assert!(!obj.contains_key("localized_description"));
         Ok(())
     }
 }

@@ -9,6 +9,18 @@
  */
 export type AreaDelta = { id: number, name?: string, type?: string, url_alias?: string, icon?: string, icon_wide?: string, website_url?: string, description?: string, 
 /**
+ * Every `name:<lang>` tag whose language suffix is exactly two characters,
+ * keyed by that code. Lets an offline client pick the right name itself
+ * instead of paying for a round trip per language. The singular `name`
+ * above stays the base tag unless `lang` is passed.
+ */
+localized_name?: Record<string, string>, 
+/**
+ * Every `description:<lang>` tag whose language suffix is exactly two
+ * characters, keyed by that code. Mirrors `localized_name`.
+ */
+localized_description?: Record<string, string>, 
+/**
  * `[west, south, east, north]`. Omitted when the area has no bbox of its
  * own, i.e. the stored columns still hold the whole-world default.
  */

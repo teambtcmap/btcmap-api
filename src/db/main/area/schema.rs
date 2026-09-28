@@ -111,6 +111,23 @@ impl Area {
             .unwrap_or_default()
     }
 
+    /// Every `{base}:<lang>` tag whose language suffix is exactly two
+    /// characters, e.g. the `name:en`/`name:ru` tags behind an area's
+    /// `localized_name`. Returns `None` when the area carries no such tag, so
+    /// the field can be omitted from a response entirely.
+    pub fn localized_tags(&self, base: &str) -> Option<Map<String, Value>> {
+        let prefix = format!("{base}:");
+        let mut localized = Map::new();
+        for (key, value) in &self.tags {
+            if let Some(lang_code) = key.strip_prefix(&prefix) {
+                if lang_code.len() == 2 && value.is_string() {
+                    localized.insert(lang_code.to_string(), value.clone());
+                }
+            }
+        }
+        (!localized.is_empty()).then_some(localized)
+    }
+
     pub fn alias(&self) -> String {
         self.tags
             .get("url_alias")
