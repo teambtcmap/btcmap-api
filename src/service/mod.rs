@@ -7,6 +7,7 @@ pub mod electrum_pinned;
 pub mod element;
 pub mod event;
 pub mod gitea;
+pub mod image;
 pub mod invoice;
 pub mod issue_body;
 pub mod lnd;

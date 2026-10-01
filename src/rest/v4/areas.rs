@@ -606,133 +606,10 @@ pub async fn get_by_id_image(
             .ok_or(RestApiError::not_found())?;
 
     let bytes = image.image_data;
-    let resize_requested = args.w.is_some() || args.h.is_some();
-
-    if !resize_requested || looks_like_svg(&bytes) {
-        let content_type =
-            content_type_for(&bytes).unwrap_or_else(|| "application/octet-stream".to_string());
-        return Ok(HttpResponse::Ok().content_type(content_type).body(bytes));
-    }
-
-    let w_req = args.w;
-    let h_req = args.h;
-
-    let resized = actix_web::web::block(move || -> Result<(Vec<u8>, String), RestApiError> {
-        let format = match image::guess_format(&bytes) {
-            Ok(f) => f,
-            Err(_) => {
-                let ct = content_type_for(&bytes)
-                    .unwrap_or_else(|| "application/octet-stream".to_string());
-                return Ok((bytes, ct));
-            }
-        };
-
-        let content_type: &'static str = match format {
-            image::ImageFormat::Png => "image/png",
-            image::ImageFormat::Jpeg => "image/jpeg",
-            image::ImageFormat::WebP => "image/webp",
-            _ => {
-                let ct = content_type_for(&bytes)
-                    .unwrap_or_else(|| "application/octet-stream".to_string());
-                return Ok((bytes, ct));
-            }
-        };
-
-        let img = image::load_from_memory(&bytes).map_err(|_| RestApiError::database())?;
-        let (src_w, src_h) = (img.width(), img.height());
-        let (target_w, target_h) = fit_dimensions(src_w, src_h, w_req, h_req);
-
-        if target_w == src_w && target_h == src_h {
-            return Ok((bytes, content_type.to_string()));
-        }
-
-        let resized_img = img.resize(target_w, target_h, image::imageops::FilterType::Triangle);
-        let mut out: Vec<u8> = Vec::new();
-        match format {
-            image::ImageFormat::Png => {
-                let encoder = image::codecs::png::PngEncoder::new(&mut out);
-                resized_img
-                    .write_with_encoder(encoder)
-                    .map_err(|_| RestApiError::database())?;
-            }
-            image::ImageFormat::Jpeg => {
-                let encoder = image::codecs::jpeg::JpegEncoder::new(&mut out);
-                resized_img
-                    .write_with_encoder(encoder)
-                    .map_err(|_| RestApiError::database())?;
-            }
-            image::ImageFormat::WebP => {
-                let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut out);
-                resized_img
-                    .write_with_encoder(encoder)
-                    .map_err(|_| RestApiError::database())?;
-            }
-            _ => unreachable!(),
-        }
-        Ok((out, content_type.to_string()))
-    })
-    .await
-    .map_err(|_| RestApiError::database())??;
-
-    Ok(HttpResponse::Ok().content_type(resized.1).body(resized.0))
-}
-
-/// Pick target dimensions that fit the source into the requested box without
-/// upsizing. If only one bound is provided, the other is derived from the
-/// source aspect ratio. When the source already fits, it is returned as-is.
-fn fit_dimensions(src_w: u32, src_h: u32, w: Option<u32>, h: Option<u32>) -> (u32, u32) {
-    match (w, h) {
-        (None, None) => (src_w, src_h),
-        (Some(mw), None) => {
-            if mw >= src_w {
-                (src_w, src_h)
-            } else {
-                (mw, src_h * mw / src_w)
-            }
-        }
-        (None, Some(mh)) => {
-            if mh >= src_h {
-                (src_w, src_h)
-            } else {
-                (src_w * mh / src_h, mh)
-            }
-        }
-        (Some(mw), Some(mh)) => {
-            if src_w <= mw && src_h <= mh {
-                return (src_w, src_h);
-            }
-            let ratio = (mw as f64 / src_w as f64).min(mh as f64 / src_h as f64);
-            let nw = ((src_w as f64) * ratio).round() as u32;
-            let nh = ((src_h as f64) * ratio).round() as u32;
-            (nw.max(1), nh.max(1))
-        }
-    }
-}
-
-fn content_type_for(bytes: &[u8]) -> Option<String> {
-    if looks_like_svg(bytes) {
-        return Some("image/svg+xml".to_string());
-    }
-    let format = image::guess_format(bytes).ok()?;
-    Some(
-        match format {
-            image::ImageFormat::Png => "image/png",
-            image::ImageFormat::Jpeg => "image/jpeg",
-            image::ImageFormat::WebP => "image/webp",
-            image::ImageFormat::Bmp => "image/bmp",
-            _ => "application/octet-stream",
-        }
-        .to_string(),
-    )
-}
-
-fn looks_like_svg(bytes: &[u8]) -> bool {
-    let head = &bytes[..bytes.len().min(512)];
-    let Ok(head) = std::str::from_utf8(head) else {
-        return false;
-    };
-    let trimmed = head.trim_start();
-    trimmed.starts_with("<?xml") || trimmed.starts_with("<svg")
+    let (bytes, content_type) = service::image::render(bytes, args.w, args.h)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(HttpResponse::Ok().content_type(content_type).body(bytes))
 }
 
 #[cfg(test)]
@@ -1344,39 +1221,6 @@ mod test {
         Ok(())
     }
 
-    #[::core::prelude::v1::test]
-    fn content_type_for_detects_png() {
-        let png_bytes: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-        assert_eq!(
-            Some("image/png".to_string()),
-            super::content_type_for(&png_bytes)
-        );
-    }
-
-    #[::core::prelude::v1::test]
-    fn content_type_for_detects_jpeg() {
-        let jpeg_bytes: Vec<u8> = vec![0xFF, 0xD8, 0xFF, 0xE0];
-        assert_eq!(
-            Some("image/jpeg".to_string()),
-            super::content_type_for(&jpeg_bytes)
-        );
-    }
-
-    #[::core::prelude::v1::test]
-    fn content_type_for_detects_svg() {
-        let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>";
-        assert_eq!(
-            Some("image/svg+xml".to_string()),
-            super::content_type_for(svg)
-        );
-    }
-
-    #[::core::prelude::v1::test]
-    fn content_type_for_returns_none_for_unknown() {
-        let bytes = b"definitely not an image";
-        assert_eq!(None, super::content_type_for(bytes));
-    }
-
     fn encode_png(width: u32, height: u32) -> Vec<u8> {
         use image::{ImageBuffer, Rgb};
         let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
@@ -1578,43 +1422,6 @@ mod test {
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), 400);
         Ok(())
-    }
-
-    #[::core::prelude::v1::test]
-    fn fit_dimensions_no_constraints_returns_source() {
-        assert_eq!((100, 200), super::fit_dimensions(100, 200, None, None));
-    }
-
-    #[::core::prelude::v1::test]
-    fn fit_dimensions_only_w_scales_height() {
-        assert_eq!((50, 100), super::fit_dimensions(100, 200, Some(50), None));
-    }
-
-    #[::core::prelude::v1::test]
-    fn fit_dimensions_only_h_scales_width() {
-        assert_eq!((50, 100), super::fit_dimensions(100, 200, None, Some(100)));
-    }
-
-    #[::core::prelude::v1::test]
-    fn fit_dimensions_w_not_upsizing_returns_source() {
-        assert_eq!((100, 200), super::fit_dimensions(100, 200, Some(200), None));
-    }
-
-    #[::core::prelude::v1::test]
-    fn fit_dimensions_box_fit_uses_smaller_ratio() {
-        // source 200x100 fitting into 100x100 -> width-bound: ratio 0.5 -> 100x50
-        assert_eq!(
-            (100, 50),
-            super::fit_dimensions(200, 100, Some(100), Some(100))
-        );
-    }
-
-    #[::core::prelude::v1::test]
-    fn fit_dimensions_box_already_fits_returns_source() {
-        assert_eq!(
-            (50, 50),
-            super::fit_dimensions(50, 50, Some(200), Some(200))
-        );
     }
 
     fn delta_keys(value: &serde_json::Value) -> Vec<String> {

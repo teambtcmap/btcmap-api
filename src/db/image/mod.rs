@@ -1,5 +1,6 @@
 pub mod area;
 pub mod og;
+pub mod place;
 
 use super::Migration;
 use crate::Result;

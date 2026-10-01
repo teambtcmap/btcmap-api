@@ -30,7 +30,10 @@ curl --request POST \
        "type": "verification",
        "extra_fields": {
          "comment": "Looks closed when I drove past on Sunday"
-       }
+       },
+       "photos": [
+         { "data_base64": "<base64-encoded image>" }
+       ]
      }'
 ```
 
@@ -41,26 +44,49 @@ curl --request POST \
 | `place_id`     | Number              | Yes      | Database ID of the place being reported.                                                                 |
 | `type`         | String              | Yes      | Report type (e.g. `verification`, `missing_payment_method`). Free-form; editors triage by `type`.       |
 | `extra_fields` | Object (string→any) | No       | Free-form additional context (e.g. `comment`, `payment_methods_seen`). Custom keys are allowed.         |
+| `photos`       | Array of objects    | No       | Optional photo evidence. Each item is `{ "data_base64": "<base64>" }`. See [Photo Evidence](#photo-evidence). |
 
 ### Response
 
 ```json
 {
   "id": 18108,
-  "origin": "user"
+  "origin": "user",
+  "photo_ids": [3]
 }
 ```
 
-| Field    | Type   | Description                                                                                  |
-|----------|--------|----------------------------------------------------------------------------------------------|
-| `id`     | Number | Unique identifier of the newly created report. Use it to look the row up.                    |
-| `origin` | String | Always `"user"` for this endpoint.                                                           |
+| Field       | Type            | Description                                                                                              |
+|-------------|-----------------|----------------------------------------------------------------------------------------------------------|
+| `id`        | Number          | Unique identifier of the newly created report. Use it to look the row up.                                |
+| `origin`    | String          | Always `"user"` for this endpoint.                                                                       |
+| `photo_ids` | Array of Number | IDs of the stored evidence photos, in the order they were submitted. Empty when `photos` is omitted.     |
 
 The `submitted_by` column is populated server-side from the authenticated user; clients do not send it.
+
+### Photo Evidence
+
+Evidence photos are optional and stored server-side against the place, so they
+can be reviewed without relying on an external host. Each item in `photos` is a
+base64-encoded image; the response returns the assigned `photo_ids`, which can
+be fetched from the public [Place Images](place-images.md) endpoints.
+
+Constraints:
+
+- At most **5** photos per report.
+- At most **10 MB** per photo (decoded size).
+- At most **20,000 px** on either side after decoding (uploads that exceed this,
+  or that fail to decode within the server's allocation budget, are rejected).
+- Only raster formats are accepted: **PNG, JPEG, WebP**. SVG is rejected
+  because serving user-supplied SVG from the API origin would be an XSS vector.
+
+Photos are validated before the report row is written, so an invalid upload
+returns `400` without creating a report.
 
 ### Error Responses
 
 | Status | Meaning                                                                                                          |
 |--------|------------------------------------------------------------------------------------------------------------------|
+| 400    | Invalid request body, or a photo is not valid base64 / too large / not a supported raster format.                 |
 | 401    | Missing or invalid Bearer token.                                                                                  |
 | 500    | Database error, or the `user` import origin is not configured on this deployment. Contact the BTC Map team if this persists. |

@@ -1,4 +1,6 @@
 use crate::{
+    db::image::place::schema::PlaceImageMeta,
+    db::image::ImagePool,
     db::main::area::schema::Area,
     db::main::place_report::schema::PlaceReport,
     db::{self},
@@ -73,7 +75,37 @@ fn build_human_section(report: &PlaceReport) -> String {
     lines.join("\n")
 }
 
-pub async fn run(pool: &Pool) -> Result<Res> {
+/// Markdown embeds for the place's report evidence, or an empty string when the
+/// place has none.
+fn build_image_section(place_id: i64, images: &[PlaceImageMeta]) -> String {
+    if images.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec!["Evidence:".to_string(), String::new()];
+    for image in images {
+        lines.push(format!(
+            "![evidence](https://api.btcmap.org/v4/places/{place_id}/images/{})",
+            image.id
+        ));
+    }
+    lines.join("\n")
+}
+
+/// The human-readable report extras and the evidence images, joined into the
+/// single markdown block that goes into the Gitea issue body.
+fn build_details(report: &PlaceReport, images: &[PlaceImageMeta]) -> String {
+    let mut details = build_human_section(report);
+    let image_section = build_image_section(report.place_id, images);
+    if !image_section.is_empty() {
+        if !details.is_empty() {
+            details.push_str("\n\n");
+        }
+        details.push_str(&image_section);
+    }
+    details
+}
+
+pub async fn run(pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
     let reports = db::main::place_report::queries::select_open_and_not_deleted(pool).await?;
     info!(
         len = reports.len(),
@@ -110,6 +142,14 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 service::area::find_areas_by_lat_lon(element.lat(), element.lon(), pool).await?;
             let title = build_issue_title(&areas, &element.name(None), &report.r#type);
 
+            let images = db::image::place::queries::select_by_place_id_and_type(
+                report.place_id,
+                "report",
+                image_pool,
+            )
+            .await?;
+            let details = build_details(report, &images);
+
             let body = format!(
                 r#"
                 Id: {id}
@@ -117,7 +157,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 Place id: {place_id}
                 Type: {type}
 
-                {human_section}
+                {details}
 
                 OpenStreetMap viewer link: https://www.openstreetmap.org/#map=21/{lat}/{lon}
 
@@ -132,7 +172,7 @@ pub async fn run(pool: &Pool) -> Result<Res> {
                 origin = import_origin.name,
                 place_id = report.place_id,
                 type = report.r#type,
-                human_section = build_human_section(report),
+                details = details,
                 lat = element.lat(),
                 lon = element.lon(),
             );
@@ -189,7 +229,11 @@ pub async fn run(pool: &Pool) -> Result<Res> {
 
 #[cfg(test)]
 mod test {
-    use super::{build_human_section, build_issue_title, needs_removal_label};
+    use super::{
+        build_details, build_human_section, build_image_section, build_issue_title,
+        needs_removal_label,
+    };
+    use crate::db::image::place::schema::PlaceImageMeta;
     use crate::db::main::area::schema::Area;
     use crate::db::main::place_report::schema::PlaceReport;
     use serde_json::{Map, Value};
@@ -318,5 +362,75 @@ severity: high"
     #[test]
     fn human_section_is_empty_without_extra_fields() {
         assert_eq!(build_human_section(&report(vec![])), "");
+    }
+
+    fn image(id: i64, place_id: i64) -> PlaceImageMeta {
+        PlaceImageMeta {
+            id,
+            place_id,
+            r#type: "report".into(),
+            width: 100,
+            height: 50,
+            size_bytes: 0,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+        }
+    }
+
+    #[test]
+    fn image_section_is_empty_without_images() {
+        assert_eq!(build_image_section(16815, &[]), "");
+    }
+
+    #[test]
+    fn image_section_embeds_public_urls() {
+        let images = vec![image(2, 16815), image(1, 16815)];
+
+        assert_eq!(
+            build_image_section(16815, &images),
+            "\
+Evidence:
+
+![evidence](https://api.btcmap.org/v4/places/16815/images/2)
+![evidence](https://api.btcmap.org/v4/places/16815/images/1)"
+        );
+    }
+
+    #[test]
+    fn details_is_empty_without_extras_or_images() {
+        assert_eq!(build_details(&report(vec![]), &[]), "");
+    }
+
+    #[test]
+    fn details_keeps_human_section_when_there_are_no_images() {
+        let report = report(vec![("comment", Value::String("gone".into()))]);
+
+        assert_eq!(build_details(&report, &[]), "Comment: gone");
+    }
+
+    #[test]
+    fn details_keeps_image_section_when_there_are_no_extras() {
+        let images = vec![image(2, 16815)];
+
+        assert_eq!(
+            build_details(&report(vec![]), &images),
+            "Evidence:\n\n![evidence](https://api.btcmap.org/v4/places/16815/images/2)",
+        );
+    }
+
+    #[test]
+    fn details_separates_human_and_image_sections() {
+        let report = report(vec![("comment", Value::String("gone".into()))]);
+        let images = vec![image(2, 16815), image(1, 16815)];
+
+        assert_eq!(
+            build_details(&report, &images),
+            "\
+Comment: gone
+
+Evidence:
+
+![evidence](https://api.btcmap.org/v4/places/16815/images/2)
+![evidence](https://api.btcmap.org/v4/places/16815/images/1)"
+        );
     }
 }

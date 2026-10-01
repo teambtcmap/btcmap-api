@@ -8,6 +8,7 @@ This document describes the endpoints for interacting with places in REST API v4
 - [Search](#search)
 - [Fetch Place](#fetch-place)
 - [Fetch Place Comments](#fetch-place-comments)
+- [Place Images](place-images.md)
 - [Get Saved Places](#get-saved-places)
 - [Set Saved Places](#set-saved-places)
 - [Add Saved Place](#add-saved-place)

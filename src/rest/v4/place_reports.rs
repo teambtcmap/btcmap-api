@@ -1,17 +1,24 @@
 use crate::db;
+use crate::db::image::ImagePool;
 use crate::db::main::place_report::blocking_queries::InsertArgs;
 use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
+use crate::service;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
+use base64::prelude::*;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
 
 const ORIGIN: &str = "user";
+/// Image type used for evidence attached to place reports.
+const PHOTO_TYPE: &str = "report";
+const MAX_PHOTOS: usize = 5;
+const MAX_PHOTO_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Deserialize, ts_rs::TS)]
 #[ts(export, rename = "PostPlaceReportArgs")]
@@ -21,6 +28,14 @@ pub struct PostArgs {
     pub r#type: String,
     #[ts(type = "Record<string, unknown>")]
     pub extra_fields: Option<JsonObject>,
+    #[ts(optional)]
+    pub photos: Option<Vec<PostPhotoArgs>>,
+}
+
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PostPlaceReportPhotoArgs")]
+pub struct PostPhotoArgs {
+    pub data_base64: String,
 }
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
@@ -29,6 +44,54 @@ pub struct PostResponse {
     #[ts(type = "number")]
     pub id: i64,
     pub origin: String,
+    #[ts(type = "Array<number>")]
+    pub photo_ids: Vec<i64>,
+}
+
+struct DecodedPhoto {
+    bytes: Vec<u8>,
+    width: i64,
+    height: i64,
+}
+
+/// Decode and validate the optional evidence photos before anything is written,
+/// so a rejected upload cannot leave a half-created report behind.
+///
+/// Base64 decoding and (especially) full image decoding are CPU- and
+/// allocation-heavy, so they run on the blocking pool instead of an Actix
+/// worker thread.
+async fn decode_photos(photos: Vec<PostPhotoArgs>) -> Result<Vec<DecodedPhoto>, RestApiError> {
+    if photos.len() > MAX_PHOTOS {
+        return Err(RestApiError::invalid_input(format!(
+            "at most {MAX_PHOTOS} photos are allowed"
+        )));
+    }
+
+    actix_web::web::block(move || {
+        photos
+            .iter()
+            .map(|photo| {
+                let bytes = BASE64_STANDARD
+                    .decode(photo.data_base64.as_bytes())
+                    .map_err(|_| RestApiError::invalid_input("photo is not valid base64"))?;
+                if bytes.len() > MAX_PHOTO_BYTES {
+                    return Err(RestApiError::invalid_input("photo is too large"));
+                }
+                // Fully decode under allocation/dimension limits. This rejects
+                // SVG and other non-raster formats and guards against
+                // decompression bombs submitted by clients.
+                let (_, width, height) = service::image::decode_upload(&bytes)
+                    .ok_or_else(|| RestApiError::invalid_input("unsupported image format"))?;
+                Ok(DecodedPhoto {
+                    bytes,
+                    width: width as i64,
+                    height: height as i64,
+                })
+            })
+            .collect::<Result<Vec<_>, RestApiError>>()
+    })
+    .await
+    .map_err(|_| RestApiError::database())?
 }
 
 #[post("")]
@@ -36,6 +99,7 @@ pub async fn post(
     auth: Auth,
     args: Json<PostArgs>,
     pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
 ) -> RestResult<PostResponse> {
     let user = auth.user.ok_or(RestApiError::unauthorized())?;
 
@@ -49,12 +113,14 @@ pub async fn post(
             )
         })?;
 
-    let extra_fields = args.extra_fields.clone().unwrap_or_default();
+    let args = args.into_inner();
+    let extra_fields = args.extra_fields.unwrap_or_default();
+    let photos = decode_photos(args.photos.unwrap_or_default()).await?;
 
     let insert_args = InsertArgs {
         place_id: args.place_id,
         origin_id: origin.id,
-        r#type: args.r#type.clone(),
+        r#type: args.r#type,
         extra_fields,
         ticket_url: None,
         submitted_by: Some(user.id),
@@ -63,9 +129,27 @@ pub async fn post(
         .await
         .map_err(|_| RestApiError::database())?;
 
+    let mut photo_ids = Vec::with_capacity(photos.len());
+    for photo in photos {
+        let size_bytes = photo.bytes.len() as i64;
+        let image = db::image::place::queries::insert(
+            args.place_id,
+            PHOTO_TYPE,
+            photo.bytes,
+            photo.width,
+            photo.height,
+            size_bytes,
+            &image_pool,
+        )
+        .await
+        .map_err(|_| RestApiError::database())?;
+        photo_ids.push(image.id);
+    }
+
     Ok(Json(PostResponse {
         id: report.id,
         origin: origin.name,
+        photo_ids,
     }))
 }
 
@@ -80,6 +164,7 @@ mod test {
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
+    use base64::prelude::*;
     use serde_json::Map;
 
     async fn seed_user_with_token(pool: &crate::db::main::MainPool) -> Result<(i64, String)> {
@@ -111,6 +196,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool()))
+                .app_data(Data::new(crate::db::image::test::pool()))
                 .service(scope("/place-reports").service(super::post)),
         )
         .await;
@@ -135,6 +221,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
                 .service(scope("/place-reports").service(super::post)),
         )
         .await;
@@ -178,6 +265,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
                 .service(scope("/place-reports").service(super::post)),
         )
         .await;
@@ -210,6 +298,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
                 .service(scope("/place-reports").service(super::post)),
         )
         .await;
@@ -243,6 +332,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
                 .service(scope("/place-reports").service(super::post)),
         )
         .await;
@@ -273,6 +363,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
                 .service(scope("/place-reports").service(super::post)),
         )
         .await;
@@ -301,6 +392,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
                 .service(scope("/place-reports").service(super::post)),
         )
         .await;
@@ -316,5 +408,197 @@ mod test {
         assert_eq!(Some(user_id), stored.submitted_by);
 
         Ok(())
+    }
+
+    #[test]
+    async fn post_stores_photos_in_image_db() -> Result<()> {
+        let pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(image_pool.clone()))
+                .service(scope("/place-reports").service(super::post)),
+        )
+        .await;
+
+        let bytes = encode_png(4, 2);
+        let payload = serde_json::json!({
+            "place_id": 42,
+            "type": "verification",
+            "photos": [{ "data_base64": BASE64_STANDARD.encode(&bytes) }],
+        })
+        .to_string();
+        let req = TestRequest::post()
+            .uri("/place-reports")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(payload)
+            .to_request();
+        let res: super::PostResponse = test::call_and_read_body_json(&app, req).await;
+
+        assert_eq!(res.photo_ids.len(), 1);
+
+        let stored = db::image::place::queries::select_by_id(res.photo_ids[0], &image_pool).await?;
+        assert_eq!(stored.place_id, 42);
+        assert_eq!(stored.r#type, "report");
+        assert_eq!(stored.image_data, bytes);
+        assert_eq!(stored.width, 4);
+        assert_eq!(stored.height, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_invalid_photo_without_creating_report() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
+                .service(scope("/place-reports").service(super::post)),
+        )
+        .await;
+
+        let payload = serde_json::json!({
+            "place_id": 42,
+            "type": "verification",
+            "photos": [{ "data_base64": BASE64_STANDARD.encode(b"not an image") }],
+        })
+        .to_string();
+        let req = TestRequest::post()
+            .uri("/place-reports")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(payload)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_too_many_photos_without_creating_report() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
+                .service(scope("/place-reports").service(super::post)),
+        )
+        .await;
+
+        let photo = serde_json::json!({ "data_base64": BASE64_STANDARD.encode(encode_png(1, 1)) });
+        let photos: Vec<serde_json::Value> =
+            (0..super::MAX_PHOTOS + 1).map(|_| photo.clone()).collect();
+        let payload = serde_json::json!({
+            "place_id": 42,
+            "type": "verification",
+            "photos": photos,
+        })
+        .to_string();
+        let req = TestRequest::post()
+            .uri("/place-reports")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(payload)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        let reports = db::main::place_report::queries::select_open_and_not_deleted(&pool).await?;
+        assert!(reports.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_oversized_photo() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
+                // Raised to match the server, since max-size photos exceed the
+                // 2MB body limit Actix applies by default.
+                .app_data(actix_web::web::JsonConfig::default().limit(64 * 1024 * 1024))
+                .service(scope("/place-reports").service(super::post)),
+        )
+        .await;
+
+        let oversized = vec![0u8; super::MAX_PHOTO_BYTES + 1];
+        let payload = serde_json::json!({
+            "place_id": 42,
+            "type": "verification",
+            "photos": [{ "data_base64": BASE64_STANDARD.encode(&oversized) }],
+        })
+        .to_string();
+        let req = TestRequest::post()
+            .uri("/place-reports")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(payload)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        let reports = db::main::place_report::queries::select_open_and_not_deleted(&pool).await?;
+        assert!(reports.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_oversized_photo_dimensions() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(Data::new(crate::db::image::test::pool()))
+                .service(scope("/place-reports").service(super::post)),
+        )
+        .await;
+
+        let bytes = encode_png(crate::service::image::MAX_UPLOAD_DIMENSION + 1, 1);
+        let payload = serde_json::json!({
+            "place_id": 42,
+            "type": "verification",
+            "photos": [{ "data_base64": BASE64_STANDARD.encode(&bytes) }],
+        })
+        .to_string();
+        let req = TestRequest::post()
+            .uri("/place-reports")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(payload)
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        let reports = db::main::place_report::queries::select_open_and_not_deleted(&pool).await?;
+        assert!(reports.is_empty());
+
+        Ok(())
+    }
+
+    fn encode_png(width: u32, height: u32) -> Vec<u8> {
+        use image::{ImageBuffer, Rgb};
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            ImageBuffer::from_pixel(width, height, Rgb([255, 0, 0]));
+        let mut out: Vec<u8> = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(&mut out);
+        img.write_with_encoder(encoder).unwrap();
+        out
     }
 }

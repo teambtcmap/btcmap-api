@@ -742,7 +742,7 @@ pub async fn handle(
         ),
         RpcMethod::SyncPlaceReports => RpcResponse::from(
             req.id.clone(),
-            super::import::sync_place_reports::run(&main_pool).await?,
+            super::import::sync_place_reports::run(&main_pool, &image_pool).await?,
         ),
         RpcMethod::GetPlaceImportOrigins => RpcResponse::from(
             req.id.clone(),

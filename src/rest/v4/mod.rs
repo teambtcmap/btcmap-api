@@ -9,6 +9,7 @@ pub mod invoices;
 pub mod nostr;
 pub mod place_boosts;
 pub mod place_comments;
+pub mod place_images;
 pub mod place_issues;
 pub mod place_reports;
 pub mod place_submissions;

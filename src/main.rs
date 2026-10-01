@@ -88,6 +88,8 @@ async fn main() -> Result<()> {
             .app_data(Data::new(log_pool.clone()))
             .app_data(Data::new(conf.clone()))
             .app_data(web::PayloadConfig::new(64 * 1024 * 1024))
+            // Base64 photo evidence makes JSON bodies larger than the 2MB default.
+            .app_data(web::JsonConfig::default().limit(64 * 1024 * 1024))
             .app_data(Data::new(rest::nostr_auth::ApiBaseUrl(
                 api_base_url.clone(),
             )))
@@ -197,6 +199,8 @@ async fn main() -> Result<()> {
                             .service(rest::v4::places::get_by_id)
                             .service(rest::v4::places::get_by_id_comments)
                             .service(rest::v4::places::get_by_id_areas)
+                            .service(rest::v4::place_images::get_by_place_id)
+                            .service(rest::v4::place_images::get_by_place_id_and_image_id)
                             .service(rest::v4::places::get_by_id_activity),
                     )
                     .service(scope("invoices").service(rest::v4::invoices::get_by_id))

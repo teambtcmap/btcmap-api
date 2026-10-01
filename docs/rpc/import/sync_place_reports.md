@@ -8,7 +8,7 @@ For every open report (one that has no `ticket_url` and is not closed/deleted), 
 
 1. Look up the [`place_import_origin`](get_place_import_origins.md) and skip the report if the origin is unknown or has `gitea_sync_enabled` turned off.
 2. Look up the `element` referenced by `place_id` and skip the report if the place no longer exists.
-3. Create a Gitea issue labelled with the place-report label (id `903`); when the report `type` is `refused_sats` or `out_of_business`, the removal label (id `904`) is added as well. The returned URL is then saved as the report's `ticket_url`. The origin's `gitea_label_id` is intentionally not applied here — that label only tags new place submissions, not reports against existing places.
+3. Create a Gitea issue labelled with the place-report label (id `903`); when the report `type` is `refused_sats` or `out_of_business`, the removal label (id `904`) is added as well. The returned URL is then saved as the report's `ticket_url`. The origin's `gitea_label_id` is intentionally not applied here — that label only tags new place submissions, not reports against existing places. Any report evidence photos attached to the place are embedded in the issue body as markdown images (see [Place Images](../../rest/v4/place-images.md)).
 
 For every already-synced report, the RPC re-fetches the linked issue and marks the report `closed_at` whenever the issue state transitions to `closed`.
 
