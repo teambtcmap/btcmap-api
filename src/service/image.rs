@@ -1,4 +1,5 @@
 use crate::Result;
+use base64::prelude::*;
 use image::ImageFormat;
 use image::ImageReader;
 use image::Limits;
@@ -8,6 +9,8 @@ use std::io::Cursor;
 pub const MAX_UPLOAD_DIMENSION: u32 = 20_000;
 /// Largest decoded allocation, in bytes, accepted for a user-supplied upload.
 pub const MAX_UPLOAD_ALLOC: u64 = 256 * 1024 * 1024;
+/// Largest decoded upload accepted from a client, in bytes.
+pub const MAX_UPLOAD_BYTES: usize = 10 * 1024 * 1024;
 
 /// Raster formats accepted for user-supplied uploads. SVG is deliberately
 /// excluded: serving user-supplied SVG from the API origin would be an XSS
@@ -71,6 +74,33 @@ pub fn decode_upload(bytes: &[u8]) -> Option<(ImageFormat, u32, u32)> {
     reader.limits(limits);
     let image = reader.decode().ok()?;
     Some((format, image.width(), image.height()))
+}
+
+/// A base64 upload that has been decoded and validated as a storable raster.
+pub struct DecodedUpload {
+    pub bytes: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Decode a base64 data payload and validate it as a storable raster upload.
+///
+/// Returns a human-readable reason on rejection so callers can surface it as a
+/// `400 invalid_input`.
+pub fn decode_upload_base64(data_base64: &str) -> Result<DecodedUpload, String> {
+    let bytes = BASE64_STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|_| "image is not valid base64".to_string())?;
+    if bytes.len() > MAX_UPLOAD_BYTES {
+        return Err("image is too large".to_string());
+    }
+    let (_, width, height) =
+        decode_upload(&bytes).ok_or_else(|| "unsupported image format".to_string())?;
+    Ok(DecodedUpload {
+        bytes,
+        width,
+        height,
+    })
 }
 
 /// Decode any raster image for resizing, bounded by the reader's default

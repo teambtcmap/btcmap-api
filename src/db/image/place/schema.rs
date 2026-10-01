@@ -15,6 +15,7 @@ pub enum Columns {
     Height,
     SizeBytes,
     CreatedAt,
+    CreatedBy,
 }
 
 #[allow(dead_code)]
@@ -28,6 +29,7 @@ pub struct PlaceImage {
     pub height: i64,
     pub size_bytes: i64,
     pub created_at: OffsetDateTime,
+    pub created_by: Option<i64>,
 }
 
 impl PlaceImage {
@@ -43,6 +45,7 @@ impl PlaceImage {
                 Columns::Height,
                 Columns::SizeBytes,
                 Columns::CreatedAt,
+                Columns::CreatedBy,
             ]
             .iter()
             .map(AsRef::as_ref)
@@ -62,6 +65,7 @@ impl PlaceImage {
                 height: row.get(Columns::Height.as_ref())?,
                 size_bytes: row.get(Columns::SizeBytes.as_ref())?,
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
+                created_by: row.get(Columns::CreatedBy.as_ref())?,
             })
         }
     }
@@ -80,6 +84,7 @@ pub struct PlaceImageMeta {
     pub height: i64,
     pub size_bytes: i64,
     pub created_at: OffsetDateTime,
+    pub created_by: Option<i64>,
 }
 
 impl PlaceImageMeta {
@@ -94,6 +99,7 @@ impl PlaceImageMeta {
                 Columns::Height,
                 Columns::SizeBytes,
                 Columns::CreatedAt,
+                Columns::CreatedBy,
             ]
             .iter()
             .map(AsRef::as_ref)
@@ -112,6 +118,7 @@ impl PlaceImageMeta {
                 height: row.get(Columns::Height.as_ref())?,
                 size_bytes: row.get(Columns::SizeBytes.as_ref())?,
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
+                created_by: row.get(Columns::CreatedBy.as_ref())?,
             })
         }
     }

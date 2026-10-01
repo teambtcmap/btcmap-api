@@ -1,4 +1,5 @@
 use crate::db;
+use crate::db::image::place::blocking_queries::InsertArgs as ImageInsertArgs;
 use crate::db::image::ImagePool;
 use crate::db::main::place_report::blocking_queries::InsertArgs;
 use crate::db::main::MainPool;
@@ -9,7 +10,6 @@ use crate::service;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
-use base64::prelude::*;
 use geojson::JsonObject;
 use serde::Deserialize;
 use serde::Serialize;
@@ -18,7 +18,6 @@ const ORIGIN: &str = "user";
 /// Image type used for evidence attached to place reports.
 const PHOTO_TYPE: &str = "report";
 const MAX_PHOTOS: usize = 5;
-const MAX_PHOTO_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Deserialize, ts_rs::TS)]
 #[ts(export, rename = "PostPlaceReportArgs")]
@@ -71,21 +70,12 @@ async fn decode_photos(photos: Vec<PostPhotoArgs>) -> Result<Vec<DecodedPhoto>, 
         photos
             .iter()
             .map(|photo| {
-                let bytes = BASE64_STANDARD
-                    .decode(photo.data_base64.as_bytes())
-                    .map_err(|_| RestApiError::invalid_input("photo is not valid base64"))?;
-                if bytes.len() > MAX_PHOTO_BYTES {
-                    return Err(RestApiError::invalid_input("photo is too large"));
-                }
-                // Fully decode under allocation/dimension limits. This rejects
-                // SVG and other non-raster formats and guards against
-                // decompression bombs submitted by clients.
-                let (_, width, height) = service::image::decode_upload(&bytes)
-                    .ok_or_else(|| RestApiError::invalid_input("unsupported image format"))?;
+                let decoded = service::image::decode_upload_base64(&photo.data_base64)
+                    .map_err(RestApiError::invalid_input)?;
                 Ok(DecodedPhoto {
-                    bytes,
-                    width: width as i64,
-                    height: height as i64,
+                    bytes: decoded.bytes,
+                    width: decoded.width as i64,
+                    height: decoded.height as i64,
                 })
             })
             .collect::<Result<Vec<_>, RestApiError>>()
@@ -132,17 +122,18 @@ pub async fn post(
     let mut photo_ids = Vec::with_capacity(photos.len());
     for photo in photos {
         let size_bytes = photo.bytes.len() as i64;
-        let image = db::image::place::queries::insert(
-            args.place_id,
-            PHOTO_TYPE,
-            photo.bytes,
-            photo.width,
-            photo.height,
+        let insert_args = ImageInsertArgs {
+            place_id: args.place_id,
+            r#type: PHOTO_TYPE.to_string(),
+            image_data: photo.bytes,
+            width: photo.width,
+            height: photo.height,
             size_bytes,
-            &image_pool,
-        )
-        .await
-        .map_err(|_| RestApiError::database())?;
+            created_by: Some(user.id),
+        };
+        let image = db::image::place::queries::insert(insert_args, &image_pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
         photo_ids.push(image.id);
     }
 
@@ -414,7 +405,7 @@ mod test {
     async fn post_stores_photos_in_image_db() -> Result<()> {
         let pool = pool();
         let image_pool = crate::db::image::test::pool();
-        let (_, secret) = seed_user_with_token(&pool).await?;
+        let (user_id, secret) = seed_user_with_token(&pool).await?;
 
         let app = test::init_service(
             App::new()
@@ -447,6 +438,7 @@ mod test {
         assert_eq!(stored.image_data, bytes);
         assert_eq!(stored.width, 4);
         assert_eq!(stored.height, 2);
+        assert_eq!(stored.created_by, Some(user_id));
 
         Ok(())
     }
@@ -535,7 +527,7 @@ mod test {
         )
         .await;
 
-        let oversized = vec![0u8; super::MAX_PHOTO_BYTES + 1];
+        let oversized = vec![0u8; crate::service::image::MAX_UPLOAD_BYTES + 1];
         let payload = serde_json::json!({
             "place_id": 42,
             "type": "verification",

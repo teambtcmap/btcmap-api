@@ -1,25 +1,13 @@
 use super::blocking_queries;
+use super::blocking_queries::InsertArgs;
 use super::schema::{PlaceImage, PlaceImageMeta};
 use crate::Result;
 use deadpool_sqlite::Pool;
 
-pub async fn insert(
-    place_id: i64,
-    r#type: &str,
-    image_data: Vec<u8>,
-    width: i64,
-    height: i64,
-    size_bytes: i64,
-    pool: &Pool,
-) -> Result<PlaceImage> {
-    let r#type = r#type.to_owned();
+pub async fn insert(args: InsertArgs, pool: &Pool) -> Result<PlaceImage> {
     pool.get()
         .await?
-        .interact(move |conn| {
-            blocking_queries::insert(
-                place_id, &r#type, image_data, width, height, size_bytes, conn,
-            )
-        })
+        .interact(move |conn| blocking_queries::insert(&args, conn))
         .await?
 }
 

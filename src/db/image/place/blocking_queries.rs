@@ -4,26 +4,36 @@ use rusqlite::{params, Connection};
 use schema::Columns::*;
 use schema::TABLE_NAME as TABLE;
 
-pub fn insert(
-    place_id: i64,
-    r#type: &str,
-    image_data: Vec<u8>,
-    width: i64,
-    height: i64,
-    size_bytes: i64,
-    conn: &Connection,
-) -> Result<PlaceImage> {
+pub struct InsertArgs {
+    pub place_id: i64,
+    pub r#type: String,
+    pub image_data: Vec<u8>,
+    pub width: i64,
+    pub height: i64,
+    pub size_bytes: i64,
+    pub created_by: Option<i64>,
+}
+
+pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceImage> {
     let sql = format!(
         r#"
-            INSERT INTO {TABLE} ({PlaceId}, {Type}, {ImageData}, {Width}, {Height}, {SizeBytes})
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT INTO {TABLE} ({PlaceId}, {Type}, {ImageData}, {Width}, {Height}, {SizeBytes}, {CreatedBy})
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             RETURNING {projection}
         "#,
         projection = PlaceImage::projection(),
     );
     conn.query_row(
         &sql,
-        params![place_id, r#type, image_data, width, height, size_bytes],
+        params![
+            args.place_id,
+            &args.r#type,
+            &args.image_data,
+            args.width,
+            args.height,
+            args.size_bytes,
+            args.created_by
+        ],
         PlaceImage::mapper(),
     )
     .map_err(Into::into)
@@ -96,12 +106,22 @@ pub fn delete(id: i64, conn: &Connection) -> Result<usize> {
 #[cfg(test)]
 mod test {
     use super::super::super::test::conn;
+    use super::InsertArgs;
     use crate::Result;
 
     fn insert(place_id: i64, r#type: &str, conn: &rusqlite::Connection) -> Result<i64> {
         let data = vec![1, 2, 3, 4, 5];
         let size = data.len() as i64;
-        Ok(super::insert(place_id, r#type, data, 600, 315, size, conn)?.id)
+        let args = InsertArgs {
+            place_id,
+            r#type: r#type.to_string(),
+            image_data: data,
+            width: 600,
+            height: 315,
+            size_bytes: size,
+            created_by: None,
+        };
+        Ok(super::insert(&args, conn)?.id)
     }
 
     #[test]
@@ -111,26 +131,29 @@ mod test {
         let image_data = vec![1, 2, 3, 4, 5];
         let size_bytes = image_data.len() as i64;
 
-        let inserted = super::insert(
+        let args = InsertArgs {
             place_id,
-            "report",
-            image_data.clone(),
-            600,
-            315,
+            r#type: "report".to_string(),
+            image_data: image_data.clone(),
+            width: 600,
+            height: 315,
             size_bytes,
-            &conn,
-        )?;
+            created_by: Some(7),
+        };
+        let inserted = super::insert(&args, &conn)?;
         assert_eq!(inserted.place_id, place_id);
         assert_eq!(inserted.r#type, "report");
         assert_eq!(inserted.image_data, image_data);
         assert_eq!(inserted.width, 600);
         assert_eq!(inserted.height, 315);
         assert_eq!(inserted.size_bytes, size_bytes);
+        assert_eq!(inserted.created_by, Some(7));
         assert!(inserted.created_at > time::OffsetDateTime::UNIX_EPOCH);
 
         let selected = super::select_by_id(inserted.id, &conn)?;
         assert_eq!(selected.id, inserted.id);
         assert_eq!(selected.image_data, image_data);
+        assert_eq!(selected.created_by, Some(7));
 
         Ok(())
     }

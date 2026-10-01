@@ -69,7 +69,8 @@ The `submitted_by` column is populated server-side from the authenticated user; 
 Evidence photos are optional and stored server-side against the place, so they
 can be reviewed without relying on an external host. Each item in `photos` is a
 base64-encoded image; the response returns the assigned `photo_ids`, which can
-be fetched from the public [Place Images](place-images.md) endpoints.
+be fetched from the public [Place Images](place-images.md) endpoints. Stored
+photos carry `type = "report"` and record the submitting user in `created_by`.
 
 Constraints:
 
