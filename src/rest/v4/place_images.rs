@@ -3,12 +3,14 @@ use crate::db::image::place::blocking_queries::InsertArgs as ImageInsertArgs;
 use crate::db::image::place::schema::PlaceImage;
 use crate::db::image::place::schema::PlaceImageMeta;
 use crate::db::image::ImagePool;
+use crate::db::main::user::schema::Role;
 use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
 use crate::service;
 use crate::Error;
+use actix_web::delete;
 use actix_web::get;
 use actix_web::post;
 use actix_web::web::Data;
@@ -18,6 +20,8 @@ use actix_web::web::Query;
 use actix_web::HttpResponse;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use time::OffsetDateTime;
 
 /// Image type used for photos uploaded directly by signed-in users (as opposed
@@ -27,6 +31,17 @@ const IMAGE_TYPE: &str = "user";
 #[derive(Deserialize)]
 pub struct GetListArgs {
     r#type: Option<String>,
+}
+
+/// Uploader of a place image, exposed as a nested `author` object so clients
+/// can migrate off the top-level `created_by` id (which is kept for backwards
+/// compatibility).
+#[derive(Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceImageAuthor")]
+pub struct Author {
+    #[ts(type = "number")]
+    pub id: i64,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
@@ -49,36 +64,83 @@ pub struct ListItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub created_by: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub author: Option<Author>,
 }
 
-impl From<PlaceImageMeta> for ListItem {
-    fn from(val: PlaceImageMeta) -> Self {
-        ListItem {
-            id: val.id,
-            place_id: val.place_id,
-            r#type: val.r#type,
-            width: val.width,
-            height: val.height,
-            size_bytes: val.size_bytes,
-            created_at: val.created_at,
-            created_by: val.created_by,
-        }
+fn to_list_item(val: PlaceImageMeta, author: Option<Author>) -> ListItem {
+    ListItem {
+        id: val.id,
+        place_id: val.place_id,
+        r#type: val.r#type,
+        width: val.width,
+        height: val.height,
+        size_bytes: val.size_bytes,
+        created_at: val.created_at,
+        created_by: val.created_by,
+        author,
     }
 }
 
-impl From<PlaceImage> for ListItem {
-    fn from(val: PlaceImage) -> Self {
-        ListItem {
-            id: val.id,
-            place_id: val.place_id,
-            r#type: val.r#type,
-            width: val.width,
-            height: val.height,
-            size_bytes: val.size_bytes,
-            created_at: val.created_at,
-            created_by: val.created_by,
-        }
+fn meta_from_image(val: PlaceImage) -> PlaceImageMeta {
+    PlaceImageMeta {
+        id: val.id,
+        place_id: val.place_id,
+        r#type: val.r#type,
+        width: val.width,
+        height: val.height,
+        size_bytes: val.size_bytes,
+        created_at: val.created_at,
+        created_by: val.created_by,
     }
+}
+
+/// Resolve the uploader user IDs against `main.db` and attach the nested
+/// `author` (the `place` images live in `image.db`, so this cannot be a SQL
+/// join).
+async fn attach_authors(
+    images: Vec<PlaceImageMeta>,
+    pool: &MainPool,
+) -> Result<Vec<ListItem>, RestApiError> {
+    let ids = images
+        .iter()
+        .filter_map(|it| it.created_by)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let authors: HashMap<i64, Author> = db::main::user::queries::select_by_ids(&ids, pool)
+        .await
+        .map_err(|_| RestApiError::database())?
+        .into_iter()
+        .map(|user| {
+            (
+                user.id,
+                Author {
+                    id: user.id,
+                    name: user.name,
+                },
+            )
+        })
+        .collect();
+    Ok(images
+        .into_iter()
+        .map(|it| {
+            let author = it.created_by.and_then(|id| authors.get(&id).cloned());
+            to_list_item(it, author)
+        })
+        .collect())
+}
+
+/// Enrich a single image, used by the write endpoints.
+async fn to_enriched_list_item(
+    image: PlaceImageMeta,
+    pool: &MainPool,
+) -> Result<ListItem, RestApiError> {
+    attach_authors(vec![image], pool)
+        .await?
+        .pop()
+        .ok_or_else(RestApiError::database)
 }
 
 #[derive(Deserialize)]
@@ -107,7 +169,7 @@ pub async fn get_by_place_id(
         None => db::image::place::queries::select_by_place_id(place_id, &image_pool).await,
     }
     .map_err(|_| RestApiError::database())?;
-    Ok(Json(images.into_iter().map(Into::into).collect()))
+    Ok(Json(attach_authors(images, &pool).await?))
 }
 
 /// Serve a single place image. Public; optionally resized with `w`/`h`.
@@ -188,7 +250,65 @@ pub async fn post(
         .await
         .map_err(|_| RestApiError::database())?;
 
-    Ok(Json(image.into()))
+    Ok(Json(
+        to_enriched_list_item(meta_from_image(image), &pool).await?,
+    ))
+}
+
+/// Delete a place image. A regular user may only delete images they uploaded
+/// (`created_by` matches); admin and root users may delete any image.
+#[delete("{id}/images/{image_id}")]
+pub async fn delete_by_place_id_and_image_id(
+    auth: Auth,
+    path: Path<(String, i64)>,
+    pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
+) -> Res<ListItem> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+
+    let (id, image_id) = path.into_inner();
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
+    let place_id = resolve_place_id(id, &pool).await?;
+
+    let image = db::image::place::queries::select_meta_by_id(image_id, &image_pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+    if image.place_id != place_id {
+        return Err(RestApiError::not_found());
+    }
+
+    let is_privileged = user
+        .roles
+        .iter()
+        .any(|role| matches!(role, Role::Admin | Role::Root));
+    if !is_privileged && image.created_by != Some(user.id) {
+        return Err(RestApiError::forbidden());
+    }
+
+    db::image::place::queries::delete(image_id, &image_pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+
+    Ok(Json(to_enriched_list_item(image, &pool).await?))
+}
+
+/// List the images the authenticated user uploaded, newest first.
+#[get("/me/place-images")]
+pub async fn get_me(
+    auth: Auth,
+    pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
+) -> Res<Vec<ListItem>> {
+    let user = auth.user.ok_or(RestApiError::unauthorized())?;
+    let images = db::image::place::queries::select_by_created_by(user.id, &image_pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(attach_authors(images, &pool).await?))
 }
 
 async fn resolve_place_id(id: String, pool: &MainPool) -> Result<i64, RestApiError> {
@@ -281,6 +401,54 @@ mod test {
         let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.len(), 2);
         assert!(res.iter().all(|it| it.r#type == "report"));
+
+        Ok(())
+    }
+
+    #[test]
+    async fn place_list_includes_author_and_omits_it_when_unknown() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (alice_id, _) = seed_user("alice", &[Role::User], &main_pool).await?;
+        let (bob_id, _) = seed_user("bob", &[Role::User], &main_pool).await?;
+        let alice_image = insert_owned_image(&image_pool, place_id, Some(alice_id)).await?;
+        let bob_image = insert_owned_image(&image_pool, place_id, Some(bob_id)).await?;
+        let unattributed = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/places").service(super::get_by_place_id)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri(&format!("/places/{place_id}/images"))
+            .to_request();
+        let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
+        let by_id = |id: i64| res.iter().find(|it| it.id == id).unwrap();
+
+        // `created_by` is still returned alongside the new `author` object.
+        assert_eq!(by_id(alice_image).created_by, Some(alice_id));
+        assert_eq!(
+            by_id(alice_image)
+                .author
+                .as_ref()
+                .map(|a| (a.id, a.name.as_str())),
+            Some((alice_id, "alice"))
+        );
+        assert_eq!(
+            by_id(bob_image)
+                .author
+                .as_ref()
+                .map(|a| (a.id, a.name.as_str())),
+            Some((bob_id, "bob"))
+        );
+        // No known uploader: no id, no author.
+        assert_eq!(by_id(unattributed).created_by, None);
+        assert!(by_id(unattributed).author.is_none());
 
         Ok(())
     }
@@ -456,6 +624,10 @@ mod test {
         assert_eq!(res.place_id, place_id);
         assert_eq!(res.r#type, "user");
         assert_eq!(res.created_by, Some(user_id));
+        assert_eq!(
+            res.author.as_ref().map(|a| (a.id, a.name.as_str())),
+            Some((user_id, "tester"))
+        );
         assert_eq!(res.width, 4);
         assert_eq!(res.height, 2);
 
@@ -521,6 +693,373 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
+
+    async fn seed_user(
+        name: &str,
+        roles: &[Role],
+        pool: &crate::db::main::MainPool,
+    ) -> Result<(i64, String)> {
+        let user = db::main::user::queries::insert(name, "", pool).await?;
+        let user = db::main::user::queries::set_roles(user.id, roles, pool).await?;
+        let secret = format!("{name}-secret");
+        db::main::access_token::queries::insert(
+            user.id,
+            String::new(),
+            secret.clone(),
+            roles.to_vec(),
+            pool,
+        )
+        .await?;
+        Ok((user.id, secret))
+    }
+
+    /// Insert a `type = "user"` image attributed to `created_by`.
+    async fn insert_owned_image(
+        image_pool: &crate::db::image::ImagePool,
+        place_id: i64,
+        created_by: Option<i64>,
+    ) -> Result<i64> {
+        let bytes = encode_png(4, 2);
+        let size_bytes = bytes.len() as i64;
+        let args = ImageInsertArgs {
+            place_id,
+            r#type: "user".to_string(),
+            image_data: bytes,
+            width: 4,
+            height: 2,
+            size_bytes,
+            created_by,
+        };
+        let image = db::image::place::queries::insert(args, image_pool).await?;
+        Ok(image.id)
+    }
+
+    #[test]
+    async fn delete_requires_auth() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let image_id = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{place_id}/images/{image_id}"))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_owner_removes_own_image() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (user_id, secret) = seed_user("owner", &[Role::User], &main_pool).await?;
+        let image_id = insert_owned_image(&image_pool, place_id, Some(user_id)).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool.clone()))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{place_id}/images/{image_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res: super::ListItem = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.id, image_id);
+        assert_eq!(res.created_by, Some(user_id));
+        assert_eq!(
+            res.author.as_ref().map(|a| (a.id, a.name.as_str())),
+            Some((user_id, "owner"))
+        );
+
+        // Actually gone.
+        assert!(
+            db::image::place::queries::select_meta_by_id(image_id, &image_pool)
+                .await
+                .is_err()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_other_users_image_is_forbidden() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (owner_id, _) = seed_user("owner", &[Role::User], &main_pool).await?;
+        let (_, other_secret) = seed_user("other", &[Role::User], &main_pool).await?;
+        let image_id = insert_owned_image(&image_pool, place_id, Some(owner_id)).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool.clone()))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{place_id}/images/{image_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {other_secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // Still there.
+        assert!(
+            db::image::place::queries::select_meta_by_id(image_id, &image_pool)
+                .await
+                .is_ok()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_admin_can_remove_any_image() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (owner_id, _) = seed_user("owner", &[Role::User], &main_pool).await?;
+        let (_, admin_secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+        let image_id = insert_owned_image(&image_pool, place_id, Some(owner_id)).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool.clone()))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{place_id}/images/{image_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {admin_secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        assert!(
+            db::image::place::queries::select_meta_by_id(image_id, &image_pool)
+                .await
+                .is_err()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_root_can_remove_any_image() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (_, root_secret) = seed_user("root", &[Role::Root], &main_pool).await?;
+        // Unattributed image: only a privileged role may remove it.
+        let image_id = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool.clone()))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{place_id}/images/{image_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {root_secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        assert!(
+            db::image::place::queries::select_meta_by_id(image_id, &image_pool)
+                .await
+                .is_err()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_unattributed_image_is_forbidden_for_regular_user() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (_, secret) = seed_user("user", &[Role::User], &main_pool).await?;
+        let image_id = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{place_id}/images/{image_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_unknown_image_returns_not_found() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (_, secret) = seed_user("user", &[Role::User], &main_pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{place_id}/images/9999"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_image_from_wrong_place_returns_not_found() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let other_place_id = insert_place(&main_pool, 2).await?;
+        let (user_id, secret) = seed_user("owner", &[Role::User], &main_pool).await?;
+        let image_id = insert_owned_image(&image_pool, place_id, Some(user_id)).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool.clone()))
+                .service(scope("/places").service(super::delete_by_place_id_and_image_id)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/places/{other_place_id}/images/{image_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+        // Not deleted.
+        assert!(
+            db::image::place::queries::select_meta_by_id(image_id, &image_pool)
+                .await
+                .is_ok()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn list_requires_auth() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .app_data(Data::new(crate::db::image::test::pool()))
+                .service(scope("/users").service(super::get_me)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/users/me/place-images")
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn list_returns_only_own_images_newest_first() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (user_id, secret) = seed_user("owner", &[Role::User], &main_pool).await?;
+        let (other_id, _) = seed_user("other", &[Role::User], &main_pool).await?;
+
+        let first = insert_owned_image(&image_pool, place_id, Some(user_id)).await?;
+        insert_owned_image(&image_pool, place_id, Some(other_id)).await?;
+        let second = insert_owned_image(&image_pool, place_id, Some(user_id)).await?;
+        insert_owned_image(&image_pool, place_id, None).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/users").service(super::get_me)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/users/me/place-images")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
+
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        assert_eq!(vec![second, first], ids);
+        assert!(res.iter().all(|it| it.created_by == Some(user_id)));
+        assert!(res
+            .iter()
+            .all(|it| it.author.as_ref().map(|a| a.name.as_str()) == Some("owner")));
+
+        Ok(())
+    }
+
+    #[test]
+    async fn list_returns_empty_when_user_has_no_images() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let (_, secret) = seed_user("empty", &[Role::User], &main_pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/users").service(super::get_me)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/users/me/place-images")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
 
         Ok(())
     }

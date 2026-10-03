@@ -55,6 +55,22 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<PlaceImage> {
     .map_err(Into::into)
 }
 
+pub fn select_meta_by_id(id: i64, conn: &Connection) -> Result<PlaceImageMeta> {
+    conn.query_row(
+        &format!(
+            r#"
+                SELECT {projection}
+                FROM {TABLE}
+                WHERE {Id} = ?1
+            "#,
+            projection = PlaceImageMeta::projection(),
+        ),
+        params![id],
+        PlaceImageMeta::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 pub fn select_by_place_id(place_id: i64, conn: &Connection) -> Result<Vec<PlaceImageMeta>> {
     conn.prepare(&format!(
         r#"
@@ -89,7 +105,21 @@ pub fn select_by_place_id_and_type(
     .map_err(Into::into)
 }
 
-#[allow(dead_code)]
+pub fn select_by_created_by(created_by: i64, conn: &Connection) -> Result<Vec<PlaceImageMeta>> {
+    conn.prepare(&format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            WHERE {CreatedBy} = ?1
+            ORDER BY {Id} DESC
+        "#,
+        projection = PlaceImageMeta::projection(),
+    ))?
+    .query_map(params![created_by], PlaceImageMeta::mapper())?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(Into::into)
+}
+
 pub fn delete(id: i64, conn: &Connection) -> Result<usize> {
     conn.execute(
         &format!(
@@ -191,6 +221,82 @@ mod test {
     fn select_by_place_id_and_type_empty() -> Result<()> {
         let conn = conn();
         let res = super::select_by_place_id_and_type(9999, "report", &conn)?;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    fn insert_with_created_by(
+        place_id: i64,
+        r#type: &str,
+        created_by: Option<i64>,
+        conn: &rusqlite::Connection,
+    ) -> Result<i64> {
+        let data = vec![1, 2, 3, 4, 5];
+        let size = data.len() as i64;
+        let args = InsertArgs {
+            place_id,
+            r#type: r#type.to_string(),
+            image_data: data,
+            width: 600,
+            height: 315,
+            size_bytes: size,
+            created_by,
+        };
+        Ok(super::insert(&args, conn)?.id)
+    }
+
+    #[test]
+    fn select_meta_by_id_omits_bytes() -> Result<()> {
+        let conn = conn();
+        let inserted = super::insert(
+            &InsertArgs {
+                place_id: 42,
+                r#type: "report".to_string(),
+                image_data: vec![1, 2, 3, 4, 5],
+                width: 600,
+                height: 315,
+                size_bytes: 5,
+                created_by: Some(7),
+            },
+            &conn,
+        )?;
+
+        let meta = super::select_meta_by_id(inserted.id, &conn)?;
+        assert_eq!(meta.id, inserted.id);
+        assert_eq!(meta.place_id, 42);
+        assert_eq!(meta.r#type, "report");
+        assert_eq!(meta.width, 600);
+        assert_eq!(meta.height, 315);
+        assert_eq!(meta.size_bytes, 5);
+        assert_eq!(meta.created_by, Some(7));
+        Ok(())
+    }
+
+    #[test]
+    fn select_meta_by_id_errors_for_unknown() {
+        let conn = conn();
+        assert!(super::select_meta_by_id(9999, &conn).is_err());
+    }
+
+    #[test]
+    fn select_by_created_by_returns_only_owned_images() -> Result<()> {
+        let conn = conn();
+        let first = insert_with_created_by(1, "user", Some(7), &conn)?;
+        insert_with_created_by(1, "report", Some(8), &conn)?;
+        let second = insert_with_created_by(2, "user", Some(7), &conn)?;
+        insert_with_created_by(1, "user", None, &conn)?;
+
+        let res = super::select_by_created_by(7, &conn)?;
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        // newest first, and never other users' or unattributed images
+        assert_eq!(vec![second, first], ids);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_created_by_empty() -> Result<()> {
+        let conn = conn();
+        let res = super::select_by_created_by(9999, &conn)?;
         assert!(res.is_empty());
         Ok(())
     }

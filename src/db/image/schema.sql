@@ -30,4 +30,5 @@ CREATE TABLE place (
 CREATE INDEX og_created_at ON og(created_at);
 CREATE INDEX area_area_id ON area(area_id);
 CREATE INDEX place_place_id ON place(place_id);
+CREATE INDEX place_created_by ON place(created_by);
 COMMIT;

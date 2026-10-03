@@ -9,7 +9,7 @@ The latest and recommended version of the BTCMap API, offering improved performa
 - **[Places](places.md)** - Fetch places.
 - **[Place Boosts](place-boosts.md)** - Fetch place boost quotes and submit boost intents.
 - **[Place Comments](place-comments.md)** - Fetch place comment quotes and submit comment intents.
-- **[Place Images](place-images.md)** - Fetch photos attached to a place, and upload new place photos as a signed-in user.
+- **[Place Images](place-images.md)** - Fetch photos attached to a place, upload new place photos as a signed-in user, list your own uploads, and delete them.
 - **[Place Issues](place-issues.md)** - Fetch issues for places within an area.
 - **[Place Reports](place-reports.md)** - File a report against an existing place as the `user` origin.
 - **[Place Submissions](place-submissions.md)** - Fetch open, non-revoked place submissions (from external import sources like Square or CoinOS, or signed-in users) and submit new places as the `user` origin.
@@ -37,6 +37,8 @@ All API errors return:
 | Code | Description |
 |------|-------------|
 | 400  | Bad Request - Invalid parameters |
+| 401  | Unauthorized - Missing or invalid credentials |
+| 403  | Forbidden - Authenticated but not allowed to perform the action |
 | 404  | Not Found - Resource doesn't exist |
 | 500  | Server Error - Unexpected failure in database or elsewhere |
 

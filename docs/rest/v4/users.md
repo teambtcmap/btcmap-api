@@ -12,6 +12,7 @@ This document describes the endpoints for interacting with users in REST API v4.
 - [Get Linked Nostr Identity](#get-linked-nostr-identity)
 - [Link Nostr Identity](#link-nostr-identity)
 - [Unlink Nostr Identity](#unlink-nostr-identity)
+- [List My Place Images](#list-my-place-images)
 
 ### Get Authenticated User
 
@@ -341,3 +342,28 @@ curl -X DELETE https://api.btcmap.org/v4/users/me/nostr \
 | Field | Type | Description |
 |-------|------|-------------|
 | npub  | null | Always `null` after unlinking |
+
+### List My Place Images
+
+Returns the place images uploaded by the authenticated user, across all places,
+newest first. Requires a valid Bearer token. Use it to find an accidentally
+uploaded photo and delete it via [Delete Place Image](place-images.md#delete-place-image).
+
+#### Example Request
+
+```bash
+curl https://api.btcmap.org/v4/users/me/place-images \
+  -H "Authorization: Bearer <your-token>"
+```
+
+#### Response
+
+Returns an array of place image items. See
+[List My Place Images](place-images.md#list-my-place-images) in the Place Images
+documentation for the response shape and errors.
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Returns the user's uploaded images (possibly empty) |
+| 401  | Unauthorized - Missing or invalid token |
+| 500  | Internal Server Error - Database error |

@@ -51,6 +51,14 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<User> {
         .await?
 }
 
+pub async fn select_by_ids(ids: &[i64], pool: &Pool) -> Result<Vec<User>> {
+    let ids = ids.to_vec();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_ids(&ids, conn))
+        .await?
+}
+
 pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<User> {
     let name = name.into();
     pool.get()

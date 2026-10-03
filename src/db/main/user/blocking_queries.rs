@@ -74,6 +74,31 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<User> {
     .map_err(Into::into)
 }
 
+pub fn select_by_ids(ids: &[i64], conn: &Connection) -> Result<Vec<User>> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            WHERE {Id} IN ({placeholders})
+        "#,
+        projection = User::projection(),
+        placeholders = placeholders.join(", "),
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<&dyn rusqlite::ToSql> =
+        ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    let mut rows = stmt.query(params.as_slice())?;
+    let mut users = Vec::new();
+    while let Some(row) = rows.next()? {
+        users.push(User::mapper()(row)?);
+    }
+    Ok(users)
+}
+
 pub fn select_by_name(name: &str, conn: &Connection) -> Result<User> {
     conn.query_row(
         &format!(
@@ -319,6 +344,24 @@ mod test {
         let admin_id = super::insert("name", "pwd", &conn)?.id;
         let res_admin = super::select_by_id(admin_id, &conn)?;
         assert_eq!(admin_id, res_admin.id);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_ids() -> Result<()> {
+        let conn = conn();
+        let first = super::insert("name_1", "pwd", &conn)?.id;
+        let second = super::insert("name_2", "pwd", &conn)?.id;
+        let third = super::insert("name_3", "pwd", &conn)?.id;
+
+        let res = super::select_by_ids(&[first, third], &conn)?;
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        assert_eq!(2, ids.len());
+        assert!(ids.contains(&first));
+        assert!(ids.contains(&third));
+        assert!(!ids.contains(&second));
+
+        assert!(super::select_by_ids(&[], &conn)?.is_empty());
         Ok(())
     }
 

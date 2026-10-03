@@ -202,6 +202,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::place_images::get_by_place_id)
                             .service(rest::v4::place_images::get_by_place_id_and_image_id)
                             .service(rest::v4::place_images::post)
+                            .service(rest::v4::place_images::delete_by_place_id_and_image_id)
                             .service(rest::v4::places::get_by_id_activity),
                     )
                     .service(scope("invoices").service(rest::v4::invoices::get_by_id))
@@ -265,6 +266,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::users::get_nostr)
                             .service(rest::v4::users::put_nostr)
                             .service(rest::v4::users::delete_nostr)
+                            .service(rest::v4::place_images::get_me)
                             .service(rest::v4::users::create_token),
                     ),
             )

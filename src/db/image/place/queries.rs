@@ -18,6 +18,13 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<PlaceImage> {
         .await?
 }
 
+pub async fn select_meta_by_id(id: i64, pool: &Pool) -> Result<PlaceImageMeta> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_meta_by_id(id, conn))
+        .await?
+}
+
 pub async fn select_by_place_id(place_id: i64, pool: &Pool) -> Result<Vec<PlaceImageMeta>> {
     pool.get()
         .await?
@@ -39,7 +46,13 @@ pub async fn select_by_place_id_and_type(
         .await?
 }
 
-#[allow(dead_code)]
+pub async fn select_by_created_by(created_by: i64, pool: &Pool) -> Result<Vec<PlaceImageMeta>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_created_by(created_by, conn))
+        .await?
+}
+
 pub async fn delete(id: i64, pool: &Pool) -> Result<usize> {
     pool.get()
         .await?
