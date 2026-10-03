@@ -287,7 +287,11 @@ pub async fn get_trending_areas(
     }
     let mut res: Vec<TrendingArea> = areas
         .into_iter()
-        .filter(|it| it.tags.contains_key("type") && it.tags["type"].as_str() == Some(r#type))
+        .filter(|it| {
+            it.deleted_at.is_none()
+                && it.tags.contains_key("type")
+                && it.tags["type"].as_str() == Some(r#type)
+        })
         .map(|it| {
             areas_to_events.entry(it.id).or_default();
             let events = areas_to_events.get(&it.id).unwrap();
@@ -1131,6 +1135,58 @@ mod test {
         };
         assert!(err.to_string().contains("outside your geofence"));
         assert!(london.id != phuket.id);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_trending_areas_excludes_deleted_areas() -> Result<()> {
+        use time::format_description::well_known::Rfc3339;
+
+        let pool = pool();
+        let user = db::main::osm_user::queries::insert(
+            1,
+            crate::service::osm::EditingApiUser::mock(),
+            &pool,
+        )
+        .await?;
+        let element = db::main::element::queries::insert(OverpassElement::mock(1), &pool).await?;
+        let mut tags = Area::mock_tags();
+        tags.insert("type".into(), json!("community"));
+        let area = db::main::area::queries::insert(tags, &pool).await?;
+        db::main::area_element::queries::insert(area.id, element.id, &pool).await?;
+        let event =
+            db::main::element_event::queries::insert(user.id, element.id, "create", &pool).await?;
+
+        // the event has to fall inside the reporting window to be counted
+        pool.get()
+            .await?
+            .interact(move |conn| {
+                conn.execute(
+                    "UPDATE element_event SET created_at = '2026-09-15T12:00:00Z' WHERE id = ?1",
+                    rusqlite::params![event.id],
+                )
+            })
+            .await??;
+
+        let period_start =
+            OffsetDateTime::parse("2026-09-01T00:00:00Z", &Rfc3339).expect("valid date");
+        let period_end =
+            OffsetDateTime::parse("2026-09-30T00:00:00Z", &Rfc3339).expect("valid date");
+
+        let trending =
+            super::get_trending_areas("community", period_start, period_end, &pool).await?;
+        assert_eq!(1, trending.len());
+        assert_eq!(area.id, trending[0].id);
+
+        db::main::area::queries::set_deleted_at(area.id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
+
+        let trending =
+            super::get_trending_areas("community", period_start, period_end, &pool).await?;
+        assert!(
+            trending.is_empty(),
+            "a retired area must not appear in the trending list"
+        );
         Ok(())
     }
 }
