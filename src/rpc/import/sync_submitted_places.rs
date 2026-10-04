@@ -1,6 +1,6 @@
 use crate::{
     db::main::area::schema::Area,
-    db::main::place_submission::schema::PlaceSubmission,
+    db::main::place_submission::schema::{PlaceSubmission, RevocationAction},
     db::{self},
     service::issue_body::{additional_fields, extra_value, field, humanize_list, single_line},
     service::matrix::ROOM_PLACE_IMPORT,
@@ -362,7 +362,9 @@ pub async fn run(pool: &Pool) -> Result<Res> {
     let mut revocations_processed = 0;
 
     for submission in &revoked_submissions {
-        revocations_processed += process_revoked_submission(submission, pool).await as i64;
+        if process_revoked_submission(submission, pool).await? {
+            revocations_processed += 1;
+        }
     }
 
     Ok(Res {
@@ -376,106 +378,111 @@ pub async fn run(pool: &Pool) -> Result<Res> {
 async fn process_revoked_submission(
     submission: &db::main::place_submission::schema::PlaceSubmission,
     pool: &Pool,
-) -> bool {
-    let ticket_url = submission.ticket_url.as_ref().unwrap();
+) -> Result<bool> {
+    let Some(ticket_url) = submission.ticket_url.as_deref() else {
+        warn!(
+            submission_id = submission.id,
+            "revoked submission has no ticket url"
+        );
+        return Ok(false);
+    };
 
-    let issue = match service::gitea::get_issue(ticket_url.clone(), pool).await {
-        Ok(Some(issue)) => issue,
-        Ok(None) => {
-            warn!(
-                submission_id = submission.id,
-                ticket_url = ticket_url,
-                "revoked submission's gitea ticket not found (404)"
-            );
-            return false;
-        }
-        Err(e) => {
-            warn!(
-                submission_id = submission.id,
-                ticket_url = ticket_url,
-                error = %e,
-                "failed to fetch gitea ticket for revoked submission"
-            );
-            return false;
-        }
+    let Some(issue) = service::gitea::get_issue(ticket_url.to_string(), pool).await? else {
+        // The ticket is gone, so there is nothing left to act on: stop retrying
+        // this submission on every run.
+        warn!(
+            submission_id = submission.id,
+            ticket_url = ticket_url,
+            "revoked submission's gitea ticket not found (404)"
+        );
+        mark_revocation_processed(submission.id, pool).await?;
+        return Ok(false);
     };
 
     if issue
         .labels
         .iter()
-        .any(|l| l.id == LOCATION_REMOVAL_LABEL_ID)
+        .any(|label| label.id == LOCATION_REMOVAL_LABEL_ID)
     {
-        return false;
+        // Our own label (or a human's) says this ticket has already been dealt
+        // with, so there is nothing to do here.
+        mark_revocation_processed(submission.id, pool).await?;
+        return Ok(false);
+    }
+
+    // Decide once and record the decision: on a retry the ticket state can
+    // already reflect this function's own half-finished work, so it can no
+    // longer be read to find out which action is the right one.
+    let action = match submission.revocation_action {
+        Some(action) => action,
+        None => {
+            let Some(action) = decide_revocation_action(&issue.state) else {
+                warn!(
+                    submission_id = submission.id,
+                    ticket_url = ticket_url,
+                    state = issue.state,
+                    "unexpected gitea ticket state for revoked submission"
+                );
+                return Ok(false);
+            };
+            db::main::place_submission::queries::set_revocation_action(submission.id, action, pool)
+                .await?;
+            action
+        }
+    };
+
+    match action {
+        RevocationAction::Close => service::gitea::close_issue(ticket_url, pool).await?,
+        RevocationAction::Reopen => service::gitea::reopen_issue(ticket_url, pool).await?,
     }
 
     let removal_labels = build_removal_labels(&submission.origin, pool).await;
+    service::gitea::set_issue_labels(ticket_url, removal_labels, pool).await?;
 
-    match issue.state.as_str() {
-        "open" => {
-            if let Err(e) = service::gitea::close_issue(ticket_url, pool).await {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to close gitea ticket for revoked submission"
-                );
-            }
-            if let Err(e) =
-                service::gitea::set_issue_labels(ticket_url, removal_labels.clone(), pool).await
-            {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to update gitea ticket labels for revoked submission"
-                );
-            }
-            if let Err(e) = service::gitea::add_issue_comment(
-                ticket_url,
-                "This location was revoked before being processed.",
-                pool,
-            )
-            .await
-            {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to add gitea comment for revoked submission"
-                );
-            }
-            true
-        }
-        "closed" => {
-            if let Err(e) = service::gitea::reopen_issue(ticket_url, pool).await {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to reopen gitea ticket for revoked submission"
-                );
-            }
-            if let Err(e) = service::gitea::set_issue_labels(ticket_url, removal_labels, pool).await
-            {
-                warn!(
-                    submission_id = submission.id,
-                    ticket_url = ticket_url,
-                    error = %e,
-                    "failed to update gitea ticket labels for revoked submission"
-                );
-            }
-            true
-        }
-        other => {
+    // Record completion before the comment: the comment is informational, and a
+    // comment duplicated on every retry would be worse than a missing one.
+    mark_revocation_processed(submission.id, pool).await?;
+
+    if action == RevocationAction::Close {
+        if let Err(e) = service::gitea::add_issue_comment(
+            ticket_url,
+            "This location was revoked before being processed.",
+            pool,
+        )
+        .await
+        {
             warn!(
                 submission_id = submission.id,
                 ticket_url = ticket_url,
-                state = other,
-                "unexpected gitea ticket state for revoked submission"
+                error = %e,
+                "failed to add gitea comment for revoked submission"
             );
-            false
         }
     }
+
+    Ok(true)
+}
+
+/// #59: a ticket that is still open was never processed, so a revocation cancels
+/// it; one that is already closed means the place was processed, so the
+/// revocation has to be raised as a removal request. An unknown state is left
+/// alone and retried on the next run.
+fn decide_revocation_action(state: &str) -> Option<RevocationAction> {
+    match state {
+        "open" => Some(RevocationAction::Close),
+        "closed" => Some(RevocationAction::Reopen),
+        _ => None,
+    }
+}
+
+async fn mark_revocation_processed(id: i64, pool: &Pool) -> Result<()> {
+    db::main::place_submission::queries::set_revocation_processed_at(
+        id,
+        Some(OffsetDateTime::now_utc()),
+        pool,
+    )
+    .await?;
+    Ok(())
 }
 
 async fn build_removal_labels(origin: &str, pool: &Pool) -> Vec<i64> {
@@ -494,7 +501,7 @@ async fn build_removal_labels(origin: &str, pool: &Pool) -> Vec<i64> {
 mod test {
     use super::{build_human_section, build_issue_body, build_issue_title, build_osm_tags};
     use crate::db::main::area::schema::Area;
-    use crate::db::main::place_submission::schema::PlaceSubmission;
+    use crate::db::main::place_submission::schema::{PlaceSubmission, RevocationAction};
     use crate::db::main::test::pool;
     use serde_json::{Map, Value};
     use time::OffsetDateTime;
@@ -533,6 +540,8 @@ mod test {
                 .collect(),
             ticket_url: None,
             revoked: false,
+            revocation_action: None,
+            revocation_processed_at: None,
             submitted_by: None,
             created_at: OffsetDateTime::UNIX_EPOCH,
             updated_at: OffsetDateTime::UNIX_EPOCH,
@@ -842,5 +851,18 @@ osm_edit_url: https://www.openstreetmap.org/edit#map=19/17.8960777/101.6562147"
         let pool = pool();
         let labels = super::build_removal_labels("unknown-origin", &pool).await;
         assert_eq!(labels, vec![super::LOCATION_REMOVAL_LABEL_ID]);
+    }
+
+    #[test]
+    fn decide_revocation_action_follows_the_ticket_state() {
+        assert_eq!(
+            Some(RevocationAction::Close),
+            super::decide_revocation_action("open")
+        );
+        assert_eq!(
+            Some(RevocationAction::Reopen),
+            super::decide_revocation_action("closed")
+        );
+        assert_eq!(None, super::decide_revocation_action("merged"));
     }
 }
