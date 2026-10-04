@@ -1,6 +1,6 @@
 use crate::{
     db::main::area::schema::Area,
-    db::main::place_submission::schema::PlaceSubmission,
+    db::main::place_submission::schema::{PlaceSubmission, RevocationAction},
     db::{self},
     service::issue_body::{additional_fields, extra_value, field, humanize_list, single_line},
     service::matrix::ROOM_PLACE_IMPORT,
@@ -17,9 +17,11 @@ pub struct Res {
     issues_pending: i64,
     issues_created: i64,
     issues_closed: i64,
+    revocations_processed: i64,
 }
 
 const LOCATION_SUBMISSION_LABEL_ID: i64 = 901;
+const LOCATION_REMOVAL_LABEL_ID: i64 = 904;
 
 const TAGGING_GUIDELINES_URL: &str =
     "https://gitea.btcmap.org/teambtcmap/btcmap-general/wiki/Tagging-Merchants";
@@ -350,18 +352,183 @@ pub async fn run(pool: &Pool) -> Result<Res> {
         }
     }
 
+    let revoked_submissions =
+        db::main::place_submission::queries::select_revoked_with_ticket_url(pool).await?;
+    info!(
+        len = revoked_submissions.len(),
+        "fetched revoked submissions with tickets",
+    );
+
+    let mut revocations_processed = 0;
+
+    for submission in &revoked_submissions {
+        if process_revoked_submission(submission, pool).await? {
+            revocations_processed += 1;
+        }
+    }
+
     Ok(Res {
         issues_pending: submissions.len() as i64 - issues_closed,
         issues_created,
         issues_closed,
+        revocations_processed,
     })
+}
+
+async fn process_revoked_submission(
+    submission: &db::main::place_submission::schema::PlaceSubmission,
+    pool: &Pool,
+) -> Result<bool> {
+    let Some(ticket_url) = submission.ticket_url.as_deref() else {
+        warn!(
+            submission_id = submission.id,
+            "revoked submission has no ticket url"
+        );
+        return Ok(false);
+    };
+
+    let Some(issue) = service::gitea::get_issue(ticket_url.to_string(), pool).await? else {
+        // The ticket is gone, so there is nothing left to act on: stop retrying
+        // this submission on every run.
+        warn!(
+            submission_id = submission.id,
+            ticket_url = ticket_url,
+            "revoked submission's gitea ticket not found (404)"
+        );
+        mark_revocation_processed(submission.id, pool).await?;
+        return Ok(false);
+    };
+
+    if issue
+        .labels
+        .iter()
+        .any(|label| label.id == LOCATION_REMOVAL_LABEL_ID)
+    {
+        // Our own label (or a human's) says this ticket has already been dealt
+        // with, so there is nothing to do here.
+        mark_revocation_processed(submission.id, pool).await?;
+        return Ok(false);
+    }
+
+    // Decide once and record the decision: on a retry the ticket state can
+    // already reflect this function's own half-finished work, so it can no
+    // longer be read to find out which action is the right one.
+    let action = match submission.revocation_action {
+        Some(action) => action,
+        None => {
+            let Some(action) = decide_revocation_action(&issue.state) else {
+                warn!(
+                    submission_id = submission.id,
+                    ticket_url = ticket_url,
+                    state = issue.state,
+                    "unexpected gitea ticket state for revoked submission"
+                );
+                return Ok(false);
+            };
+            db::main::place_submission::queries::set_revocation_action(submission.id, action, pool)
+                .await?;
+            action
+        }
+    };
+
+    match action {
+        RevocationAction::Close => service::gitea::close_issue(ticket_url, pool).await?,
+        RevocationAction::Reopen => service::gitea::reopen_issue(ticket_url, pool).await?,
+    }
+
+    let origin_labels = build_removal_labels(&submission.origin, pool).await;
+    let labels = removal_label_ids(&issue, &origin_labels);
+    service::gitea::set_issue_labels(ticket_url, labels, pool).await?;
+
+    // Record completion before the comment: the comment is informational, and a
+    // comment duplicated on every retry would be worse than a missing one.
+    mark_revocation_processed(submission.id, pool).await?;
+
+    if action == RevocationAction::Close {
+        if let Err(e) = service::gitea::add_issue_comment(
+            ticket_url,
+            "This location was revoked before being processed.",
+            pool,
+        )
+        .await
+        {
+            warn!(
+                submission_id = submission.id,
+                ticket_url = ticket_url,
+                error = %e,
+                "failed to add gitea comment for revoked submission"
+            );
+        }
+    }
+
+    Ok(true)
+}
+
+/// #59: a ticket that is still open was never processed, so a revocation cancels
+/// it; one that is already closed means the place was processed, so the
+/// revocation has to be raised as a removal request. An unknown state is left
+/// alone and retried on the next run.
+fn decide_revocation_action(state: &str) -> Option<RevocationAction> {
+    match state {
+        "open" => Some(RevocationAction::Close),
+        "closed" => Some(RevocationAction::Reopen),
+        _ => None,
+    }
+}
+
+async fn mark_revocation_processed(id: i64, pool: &Pool) -> Result<()> {
+    db::main::place_submission::queries::set_revocation_processed_at(
+        id,
+        Some(OffsetDateTime::now_utc()),
+        pool,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn build_removal_labels(origin: &str, pool: &Pool) -> Vec<i64> {
+    let mut labels = vec![LOCATION_REMOVAL_LABEL_ID];
+    if let Ok(Some(import_origin)) =
+        db::main::place_import_origin::queries::select_by_name(origin.to_string(), pool).await
+    {
+        if let Some(label_id) = import_origin.gitea_label_id {
+            labels.push(label_id);
+        }
+    }
+    labels
+}
+
+/// The label set to put on the ticket in place of the one it carries now.
+///
+/// #59 asks for `type/location-submission` (901) to be swapped for
+/// `type/location-removal` (904) and for nothing else to change, so every other
+/// label stays: the triage bot's `triaged/auto` and `confidence/*` labels say
+/// something about the submission, not about the type label being swapped.
+/// Gitea's `PUT /issues/{n}/labels` replaces the whole set, so the replacement
+/// has to be built from what the ticket has at that moment.
+fn removal_label_ids(issue: &service::gitea::GetIssueResponse, origin_labels: &[i64]) -> Vec<i64> {
+    let mut ids: Vec<i64> = issue
+        .labels
+        .iter()
+        .map(|label| label.id)
+        .filter(|id| *id != LOCATION_SUBMISSION_LABEL_ID && *id != LOCATION_REMOVAL_LABEL_ID)
+        .collect();
+    ids.push(LOCATION_REMOVAL_LABEL_ID);
+    for id in origin_labels {
+        if !ids.contains(id) {
+            ids.push(*id);
+        }
+    }
+    ids
 }
 
 #[cfg(test)]
 mod test {
     use super::{build_human_section, build_issue_body, build_issue_title, build_osm_tags};
     use crate::db::main::area::schema::Area;
-    use crate::db::main::place_submission::schema::PlaceSubmission;
+    use crate::db::main::place_submission::schema::{PlaceSubmission, RevocationAction};
+    use crate::db::main::test::pool;
+    use crate::service::gitea::{GetIssueResponse, GiteaLabel};
     use serde_json::{Map, Value};
     use time::OffsetDateTime;
 
@@ -399,6 +566,8 @@ mod test {
                 .collect(),
             ticket_url: None,
             revoked: false,
+            revocation_action: None,
+            revocation_processed_at: None,
             submitted_by: None,
             created_at: OffsetDateTime::UNIX_EPOCH,
             updated_at: OffsetDateTime::UNIX_EPOCH,
@@ -701,5 +870,66 @@ Category: cafe
 Additional fields:
 osm_edit_url: https://www.openstreetmap.org/edit#map=19/17.8960777/101.6562147"
         );
+    }
+
+    #[actix_web::test]
+    async fn build_removal_labels_falls_back_to_default() {
+        let pool = pool();
+        let labels = super::build_removal_labels("unknown-origin", &pool).await;
+        assert_eq!(labels, vec![super::LOCATION_REMOVAL_LABEL_ID]);
+    }
+
+    #[test]
+    fn decide_revocation_action_follows_the_ticket_state() {
+        assert_eq!(
+            Some(RevocationAction::Close),
+            super::decide_revocation_action("open")
+        );
+        assert_eq!(
+            Some(RevocationAction::Reopen),
+            super::decide_revocation_action("closed")
+        );
+        assert_eq!(None, super::decide_revocation_action("merged"));
+    }
+
+    fn issue(label_ids: &[i64]) -> GetIssueResponse {
+        GetIssueResponse {
+            id: 1,
+            state: "open".to_string(),
+            html_url: "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/1".to_string(),
+            labels: label_ids
+                .iter()
+                .map(|id| GiteaLabel {
+                    id: *id,
+                    name: format!("label-{}", id),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn removal_label_ids_swaps_the_type_label_and_keeps_the_rest() {
+        // Real submission tickets arrive here carrying the triage bot's labels
+        // too, and only 901 is ours to replace.
+        let issue = issue(&[901, 1307, 42, 24]);
+        assert_eq!(
+            vec![1307, 42, 24, 904],
+            super::removal_label_ids(&issue, &[904, 1307])
+        );
+    }
+
+    #[test]
+    fn removal_label_ids_adds_an_origin_label_the_ticket_lacks() {
+        let issue = issue(&[901]);
+        assert_eq!(
+            vec![904, 1307],
+            super::removal_label_ids(&issue, &[904, 1307])
+        );
+    }
+
+    #[test]
+    fn removal_label_ids_lists_the_removal_label_once() {
+        let issue = issue(&[901, 904]);
+        assert_eq!(vec![904], super::removal_label_ids(&issue, &[]));
     }
 }

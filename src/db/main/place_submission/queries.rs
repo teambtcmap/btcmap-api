@@ -2,7 +2,7 @@ use crate::{
     db::main::place_submission::{
         blocking_queries,
         blocking_queries::InsertArgs,
-        schema::{OriginSubmissionCounts, PlaceSubmission},
+        schema::{OriginSubmissionCounts, PlaceSubmission, RevocationAction},
     },
     Result,
 };
@@ -21,6 +21,35 @@ pub async fn select_open_and_not_revoked(pool: &Pool) -> Result<Vec<PlaceSubmiss
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::select_open_and_not_revoked(conn))
+        .await?
+}
+
+pub async fn select_revoked_with_ticket_url(pool: &Pool) -> Result<Vec<PlaceSubmission>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_revoked_with_ticket_url(conn))
+        .await?
+}
+
+pub async fn set_revocation_action(
+    id: i64,
+    action: RevocationAction,
+    pool: &Pool,
+) -> Result<PlaceSubmission> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_revocation_action(id, action, conn))
+        .await?
+}
+
+pub async fn set_revocation_processed_at(
+    id: i64,
+    processed_at: Option<OffsetDateTime>,
+    pool: &Pool,
+) -> Result<PlaceSubmission> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_revocation_processed_at(id, processed_at, conn))
         .await?
 }
 

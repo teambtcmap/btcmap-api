@@ -1,4 +1,4 @@
-use super::schema::{self, Columns, OriginSubmissionCounts, PlaceSubmission};
+use super::schema::{self, Columns, OriginSubmissionCounts, PlaceSubmission, RevocationAction};
 use crate::Result;
 use geojson::JsonObject;
 use rusqlite::{named_params, params, Connection, OptionalExtension};
@@ -64,6 +64,30 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         table = schema::TABLE_NAME,
         closed_at = Columns::ClosedAt.as_ref(),
         revoked = Columns::Revoked.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_revoked_with_ticket_url(conn: &Connection) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {revoked} = 1
+                AND {ticket_url} IS NOT NULL
+                AND {revocation_processed_at} IS NULL
+            ORDER BY {updated_at} DESC, {id} DESC
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        revoked = Columns::Revoked.as_ref(),
+        ticket_url = Columns::TicketUrl.as_ref(),
+        revocation_processed_at = Columns::RevocationProcessedAt.as_ref(),
         updated_at = Columns::UpdatedAt.as_ref(),
         id = Columns::Id.as_ref(),
     );
@@ -243,6 +267,44 @@ pub fn set_ticket_url(id: i64, ticket_url: String, conn: &Connection) -> Result<
     select_by_id(id, conn)
 }
 
+pub fn set_revocation_action(
+    id: i64,
+    action: RevocationAction,
+    conn: &Connection,
+) -> Result<PlaceSubmission> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {revocation_action} = ?2
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        revocation_action = Columns::RevocationAction.as_ref(),
+        id = Columns::Id.as_ref(),
+    );
+    conn.execute(&sql, params![id, action])?;
+    select_by_id(id, conn)
+}
+
+pub fn set_revocation_processed_at(
+    id: i64,
+    processed_at: Option<OffsetDateTime>,
+    conn: &Connection,
+) -> Result<PlaceSubmission> {
+    let sql = format!(
+        r#"
+            UPDATE {table}
+            SET {revocation_processed_at} = ?2
+            WHERE {id} = ?1
+        "#,
+        table = schema::TABLE_NAME,
+        revocation_processed_at = Columns::RevocationProcessedAt.as_ref(),
+        id = Columns::Id.as_ref(),
+    );
+    conn.execute(&sql, params![id, processed_at])?;
+    select_by_id(id, conn)
+}
+
 #[cfg(test)]
 pub fn set_updated_at(
     id: i64,
@@ -310,6 +372,7 @@ pub fn set_closed_at(
 #[cfg(test)]
 mod test {
     use crate::db::main::place_submission::blocking_queries::InsertArgs;
+    use crate::db::main::place_submission::schema::RevocationAction;
     use crate::db::main::test::conn;
     use crate::Result;
     use geojson::JsonObject;
@@ -586,6 +649,113 @@ mod test {
 
         let counts = super::select_origin_counts_since(datetime!(2030-01-01 00:00 UTC), &conn)?;
         assert!(counts.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_revoked_with_ticket_url() -> Result<()> {
+        let conn = conn();
+
+        let args = InsertArgs {
+            origin: "foo".to_string(),
+            external_id: "1".to_string(),
+            lat: 1.0,
+            lon: 2.0,
+            category: "cafe".to_string(),
+            name: "Place 1".to_string(),
+            extra_fields: Map::new(),
+            submitted_by: None,
+        };
+        let submission = super::insert(&args, &conn)?;
+
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert!(results.is_empty());
+
+        super::set_revoked(submission.id, true, &conn)?;
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert!(results.is_empty());
+
+        super::set_ticket_url(
+            submission.id,
+            "https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/1".to_string(),
+            &conn,
+        )?;
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert_eq!(1, results.len());
+        assert_eq!(submission.id, results[0].id);
+        assert!(results[0].revoked);
+        assert!(results[0].ticket_url.is_some());
+
+        // A finished revocation must not be handed to the sync again: this query
+        // is what runs on every cron tick, and the rows it returns are the ones
+        // the job then fetches from Gitea.
+        super::set_revocation_processed_at(
+            submission.id,
+            Some(time::OffsetDateTime::UNIX_EPOCH),
+            &conn,
+        )?;
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert!(results.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_revocation_action_persists_the_decision() -> Result<()> {
+        let conn = conn();
+        let submission = super::insert(
+            &InsertArgs {
+                origin: "foo".to_string(),
+                external_id: "1".to_string(),
+                lat: 1.0,
+                lon: 2.0,
+                category: "cafe".to_string(),
+                name: "Place 1".to_string(),
+                extra_fields: Map::new(),
+                submitted_by: None,
+            },
+            &conn,
+        )?;
+        assert_eq!(None, submission.revocation_action);
+
+        let submission =
+            super::set_revocation_action(submission.id, RevocationAction::Reopen, &conn)?;
+        assert_eq!(Some(RevocationAction::Reopen), submission.revocation_action);
+
+        // A second decision must not be overwritten by anything but a new one:
+        // the sync reads it back to re-apply the same action on a retry.
+        let submission = super::select_by_id(submission.id, &conn)?;
+        assert_eq!(Some(RevocationAction::Reopen), submission.revocation_action);
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_revocation_processed_at_marks_the_submission_finished() -> Result<()> {
+        let conn = conn();
+        let submission = super::insert(
+            &InsertArgs {
+                origin: "foo".to_string(),
+                external_id: "1".to_string(),
+                lat: 1.0,
+                lon: 2.0,
+                category: "cafe".to_string(),
+                name: "Place 1".to_string(),
+                extra_fields: Map::new(),
+                submitted_by: None,
+            },
+            &conn,
+        )?;
+        assert_eq!(None, submission.revocation_processed_at);
+
+        let processed_at = time::OffsetDateTime::UNIX_EPOCH + time::Duration::days(1);
+        let submission =
+            super::set_revocation_processed_at(submission.id, Some(processed_at), &conn)?;
+        assert_eq!(Some(processed_at), submission.revocation_processed_at);
+
+        let submission = super::set_revocation_processed_at(submission.id, None, &conn)?;
+        assert_eq!(None, submission.revocation_processed_at);
 
         Ok(())
     }
