@@ -436,8 +436,9 @@ async fn process_revoked_submission(
         RevocationAction::Reopen => service::gitea::reopen_issue(ticket_url, pool).await?,
     }
 
-    let removal_labels = build_removal_labels(&submission.origin, pool).await;
-    service::gitea::set_issue_labels(ticket_url, removal_labels, pool).await?;
+    let origin_labels = build_removal_labels(&submission.origin, pool).await;
+    let labels = removal_label_ids(&issue, &origin_labels);
+    service::gitea::set_issue_labels(ticket_url, labels, pool).await?;
 
     // Record completion before the comment: the comment is informational, and a
     // comment duplicated on every retry would be worse than a missing one.
@@ -497,12 +498,37 @@ async fn build_removal_labels(origin: &str, pool: &Pool) -> Vec<i64> {
     labels
 }
 
+/// The label set to put on the ticket in place of the one it carries now.
+///
+/// #59 asks for `type/location-submission` (901) to be swapped for
+/// `type/location-removal` (904) and for nothing else to change, so every other
+/// label stays: the triage bot's `triaged/auto` and `confidence/*` labels say
+/// something about the submission, not about the type label being swapped.
+/// Gitea's `PUT /issues/{n}/labels` replaces the whole set, so the replacement
+/// has to be built from what the ticket has at that moment.
+fn removal_label_ids(issue: &service::gitea::GetIssueResponse, origin_labels: &[i64]) -> Vec<i64> {
+    let mut ids: Vec<i64> = issue
+        .labels
+        .iter()
+        .map(|label| label.id)
+        .filter(|id| *id != LOCATION_SUBMISSION_LABEL_ID && *id != LOCATION_REMOVAL_LABEL_ID)
+        .collect();
+    ids.push(LOCATION_REMOVAL_LABEL_ID);
+    for id in origin_labels {
+        if !ids.contains(id) {
+            ids.push(*id);
+        }
+    }
+    ids
+}
+
 #[cfg(test)]
 mod test {
     use super::{build_human_section, build_issue_body, build_issue_title, build_osm_tags};
     use crate::db::main::area::schema::Area;
     use crate::db::main::place_submission::schema::{PlaceSubmission, RevocationAction};
     use crate::db::main::test::pool;
+    use crate::service::gitea::{GetIssueResponse, GiteaLabel};
     use serde_json::{Map, Value};
     use time::OffsetDateTime;
 
@@ -864,5 +890,46 @@ osm_edit_url: https://www.openstreetmap.org/edit#map=19/17.8960777/101.6562147"
             super::decide_revocation_action("closed")
         );
         assert_eq!(None, super::decide_revocation_action("merged"));
+    }
+
+    fn issue(label_ids: &[i64]) -> GetIssueResponse {
+        GetIssueResponse {
+            id: 1,
+            state: "open".to_string(),
+            html_url: "https://gitea.btcmap.org/teambtcmap/btcmap-data/issues/1".to_string(),
+            labels: label_ids
+                .iter()
+                .map(|id| GiteaLabel {
+                    id: *id,
+                    name: format!("label-{}", id),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn removal_label_ids_swaps_the_type_label_and_keeps_the_rest() {
+        // Real submission tickets arrive here carrying the triage bot's labels
+        // too, and only 901 is ours to replace.
+        let issue = issue(&[901, 1307, 42, 24]);
+        assert_eq!(
+            vec![1307, 42, 24, 904],
+            super::removal_label_ids(&issue, &[904, 1307])
+        );
+    }
+
+    #[test]
+    fn removal_label_ids_adds_an_origin_label_the_ticket_lacks() {
+        let issue = issue(&[901]);
+        assert_eq!(
+            vec![904, 1307],
+            super::removal_label_ids(&issue, &[904, 1307])
+        );
+    }
+
+    #[test]
+    fn removal_label_ids_lists_the_removal_label_once() {
+        let issue = issue(&[901, 904]);
+        assert_eq!(vec![904], super::removal_label_ids(&issue, &[]));
     }
 }
