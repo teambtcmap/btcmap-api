@@ -1,2 +1,5 @@
 [build]
-rustflags = ["-C", "target-cpu=native"]
+rustflags = ["-C", "target-cpu=x86-64-v3"]
+
+[env]
+TS_RS_EXPORT_DIR = { value = "bindings/ts", relative = true }

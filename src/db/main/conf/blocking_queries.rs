@@ -25,6 +25,56 @@ mod test {
         let conn = conn();
         let conf = super::select(&conn)?;
         assert_eq!(conf.paywall_add_element_comment_price_sat, 500);
+        assert_eq!(conf.boost_element_prices, vec![]);
+        assert_eq!(conf.cors_origins, Vec::<String>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn select_with_boost_prices() -> crate::Result<()> {
+        let conn = conn();
+        conn.execute(
+            "UPDATE conf SET boost_element_prices = ?1",
+            rusqlite::params![
+                r#"[{"days":30,"sats":5000},{"days":90,"sats":10000},{"days":365,"sats":30000}]"#
+            ],
+        )?;
+        let conf = super::select(&conn)?;
+        assert_eq!(
+            conf.boost_element_prices,
+            vec![
+                super::schema::BoostPrice {
+                    days: 30,
+                    sats: 5000
+                },
+                super::schema::BoostPrice {
+                    days: 90,
+                    sats: 10000
+                },
+                super::schema::BoostPrice {
+                    days: 365,
+                    sats: 30000
+                },
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn select_with_cors_origins() -> crate::Result<()> {
+        let conn = conn();
+        conn.execute(
+            "UPDATE conf SET cors_origins = ?1",
+            rusqlite::params!["https://a.example.com, https://b.example.com ,"],
+        )?;
+        let conf = super::select(&conn)?;
+        assert_eq!(
+            conf.cors_origins,
+            vec![
+                "https://a.example.com".to_string(),
+                "https://b.example.com".to_string(),
+            ]
+        );
         Ok(())
     }
 }

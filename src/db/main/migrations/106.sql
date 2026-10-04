@@ -1,0 +1,1 @@
+ALTER TABLE conf ADD COLUMN electrum_url TEXT NOT NULL DEFAULT '';

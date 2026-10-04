@@ -6,6 +6,12 @@ Most BTC Map locations are sourced from [OpenStreetMap](https://www.openstreetma
 
 This RPC offers trusted external sources (major franchises, PoS providers, etc.) the ability to get on BTC Map instantly, which benefits BTC Map users and API consumers, including popular Bitcoin wallets. All imported data will also be processed by BTC Map editors and merged into OSM eventually. The merger timeline is unpredictable, as it depends on many factors beyond our control. This method allows BTC Map users to skip the wait while also making it easy for various Bitcoin merchant data sources to open-source their data and promote their merchants.
 
+### Idempotent updates (Patch-by-resubmit)
+
+`submit_place` is idempotent based on the `(origin, external_id)` pair. If you call it with the same `origin` and `external_id` as a previous submission, it will **update** the existing record in place rather than creating a duplicate. Only fields whose values actually changed (`lat`, `lon`, `category`, `name`, `extra_fields`) will be written. The record `id` stays the same — there is no separate "update" or "patch" method.
+
+If the previous submission was revoked, resubmitting will automatically un-revoke it. To revoke a submission, use [`revoke_submitted_place`](revoke_submitted_place.md) instead.
+
 ## Params
 
 ```json
@@ -47,9 +53,9 @@ Additionally, a `extra_fields` object is available:
 
 ## Allowed Roles
 
-- root
-- admin
-- places_source
+- `root` — full access to every origin.
+- `admin` — full access to every origin.
+- `places_source` — limited to origins listed in the token's `import_origins`; use `*` as a wildcard.
 
 ## Examples
 
@@ -70,6 +76,6 @@ btcmap-cli submit-place --origin acme \
 curl --header 'Content-Type: application/json' \
   --header "Authorization: Bearer $ACCESS_TOKEN" \
   --request POST \
-  --data '{"jsonrpc":"2.0","method":"submit_place","params":{"origin":"acme","external_id":"15",lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe"},"id":1}' \
+  --data '{"jsonrpc":"2.0","method":"submit_place","params":{"origin":"acme","external_id":"15","lat":18.2649,"lon":98.5013,"category":"cafe","name":"Satoshi Cafe"},"id":1}' \
   https://api.btcmap.org/rpc
 ```

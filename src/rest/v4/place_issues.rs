@@ -19,15 +19,19 @@ pub struct GetArgs {
     offset: Option<i64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct PlaceIssuesRes {
+    #[ts(type = "number")]
     pub total_issues: i64,
     pub requested_issues: Vec<ResItem>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceIssueSummary")]
 pub struct ResItem {
     pub element_osm_type: String,
+    #[ts(type = "number")]
     pub element_osm_id: i64,
     pub element_name: String,
     pub issue_code: String,
@@ -44,18 +48,25 @@ impl From<SelectOrderedBySeverityRow> for ResItem {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, rename = "PlaceIssue")]
 pub struct Issue {
+    #[ts(type = "number")]
     pub id: i64,
+    #[ts(type = "number")]
     pub place_id: i64,
     pub code: String,
+    #[ts(type = "number")]
     pub severity: i64,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "time::serde::rfc3339::option")]
+    #[ts(optional, type = "string")]
     pub deleted_at: Option<OffsetDateTime>,
 }
 

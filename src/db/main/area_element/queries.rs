@@ -21,17 +21,27 @@ pub async fn select_updated_since(
         .await?
 }
 
-pub async fn select_by_area_id(area_id: i64, pool: &Pool) -> Result<Vec<AreaElement>> {
+pub async fn select_by_area_id(
+    area_id: i64,
+    include_deleted: bool,
+    pool: &Pool,
+) -> Result<Vec<AreaElement>> {
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_area_id(area_id, conn))
+        .interact(move |conn| blocking_queries::select_by_area_id(area_id, include_deleted, conn))
         .await?
 }
 
-pub async fn select_by_element_id(element_id: i64, pool: &Pool) -> Result<Vec<AreaElement>> {
+pub async fn select_by_element_id(
+    element_id: i64,
+    include_deleted: bool,
+    pool: &Pool,
+) -> Result<Vec<AreaElement>> {
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_element_id(element_id, conn))
+        .interact(move |conn| {
+            blocking_queries::select_by_element_id(element_id, include_deleted, conn)
+        })
         .await?
 }
 

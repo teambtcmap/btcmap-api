@@ -36,24 +36,33 @@ pub struct GetActivityArgs {
     places: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct ActivityItem {
     pub r#type: String,
+    #[ts(type = "number")]
     pub place_id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub place_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
     pub osm_user_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub osm_user_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub osm_user_tip: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub comment: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
     pub duration_days: Option<i64>,
     pub image: String,
     #[serde(with = "time::serde::rfc3339", rename = "date")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
 }
 
@@ -138,13 +147,12 @@ pub async fn get(
     if !areas.is_empty() || !places.is_empty() {
         let mut combined_elements: HashSet<i64> = HashSet::new();
         for area in &areas {
-            let area_elements = db::main::area_element::queries::select_by_area_id(*area, &pool)
-                .await
-                .map_err(|_| RestApiError::database())?;
+            let area_elements =
+                db::main::area_element::queries::select_by_area_id(*area, false, &pool)
+                    .await
+                    .map_err(|_| RestApiError::database())?;
             for area_element in area_elements {
-                if area_element.deleted_at.is_none() {
-                    combined_elements.insert(area_element.element_id);
-                }
+                combined_elements.insert(area_element.element_id);
             }
         }
         for place_id in &places {

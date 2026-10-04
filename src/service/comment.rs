@@ -69,12 +69,12 @@ mod test {
         let count_res = super::refresh_comment_count_tag(&element, &pool).await?;
         assert_eq!(0, count_res.previous_count);
         assert_eq!(0, count_res.current_count);
-        assert_eq!(false, count_res.count_changed);
+        assert!(!count_res.count_changed);
         let comment = db::main::element_comment::queries::insert(element.id, "test", &pool).await?;
         let count_res = super::refresh_comment_count_tag(&element, &pool).await?;
         assert_eq!(0, count_res.previous_count);
         assert_eq!(1, count_res.current_count);
-        assert_eq!(true, count_res.count_changed);
+        assert!(count_res.count_changed);
         let element = db::main::element::queries::select_by_id(element.id, &pool).await?;
         assert_eq!(Value::Number(1.into()), element.tags["comments"]);
         db::main::element_comment::queries::set_deleted_at(
@@ -86,7 +86,7 @@ mod test {
         let count_res = super::refresh_comment_count_tag(&element, &pool).await?;
         assert_eq!(1, count_res.previous_count);
         assert_eq!(0, count_res.current_count);
-        assert_eq!(true, count_res.count_changed);
+        assert!(count_res.count_changed);
         let element = db::main::element::queries::select_by_id(element.id, &pool).await?;
         assert_eq!(None, element.tags.get("comments"));
         Ok(())

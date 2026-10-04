@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod areas;
+pub mod auth;
 pub mod communities;
 pub mod countries;
 pub mod dashboard;
@@ -8,7 +9,10 @@ pub mod invoices;
 pub mod nostr;
 pub mod place_boosts;
 pub mod place_comments;
+pub mod place_images;
 pub mod place_issues;
+pub mod place_reports;
+pub mod place_submissions;
 pub mod places;
 pub mod search;
 pub mod top_editors;

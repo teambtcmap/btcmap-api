@@ -22,7 +22,8 @@ Retreives an event by id
   "name": "Phuket Bitcoin Meetup",
   "website": "https://www.meetup.com/phuket-bitcoin-meetup/events/310120143/",
   "starts_at": "2025-08-29T19:00:00+07:00",
-  "ends_at": null
+  "ends_at": null,
+  "area_id": null
 }
 ```
 
@@ -38,7 +39,7 @@ Retreives an event by id
 ### btcmap-cli
 
 ```bash
-btcmap-cli get-event 1
+btcmap-cli event get-event 1
 ```
 
 ### curl

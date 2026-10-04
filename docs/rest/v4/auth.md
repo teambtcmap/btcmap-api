@@ -11,14 +11,16 @@ Both paths mint the same kind of opaque Bearer token, sent as
 `Authorization: Bearer <token>` on subsequent requests.
 
 > [!NOTE]
-> The `/v4/auth` scope is **Nostr-specific** — it currently exposes only the
-> endpoint below. Password login is **not** under `/v4/auth`; it lives at
+> Unlike sign-in, [Sign Out](#sign-out) is **not** Nostr-specific: it revokes
+> the Bearer token presented, whichever route minted it. Password login is
+> still **not** under `/v4/auth`; it lives at
 > `POST /v4/users/{username}/tokens` ([Create Token](users.md#create-token)),
 > which takes the password in an `Authorization: Bearer <password>` header.
 
 ## Available Endpoints
 
 - [Sign In with Nostr](#sign-in-with-nostr)
+- [Sign Out](#sign-out)
 
 ## Server Configuration (NIP-98)
 
@@ -89,3 +91,42 @@ curl -X POST https://api.btcmap.org/v4/auth/nostr \
 | token | String | Bearer token to send as `Authorization: Bearer <token>` on subsequent requests |
 | username | String | Username of the signed-in (or newly created) account |
 | npub  | String | Bech32 npub of the Nostr identity that signed in |
+
+### Sign Out
+
+Revokes the Bearer token that authenticates the request. Only the presented
+token is revoked — other tokens belonging to the same account stay valid.
+The token can come from either sign-in route (Nostr or password).
+
+A token that is already revoked no longer authenticates, so calling this
+endpoint again with it returns `401` rather than repeating the `200`.
+
+#### Example Request
+
+```bash
+curl -X POST https://api.btcmap.org/v4/auth/signout \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - The token was revoked |
+| 401  | Unauthorized - Missing, invalid, or already-revoked token |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "id": 42,
+  "label": "laptop",
+  "revoked_at": "2026-09-17T12:34:56.789Z"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | Number | Database id of the revoked token |
+| label | String \| null | Label given to the token when it was created, if any |
+| revoked_at | String | RFC 3339 timestamp of when the token was revoked |

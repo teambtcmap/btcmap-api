@@ -13,23 +13,25 @@ pub struct InsertArgs {
     pub category: String,
     pub name: String,
     pub extra_fields: Map<String, Value>,
+    pub submitted_by: Option<i64>,
 }
 
 pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceSubmission> {
     let sql = format!(
         r#"
-            INSERT INTO {table} ({origin}, {external_id}, {lat}, {lon}, {category}, {name}, {extra_fields}) 
-            VALUES (:origin, :external_id, :lat, :lon, :category, :name, json(:extra_fields))
+            INSERT INTO {table} ({origin}, {external_id}, {lat}, {lon}, {category}, {name}, {extra_fields}, {submitted_by})
+            VALUES (:origin, :external_id, :lat, :lon, :category, :name, json(:extra_fields), :submitted_by)
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        origin = Columns::Origin.as_str(),
-        external_id = Columns::ExternalId.as_str(),
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        category = Columns::Category.as_str(),
-        name = Columns::Name.as_str(),
-        extra_fields = Columns::ExtraFields.as_str(),
+        origin = Columns::Origin.as_ref(),
+        external_id = Columns::ExternalId.as_ref(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        category = Columns::Category.as_ref(),
+        name = Columns::Name.as_ref(),
+        extra_fields = Columns::ExtraFields.as_ref(),
+        submitted_by = Columns::SubmittedBy.as_ref(),
         projection = PlaceSubmission::projection(),
     );
     conn.query_row(
@@ -42,6 +44,7 @@ pub fn insert(args: &InsertArgs, conn: &Connection) -> Result<PlaceSubmission> {
             ":category": &args.category,
             ":name": &args.name,
             ":extra_fields": serde_json::to_string(&args.extra_fields)?,
+            ":submitted_by": args.submitted_by,
 
         },
         PlaceSubmission::mapper(),
@@ -59,10 +62,10 @@ pub fn select_open_and_not_revoked(conn: &Connection) -> Result<Vec<PlaceSubmiss
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
-        closed_at = Columns::ClosedAt.as_str(),
-        revoked = Columns::Revoked.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        closed_at = Columns::ClosedAt.as_ref(),
+        revoked = Columns::Revoked.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![], PlaceSubmission::mapper())?
@@ -80,13 +83,38 @@ pub fn select_revoked_with_ticket_url(conn: &Connection) -> Result<Vec<PlaceSubm
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
-        revoked = Columns::Revoked.as_str(),
-        ticket_url = Columns::TicketUrl.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        revoked = Columns::Revoked.as_ref(),
+        ticket_url = Columns::TicketUrl.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![], PlaceSubmission::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+pub fn select_open_and_not_revoked_by_origin(
+    origin: &str,
+    conn: &Connection,
+) -> Result<Vec<PlaceSubmission>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {closed_at} IS NULL AND {revoked} = 0 AND {origin} = ?1
+            ORDER BY {updated_at} DESC, {id} DESC
+        "#,
+        projection = PlaceSubmission::projection(),
+        table = schema::TABLE_NAME,
+        closed_at = Columns::ClosedAt.as_ref(),
+        revoked = Columns::Revoked.as_ref(),
+        origin = Columns::Origin.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![origin], PlaceSubmission::mapper())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
@@ -108,10 +136,10 @@ pub fn select_origin_counts_since(
             ORDER BY {origin}
         "#,
         table = schema::TABLE_NAME,
-        origin = Columns::Origin.as_str(),
-        closed_at = Columns::ClosedAt.as_str(),
-        revoked = Columns::Revoked.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
+        origin = Columns::Origin.as_ref(),
+        closed_at = Columns::ClosedAt.as_ref(),
+        revoked = Columns::Revoked.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![since.format(&Rfc3339)?], |row| {
@@ -138,7 +166,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<PlaceSubmission> {
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], PlaceSubmission::mapper())
         .map_err(Into::into)
@@ -157,8 +185,8 @@ pub fn select_by_origin_and_external_id(
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
-        origin = Columns::Origin.as_str(),
-        external_id = Columns::ExternalId.as_str(),
+        origin = Columns::Origin.as_ref(),
+        external_id = Columns::ExternalId.as_ref(),
     );
     conn.query_row(
         &sql,
@@ -185,12 +213,12 @@ pub fn set_fields(
             WHERE {id} = :id
         "#,
         table = schema::TABLE_NAME,
-        lat = Columns::Lat.as_str(),
-        lon = Columns::Lon.as_str(),
-        category = Columns::Category.as_str(),
-        name = Columns::Name.as_str(),
-        extra_fields = Columns::ExtraFields.as_str(),
-        id = Columns::Id.as_str(),
+        lat = Columns::Lat.as_ref(),
+        lon = Columns::Lon.as_ref(),
+        category = Columns::Category.as_ref(),
+        name = Columns::Name.as_ref(),
+        extra_fields = Columns::ExtraFields.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     let _rows = conn.execute(
         &sql,
@@ -214,8 +242,8 @@ pub fn set_revoked(id: i64, revoked: bool, conn: &Connection) -> Result<PlaceSub
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        revoked = Columns::Revoked.as_str(),
-        id = Columns::Id.as_str(),
+        revoked = Columns::Revoked.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, revoked])?;
     select_by_id(id, conn)
@@ -229,8 +257,8 @@ pub fn set_ticket_url(id: i64, ticket_url: String, conn: &Connection) -> Result<
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        ticket_url = Columns::TicketUrl.as_str(),
-        id = Columns::Id.as_str(),
+        ticket_url = Columns::TicketUrl.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, ticket_url])?;
     select_by_id(id, conn)
@@ -249,8 +277,8 @@ pub fn set_updated_at(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(
         &sql,
@@ -278,8 +306,8 @@ pub fn set_closed_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                closed_at = Columns::ClosedAt.as_str(),
-                id = Columns::Id.as_str(),
+                closed_at = Columns::ClosedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, closed_at.format(&Rfc3339)?,])?;
         }
@@ -291,8 +319,8 @@ pub fn set_closed_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                closed_at = Columns::ClosedAt.as_str(),
-                id = Columns::Id.as_str(),
+                closed_at = Columns::ClosedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }
@@ -330,6 +358,7 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields: extra_fields.clone(),
+            submitted_by: None,
         };
         let element = super::insert(&args, &conn)?;
 
@@ -368,16 +397,17 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields: extra_fields.clone(),
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
         assert_eq!(
             Some(submission),
-            super::select_by_origin_and_external_id(origin.into(), external_id.into(), &conn)?
+            super::select_by_origin_and_external_id(origin, external_id, &conn)?
         );
         assert_eq!(
             None,
-            super::select_by_origin_and_external_id(external_id.into(), origin.into(), &conn)?
+            super::select_by_origin_and_external_id(external_id, origin, &conn)?
         );
 
         Ok(())
@@ -403,6 +433,7 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields: extra_fields.clone(),
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
@@ -444,18 +475,19 @@ mod test {
             category: "category".to_string(),
             name: "name".to_string(),
             extra_fields: JsonObject::new(),
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
-        assert_eq!(false, submission.revoked);
+        assert!(!submission.revoked);
 
         let submission = super::set_revoked(submission.id, true, &conn)?;
 
-        assert_eq!(true, submission.revoked);
+        assert!(submission.revoked);
 
         let submission = super::set_revoked(submission.id, false, &conn)?;
 
-        assert_eq!(false, submission.revoked);
+        assert!(!submission.revoked);
 
         Ok(())
     }
@@ -480,6 +512,7 @@ mod test {
             category: category.to_string(),
             name: name.to_string(),
             extra_fields,
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 
@@ -507,6 +540,7 @@ mod test {
                 category: "cafe".to_string(),
                 name: "Place".to_string(),
                 extra_fields: Map::new(),
+                submitted_by: None,
             };
             Ok(super::insert(&args, &conn)?.id)
         };
@@ -589,6 +623,7 @@ mod test {
             category: "cafe".to_string(),
             name: "Place 1".to_string(),
             extra_fields: Map::new(),
+            submitted_by: None,
         };
         let submission = super::insert(&args, &conn)?;
 

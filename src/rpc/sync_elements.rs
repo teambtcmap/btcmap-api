@@ -7,6 +7,7 @@ use crate::service::{self, matrix};
 use crate::Result;
 use deadpool_sqlite::Pool;
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -17,7 +18,36 @@ pub struct Res {
     pub merge_result: MergeResult,
 }
 
+/// Guards against two syncs running at once. The systemd scheduler already
+/// serializes `sync-elements.service`, but the API has no lock of its own: a
+/// manual/retried call, or a client that gives up while the server keeps
+/// working, could otherwise start a second sync in parallel. The merge writes
+/// to the DB, so overlapping runs are not safe.
+static SYNC_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+/// RAII handle that releases the in-progress flag when dropped, including on
+/// early return.
+struct SyncInProgressGuard;
+
+impl SyncInProgressGuard {
+    /// Returns `Some` if it acquired the lock, `None` if a sync is already
+    /// running.
+    fn acquire() -> Option<Self> {
+        SYNC_IN_PROGRESS
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| SyncInProgressGuard)
+    }
+}
+
+impl Drop for SyncInProgressGuard {
+    fn drop(&mut self) {
+        SYNC_IN_PROGRESS.store(false, Ordering::Release);
+    }
+}
+
 pub async fn run(pool: &Pool, log_pool: &LogPool) -> Result<Res> {
+    let _guard = SyncInProgressGuard::acquire().ok_or("Sync is already in progress")?;
     let started_at = OffsetDateTime::now_utc();
     let sync_log_id = sync_log_queries::insert(log_pool).await?;
 
@@ -84,4 +114,23 @@ pub async fn run(pool: &Pool, log_pool: &LogPool) -> Result<Res> {
         overpass_elements: overpass_elements_len,
         merge_result: merge_res,
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::SyncInProgressGuard;
+
+    #[test]
+    fn rejects_concurrent_acquire_and_releases_on_drop() {
+        let first = SyncInProgressGuard::acquire().expect("first acquire should succeed");
+        assert!(
+            SyncInProgressGuard::acquire().is_none(),
+            "a second acquire must be rejected while the first is held"
+        );
+        drop(first);
+        assert!(
+            SyncInProgressGuard::acquire().is_some(),
+            "acquire must succeed again once the previous guard is dropped"
+        );
+    }
 }

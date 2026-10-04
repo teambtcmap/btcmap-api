@@ -34,7 +34,7 @@ pub async fn generate_element_areas_mapping(
     let mut added_areas: Vec<i64> = vec![];
     let mut removed_areas: Vec<i64> = vec![];
     let old_mappings =
-        db::main::area_element::queries::select_by_element_id(element.id, pool).await?;
+        db::main::area_element::queries::select_by_element_id(element.id, true, pool).await?;
     let new_mappings = service::element::find_areas(element, areas)?;
     // mark no longer active mappings as deleted
     for old_mapping in &old_mappings {
@@ -56,7 +56,7 @@ pub async fn generate_element_areas_mapping(
     }
     // refresh data to include the changes made above
     let old_mappings =
-        db::main::area_element::queries::select_by_element_id(element.id, pool).await?;
+        db::main::area_element::queries::select_by_element_id(element.id, true, pool).await?;
     for area in new_mappings {
         let old_mapping = old_mappings
             .iter()

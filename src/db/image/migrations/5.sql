@@ -1,0 +1,1 @@
+ALTER TABLE place ADD COLUMN created_by INTEGER;

@@ -96,14 +96,10 @@ pub async fn select_with_opening_hours_without_humanization_by_area(
         .await?
 }
 
-pub async fn select_by_osm_type_and_id(
-    osm_type: String,
-    osm_id: i64,
-    pool: &Pool,
-) -> Result<Element> {
+pub async fn select_active_by_area_id(area_id: i64, pool: &Pool) -> Result<Vec<Element>> {
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::select_by_osm_type_and_id(&osm_type, osm_id, conn))
+        .interact(move |conn| blocking_queries::select_active_by_area_id(area_id, conn))
         .await?
 }
 
@@ -204,5 +200,28 @@ pub async fn set_deleted_at(
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::set_deleted_at(id, deleted_at, conn))
+        .await?
+}
+
+pub use super::blocking_queries::RankedElement;
+
+pub async fn select_by_tag_value_search(
+    query: String,
+    location: Option<(f64, f64)>,
+    row_limit: i64,
+    pool: &Pool,
+) -> Result<Vec<RankedElement>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_by_tag_value_search(&query, location, row_limit, conn)
+        })
+        .await?
+}
+
+pub async fn count_by_tag_value_search(query: String, pool: &Pool) -> Result<i64> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::count_by_tag_value_search(&query, conn))
         .await?
 }

@@ -8,53 +8,137 @@ use actix_web::get;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
+use actix_web::web::Query;
+use geo::Contains;
+use geo::LineString;
+use geo::MultiPolygon;
+use geo::Polygon;
+use geojson::Geometry as GeoJsonGeometry;
+use serde::Deserialize;
 use serde::Serialize;
+use time::format_description::well_known::Rfc3339;
+use time::macros::datetime;
 use time::OffsetDateTime;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, rename = "Event")]
 pub struct Item {
+    #[ts(type = "number")]
     pub id: i64,
-    pub area_id: Option<i64>,
     pub lat: f64,
     pub lon: f64,
     pub name: String,
     pub website: String,
+    #[ts(type = "string")]
     #[serde(with = "time::serde::rfc3339")]
     pub starts_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
+    #[ts(type = "string", optional)]
+    #[serde(
+        with = "time::serde::rfc3339::option",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub ends_at: Option<OffsetDateTime>,
-    pub cron_schedule: Option<String>,
+    // Present only on delta responses (`updated_since` supplied) so a sync
+    // client can advance its cursor. Omitted from the legacy full snapshot.
+    #[ts(type = "string", optional)]
+    #[serde(
+        with = "time::serde::rfc3339::option",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub updated_at: Option<OffsetDateTime>,
+    // Present only on delta responses that include tombstones
+    // (`include_deleted=true`). Omitted otherwise, including the legacy
+    // full snapshot.
+    #[ts(type = "string", optional)]
+    #[serde(
+        with = "time::serde::rfc3339::option",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub deleted_at: Option<OffsetDateTime>,
 }
 
 impl From<Event> for Item {
     fn from(val: Event) -> Self {
         Item {
             id: val.id,
-            area_id: val.area_id,
             lat: val.lat,
             lon: val.lon,
             name: val.name,
             website: val.website,
-            starts_at: val.starts_at.unwrap_or(OffsetDateTime::UNIX_EPOCH),
+            starts_at: val.starts_at,
             ends_at: val.ends_at,
-            cron_schedule: val.cron_schedule,
+            updated_at: None,
+            deleted_at: None,
         }
     }
 }
 
+impl Item {
+    /// Delta representation: exposes `updated_at` (sync cursor) and
+    /// `deleted_at` (tombstone). Non-deleted rows serialize `deleted_at` as
+    /// absent because of `skip_serializing_if`.
+    fn from_delta(val: Event) -> Self {
+        Item {
+            updated_at: Some(val.updated_at),
+            deleted_at: val.deleted_at,
+            ..Item::from(val)
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct GetByAreaArgs {
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GetArgs {
+    /// When present, switch to delta semantics: return every row with
+    /// `updated_at` after this instant, including past events, so a sync
+    /// client can page through the change log. When absent, the legacy full
+    /// snapshot is returned unchanged.
+    #[serde(default)]
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_since: Option<OffsetDateTime>,
+    limit: Option<i64>,
+    include_deleted: Option<bool>,
+}
+
 #[get("")]
-pub async fn get(pool: Data<MainPool>) -> RestResult<Vec<Item>> {
-    let items = db::main::event::queries::select_all(&pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
-    let items: Vec<Event> = items
-        .into_iter()
-        .filter(|it| {
-            it.deleted_at.is_none()
-                && (it.starts_at.is_none() || it.starts_at > Some(OffsetDateTime::now_utc()))
-        })
-        .collect();
-    Ok(Json(items.into_iter().map(|it| it.into()).collect()))
+pub async fn get(args: Query<GetArgs>, pool: Data<MainPool>) -> RestResult<Vec<Item>> {
+    match args.updated_since {
+        // Legacy full snapshot: identical to the pre-delta response. Existing
+        // clients that don't request `updated_since` keep seeing only upcoming,
+        // non-deleted events and no `updated_at`/`deleted_at` fields.
+        None => {
+            let items = db::main::event::queries::select_all(&pool)
+                .await
+                .map_err(|_| RestApiError::database())?;
+            let items: Vec<Event> = items
+                .into_iter()
+                .filter(|it| it.deleted_at.is_none() && it.starts_at > OffsetDateTime::now_utc())
+                .collect();
+            Ok(Json(items.into_iter().map(Into::into).collect()))
+        }
+        // Delta change log: deliberately skip the upcoming filter so edits and
+        // tombstones of already-started events are still observable. The client
+        // prunes past events locally.
+        Some(updated_since) => {
+            let items = db::main::event::queries::select_updated_since(
+                updated_since,
+                args.include_deleted.unwrap_or(false),
+                args.limit,
+                &pool,
+            )
+            .await
+            .map_err(|_| RestApiError::database())?;
+            Ok(Json(items.into_iter().map(Item::from_delta).collect()))
+        }
+    }
 }
 
 #[get("{id}")]
@@ -66,6 +150,102 @@ pub async fn get_by_id(id: Path<i64>, pool: Data<MainPool>) -> RestResult<Item> 
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
         })
+}
+
+#[get("{id}/events")]
+pub async fn get_by_area(
+    id: Path<String>,
+    args: Query<GetByAreaArgs>,
+    pool: Data<MainPool>,
+) -> RestResult<Vec<Item>> {
+    let id = id.into_inner();
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
+
+    let from = match args.from.as_deref() {
+        Some(s) => OffsetDateTime::parse(s, &Rfc3339)
+            .map_err(|_| RestApiError::invalid_input("Invalid 'from' date"))?,
+        None => OffsetDateTime::now_utc(),
+    };
+    let to = match args.to.as_deref() {
+        Some(s) => OffsetDateTime::parse(s, &Rfc3339)
+            .map_err(|_| RestApiError::invalid_input("Invalid 'to' date"))?,
+        None => datetime!(2200-01-01 0:00 UTC),
+    };
+
+    let area = db::main::area::queries::select_by_id_or_alias(id, &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+
+    let candidates = db::main::event::queries::select_by_bbox(
+        area.bbox_west,
+        area.bbox_south,
+        area.bbox_east,
+        area.bbox_north,
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
+
+    let geometries: Vec<GeoJsonGeometry> = area.geo_json_geometries().unwrap_or_default();
+    let items: Vec<Item> = candidates
+        .into_iter()
+        .filter(|event| {
+            if event.deleted_at.is_some() {
+                return false;
+            }
+            if event.starts_at < from || event.starts_at > to {
+                return false;
+            }
+            event_point_in_geometries(event.lon, event.lat, &geometries)
+        })
+        .map(|it| it.into())
+        .collect();
+
+    Ok(Json(items))
+}
+
+/// Cheap two-stage membership check: assume the candidate point is outside
+/// the area unless at least one of the area's geometries reports it as
+/// contained. The bbox pre-filter has already discarded obvious misses; this
+/// loop only runs on the survivors.
+pub(crate) fn event_point_in_geometries(
+    lon: f64,
+    lat: f64,
+    geometries: &[GeoJsonGeometry],
+) -> bool {
+    if geometries.is_empty() {
+        return false;
+    }
+    let coord = geo::coord!(x: lon, y: lat);
+    for geometry in geometries {
+        match &geometry.value {
+            geojson::GeometryValue::MultiPolygon { .. } => {
+                let multi_poly: MultiPolygon = (&geometry.value).try_into().unwrap();
+                if multi_poly.contains(&coord) {
+                    return true;
+                }
+            }
+            geojson::GeometryValue::Polygon { .. } => {
+                let poly: Polygon = (&geometry.value).try_into().unwrap();
+                if poly.contains(&coord) {
+                    return true;
+                }
+            }
+            geojson::GeometryValue::LineString { .. } => {
+                let line_string: LineString = (&geometry.value).try_into().unwrap();
+                if line_string.contains(&coord) {
+                    return true;
+                }
+            }
+            _ => continue,
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -102,7 +282,7 @@ mod test {
             4.56,
             "name".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -117,7 +297,151 @@ mod test {
         let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
         assert_eq!(1, res.len());
         assert_eq!(event.id, res.first().unwrap()["id"].as_i64().unwrap());
-        assert_eq!(1, res.first().unwrap()["area_id"].as_i64().unwrap());
+        assert!(res.first().unwrap().get("area_id").is_none());
+        assert!(res.first().unwrap().get("ends_at").is_none());
+        // Backward compatibility: the full snapshot must not grow the new
+        // delta-only fields.
+        assert!(res.first().unwrap().get("updated_at").is_none());
+        assert!(res.first().unwrap().get("deleted_at").is_none());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_includes_past_events_unlike_snapshot() -> Result<()> {
+        let pool = pool();
+        let past = db::main::event::queries::insert(
+            None,
+            1.23,
+            4.56,
+            "past_event".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2020-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Snapshot drops the past event...
+        let req = TestRequest::get().uri("/").to_request();
+        let snapshot: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(snapshot.is_empty());
+
+        // ...while the delta change log keeps it and exposes updated_at.
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let delta: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, delta.len());
+        assert_eq!(past.id, delta[0]["id"].as_i64().unwrap());
+        assert!(delta[0].get("updated_at").is_some());
+        assert!(delta[0].get("deleted_at").is_none());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_excludes_unchanged_events() -> Result<()> {
+        let pool = pool();
+        db::main::event::queries::insert(
+            None,
+            1.23,
+            4.56,
+            "future".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/?updated_since=2100-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_deleted_only_with_include_deleted() -> Result<()> {
+        let pool = pool();
+        let event = db::main::event::queries::insert(
+            None,
+            1.23,
+            4.56,
+            "deleted".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        db::main::event::queries::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        // Delta without tombstones: the soft-deleted row is invisible.
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let hidden: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(hidden.is_empty());
+
+        // Delta with tombstones: the row is returned with deleted_at set.
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z&include_deleted=true")
+            .to_request();
+        let tombstones: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, tombstones.len());
+        assert_eq!(event.id, tombstones[0]["id"].as_i64().unwrap());
+        assert!(tombstones[0].get("deleted_at").is_some());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_updated_since_respects_limit() -> Result<()> {
+        let pool = pool();
+        for name in ["one", "two", "three"] {
+            db::main::event::queries::insert(
+                None,
+                1.23,
+                4.56,
+                name.to_string(),
+                "https://example.com".to_string(),
+                datetime!(2099-01-01 0:00 UTC),
+                None,
+                &pool,
+            )
+            .await?;
+        }
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/?updated_since=1970-01-01T00:00:00Z&limit=2")
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
         Ok(())
     }
 
@@ -130,7 +454,7 @@ mod test {
             4.56,
             "name".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -158,7 +482,7 @@ mod test {
             4.56,
             "past_event".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -169,7 +493,7 @@ mod test {
             10.11,
             "future_event".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -199,7 +523,7 @@ mod test {
             4.56,
             "name".to_string(),
             "https://example.com".to_string(),
-            Some(datetime!(2099-01-01 0:00 UTC)),
+            datetime!(2099-01-01 0:00 UTC),
             None,
             &pool,
         )
@@ -213,7 +537,7 @@ mod test {
         let req = TestRequest::get().uri("/1").to_request();
         let res: JsonObject = test::call_and_read_body_json(&app, req).await;
         assert_eq!(event.id, res["id"].as_i64().unwrap());
-        assert_eq!(1, res["area_id"].as_i64().unwrap());
+        assert!(res.get("area_id").is_none());
         Ok(())
     }
 
@@ -229,6 +553,398 @@ mod test {
         let req = TestRequest::get().uri("/999").to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), 404);
+        Ok(())
+    }
+
+    fn phuket_area_tags() -> serde_json::Map<String, serde_json::Value> {
+        let mut tags = crate::db::main::area::schema::Area::mock_tags();
+        tags.insert(
+            "geo_json".into(),
+            serde_json::json!({
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [98.21, 7.74],
+                        [98.49, 7.74],
+                        [98.35, 8.21],
+                        [98.21, 7.74]
+                    ]]
+                }
+            }),
+        );
+        tags
+    }
+
+    #[test]
+    async fn get_by_area_returns_empty_when_no_events() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_includes_event_inside_polygon() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let inside = db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "inside".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(inside.id, res[0]["id"].as_i64().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_excludes_event_outside_bbox() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        db::main::event::queries::insert(
+            Some(area.id),
+            51.5,
+            -0.1,
+            "london".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_excludes_event_in_bbox_but_outside_polygon() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        // Triangle's bbox is lat [7.74, 8.21] / lon [98.21, 98.49].
+        // (98.25, 8.10) is inside the bbox but west of the slanted
+        // hypotenuse, so it's outside the polygon.
+        db::main::event::queries::insert(
+            Some(area.id),
+            8.10,
+            98.25,
+            "sea".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(
+            res.is_empty(),
+            "events in the bbox but outside the polygon must be filtered out"
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_excludes_past_events_by_default() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "past".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2020-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_from_includes_past_events() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let past = db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "past".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2020-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "future".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events?from=2019-01-01T00:00:00Z", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+        assert_eq!(past.id, res[0]["id"].as_i64().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_to_caps_upper_bound() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "in_window".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2024-06-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "too_late".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!(
+                "/{}/events?from=2020-01-01T00:00:00Z&to=2025-01-01T00:00:00Z",
+                area.id
+            ))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!("in_window", res[0]["name"].as_str().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_excludes_soft_deleted_events() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let event = db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "deleted".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        db::main::event::queries::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_returns_empty_when_area_has_no_geometry() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(
+            crate::db::main::area::schema::Area::mock_tags(),
+            &pool,
+        )
+        .await?;
+        db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "orphan".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events", area.id))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(
+            res.is_empty(),
+            "areas without geo_json geometry cannot contain any event"
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_resolves_alias() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let event = db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "alias_test".to_string(),
+            "https://example.com".to_string(),
+            datetime!(2099-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get().uri("/alias/events").to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(event.id, res[0]["id"].as_i64().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_404_for_unknown_area() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get().uri("/999/events").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 404);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_400_for_invalid_from() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events?from=not-a-date", area.id))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 400);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_area_400_for_invalid_to() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(super::get_by_area),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/{}/events?to=not-a-date", area.id))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), 400);
         Ok(())
     }
 }

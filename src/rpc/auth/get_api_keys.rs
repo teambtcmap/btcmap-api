@@ -63,6 +63,7 @@ mod test {
             saved_places: vec![],
             saved_areas: vec![],
             npub: None,
+            geofence: vec![],
             created_at: String::new(),
             updated_at: String::new(),
             deleted_at: None,

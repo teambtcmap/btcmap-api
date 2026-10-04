@@ -8,6 +8,7 @@ use time::OffsetDateTime;
 pub struct Res {
     pub name: String,
     pub roles: Vec<String>,
+    pub geofence: Vec<i64>,
     #[serde(with = "time::serde::rfc3339")]
     pub registration_date: OffsetDateTime,
 }
@@ -17,6 +18,7 @@ pub async fn run(user: &User) -> Result<Res> {
     Ok(Res {
         name: user.name.clone(),
         roles,
+        geofence: user.geofence.clone(),
         registration_date: OffsetDateTime::parse(&user.created_at, &Rfc3339)?,
     })
 }
@@ -38,6 +40,7 @@ mod test {
             saved_places: vec![],
             saved_areas: vec![],
             npub: None,
+            geofence: vec![],
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
@@ -64,6 +67,7 @@ mod test {
             saved_places: vec![],
             saved_areas: vec![],
             npub: None,
+            geofence: vec![],
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
@@ -84,6 +88,7 @@ mod test {
             saved_places: vec![],
             saved_areas: vec![],
             npub: None,
+            geofence: vec![],
             created_at: "2023-01-01T00:00:00Z".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
@@ -104,6 +109,7 @@ mod test {
             saved_places: vec![],
             saved_areas: vec![],
             npub: None,
+            geofence: vec![],
             created_at: "not-a-timestamp".to_string(),
             updated_at: "2023-01-01T00:00:00Z".to_string(),
             deleted_at: None,
@@ -125,6 +131,7 @@ mod test {
             saved_places: vec![],
             saved_areas: vec![],
             npub: None,
+            geofence: vec![],
             created_at: future_date.format(&Rfc3339)?,
             updated_at: future_date.format(&Rfc3339)?,
             deleted_at: None,

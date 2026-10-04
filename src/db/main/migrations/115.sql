@@ -1,0 +1,1 @@
+CREATE INDEX event_lat_lon ON event(lat, lon);

@@ -15,14 +15,13 @@ pub enum Columns {
     Website,
     StartsAt,
     EndsAt,
-    CronSchedule,
     CreatedAt,
     UpdatedAt,
     DeletedAt,
 }
 
 #[allow(dead_code)]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Event {
     pub id: i64,
     pub area_id: Option<i64>,
@@ -30,9 +29,8 @@ pub struct Event {
     pub lon: f64,
     pub name: String,
     pub website: String,
-    pub starts_at: Option<OffsetDateTime>,
+    pub starts_at: OffsetDateTime,
     pub ends_at: Option<OffsetDateTime>,
-    pub cron_schedule: Option<String>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
@@ -51,7 +49,6 @@ impl Event {
                 Columns::Website,
                 Columns::StartsAt,
                 Columns::EndsAt,
-                Columns::CronSchedule,
                 Columns::CreatedAt,
                 Columns::UpdatedAt,
                 Columns::DeletedAt,
@@ -74,7 +71,6 @@ impl Event {
                 website: row.get(Columns::Website.as_ref())?,
                 starts_at: row.get(Columns::StartsAt.as_ref())?,
                 ends_at: row.get(Columns::EndsAt.as_ref())?,
-                cron_schedule: row.get(Columns::CronSchedule.as_ref())?,
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
                 updated_at: row.get(Columns::UpdatedAt.as_ref())?,
                 deleted_at: row.get(Columns::DeletedAt.as_ref())?,

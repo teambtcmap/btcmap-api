@@ -20,8 +20,8 @@ pub fn insert(
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        comment = Columns::Comment.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        comment = Columns::Comment.as_ref(),
         projection = ElementComment::projection(),
     );
     conn.query_row(
@@ -47,14 +47,14 @@ pub fn select_updated_since(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {updated_at} > :updated_since {include_deleted_sql}
+            WHERE julianday({updated_at}) > julianday(:updated_since) {include_deleted_sql}
             ORDER BY {updated_at}, {id}
             LIMIT :limit
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -78,8 +78,8 @@ pub fn select_latest(limit: i64, conn: &Connection) -> Result<Vec<ElementComment
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     let res = conn
         .prepare(&sql)?
@@ -97,14 +97,14 @@ pub fn select_created_between(
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {created_at} > ?1 AND {created_at} < ?2
+            WHERE julianday({created_at}) > julianday(?1) AND julianday({created_at}) < julianday(?2)
             ORDER BY {updated_at}, {id}
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        created_at = Columns::CreatedAt.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        created_at = Columns::CreatedAt.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -130,14 +130,14 @@ pub fn select_created_between_for_area(
                 WHERE area_id = ?1 AND deleted_at IS NULL
             )
             AND {deleted_at} IS NULL
-            AND {created_at} > ?2 AND {created_at} < ?3
+            AND julianday({created_at}) > julianday(?2) AND julianday({created_at}) < julianday(?3)
             ORDER BY {created_at} DESC
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        created_at = Columns::CreatedAt.as_str(),
-        deleted_at = Columns::DeletedAt.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        created_at = Columns::CreatedAt.as_ref(),
+        deleted_at = Columns::DeletedAt.as_ref(),
         area_element_table = crate::db::main::area_element::schema::TABLE_NAME,
     );
     conn.prepare(&sql)?
@@ -174,9 +174,9 @@ pub fn select_by_element_id(
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        element_id = Columns::ElementId.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        element_id = Columns::ElementId.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(
@@ -199,7 +199,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<ElementComment> {
         "#,
         projection = ElementComment::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], ElementComment::mapper())
         .map_err(Into::into)
@@ -218,8 +218,8 @@ pub fn set_created_at(
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        created_at = Columns::CreatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        created_at = Columns::CreatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, created_at.format(&Rfc3339)?])?;
     select_by_id(id, conn)
@@ -238,8 +238,8 @@ pub fn set_updated_at(
                     WHERE {id} = ?1
                 "#,
         table = schema::TABLE_NAME,
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![id, updated_at.format(&Rfc3339)?])?;
     select_by_id(id, conn)
@@ -259,8 +259,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id, deleted_at.format(&Rfc3339)?])?;
         }
@@ -272,8 +272,8 @@ pub fn set_deleted_at(
                     WHERE {id} = ?1
                 "#,
                 table = schema::TABLE_NAME,
-                deleted_at = Columns::DeletedAt.as_str(),
-                id = Columns::Id.as_str(),
+                deleted_at = Columns::DeletedAt.as_ref(),
+                id = Columns::Id.as_ref(),
             );
             conn.execute(&sql, params![id])?;
         }
@@ -284,6 +284,7 @@ pub fn set_deleted_at(
 #[cfg(test)]
 mod test {
     use crate::{db::main::test::conn, Result};
+    use time::macros::datetime;
     use time::{Duration, OffsetDateTime};
 
     #[test]
@@ -311,7 +312,7 @@ mod test {
     fn select_updated_since() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let time1 = OffsetDateTime::now_utc().saturating_add(Duration::hours(-1));
         let comment1 = super::insert(1, "First", &conn)?;
@@ -330,10 +331,39 @@ mod test {
     }
 
     #[test]
+    fn select_updated_since_compares_by_instant_not_text() -> Result<()> {
+        let conn = conn();
+        // Disable foreign keys for this test
+        conn.pragma_update(None, "foreign_keys", false)?;
+
+        let comment = super::insert(1, "Test", &conn)?;
+        // Production writes milliseconds with `strftime('%Y-%m-%dT%H:%M:%fZ')`,
+        // so the stored value keeps all three digits. The bound is rendered by
+        // `time` as "2024-01-01T10:00:00.5Z" (trailing zero trimmed), which
+        // sorts before ".550Z" as text and used to drop the row.
+        conn.execute(
+            "UPDATE element_comment SET updated_at = '2024-01-01T10:00:00.550Z' WHERE id = ?1",
+            [comment.id],
+        )?;
+
+        let results = super::select_updated_since(
+            &datetime!(2024-01-01 10:00:00.500 UTC),
+            true,
+            None,
+            &conn,
+        )?;
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, comment.id);
+
+        Ok(())
+    }
+
+    #[test]
     fn select_latest() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let time1 = OffsetDateTime::now_utc().saturating_sub(Duration::hours(1));
         let comment1 = super::insert(1, "First", &conn)?;
         let _comment1 = super::set_updated_at(comment1.id, time1, &conn)?;
@@ -354,7 +384,7 @@ mod test {
     fn select_created_between() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let time1 = OffsetDateTime::now_utc().saturating_sub(Duration::hours(1));
         let comment1 = super::insert(1, "First", &conn)?;
@@ -380,7 +410,7 @@ mod test {
     fn select_by_element_id() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
         let comment = super::insert(1, "First", &conn)?;
 
         // Test select_by_element_id
@@ -395,7 +425,7 @@ mod test {
     fn set_deleted_at() -> Result<()> {
         let conn = conn();
         // Disable foreign keys for this test
-        conn.pragma_update(None, "foreign_keys", &false)?;
+        conn.pragma_update(None, "foreign_keys", false)?;
 
         let comment = super::insert(1, "Test", &conn)?;
 

@@ -1,0 +1,437 @@
+use crate::{
+    db::image::place::schema::PlaceImageMeta,
+    db::image::ImagePool,
+    db::main::area::schema::Area,
+    db::main::place_report::schema::PlaceReport,
+    db::{self},
+    service::issue_body::{additional_fields, extra_value, field},
+    service::matrix::ROOM_PLACE_IMPORT,
+    service::{self, matrix},
+    Result,
+};
+use deadpool_sqlite::Pool;
+use serde::Serialize;
+use time::OffsetDateTime;
+use tracing::{info, warn};
+
+#[derive(Serialize)]
+pub struct Res {
+    issues_pending: i64,
+    issues_created: i64,
+    issues_closed: i64,
+}
+
+const PLACE_REPORT_LABEL_ID: i64 = 903;
+const PLACE_REPORT_REMOVAL_LABEL_ID: i64 = 904;
+
+fn needs_removal_label(report_type: &str) -> bool {
+    matches!(report_type, "refused_sats" | "out_of_business")
+}
+
+fn build_issue_title(areas: &[Area], name: &str, report_type: &str) -> String {
+    let country = areas
+        .iter()
+        .find(|area| area.tags.get("type").and_then(|v| v.as_str()) == Some("country"));
+    let community = areas
+        .iter()
+        .find(|area| area.tags.get("type").and_then(|v| v.as_str()) == Some("community"));
+
+    let mut prefix = String::new();
+    if let Some(country) = country {
+        prefix.push_str(&format!("[{}]", country.alias().to_uppercase()));
+    }
+    if let Some(community) = community {
+        prefix.push_str(&format!("[{}]", community.name()));
+    }
+
+    if prefix.is_empty() {
+        format!("[{}] {}", report_type, name)
+    } else {
+        format!("{} [{}] {}", prefix, report_type, name)
+    }
+}
+
+/// `extra_fields` is free-form. The comment is the one field with a documented
+/// meaning for reviewers; anything else is listed verbatim as key pairs.
+const COMMENT_KEYS: &[&str] = &["comment", "notes"];
+
+/// The report's free-form extras as readable lines, so a reviewer never has to
+/// read pasted JSON.
+fn build_human_section(report: &PlaceReport) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    if let Some(value) = extra_value(&report.extra_fields, COMMENT_KEYS) {
+        lines.push(field("Comment", &value));
+    }
+
+    let additional = additional_fields(&report.extra_fields, COMMENT_KEYS);
+    if !additional.is_empty() {
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+        lines.push("Additional fields:".to_string());
+        lines.extend(additional);
+    }
+
+    lines.join("\n")
+}
+
+/// Markdown embeds for the place's report evidence, or an empty string when the
+/// place has none.
+fn build_image_section(place_id: i64, images: &[PlaceImageMeta]) -> String {
+    if images.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec!["Evidence:".to_string(), String::new()];
+    for image in images {
+        lines.push(format!(
+            "![evidence](https://api.btcmap.org/v4/places/{place_id}/images/{})",
+            image.id
+        ));
+    }
+    lines.join("\n")
+}
+
+/// The human-readable report extras and the evidence images, joined into the
+/// single markdown block that goes into the Gitea issue body.
+fn build_details(report: &PlaceReport, images: &[PlaceImageMeta]) -> String {
+    let mut details = build_human_section(report);
+    let image_section = build_image_section(report.place_id, images);
+    if !image_section.is_empty() {
+        if !details.is_empty() {
+            details.push_str("\n\n");
+        }
+        details.push_str(&image_section);
+    }
+    details
+}
+
+pub async fn run(pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
+    let reports = db::main::place_report::queries::select_open_and_not_deleted(pool).await?;
+    info!(
+        len = reports.len(),
+        "fetched open and non-deleted place reports"
+    );
+
+    let mut issues_created = 0;
+    let mut issues_closed = 0;
+
+    for report in &reports {
+        let Some(import_origin) =
+            db::main::place_import_origin::queries::select_by_id(report.origin_id, pool).await?
+        else {
+            warn!(report.origin_id, "unknown origin");
+            continue;
+        };
+
+        if !import_origin.gitea_sync_enabled {
+            warn!(report.origin_id, "disabled origin");
+            continue;
+        }
+
+        let element = match db::main::element::queries::select_by_id(report.place_id, pool).await {
+            Ok(element) => element,
+            Err(crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => {
+                warn!(report.place_id, "missing element");
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+
+        if report.ticket_url.is_none() {
+            let areas =
+                service::area::find_areas_by_lat_lon(element.lat(), element.lon(), pool).await?;
+            let title = build_issue_title(&areas, &element.name(None), &report.r#type);
+
+            let images = db::image::place::queries::select_by_place_id_and_type(
+                report.place_id,
+                "report",
+                image_pool,
+            )
+            .await?;
+            let details = build_details(report, &images);
+
+            let body = format!(
+                r#"
+                Id: {id}
+                Origin: {origin}
+                Place id: {place_id}
+                Type: {type}
+
+                {details}
+
+                OpenStreetMap viewer link: https://www.openstreetmap.org/#map=21/{lat}/{lon}
+
+                OpenStreetMap editor link: https://www.openstreetmap.org/edit#map=21/{lat}/{lon}
+
+                To resolve this report:
+
+                1. Look up the place in OSM and on BTC Map using the place id and links above.
+                2. Decide whether the report is actionable, then update the place or close the ticket.
+            "#,
+                id = report.id,
+                origin = import_origin.name,
+                place_id = report.place_id,
+                type = report.r#type,
+                details = details,
+                lat = element.lat(),
+                lon = element.lon(),
+            );
+            let body = body
+                .lines()
+                .map(|line| line.trim())
+                .collect::<Vec<&str>>()
+                .join("\n");
+            let mut label_ids = vec![PLACE_REPORT_LABEL_ID];
+            if needs_removal_label(&report.r#type) {
+                label_ids.push(PLACE_REPORT_REMOVAL_LABEL_ID);
+            }
+            let issue = service::gitea::create_issue(title, body, label_ids, pool).await?;
+            db::main::place_report::queries::set_ticket_url(report.id, issue.url.clone(), pool)
+                .await?;
+            issues_created += 1;
+            let message = format!(
+                "Created Gitea issue for place report {} {}",
+                report.id, issue.html_url
+            );
+            let matrix_client = matrix::try_client(pool);
+            service::matrix::send_message(&matrix_client, ROOM_PLACE_IMPORT, &message);
+        } else {
+            let issue = service::gitea::get_issue(report.ticket_url.clone().unwrap(), pool).await?;
+
+            let Some(issue) = issue else {
+                continue;
+            };
+
+            if issue.state == "closed" {
+                db::main::place_report::queries::set_closed_at(
+                    report.id,
+                    Some(OffsetDateTime::now_utc()),
+                    pool,
+                )
+                .await?;
+                issues_closed += 1;
+                let message = format!(
+                    "Closed Gitea issue and marked report as closed for {} {}",
+                    report.id, issue.html_url
+                );
+                let matrix_client = matrix::try_client(pool);
+                service::matrix::send_message(&matrix_client, ROOM_PLACE_IMPORT, &message);
+            }
+        }
+    }
+
+    Ok(Res {
+        issues_pending: reports.len() as i64 - issues_closed,
+        issues_created,
+        issues_closed,
+    })
+}
+
+#[cfg(test)]
+mod test {
+    use super::{
+        build_details, build_human_section, build_image_section, build_issue_title,
+        needs_removal_label,
+    };
+    use crate::db::image::place::schema::PlaceImageMeta;
+    use crate::db::main::area::schema::Area;
+    use crate::db::main::place_report::schema::PlaceReport;
+    use serde_json::{Map, Value};
+    use time::OffsetDateTime;
+
+    fn report(extra_fields: Vec<(&str, Value)>) -> PlaceReport {
+        PlaceReport {
+            id: 2,
+            place_id: 16815,
+            origin_id: 1,
+            r#type: "refused_sats".into(),
+            extra_fields: extra_fields
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect::<Map<String, Value>>(),
+            ticket_url: None,
+            submitted_by: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            closed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    fn area(area_type: &str, name: &str, alias: &str) -> Area {
+        let mut tags = Map::new();
+        tags.insert("type".into(), Value::String(area_type.into()));
+        tags.insert("name".into(), Value::String(name.into()));
+        tags.insert("url_alias".into(), Value::String(alias.into()));
+        Area {
+            id: 0,
+            alias: alias.into(),
+            bbox_west: 0.0,
+            bbox_south: 0.0,
+            bbox_east: 0.0,
+            bbox_north: 0.0,
+            tags,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn title_with_country_and_community() {
+        let areas = vec![
+            area("country", "Thailand", "th"),
+            area("community", "Phuket Bitcoin Community", "phuket"),
+        ];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe", "verified"),
+            "[TH][Phuket Bitcoin Community] [verified] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_with_country_only_uppercases_alias() {
+        let areas = vec![area("country", "Thailand", "th")];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe", "verified"),
+            "[TH] [verified] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_with_community_only_uses_name_as_is() {
+        let areas = vec![area("community", "Phuket Bitcoin Community", "phuket")];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe", "verified"),
+            "[Phuket Bitcoin Community] [verified] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_without_areas_falls_back_to_name() {
+        assert_eq!(
+            build_issue_title(&[], "Some Cafe", "verified"),
+            "[verified] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn title_ignores_unrelated_area_types() {
+        let areas = vec![area("planet", "Earth", "earth")];
+        assert_eq!(
+            build_issue_title(&areas, "Some Cafe", "verified"),
+            "[verified] Some Cafe",
+        );
+    }
+
+    #[test]
+    fn removal_label_applies_to_refused_sats_and_out_of_business() {
+        assert!(needs_removal_label("refused_sats"));
+        assert!(needs_removal_label("out_of_business"));
+        assert!(!needs_removal_label("verified"));
+        assert!(!needs_removal_label("verification"));
+        assert!(!needs_removal_label(""));
+    }
+
+    #[test]
+    fn human_section_renders_comment() {
+        let report = report(vec![("comment", Value::String("refused sats".into()))]);
+
+        assert_eq!(build_human_section(&report), "Comment: refused sats");
+    }
+
+    #[test]
+    fn human_section_lists_other_fields_as_key_pairs() {
+        let report = report(vec![
+            ("comment", Value::String("refused sats".into())),
+            ("severity", Value::String("high".into())),
+            ("location", serde_json::json!({ "lat": 1.5, "lon": -2.5 })),
+        ]);
+
+        assert_eq!(
+            build_human_section(&report),
+            "\
+Comment: refused sats
+
+Additional fields:
+location: lat=1.5, lon=-2.5
+severity: high"
+        );
+    }
+
+    #[test]
+    fn human_section_is_empty_without_extra_fields() {
+        assert_eq!(build_human_section(&report(vec![])), "");
+    }
+
+    fn image(id: i64, place_id: i64) -> PlaceImageMeta {
+        PlaceImageMeta {
+            id,
+            place_id,
+            r#type: "report".into(),
+            width: 100,
+            height: 50,
+            size_bytes: 0,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            created_by: None,
+        }
+    }
+
+    #[test]
+    fn image_section_is_empty_without_images() {
+        assert_eq!(build_image_section(16815, &[]), "");
+    }
+
+    #[test]
+    fn image_section_embeds_public_urls() {
+        let images = vec![image(2, 16815), image(1, 16815)];
+
+        assert_eq!(
+            build_image_section(16815, &images),
+            "\
+Evidence:
+
+![evidence](https://api.btcmap.org/v4/places/16815/images/2)
+![evidence](https://api.btcmap.org/v4/places/16815/images/1)"
+        );
+    }
+
+    #[test]
+    fn details_is_empty_without_extras_or_images() {
+        assert_eq!(build_details(&report(vec![]), &[]), "");
+    }
+
+    #[test]
+    fn details_keeps_human_section_when_there_are_no_images() {
+        let report = report(vec![("comment", Value::String("gone".into()))]);
+
+        assert_eq!(build_details(&report, &[]), "Comment: gone");
+    }
+
+    #[test]
+    fn details_keeps_image_section_when_there_are_no_extras() {
+        let images = vec![image(2, 16815)];
+
+        assert_eq!(
+            build_details(&report(vec![]), &images),
+            "Evidence:\n\n![evidence](https://api.btcmap.org/v4/places/16815/images/2)",
+        );
+    }
+
+    #[test]
+    fn details_separates_human_and_image_sections() {
+        let report = report(vec![("comment", Value::String("gone".into()))]);
+        let images = vec![image(2, 16815), image(1, 16815)];
+
+        assert_eq!(
+            build_details(&report, &images),
+            "\
+Comment: gone
+
+Evidence:
+
+![evidence](https://api.btcmap.org/v4/places/16815/images/2)
+![evidence](https://api.btcmap.org/v4/places/16815/images/1)"
+        );
+    }
+}

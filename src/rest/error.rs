@@ -45,6 +45,13 @@ impl RestApiError {
             "Authentication required".to_string(),
         )
     }
+
+    pub fn forbidden() -> Self {
+        Self::new(
+            RestApiErrorCode::Forbidden,
+            "You don't have permission to perform this action".to_string(),
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -53,6 +60,7 @@ pub enum RestApiErrorCode {
     NotFound,
     Database,
     Unauthorized,
+    Forbidden,
 }
 
 impl fmt::Display for RestApiError {
@@ -68,6 +76,7 @@ impl std::fmt::Display for RestApiErrorCode {
             RestApiErrorCode::NotFound => write!(f, "not_found"),
             RestApiErrorCode::Database => write!(f, "database"),
             RestApiErrorCode::Unauthorized => write!(f, "unauthorized"),
+            RestApiErrorCode::Forbidden => write!(f, "forbidden"),
         }
     }
 }
@@ -79,6 +88,7 @@ impl RestApiErrorCode {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Forbidden => StatusCode::FORBIDDEN,
         }
     }
 }

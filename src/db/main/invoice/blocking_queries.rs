@@ -34,13 +34,13 @@ pub fn insert(
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        uuid = Columns::Uuid.as_str(),
-        source = Columns::Source.as_str(),
-        description = Columns::Description.as_str(),
-        amount_sats = Columns::AmountSats.as_str(),
-        payment_hash = Columns::PaymentHash.as_str(),
-        payment_request = Columns::PaymentRequest.as_str(),
-        status = Columns::Status.as_str(),
+        uuid = Columns::Uuid.as_ref(),
+        source = Columns::Source.as_ref(),
+        description = Columns::Description.as_ref(),
+        amount_sats = Columns::AmountSats.as_ref(),
+        payment_hash = Columns::PaymentHash.as_ref(),
+        payment_request = Columns::PaymentRequest.as_ref(),
+        status = Columns::Status.as_ref(),
         projection = Invoice::projection(),
     );
     let params = named_params! {
@@ -66,9 +66,9 @@ pub fn select_by_status(status: InvoiceStatus, conn: &Connection) -> Result<Vec<
         "#,
         projection = Invoice::projection(),
         table = schema::TABLE_NAME,
-        status = Columns::Status.as_str(),
-        updated_at = Columns::UpdatedAt.as_str(),
-        id = Columns::Id.as_str(),
+        status = Columns::Status.as_ref(),
+        updated_at = Columns::UpdatedAt.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.prepare(&sql)?
         .query_map(params![status,], Invoice::mapper())?
@@ -85,7 +85,7 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Invoice> {
         "#,
         projection = Invoice::projection(),
         table = schema::TABLE_NAME,
-        id = Columns::Id.as_str(),
+        id = Columns::Id.as_ref(),
     );
     conn.query_row(&sql, params![id], Invoice::mapper())
         .map_err(Into::into)
@@ -100,7 +100,7 @@ pub fn select_by_uuid(uuid: &str, conn: &Connection) -> Result<Invoice> {
         "#,
         projection = Invoice::projection(),
         table = schema::TABLE_NAME,
-        uuid = Columns::Uuid.as_str(),
+        uuid = Columns::Uuid.as_ref(),
     );
     conn.query_row(&sql, params![uuid], Invoice::mapper())
         .map_err(Into::into)
@@ -114,8 +114,8 @@ pub fn set_status(invoice_id: i64, status: InvoiceStatus, conn: &Connection) -> 
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
-        status = Columns::Status.as_str(),
-        id = Columns::Id.as_str(),
+        status = Columns::Status.as_ref(),
+        id = Columns::Id.as_ref(),
     );
     conn.execute(&sql, params![invoice_id, status])?;
     select_by_id(invoice_id, conn)

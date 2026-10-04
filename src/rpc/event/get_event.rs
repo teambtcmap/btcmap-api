@@ -18,10 +18,11 @@ pub struct Res {
     lon: f64,
     name: String,
     website: String,
-    #[serde(with = "time::serde::rfc3339::option")]
-    starts_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339")]
+    starts_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339::option")]
     ends_at: Option<OffsetDateTime>,
+    pub area_id: Option<i64>,
 }
 
 impl From<Event> for Res {
@@ -34,6 +35,7 @@ impl From<Event> for Res {
             website: event.website,
             starts_at: event.starts_at,
             ends_at: event.ends_at,
+            area_id: event.area_id,
         }
     }
 }

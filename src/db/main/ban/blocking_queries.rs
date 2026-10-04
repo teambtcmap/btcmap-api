@@ -23,10 +23,10 @@ pub fn insert(ip: &str, reason: &str, duration_days: i64, conn: &Connection) -> 
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
-        ip = Columns::Ip.as_str(),
-        reason = Columns::Reason.as_str(),
-        start_at = Columns::StartAt.as_str(),
-        end_at = Columns::EndAt.as_str(),
+        ip = Columns::Ip.as_ref(),
+        reason = Columns::Reason.as_ref(),
+        start_at = Columns::StartAt.as_ref(),
+        end_at = Columns::EndAt.as_ref(),
         projection = Ban::projection(),
     );
     let params = named_params! {
@@ -48,9 +48,9 @@ pub fn select_by_ip(ip: &str, conn: &Connection) -> Result<Option<Ban>> {
         "#,
         projection = Ban::projection(),
         table = schema::TABLE_NAME,
-        ip = Columns::Ip.as_str(),
-        start_at = Columns::StartAt.as_str(),
-        end_at = Columns::EndAt.as_str(),
+        ip = Columns::Ip.as_ref(),
+        start_at = Columns::StartAt.as_ref(),
+        end_at = Columns::EndAt.as_ref(),
     );
     conn.prepare(&sql)?
         .query_row(params![ip], Ban::mapper())

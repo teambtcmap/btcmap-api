@@ -31,6 +31,18 @@ pub async fn select_revoked_with_ticket_url(pool: &Pool) -> Result<Vec<PlaceSubm
         .await?
 }
 
+pub async fn select_open_and_not_revoked_by_origin(
+    origin: String,
+    pool: &Pool,
+) -> Result<Vec<PlaceSubmission>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_open_and_not_revoked_by_origin(&origin, conn)
+        })
+        .await?
+}
+
 pub async fn select_origin_counts_since(
     since: OffsetDateTime,
     pool: &Pool,
