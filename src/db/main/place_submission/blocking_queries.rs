@@ -78,13 +78,16 @@ pub fn select_revoked_with_ticket_url(conn: &Connection) -> Result<Vec<PlaceSubm
         r#"
             SELECT {projection}
             FROM {table}
-            WHERE {revoked} = 1 AND {ticket_url} IS NOT NULL
+            WHERE {revoked} = 1
+                AND {ticket_url} IS NOT NULL
+                AND {revocation_processed_at} IS NULL
             ORDER BY {updated_at} DESC, {id} DESC
         "#,
         projection = PlaceSubmission::projection(),
         table = schema::TABLE_NAME,
         revoked = Columns::Revoked.as_ref(),
         ticket_url = Columns::TicketUrl.as_ref(),
+        revocation_processed_at = Columns::RevocationProcessedAt.as_ref(),
         updated_at = Columns::UpdatedAt.as_ref(),
         id = Columns::Id.as_ref(),
     );
@@ -683,6 +686,17 @@ mod test {
         assert_eq!(submission.id, results[0].id);
         assert!(results[0].revoked);
         assert!(results[0].ticket_url.is_some());
+
+        // A finished revocation must not be handed to the sync again: this query
+        // is what runs on every cron tick, and the rows it returns are the ones
+        // the job then fetches from Gitea.
+        super::set_revocation_processed_at(
+            submission.id,
+            Some(time::OffsetDateTime::UNIX_EPOCH),
+            &conn,
+        )?;
+        let results = super::select_revoked_with_ticket_url(&conn)?;
+        assert!(results.is_empty());
 
         Ok(())
     }
