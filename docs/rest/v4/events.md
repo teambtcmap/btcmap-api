@@ -12,6 +12,7 @@ which matches them by name alongside areas and places.
 - [Get Events by Area](#get-events-by-area)
 - [Submit Event](#submit-event)
 - [Change Event Status](#change-event-status)
+- [Revoke Event](#revoke-event)
 - [Get My Submitted Events](#get-my-submitted-events)
 
 ### Get Batch
@@ -355,6 +356,38 @@ call it, and the event location must be inside the caller's geofence (when set).
 | `400` | `status` is missing or is not `live`/`rejected`. |
 | `401` | Missing or invalid bearer token. |
 | `403` | The caller is not an event manager/admin/root, or the event is outside their geofence. |
+| `404` | No event with the requested ID. |
+
+### Revoke Event
+
+```bash
+curl --request DELETE https://api.btcmap.org/v4/events/123 \
+  --header 'Authorization: Bearer <token>'
+```
+
+Revokes one of your own submissions while it is still `pending`, by soft-deleting
+it. The event disappears from `GET /v4/events?status=pending` and from
+[Get My Submitted Events](#get-my-submitted-events); delta clients receive it as
+a tombstone.
+
+Only the original submitter may revoke, and only while the event is `pending`. A
+`live` event must be taken down by an event manager, admin or root through the RPC
+`delete_event`. Revoking an already-revoked event succeeds as a no-op, so retrying
+is safe.
+
+#### Path Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `id` | Integer | `123` | **Required**. Event ID. |
+
+#### Responses
+
+| Status | Description |
+|--------|-------------|
+| `200` | Revoked. The body is the full [event object](#response-fields), still carrying `status: "pending"` and its `submitted_by`. |
+| `401` | Missing or invalid bearer token. |
+| `403` | The caller is not the submitter, or the event is not `pending`. |
 | `404` | No event with the requested ID. |
 
 ### Get My Submitted Events

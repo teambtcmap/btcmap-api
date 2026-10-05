@@ -13,7 +13,7 @@ The latest and recommended version of the BTCMap API, offering improved performa
 - **[Place Issues](place-issues.md)** - Fetch issues for places within an area.
 - **[Place Reports](place-reports.md)** - File a report against an existing place as the `user` origin.
 - **[Place Submissions](place-submissions.md)** - Fetch open, non-revoked place submissions (from external import sources like Square or CoinOS, or signed-in users) and submit new places as the `user` origin.
-- **[Events](events.md)** - Fetch events, submit new ones as a signed-in user, track the status of your own submissions, and review submissions as an event manager, admin or root.
+- **[Events](events.md)** - Fetch events, submit new ones as a signed-in user, revoke your own pending submissions, track the status of your submissions, and review them as an event manager, admin or root.
 - **[Activity](activity.md)** - Fetch a merged feed of place activity, optionally scoped to areas and/or places.
 - **[Invoices](invoices.md)** - Check invoice status for boosts, comments and other paywalled features.
 - **[Users](users.md)** - Get authenticated user information.  

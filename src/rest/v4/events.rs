@@ -9,6 +9,7 @@ use crate::rest::error::RestResult;
 use crate::service::timezone;
 use crate::service::timezone::EventTime;
 use crate::Error;
+use actix_web::delete;
 use actix_web::get;
 use actix_web::post;
 use actix_web::put;
@@ -482,6 +483,39 @@ pub async fn post(auth: Auth, args: Json<PostArgs>, pool: Data<MainPool>) -> Res
     )
     .await
     .map_err(|_| RestApiError::database())?;
+    Ok(Json(attach_author(event, &pool).await?))
+}
+
+/// `DELETE /v4/events/{id}`
+///
+/// Revokes the caller's own submission while it is still awaiting review, by
+/// soft-deleting it. Only the original submitter may call this, and only for a
+/// `pending` event; a `live` event must be taken down by an event manager,
+/// admin or root through the RPC `delete_event`. Revoking an already-revoked
+/// event succeeds as a no-op so the call is idempotent.
+#[delete("{id}")]
+pub async fn delete(id: Path<i64>, auth: Auth, pool: Data<MainPool>) -> RestResult<Item> {
+    let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    let id = id.into_inner();
+
+    let event = db::main::event::queries::select_by_id(id, &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+
+    // Self-service revocation is limited to the submitter and to events that
+    // are still awaiting review. Everything else reads as forbidden so the
+    // endpoint can't be used to take down published events.
+    if event.submitted_by != Some(user.id) || event.status != Status::Pending {
+        return Err(RestApiError::forbidden());
+    }
+
+    let event =
+        db::main::event::queries::set_deleted_at(id, Some(OffsetDateTime::now_utc()), &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
     Ok(Json(attach_author(event, &pool).await?))
 }
 
@@ -1941,6 +1975,270 @@ mod test {
             .to_request();
         let res = test::call_service(&app, req).await;
         assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    async fn seed_pending_event(owner_id: i64, pool: &crate::db::main::MainPool) -> Result<i64> {
+        let event = db::main::event::queries::insert_with_status(
+            None,
+            1.0,
+            2.0,
+            "mine".to_string(),
+            "website".to_string(),
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            crate::db::main::event::schema::Status::Pending,
+            Some(owner_id),
+            pool,
+        )
+        .await?;
+        Ok(event.id)
+    }
+
+    #[test]
+    async fn delete_requires_auth() -> Result<()> {
+        let pool = pool();
+        let event_id = seed_pending_event(1, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::delete)),
+        )
+        .await;
+        let req = TestRequest::delete()
+            .uri(&format!("/events/{event_id}"))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_owner_revokes_own_pending() -> Result<()> {
+        let pool = pool();
+        let (owner_id, secret) = seed_user_id_and_token(&[Role::User], &pool).await?;
+        let event_id = seed_pending_event(owner_id, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::delete)),
+        )
+        .await;
+        let req = TestRequest::delete()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(event_id, res["id"].as_i64().unwrap());
+        assert_eq!("pending", res["status"].as_str().unwrap());
+        assert_eq!(
+            owner_id,
+            res["submitted_by"]["id"].as_i64().unwrap(),
+            "the revoked event still carries its submitter"
+        );
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert!(stored.deleted_at.is_some());
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_forbids_non_owner() -> Result<()> {
+        let pool = pool();
+        let (owner_id, _owner_secret) = seed_user_id_and_token(&[Role::User], &pool).await?;
+        // A different signed-in user ("tester", secret "test-secret").
+        let secret = seed_user_with_token(&[Role::User], &[], &pool).await?;
+        let event_id = seed_pending_event(owner_id, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::delete)),
+        )
+        .await;
+        let req = TestRequest::delete()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert!(
+            stored.deleted_at.is_none(),
+            "another user's event must be left untouched"
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_forbids_own_live_event() -> Result<()> {
+        let pool = pool();
+        let (owner_id, secret) = seed_user_id_and_token(&[Role::User], &pool).await?;
+        // Privileged submissions go straight to live; a regular owner still
+        // must not be able to take a published event down through this route.
+        let event = db::main::event::queries::insert_with_status(
+            None,
+            1.0,
+            2.0,
+            "published".to_string(),
+            "website".to_string(),
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            crate::db::main::event::schema::Status::Live,
+            Some(owner_id),
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::delete)),
+        )
+        .await;
+        let req = TestRequest::delete()
+            .uri(&format!("/events/{}", event.id))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        let stored = db::main::event::queries::select_by_id(event.id, &pool).await?;
+        assert!(stored.deleted_at.is_none());
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_forbids_own_rejected_event() -> Result<()> {
+        let pool = pool();
+        let (owner_id, secret) = seed_user_id_and_token(&[Role::User], &pool).await?;
+        let event = db::main::event::queries::insert_with_status(
+            None,
+            1.0,
+            2.0,
+            "rejected".to_string(),
+            "website".to_string(),
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            crate::db::main::event::schema::Status::Rejected,
+            Some(owner_id),
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::delete)),
+        )
+        .await;
+        let req = TestRequest::delete()
+            .uri(&format!("/events/{}", event.id))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_is_idempotent_for_owner() -> Result<()> {
+        let pool = pool();
+        let (owner_id, secret) = seed_user_id_and_token(&[Role::User], &pool).await?;
+        let event_id = seed_pending_event(owner_id, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::delete)),
+        )
+        .await;
+
+        for _ in 0..2 {
+            let req = TestRequest::delete()
+                .uri(&format!("/events/{event_id}"))
+                .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(res.status(), StatusCode::OK);
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_not_found() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::User], &[], &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::delete)),
+        )
+        .await;
+        let req = TestRequest::delete()
+            .uri("/events/999")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_hides_revoked_event_from_my_events() -> Result<()> {
+        let pool = pool();
+        let (owner_id, secret) = seed_user_id_and_token(&[Role::User], &pool).await?;
+        let event_id = seed_pending_event(owner_id, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::delete))
+                .service(scope("/users").service(super::get_me)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let req = TestRequest::get()
+            .uri("/users/me/events")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert!(
+            res.is_empty(),
+            "a revoked submission must disappear from the submitter's list"
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_appears_as_tombstone_in_delta() -> Result<()> {
+        let pool = pool();
+        let (owner_id, secret) = seed_user_id_and_token(&[Role::User], &pool).await?;
+        let event_id = seed_pending_event(owner_id, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::delete).service(super::get)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let req = TestRequest::get()
+            .uri("/events?updated_since=1970-01-01T00:00:00Z&include_deleted=true&status=all")
+            .to_request();
+        let res: Vec<JsonObject> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(event_id, res[0]["id"].as_i64().unwrap());
+        assert!(
+            res[0]["deleted_at"].is_string(),
+            "the revocation must be observable as a tombstone"
+        );
         Ok(())
     }
 }
