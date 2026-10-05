@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod area_reports;
 pub mod areas;
 pub mod auth;
 pub mod communities;

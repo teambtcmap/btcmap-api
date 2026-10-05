@@ -252,6 +252,7 @@ END;
 CREATE INDEX idx_user_updated_at ON "osm_user"(updated_at);
 CREATE INDEX area_updated_at ON area(updated_at);
 CREATE INDEX report_updated_at ON report(updated_at);
+CREATE INDEX report_area_id_date ON report(area_id, date);
 CREATE INDEX element_updated_at ON element(updated_at);
 CREATE UNIQUE INDEX element_overpass_data_type_and_id ON element(json_extract(overpass_data, '$.type'), json_extract(overpass_data, '$.id'));
 CREATE INDEX element_comment_updated_at ON element_comment(updated_at);

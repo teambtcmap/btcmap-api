@@ -47,6 +47,19 @@ pub async fn select_by_area_id(
         .await?
 }
 
+pub async fn select_by_area_id_ordered_by_date(
+    area_id: i64,
+    limit: Option<i64>,
+    pool: &Pool,
+) -> Result<Vec<Report>> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::select_by_area_id_ordered_by_date(area_id, limit, conn)
+        })
+        .await?
+}
+
 pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Report> {
     pool.get()
         .await?

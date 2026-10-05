@@ -9,6 +9,7 @@ This document describes the endpoints for interacting with areas in REST API v4.
 - [Add Saved Area](#add-saved-area)
 - [Delete Saved Area](#delete-saved-area)
 - [Get Area Image](#get-area-image)
+- [Get Area Reports](#get-area-reports)
 - [Get Events by Area](events.md#get-events-by-area)
 
 ### Get Saved Areas
@@ -453,3 +454,96 @@ curl -o big.png 'https://api.btcmap.org/v4/areas/grand-paris/image?type=square&w
 
 If the stored image is smaller than 4000×4000, the original bytes are
 returned unchanged.
+
+### Get Area Reports
+
+Returns the daily aggregate report history for a single area, oldest first.
+
+```bash
+curl https://api.btcmap.org/v4/areas/grand-paris/reports
+```
+
+These are **area aggregate reports** (the same rows served by the global
+`/v2/reports` and `/v3/reports` feeds), not [place reports](place-reports.md).
+An area report is a daily snapshot of how many places the area contained and
+how many were verified, so the time series cannot be re-derived from the
+current place data.
+
+#### Path Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `id` | String | `123` or `grand-paris` | **Required**. Area ID (numeric) or alias (url slug). |
+
+#### Query Parameters
+
+| Parameter | Type | Example | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `limit` | Integer | `365` | full history | Maximum number of rows to return. Must be greater than `0`; values above `10000` are capped at `10000`. |
+
+#### Response
+
+A JSON array of report rows in **chronological ascending order**
+(`ORDER BY date ASC, id ASC`), so the rows are ready to plot and the latest
+row is last. A known area with no report rows yet returns `200 []`; only an
+unknown id or alias returns `404`.
+
+```json
+[
+  {
+    "id": 12345,
+    "date": "2026-04-30",
+    "tags": {
+      "total_elements": 245,
+      "total_elements_onchain": 198,
+      "total_elements_lightning": 173,
+      "total_elements_lightning_contactless": 42,
+      "total_atms": 6,
+      "total_merchants": 239,
+      "total_exchanges": 6,
+      "up_to_date_elements": 210,
+      "up_to_date_percent": 85,
+      "outdated_elements": 35,
+      "legacy_elements": 12,
+      "avg_verification_date": "2026-03-14T00:00:00.000000000Z"
+    },
+    "created_at": "2026-04-30T02:11:07.123Z",
+    "updated_at": "2026-04-30T02:11:07.123Z"
+  }
+]
+```
+
+`area_id` is omitted from each row because the path already scopes the result
+to one area.
+
+#### Response Fields
+
+| Name | Type | Example | Description |
+|------|------|---------|-------------|
+| `id` | Number | `12345` | Report row ID. |
+| `date` | String (`YYYY-MM-DD`) | `2026-04-30` | The day the snapshot describes. |
+| `tags` | Object | | Aggregate counts for that day. See [Report Tags](#report-tags) below. |
+| `created_at` | String (RFC 3339) | `2026-04-30T02:11:07.123Z` | When the row was created. |
+| `updated_at` | String (RFC 3339) | `2026-04-30T02:11:07.123Z` | When the row was last updated. |
+
+#### Report Tags
+
+Every numeric field defaults to `0` when the stored row predates the field, so
+older rows are always safe to read. `total_merchants` and `total_exchanges`
+fall back to `total_elements − total_atms` and `total_atms` respectively when
+their keys are absent.
+
+| Name | Type | Description |
+|------|------|-------------|
+| `total_elements` | Number | Total places in the area. |
+| `total_elements_onchain` | Number | Places accepting on-chain payments. |
+| `total_elements_lightning` | Number | Places accepting Lightning payments. |
+| `total_elements_lightning_contactless` | Number | Places accepting contactless Lightning payments. |
+| `total_atms` | Number | Bitcoin ATMs in the area. |
+| `total_merchants` | Number | Merchants in the area. Falls back to `total_elements − total_atms`. |
+| `total_exchanges` | Number | Exchanges in the area. Falls back to `total_atms`. |
+| `up_to_date_elements` | Number | Places verified recently enough to count as up to date. |
+| `up_to_date_percent` | Number | Percentage of places that are up to date, truncated to an integer. |
+| `outdated_elements` | Number | Places that are not up to date. |
+| `legacy_elements` | Number | Places using a legacy payment format. |
+| `avg_verification_date` | String (RFC 3339) or omitted | Average verification date, if any place had one. |

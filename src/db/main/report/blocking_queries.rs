@@ -112,6 +112,38 @@ pub fn select_by_area_id(
         .map_err(Into::into)
 }
 
+/// Select one area's reports ordered by date, oldest first. Unlike
+/// [`select_by_area_id`], the `ORDER BY` matches the chronological order the
+/// per-area report endpoint returns, so a `LIMIT` counts rows in that same
+/// order instead of by `updated_at`.
+pub fn select_by_area_id_ordered_by_date(
+    area_id: i64,
+    limit: Option<i64>,
+    conn: &Connection,
+) -> Result<Vec<Report>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {table}
+            WHERE {area_id} = ?1
+            ORDER BY {date} ASC, {id} ASC
+            LIMIT ?2
+        "#,
+        projection = Report::projection(),
+        table = schema::TABLE_NAME,
+        area_id = Columns::AreaId.as_ref(),
+        date = Columns::Date.as_ref(),
+        id = Columns::Id.as_ref(),
+    );
+    conn.prepare(&sql)?
+        .query_map(
+            params![area_id, limit.unwrap_or(i64::MAX)],
+            Report::mapper(),
+        )?
+        .collect::<Result<Vec<Report>, _>>()
+        .map_err(Into::into)
+}
+
 pub fn select_by_id(id: i64, conn: &Connection) -> Result<Report> {
     let sql = format!(
         r#"
@@ -237,6 +269,35 @@ mod test {
         db::main::area::blocking_queries::insert(Area::mock_tags(), &conn)?;
         super::insert(1, OffsetDateTime::now_utc().date(), &Map::new(), &conn)?;
         assert!(super::select_by_id(1, &conn).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_area_id_ordered_by_date() -> Result<()> {
+        let conn = conn();
+        let area = db::main::area::blocking_queries::insert(Area::mock_tags(), &conn)?;
+        let other = db::main::area::blocking_queries::insert(Area::mock_tags(), &conn)?;
+        let mut older = Map::new();
+        older.insert("total_elements".to_string(), Value::from(1));
+        let first = super::insert(area.id, date!(2024 - 02 - 01), &older, &conn)?;
+        // An out-of-area row must be excluded even if it sorts earlier by date.
+        super::insert(other.id, date!(2024 - 01 - 01), &Map::new(), &conn)?;
+        let second = super::insert(area.id, date!(2024 - 03 - 01), &older, &conn)?;
+        let third = super::insert(area.id, date!(2024 - 01 - 01), &older, &conn)?;
+        // Make the oldest date the most recently updated to prove the sort is
+        // by date rather than updated_at.
+        super::set_updated_at(third.id, datetime!(2025-01-01 00:00 UTC), &conn)?;
+
+        let reports = super::select_by_area_id_ordered_by_date(area.id, None, &conn)?;
+        let ids: Vec<i64> = reports.iter().map(|it| it.id).collect();
+        assert_eq!(vec![third.id, first.id, second.id], ids);
+
+        // A limit counts rows in the same chronological order.
+        let limited = super::select_by_area_id_ordered_by_date(area.id, Some(2), &conn)?;
+        assert_eq!(
+            vec![third.id, first.id],
+            limited.iter().map(|it| it.id).collect::<Vec<_>>()
+        );
         Ok(())
     }
 
