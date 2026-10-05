@@ -170,6 +170,7 @@ curl 'https://api.btcmap.org/v4/areas?lat=7.9&lon=98.3'
         "lon": 98.36758749588596,
         "name": "Central Bitcoin Meetup",
         "website": "https://www.meetup.com/phuket-bitcoin-meetup/",
+        "status": "live",
         "starts_at": "2026-09-25T19:00:00Z",
         "ends_at": "2026-09-25T22:00:00Z"
       }
@@ -193,6 +194,8 @@ curl 'https://api.btcmap.org/v4/areas?lat=7.9&lon=98.3'
 #### Event Object
 
 Each entry in `upcoming_events` matches the [Events API](events.md) response shape.
+Only `live` events are included; `pending` and `rejected` submissions are never
+published through the area endpoints.
 
 | Name | Type | Example | Description |
 |------|------|---------|-------------|
@@ -201,6 +204,8 @@ Each entry in `upcoming_events` matches the [Events API](events.md) response sha
 | `lon` | Number | `98.3` | Event longitude. |
 | `name` | String | `Central Bitcoin Meetup` | Event name. |
 | `website` | String | `https://example.com` | Event website. |
+| `status` | String | `live` | Review state: `pending`, `live` or `rejected`. |
+| `submitted_by` | Object, omitted when unknown | `{ "id": 42, "name": "satoshi" }` | `id` and `name` of the user who submitted the event. |
 | `starts_at` | String (RFC 3339) | `2026-09-25T19:00:00Z` | Event start time. |
 | `ends_at` | String (RFC 3339), omitted when absent | `2026-09-25T22:00:00Z` | Event end time, if set. |
 

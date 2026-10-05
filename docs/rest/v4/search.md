@@ -95,7 +95,9 @@ Every result carries a `type` discriminator.
 `verified_at`, `osm_id`, `phone`, `website`, `localized_name` and friends.
 
 `type: "event"` — the same object returned by [`/v4/events`](events.md#get-list): `id`,
-`lat`, `lon`, `name`, `website`, `starts_at` and optional `ends_at`.
+`lat`, `lon`, `name`, `website`, `status`, optional `submitted_by` object
+(`{ id, name }`), `starts_at` and optional `ends_at`. Search only surfaces
+`live` events, so `pending` and `rejected` submissions never appear in results.
 
 ## Notes
 

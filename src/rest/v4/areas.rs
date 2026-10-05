@@ -5,7 +5,9 @@ use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
-use crate::rest::v4::events::{event_point_in_geometries, Item as EventItem};
+use crate::rest::v4::events::{
+    event_point_in_geometries, resolve_authors, with_author, Item as EventItem,
+};
 use crate::rest::v4::top_editors::{
     extract_tip_url, far_future, parse_date, validate_limit, TopEditor, EXCLUDED_USER_IDS,
 };
@@ -355,12 +357,14 @@ async fn upcoming_events_by_area(
     let candidates =
         db::main::event::queries::select_upcoming_by_bbox(west, south, east, north, pool).await?;
 
+    let authors = resolve_authors(candidates.iter().map(|it| it.submitted_by), pool).await?;
+
     for area in areas {
         let geometries = area.geo_json_geometries().unwrap_or_default();
         let events: Vec<EventItem> = candidates
             .iter()
             .filter(|event| event_point_in_geometries(event.lon, event.lat, &geometries))
-            .map(|event| EventItem::from(event.clone()))
+            .map(|event| with_author(event, false, &authors))
             .collect();
         if !events.is_empty() {
             map.insert(area.id, events);

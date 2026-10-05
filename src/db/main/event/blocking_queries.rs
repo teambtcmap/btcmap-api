@@ -21,10 +21,41 @@ pub fn insert(
     ends_at: Option<OffsetDateTime>,
     conn: &Connection,
 ) -> Result<Event> {
+    insert_with_status(
+        area_id,
+        lat,
+        lon,
+        name,
+        website,
+        starts_at,
+        ends_at,
+        schema::Status::Live,
+        None,
+        conn,
+    )
+}
+
+/// Same as [`insert`] but lets the caller pick the initial review [`Status`]
+/// and the submitting user. Existing callers (RPC and tests) create published,
+/// unattributed events; the v4 submission endpoint uses this to create
+/// `pending` events owned by the signed-in user.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_with_status(
+    area_id: Option<i64>,
+    lat: f64,
+    lon: f64,
+    name: &str,
+    website: &str,
+    starts_at: OffsetDateTime,
+    ends_at: Option<OffsetDateTime>,
+    status: schema::Status,
+    submitted_by: Option<i64>,
+    conn: &Connection,
+) -> Result<Event> {
     let sql = format!(
         r#"
-            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt})
-            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at)
+            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt}, {Status}, {SubmittedBy})
+            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at, :status, :submitted_by)
             RETURNING {projection}
         "#,
         projection = Event::projection(),
@@ -37,6 +68,8 @@ pub fn insert(
         ":website": website,
         ":starts_at": starts_at,
         ":ends_at": ends_at,
+        ":status": status,
+        ":submitted_by": submitted_by,
     };
     conn.query_row(&sql, params, Event::mapper())
         .map_err(Into::into)
@@ -131,6 +164,43 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Event> {
         .map_err(Into::into)
 }
 
+/// Every non-deleted event submitted by `user_id`, newest first. Feeds
+/// `GET /v4/users/me/events` so a submitter can track review status.
+pub fn select_by_submitted_by(user_id: i64, conn: &Connection) -> Result<Vec<Event>> {
+    let sql = format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            WHERE {SubmittedBy} = ?1
+              AND {DeletedAt} IS NULL
+            ORDER BY {CreatedAt} DESC, {Id} DESC
+        "#,
+        projection = Event::projection(),
+    );
+    conn.prepare(&sql)?
+        .query_map(params![user_id], Event::mapper())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+/// SQL predicate restricting a query to the supplied [`schema::Status`]es.
+///
+/// The literals are rendered from the enum itself, never from request input,
+/// so embedding them in the statement is safe. An empty slice matches nothing,
+/// which is deliberate: callers that want no rows must say so explicitly
+/// instead of accidentally widening to "all".
+fn statuses_predicate(statuses: &[schema::Status]) -> String {
+    if statuses.is_empty() {
+        return "0".to_string();
+    }
+    let list = statuses
+        .iter()
+        .map(|status| format!("'{}'", status.as_str()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{Status} IN ({list})")
+}
+
 /// Delta query for sync clients: every row whose `updated_at` is strictly after
 /// `updated_since`, ordered so a client can page through with a timestamp
 /// cursor (the caller widens the window when a full page shares one timestamp,
@@ -139,10 +209,14 @@ pub fn select_by_id(id: i64, conn: &Connection) -> Result<Event> {
 /// Unlike the full snapshot in [`select_all`], this deliberately does not drop
 /// past events: a change log must still surface edits and deletions of events
 /// that have already started. Soft-deleted rows are returned only when
-/// `include_deleted` is set, so a client can apply tombstones.
+/// `include_deleted` is set, so a client can apply tombstones. Only rows whose
+/// status is in `statuses` are returned, so the default (live-only) sync client
+/// never observes unreviewed submissions, and the `LIMIT` is applied to the
+/// matching rows rather than after filtering.
 pub fn select_updated_since(
     updated_since: &OffsetDateTime,
     include_deleted: bool,
+    statuses: &[schema::Status],
     limit: Option<i64>,
     conn: &Connection,
 ) -> Result<Vec<Event>> {
@@ -151,11 +225,14 @@ pub fn select_updated_since(
     } else {
         "AND deleted_at IS NULL"
     };
+    let status_filter = statuses_predicate(statuses);
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {TABLE}
-            WHERE julianday({UpdatedAt}) > julianday(:updated_since) {deleted_filter}
+            WHERE julianday({UpdatedAt}) > julianday(:updated_since)
+              {deleted_filter}
+              AND {status_filter}
             ORDER BY {UpdatedAt}, {Id}
             LIMIT :limit
         "#,
@@ -203,8 +280,9 @@ pub fn select_by_bbox(
 
 /// Bbox pre-filter for upcoming events. Drops rows whose `starts_at` is in
 /// the past so callers can use the result as a final list without re-checking
-/// timestamps. The caller is still responsible for the precise geojson
-/// contains check on the returned candidates.
+/// timestamps, and returns only `live` events so area pages never publish
+/// unreviewed submissions. The caller is still responsible for the precise
+/// geojson contains check on the returned candidates.
 pub fn select_upcoming_by_bbox(
     west: f64,
     south: f64,
@@ -213,12 +291,14 @@ pub fn select_upcoming_by_bbox(
     conn: &Connection,
 ) -> Result<Vec<Event>> {
     let now = OffsetDateTime::now_utc().format(&Rfc3339)?;
+    let live = schema::Status::Live.as_str();
     let sql = format!(
         r#"
             SELECT {projection}
             FROM {TABLE}
             WHERE {DeletedAt} IS NULL
               AND {StartsAt} >= ?5
+              AND {Status} = '{live}'
               AND {Lat} >= ?2
               AND {Lat} <= ?4
               AND {Lon} >= ?1
@@ -239,10 +319,10 @@ pub struct RankedEvent {
 }
 
 /// Matches `query` against the event name only. Every whitespace word must
-/// match the name, soft-deleted events are dropped, and only future
-/// events survive, mirroring what `GET /v4/events` returns. `starts_at` is the
-/// RFC 3339 `TEXT` column, compared lexicographically like
-/// [`select_upcoming_by_bbox`].
+/// match the name, soft-deleted events are dropped, only future events survive
+/// and only `live` events are eligible, mirroring the public `GET /v4/events`
+/// default. `starts_at` is the RFC 3339 `TEXT` column, compared
+/// lexicographically like [`select_upcoming_by_bbox`].
 fn search_predicate(word_count: usize, now_param: usize, first_word_param: usize) -> String {
     let mut words = String::new();
     for i in 0..word_count {
@@ -252,9 +332,11 @@ fn search_predicate(word_count: usize, now_param: usize, first_word_param: usize
             AND {Name} LIKE ?{param} ESCAPE '\'"#
         ));
     }
+    let live = schema::Status::Live.as_str();
     format!(
         "{DeletedAt} IS NULL
-         AND {StartsAt} >= ?{now_param}{words}"
+         AND {StartsAt} >= ?{now_param}
+         AND {Status} = '{live}'{words}"
     )
 }
 
@@ -264,8 +346,8 @@ fn word_patterns(words: &[String]) -> impl Iterator<Item = SqlValue> + '_ {
         .map(|word| SqlValue::Text(format!("%{}%", escape_like(word))))
 }
 
-/// Ranked name search over future or undated events. `location` breaks rank
-/// ties by proximity, exactly as the element and area searches do.
+/// Ranked name search over future or undated `live` events. `location` breaks
+/// rank ties by proximity, exactly as the element and area searches do.
 pub fn select_by_search(
     query: &str,
     location: Option<(f64, f64)>,
@@ -380,10 +462,28 @@ pub fn set_deleted_at(
     }
 }
 
+pub fn set_status(id: i64, status: schema::Status, conn: &Connection) -> Result<Event> {
+    let sql = format!(
+        r#"
+            UPDATE {TABLE}
+            SET {Status} = :status
+            WHERE {Id} = :id
+            RETURNING {projection}
+        "#,
+        projection = Event::projection(),
+    );
+    conn.query_row(
+        &sql,
+        named_params! { ":id": id, ":status": status },
+        Event::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
-        db::main::{area::schema::Area, test::conn},
+        db::main::{area::schema::Area, event::schema::Status, test::conn},
         Result,
     };
     use rusqlite::params;
@@ -406,7 +506,118 @@ mod test {
             None,
             &conn,
         )?;
+        assert_eq!(event.status, Status::Live);
         assert_eq!(Some(&event), super::select_all(&conn)?.first());
+        Ok(())
+    }
+
+    #[test]
+    fn insert_with_status_persists_status() -> Result<()> {
+        let conn = conn();
+        let event = super::insert_with_status(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Pending,
+            Some(42),
+            &conn,
+        )?;
+        assert_eq!(event.status, Status::Pending);
+        assert_eq!(event.submitted_by, Some(42));
+        assert_eq!(
+            Status::Pending,
+            super::select_by_id(event.id, &conn)?.status
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_submitted_by_returns_only_that_users_live_rows() -> Result<()> {
+        let conn = conn();
+        let mine = super::insert_with_status(
+            None,
+            1.0,
+            1.0,
+            "mine",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Pending,
+            Some(7),
+            &conn,
+        )?;
+        super::insert_with_status(
+            None,
+            2.0,
+            2.0,
+            "theirs",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Live,
+            Some(8),
+            &conn,
+        )?;
+        super::insert(
+            None,
+            3.0,
+            3.0,
+            "unattributed",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            &conn,
+        )?;
+
+        let mine_only = super::select_by_submitted_by(7, &conn)?;
+        assert_eq!(vec![mine], mine_only);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_submitted_by_excludes_deleted() -> Result<()> {
+        let conn = conn();
+        let event = super::insert_with_status(
+            None,
+            1.0,
+            1.0,
+            "mine",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Live,
+            Some(7),
+            &conn,
+        )?;
+        super::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &conn)?;
+        assert!(super::select_by_submitted_by(7, &conn)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn set_status_transitions_and_bumps_updated_at() -> Result<()> {
+        let conn = conn();
+        let event = super::insert(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            &conn,
+        )?;
+        let updated = super::set_status(event.id, Status::Rejected, &conn)?;
+        assert_eq!(updated.status, Status::Rejected);
+        assert!(updated.updated_at >= event.updated_at);
+        assert_eq!(
+            Status::Rejected,
+            super::select_by_id(event.id, &conn)?.status
+        );
         Ok(())
     }
 
@@ -866,7 +1077,7 @@ mod test {
         )?;
         set_updated_at(new.id, now + Duration::hours(1), &conn)?;
 
-        let results = super::select_updated_since(&now, false, None, &conn)?;
+        let results = super::select_updated_since(&now, false, &[Status::Live], None, &conn)?;
         assert_eq!(
             vec![new.id],
             results.into_iter().map(|it| it.id).collect::<Vec<_>>()
@@ -898,6 +1109,7 @@ mod test {
         let results = super::select_updated_since(
             &datetime!(2024-01-01 10:00:00.500 UTC),
             false,
+            &[Status::Live],
             None,
             &conn,
         )?;
@@ -922,10 +1134,22 @@ mod test {
         )?;
         super::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &conn)?;
 
-        let without = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, None, &conn)?;
+        let without = super::select_updated_since(
+            &OffsetDateTime::UNIX_EPOCH,
+            false,
+            &[Status::Live],
+            None,
+            &conn,
+        )?;
         assert!(without.is_empty());
 
-        let included = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, true, None, &conn)?;
+        let included = super::select_updated_since(
+            &OffsetDateTime::UNIX_EPOCH,
+            true,
+            &[Status::Live],
+            None,
+            &conn,
+        )?;
         assert_eq!(1, included.len());
         assert!(included[0].deleted_at.is_some());
         Ok(())
@@ -969,7 +1193,13 @@ mod test {
         )?;
         set_updated_at(third.id, base + Duration::hours(2), &conn)?;
 
-        let page = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, Some(2), &conn)?;
+        let page = super::select_updated_since(
+            &OffsetDateTime::UNIX_EPOCH,
+            false,
+            &[Status::Live],
+            Some(2),
+            &conn,
+        )?;
         assert_eq!(
             vec![first.id, second.id],
             page.into_iter().map(|it| it.id).collect::<Vec<_>>()
@@ -991,11 +1221,152 @@ mod test {
             &conn,
         )?;
 
-        let results = super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, None, &conn)?;
+        let results = super::select_updated_since(
+            &OffsetDateTime::UNIX_EPOCH,
+            false,
+            &[Status::Live],
+            None,
+            &conn,
+        )?;
         assert_eq!(
             vec![past.id],
             results.into_iter().map(|it| it.id).collect::<Vec<_>>()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn select_updated_since_respects_status_filter() -> Result<()> {
+        let conn = conn();
+        let live = super::insert(
+            None,
+            1.0,
+            1.0,
+            "live",
+            "website",
+            future_start(),
+            None,
+            &conn,
+        )?;
+        let pending = super::insert_with_status(
+            None,
+            2.0,
+            2.0,
+            "pending",
+            "website",
+            future_start(),
+            None,
+            Status::Pending,
+            None,
+            &conn,
+        )?;
+        set_updated_at(
+            live.id,
+            OffsetDateTime::UNIX_EPOCH + Duration::days(1),
+            &conn,
+        )?;
+        set_updated_at(
+            pending.id,
+            OffsetDateTime::UNIX_EPOCH + Duration::days(2),
+            &conn,
+        )?;
+
+        let live_only = super::select_updated_since(
+            &OffsetDateTime::UNIX_EPOCH,
+            false,
+            &[Status::Live],
+            None,
+            &conn,
+        )?;
+        assert_eq!(
+            vec![live.id],
+            live_only.into_iter().map(|it| it.id).collect::<Vec<_>>()
+        );
+
+        let all = super::select_updated_since(
+            &OffsetDateTime::UNIX_EPOCH,
+            false,
+            &Status::ALL,
+            None,
+            &conn,
+        )?;
+        assert_eq!(
+            vec![live.id, pending.id],
+            all.into_iter().map(|it| it.id).collect::<Vec<_>>()
+        );
+
+        let none =
+            super::select_updated_since(&OffsetDateTime::UNIX_EPOCH, false, &[], None, &conn)?;
+        assert!(none.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn select_upcoming_by_bbox_excludes_non_live_events() -> Result<()> {
+        let conn = conn();
+        let live = super::insert(
+            None,
+            7.97,
+            98.33,
+            "live",
+            "website",
+            future_start(),
+            None,
+            &conn,
+        )?;
+        super::insert_with_status(
+            None,
+            7.97,
+            98.33,
+            "pending",
+            "website",
+            future_start(),
+            None,
+            Status::Pending,
+            None,
+            &conn,
+        )?;
+
+        let hits = super::select_upcoming_by_bbox(98.0, 7.0, 99.0, 8.0, &conn)?;
+        assert_eq!(vec![live], hits);
+        Ok(())
+    }
+
+    #[test]
+    fn search_excludes_non_live_events() -> Result<()> {
+        let conn = conn();
+        let live = insert_named("Bitcoin Live", future_start(), 0.0, 0.0, &conn)?;
+        super::insert_with_status(
+            None,
+            0.0,
+            0.0,
+            "Bitcoin Pending",
+            "website",
+            future_start(),
+            None,
+            Status::Pending,
+            None,
+            &conn,
+        )?;
+        super::insert_with_status(
+            None,
+            0.0,
+            0.0,
+            "Bitcoin Rejected",
+            "website",
+            future_start(),
+            None,
+            Status::Rejected,
+            None,
+            &conn,
+        )?;
+
+        let ranked = super::select_by_search("Bitcoin", None, 100, &conn)?;
+        assert_eq!(
+            vec![live],
+            ranked.into_iter().map(|it| it.event.id).collect::<Vec<_>>()
+        );
+        assert_eq!(1, super::count_by_search("Bitcoin", &conn)?);
         Ok(())
     }
 }

@@ -21,7 +21,7 @@ use geo::Polygon;
 ///
 /// Returns an error when the caller has a non-empty geofence and the point
 /// falls outside every fenced area.
-pub(crate) async fn check(
+pub async fn check(
     user: &crate::db::main::user::schema::User,
     lat: f64,
     lon: f64,
@@ -76,7 +76,7 @@ fn point_inside_area(area: &Area, coord: geo::Coord) -> Result<bool> {
 
 /// Convenience wrapper used by `delete_event`: load the existing event
 /// then run the geofence check against its stored (lat, lon).
-pub(crate) async fn check_existing(
+pub async fn check_existing(
     user: &crate::db::main::user::schema::User,
     event_id: i64,
     pool: &Pool,

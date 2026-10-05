@@ -36,7 +36,7 @@ pub struct Res {
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
-    super::geofence::check(user, params.lat, params.lon, pool).await?;
+    crate::service::geofence::check(user, params.lat, params.lon, pool).await?;
     let (starts_at, ends_at, timezone) = timezone::resolve_create_times(
         params.starts_at,
         params.ends_at,

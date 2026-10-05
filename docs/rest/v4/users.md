@@ -13,6 +13,7 @@ This document describes the endpoints for interacting with users in REST API v4.
 - [Link Nostr Identity](#link-nostr-identity)
 - [Unlink Nostr Identity](#unlink-nostr-identity)
 - [List My Place Images](#list-my-place-images)
+- [List My Events](#list-my-events)
 
 ### Get Authenticated User
 
@@ -365,5 +366,30 @@ documentation for the response shape and errors.
 | Code | Description |
 |------|-------------|
 | 200  | Success - Returns the user's uploaded images (possibly empty) |
+| 401  | Unauthorized - Missing or invalid token |
+| 500  | Internal Server Error - Database error |
+
+### List My Events
+
+Returns the events submitted by the authenticated user, across all review
+statuses, newest first. Requires a valid Bearer token. Use it to track the
+`pending`/`live`/`rejected` state of submissions.
+
+#### Example Request
+
+```bash
+curl https://api.btcmap.org/v4/users/me/events \
+  -H "Authorization: Bearer <your-token>"
+```
+
+#### Response
+
+Returns an array of event items. See
+[Get My Submitted Events](events.md#get-my-submitted-events) in the Events
+documentation for the response shape and errors.
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Returns the user's submitted events (possibly empty) |
 | 401  | Unauthorized - Missing or invalid token |
 | 500  | Internal Server Error - Database error |

@@ -1,5 +1,8 @@
 use crate::{
-    db::main::event::{blocking_queries, schema::Event},
+    db::main::event::{
+        blocking_queries,
+        schema::{Event, Status},
+    },
     Result,
 };
 use deadpool_sqlite::Pool;
@@ -26,6 +29,38 @@ pub async fn insert(
         .await?
 }
 
+#[allow(clippy::too_many_arguments)]
+pub async fn insert_with_status(
+    area_id: Option<i64>,
+    lat: f64,
+    lon: f64,
+    name: String,
+    website: String,
+    starts_at: OffsetDateTime,
+    ends_at: Option<OffsetDateTime>,
+    status: Status,
+    submitted_by: Option<i64>,
+    pool: &Pool,
+) -> Result<Event> {
+    pool.get()
+        .await?
+        .interact(move |conn| {
+            blocking_queries::insert_with_status(
+                area_id,
+                lat,
+                lon,
+                &name,
+                &website,
+                starts_at,
+                ends_at,
+                status,
+                submitted_by,
+                conn,
+            )
+        })
+        .await?
+}
+
 pub async fn select_all(pool: &Pool) -> Result<Vec<Event>> {
     pool.get()
         .await?
@@ -40,16 +75,30 @@ pub async fn select_by_id(id: i64, pool: &Pool) -> Result<Event> {
         .await?
 }
 
+pub async fn select_by_submitted_by(user_id: i64, pool: &Pool) -> Result<Vec<Event>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_submitted_by(user_id, conn))
+        .await?
+}
+
 pub async fn select_updated_since(
     updated_since: OffsetDateTime,
     include_deleted: bool,
+    statuses: Vec<Status>,
     limit: Option<i64>,
     pool: &Pool,
 ) -> Result<Vec<Event>> {
     pool.get()
         .await?
         .interact(move |conn| {
-            blocking_queries::select_updated_since(&updated_since, include_deleted, limit, conn)
+            blocking_queries::select_updated_since(
+                &updated_since,
+                include_deleted,
+                &statuses,
+                limit,
+                conn,
+            )
         })
         .await?
 }
@@ -139,5 +188,12 @@ pub async fn set_deleted_at(
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::set_deleted_at(id, deleted_at, conn))
+        .await?
+}
+
+pub async fn set_status(id: i64, status: Status, pool: &Pool) -> Result<Event> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_status(id, status, conn))
         .await?
 }

@@ -74,7 +74,7 @@ pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
     let event = db::main::event::queries::select_by_id(params.id, pool).await?;
     let lat = params.lat.unwrap_or(event.lat);
     let lon = params.lon.unwrap_or(event.lon);
-    super::geofence::check(user, lat, lon, pool).await?;
+    crate::service::geofence::check(user, lat, lon, pool).await?;
     let (starts_at, ends_at, timezone) = timezone::resolve_update_times(
         params.starts_at,
         params.ends_at,

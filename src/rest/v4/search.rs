@@ -5,7 +5,7 @@ use crate::db::main::event::queries::RankedEvent;
 use crate::db::main::MainPool;
 use crate::rest::error::RestResult as Res;
 use crate::rest::error::{RestApiError, RestApiErrorCode};
-use crate::rest::v4::events::Item;
+use crate::rest::v4::events::{resolve_authors, with_author, Item};
 use crate::rest::v4::places::SearchedPlace;
 use actix_web::{get, web::Data, web::Json, web::Query};
 use serde::{Deserialize, Serialize};
@@ -233,6 +233,9 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
         total += db::main::event::queries::count_by_search(query.clone(), &pool)
             .await
             .map_err(|_| RestApiError::database())?;
+        let authors = resolve_authors(events.iter().map(|it| it.event.submitted_by), &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
         for RankedEvent { event, rank } in events {
             let distance = match location {
                 Some((lat, lon)) => (event.lat - lat).powi(2) + (event.lon - lon).powi(2),
@@ -247,7 +250,7 @@ pub async fn get(args: Query<SearchArgs>, pool: Data<MainPool>) -> Res<SearchRes
                 name_len: name.chars().count(),
                 name,
                 id,
-                result: SearchResult::Event(Box::new(event.into())),
+                result: SearchResult::Event(Box::new(with_author(&event, false, &authors))),
             });
         }
     }

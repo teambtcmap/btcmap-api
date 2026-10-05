@@ -6,6 +6,7 @@ pub mod comment;
 pub mod electrum_pinned;
 pub mod element;
 pub mod event;
+pub mod geofence;
 pub mod gitea;
 pub mod image;
 pub mod invoice;

@@ -23,7 +23,7 @@ impl From<Event> for Res {
 }
 
 pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
-    super::geofence::check_existing(user, params.id, pool).await?;
+    crate::service::geofence::check_existing(user, params.id, pool).await?;
     db::main::event::queries::set_deleted_at(params.id, Some(OffsetDateTime::now_utc()), pool)
         .await
         .map(Into::into)
