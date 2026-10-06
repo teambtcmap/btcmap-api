@@ -1,6 +1,7 @@
 use crate::db;
 use crate::db::image::ImagePool;
 use crate::db::main::area::schema::Area;
+use crate::db::main::user::schema::Role;
 use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestResult as Res;
@@ -393,6 +394,19 @@ pub struct GetByIdArgs {
     pub lang: Option<String>,
 }
 
+fn get_by_id_res(area: &Area, lang: Option<&str>) -> GetByIdRes {
+    GetByIdRes {
+        id: area.id,
+        name: area.localized_tag("name", lang),
+        r#type: area_type(area),
+        url_alias: area.alias(),
+        icon: area_icon(area, "icon:square"),
+        icon_wide: area_icon(area, "icon:wide"),
+        website_url: area_website_url(area),
+        description: area.localized_tag("description", lang),
+    }
+}
+
 #[get("{id}")]
 pub async fn get_by_id(
     id: Path<String>,
@@ -409,33 +423,183 @@ pub async fn get_by_id(
             Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
             _ => RestApiError::database(),
         })?;
-    let r#type = area.tags.get("type").and_then(|v| v.as_str()).unwrap_or("");
-    let singular_type = if let Some(stripped) = r#type.strip_suffix("ies") {
-        format!("{}y", stripped)
-    } else if let Some(stripped) = r#type.strip_suffix('s') {
-        stripped.to_string()
-    } else {
-        r#type.to_string()
-    };
-    let url_alias = area.alias();
-    Ok(Json(GetByIdRes {
-        id: area.id,
-        name: area.localized_tag("name", lang),
-        r#type: r#type.to_string(),
-        url_alias: url_alias.clone(),
-        icon: area
-            .tags
-            .get("icon:square")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        icon_wide: area
-            .tags
-            .get("icon:wide")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        website_url: format!("https://btcmap.org/{}/{}", singular_type, url_alias),
-        description: area.localized_tag("description", lang),
-    }))
+    Ok(Json(get_by_id_res(&area, lang)))
+}
+
+/// Contact channels a caller may set through [`PostAreaArgs::contact`]. The
+/// server prefixes each accepted channel with `contact:` when storing it, so the
+/// request body uses bare channel names. Anything outside this allowlist is
+/// ignored, so the endpoint can never write arbitrary or server-managed tags.
+const SUBMITTABLE_CONTACT_CHANNELS: &[&str] = &[
+    "discord",
+    "email",
+    "eventbrite",
+    "facebook",
+    "geyser",
+    "github",
+    "instagram",
+    "line",
+    "linkedin",
+    "luma",
+    "matrix",
+    "meetup",
+    "nostr",
+    "phone",
+    "reddit",
+    "rss",
+    "satlantis",
+    "signal",
+    "simplex",
+    "telegram",
+    "twitter",
+    "website",
+    "whatsapp",
+    "youtube",
+];
+
+/// Request body for `POST /v4/areas`.
+///
+/// Generic area `tags` are abstracted away behind named fields instead of being
+/// accepted verbatim. `contact` is the only free-form part and is filtered
+/// through `SUBMITTABLE_CONTACT_CHANNELS`, so a caller can only ever set
+/// known, non-sensitive tags.
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct PostAreaArgs {
+    pub name: String,
+    pub r#type: String,
+    pub url_alias: String,
+    #[ts(type = "Record<string, unknown>")]
+    pub geo_json: Value,
+    #[serde(default)]
+    #[ts(optional)]
+    pub description: Option<String>,
+    /// Well-known contact channels keyed by bare channel name (e.g. `telegram`),
+    /// stored as `contact:<name>`. Channels outside
+    /// `SUBMITTABLE_CONTACT_CHANNELS` are silently ignored.
+    #[serde(default)]
+    #[ts(optional, type = "Record<string, unknown>")]
+    pub contact: Option<Map<String, Value>>,
+}
+
+/// Roles allowed to create areas. Mirrors the RPC `add_area` gate.
+fn is_area_privileged(auth: &Auth) -> bool {
+    auth.effective_roles()
+        .iter()
+        .any(|role| matches!(role, Role::AreaManager | Role::Admin | Role::Root))
+}
+
+/// Aliases are stored verbatim (production contains spaces, uppercase and
+/// accented characters), so this only guards against values that break URLs or
+/// storage: control characters and unbounded length.
+fn validate_url_alias(alias: &str) -> Result<(), RestApiError> {
+    if alias.chars().any(char::is_control) {
+        return Err(RestApiError::invalid_input(
+            "url_alias must not contain control characters",
+        ));
+    }
+    if alias.len() > 128 {
+        return Err(RestApiError::invalid_input("url_alias is too long"));
+    }
+    Ok(())
+}
+
+fn build_area_tags(args: &PostAreaArgs) -> Result<Map<String, Value>, RestApiError> {
+    let name = args.name.trim();
+    let r#type = args.r#type.trim();
+    let url_alias = args.url_alias.trim();
+    if name.is_empty() {
+        return Err(RestApiError::invalid_input("name cannot be empty"));
+    }
+    if r#type.is_empty() {
+        return Err(RestApiError::invalid_input("type cannot be empty"));
+    }
+    if url_alias.is_empty() {
+        return Err(RestApiError::invalid_input("url_alias cannot be empty"));
+    }
+    validate_url_alias(url_alias)?;
+    serde_json::to_string(&args.geo_json)
+        .ok()
+        .and_then(|it| it.parse::<geojson::GeoJson>().ok())
+        .ok_or_else(|| RestApiError::invalid_input("geo_json must be valid GeoJSON"))?;
+
+    let mut tags = Map::new();
+    tags.insert("name".into(), Value::String(name.into()));
+    tags.insert("type".into(), Value::String(r#type.into()));
+    tags.insert("url_alias".into(), Value::String(url_alias.into()));
+    tags.insert("geo_json".into(), args.geo_json.clone());
+    if let Some(description) = args
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|it| !it.is_empty())
+    {
+        tags.insert("description".into(), Value::String(description.into()));
+    }
+    if let Some(contact) = &args.contact {
+        for (channel, value) in contact {
+            if !SUBMITTABLE_CONTACT_CHANNELS.contains(&channel.as_str()) {
+                continue;
+            }
+            // A missing value is a no-op, but a present one has to be a string:
+            // the tag schema only ever stores strings, and silently coercing a
+            // number or object would surprise the caller.
+            if value.is_null() {
+                continue;
+            }
+            let value = value.as_str().ok_or_else(|| {
+                RestApiError::invalid_input(format!("contact.{channel} must be a string"))
+            })?;
+            let value = value.trim();
+            if !value.is_empty() {
+                tags.insert(format!("contact:{channel}"), Value::String(value.into()));
+            }
+        }
+    }
+    Ok(tags)
+}
+
+/// `POST /v4/areas`
+///
+/// Creates a new area. Restricted to area managers, admins and roots. A caller
+/// with a non-empty geofence is rejected, since a brand new top-level area
+/// would fall outside every area they are allowed to manage; this mirrors the
+/// RPC `add_area` rule.
+#[post("")]
+pub async fn post(auth: Auth, args: Json<PostAreaArgs>, pool: Data<MainPool>) -> Res<GetByIdRes> {
+    let user = auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
+    if !is_area_privileged(&auth) {
+        return Err(RestApiError::forbidden());
+    }
+    if !user.geofence.is_empty() {
+        return Err(RestApiError::new(
+            RestApiErrorCode::Forbidden,
+            "Cannot create areas while your geofence is set; ask an admin to create the area",
+        ));
+    }
+
+    let tags = build_area_tags(&args)?;
+    let alias = tags
+        .get("url_alias")
+        .and_then(|it| it.as_str())
+        .unwrap_or_default()
+        .to_string();
+    match service::area::is_alias_taken(&alias, &pool).await {
+        Ok(true) => {
+            return Err(RestApiError::invalid_input(format!(
+                "url_alias '{alias}' is already taken"
+            )))
+        }
+        Ok(false) => {}
+        Err(_) => return Err(RestApiError::database()),
+    }
+
+    // `build_area_tags` has already validated geo_json and the alias, so any
+    // remaining failure here is internal (bbox/sync/mapping), not caller input.
+    let area = service::area::insert(tags, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(get_by_id_res(&area, None)))
 }
 
 #[get("/saved")]
@@ -622,6 +786,7 @@ mod test {
     use crate::db::main::area::schema::Area;
     use crate::db::main::test::pool;
     use crate::{db, Result};
+    use actix_web::http::{header, StatusCode};
     use actix_web::test::TestRequest;
     use actix_web::web::{scope, Data};
     use actix_web::{test, App};
@@ -1834,6 +1999,298 @@ mod test {
         let obj = res[0].as_object().unwrap();
         assert!(!obj.contains_key("localized_name"));
         assert!(!obj.contains_key("localized_description"));
+        Ok(())
+    }
+
+    async fn seed_user_token(
+        pool: &crate::db::main::MainPool,
+        roles: Vec<Role>,
+        geofence: Vec<i64>,
+    ) -> Result<String> {
+        let user = db::main::user::queries::insert("tester", "", pool).await?;
+        if !geofence.is_empty() {
+            db::main::user::queries::set_geofence(user.id, &geofence, pool).await?;
+        }
+        let secret = "test-secret".to_string();
+        db::main::access_token::queries::insert(
+            user.id,
+            String::new(),
+            secret.clone(),
+            roles,
+            pool,
+        )
+        .await?;
+        Ok(secret)
+    }
+
+    fn post_area_payload(alias: &str) -> serde_json::Value {
+        json!({
+            "name": "Grand Paris",
+            "type": "community",
+            "url_alias": alias,
+            "geo_json": phuket_polygon(),
+            "description": "Greater Paris",
+            "contact": {
+                "telegram": "https://t.me/grandparis",
+                "website": "https://grandparis.example",
+                "line": "https://line.me/R/ti/p/@grandparis",
+                "foo": "bar"
+            }
+        })
+    }
+
+    async fn call_post(
+        pool: &crate::db::main::MainPool,
+        secret: Option<&str>,
+        payload: &serde_json::Value,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/areas").service(super::post)),
+        )
+        .await;
+        let mut request = TestRequest::post()
+            .uri("/areas")
+            .insert_header(header::ContentType::json())
+            .set_payload(payload.to_string());
+        if let Some(secret) = secret {
+            request = request.insert_header((header::AUTHORIZATION, format!("Bearer {secret}")));
+        }
+        test::call_service(&app, request.to_request()).await
+    }
+
+    #[test]
+    async fn post_requires_auth() -> Result<()> {
+        let res = call_post(&pool(), None, &post_area_payload("grand-paris")).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_forbidden_for_regular_user() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::User], vec![]).await?;
+        let res = call_post(&pool, Some(&secret), &post_area_payload("grand-paris")).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_forbidden_for_area_manager_with_geofence() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![area.id]).await?;
+        let res = call_post(&pool, Some(&secret), &post_area_payload("grand-paris")).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_creates_area_with_whitelisted_fields() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_post(&pool, Some(&secret), &post_area_payload("grand-paris")).await;
+        assert_eq!(res.status(), StatusCode::OK);
+        let body: GetByIdRes = test::read_body_json(res).await;
+        assert_eq!(body.name, "Grand Paris");
+        assert_eq!(body.r#type, "community");
+        assert_eq!(body.url_alias, "grand-paris");
+        assert_eq!(body.description, "Greater Paris");
+        assert_eq!(body.icon, None);
+        assert_eq!(body.icon_wide, None);
+        assert_eq!(body.website_url, "https://btcmap.org/community/grand-paris");
+
+        let stored = db::main::area::queries::select_by_alias("grand-paris", &pool).await?;
+        assert_eq!(stored.tags["name"], json!("Grand Paris"));
+        assert_eq!(stored.tags["type"], json!("community"));
+        assert_eq!(stored.tags["url_alias"], json!("grand-paris"));
+        assert_eq!(stored.tags["description"], json!("Greater Paris"));
+        assert_eq!(
+            stored.tags["contact:telegram"],
+            json!("https://t.me/grandparis")
+        );
+        assert_eq!(
+            stored.tags["contact:website"],
+            json!("https://grandparis.example")
+        );
+        assert_eq!(
+            stored.tags["contact:line"],
+            json!("https://line.me/R/ti/p/@grandparis")
+        );
+        assert!(
+            !stored.tags.contains_key("contact:foo"),
+            "non-whitelisted contact channel must be dropped"
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn post_ignores_unknown_body_fields() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["tags"] = json!({"name": "hacked", "verified:date": "2099-01-01"});
+        payload["bbox_west"] = json!(-1.0);
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_alias("grand-paris", &pool).await?;
+        assert_eq!(stored.tags["name"], json!("Grand Paris"));
+        assert!(!stored.tags.contains_key("verified:date"));
+        assert_ne!(stored.bbox_west, -1.0);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_empty_name() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["name"] = json!("   ");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_empty_type() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["type"] = json!("");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_empty_url_alias() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("   ");
+        payload["url_alias"] = json!("");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_too_long_url_alias() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["url_alias"] = json!("a".repeat(129));
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_control_chars_in_url_alias() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["url_alias"] = json!("grand\nparis");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_invalid_geo_json() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["geo_json"] = json!("not geojson");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_non_string_contact() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["contact"] = json!({ "telegram": 123 });
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_ignores_null_and_blank_contact() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["contact"] = json!({ "telegram": null, "website": "  " });
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_alias("grand-paris", &pool).await?;
+        assert!(!stored.tags.contains_key("contact:telegram"));
+        assert!(!stored.tags.contains_key("contact:website"));
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_duplicate_url_alias() -> Result<()> {
+        let pool = pool();
+        let mut tags = phuket_area_tags("Taken");
+        tags.insert("url_alias".into(), json!("grand-paris"));
+        db::main::area::queries::insert(tags, &pool).await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_post(&pool, Some(&secret), &post_area_payload("grand-paris")).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_follows_token_roles_over_user_roles() -> Result<()> {
+        // A token with a non-empty role list is authoritative: it narrows or
+        // changes the user's effective roles, exactly like the RPC layer.
+        let pool = pool();
+
+        // User is an area manager but the token is scoped down to `user`.
+        let scoped_down = db::main::user::queries::insert("scoped_down", "", &pool).await?;
+        db::main::user::queries::set_roles(scoped_down.id, &[Role::AreaManager], &pool).await?;
+        let down_secret = "down-secret".to_string();
+        db::main::access_token::queries::insert(
+            scoped_down.id,
+            String::new(),
+            down_secret.clone(),
+            vec![Role::User],
+            &pool,
+        )
+        .await?;
+
+        // User is ordinary but the token carries the area-manager role.
+        let scoped_up = db::main::user::queries::insert("scoped_up", "", &pool).await?;
+        db::main::user::queries::set_roles(scoped_up.id, &[Role::User], &pool).await?;
+        let up_secret = "up-secret".to_string();
+        db::main::access_token::queries::insert(
+            scoped_up.id,
+            String::new(),
+            up_secret.clone(),
+            vec![Role::AreaManager],
+            &pool,
+        )
+        .await?;
+
+        let down = call_post(&pool, Some(&down_secret), &post_area_payload("scoped-down")).await;
+        assert_eq!(
+            down.status(),
+            StatusCode::FORBIDDEN,
+            "a down-scoped token must not inherit the user's area-manager role"
+        );
+
+        let up = call_post(&pool, Some(&up_secret), &post_area_payload("scoped-up")).await;
+        assert_eq!(
+            up.status(),
+            StatusCode::OK,
+            "a token with an elevated role grants privileges regardless of user roles"
+        );
         Ok(())
     }
 }

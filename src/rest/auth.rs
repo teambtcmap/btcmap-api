@@ -1,6 +1,6 @@
 use crate::db;
 use crate::db::main::access_token::schema::AccessToken;
-use crate::db::main::user::schema::User;
+use crate::db::main::user::schema::{Role, User};
 use crate::db::main::MainPool;
 use crate::service::log::AuthenticatedUser;
 use actix_web::{dev::Payload, http::header, web::Data, FromRequest, HttpMessage, HttpRequest};
@@ -19,6 +19,20 @@ impl Auth {
 
     pub fn token(&self) -> Option<&AccessToken> {
         self.token.as_ref()
+    }
+
+    /// Effective roles for the request: a non-empty token role list narrows (or
+    /// changes) the user's roles, otherwise the user's own roles apply. Mirrors
+    /// the RPC layer's precedence so REST and RPC authorize identically.
+    pub fn effective_roles(&self) -> &[Role] {
+        match self.token.as_ref() {
+            Some(token) if !token.roles.is_empty() => &token.roles,
+            _ => self
+                .user
+                .as_ref()
+                .map(|user| user.roles.as_slice())
+                .unwrap_or(&[]),
+        }
     }
 }
 

@@ -47,6 +47,22 @@ pub async fn insert(tags: Map<String, Value>, pool: &Pool) -> Result<Area> {
     Ok(area)
 }
 
+/// Whether an alias is already taken. Soft-deleted areas keep their alias
+/// reserved, so historical links cannot silently point at a different area.
+///
+/// Aliases are not `UNIQUE` in the database: production already holds live and
+/// soft-deleted areas that share an alias (an artifact of the RPC path, which
+/// had no uniqueness check). Uniqueness is therefore enforced in application
+/// code, and the check is best-effort: a concurrent create can still slip
+/// through, matching the tolerant historical data.
+pub async fn is_alias_taken(alias: &str, pool: &Pool) -> Result<bool> {
+    match db::main::area::queries::select_by_alias(alias, pool).await {
+        Ok(_) => Ok(true),
+        Err(crate::Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows)) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 pub async fn patch_tags(
     area_id_or_alias: &str,
     tags: Map<String, Value>,

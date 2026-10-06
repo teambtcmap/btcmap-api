@@ -379,24 +379,10 @@ pub async fn get_by_area(
     Ok(Json(attach_authors(items, false, &pool).await?))
 }
 
-/// Effective roles for the request: a non-empty token role list narrows (or
-/// changes) the user's roles, otherwise the user's own roles apply. Mirrors the
-/// RPC layer's precedence so REST and RPC authorize identically.
-fn effective_roles(auth: &Auth) -> &[Role] {
-    match auth.token.as_ref() {
-        Some(token) if !token.roles.is_empty() => &token.roles,
-        _ => auth
-            .user
-            .as_ref()
-            .map(|user| user.roles.as_slice())
-            .unwrap_or(&[]),
-    }
-}
-
 /// Roles allowed to bypass review: their submissions go straight to `live` and
 /// they may transition an event's status.
 fn is_privileged(auth: &Auth) -> bool {
-    effective_roles(auth)
+    auth.effective_roles()
         .iter()
         .any(|role| matches!(role, Role::EventManager | Role::Admin | Role::Root))
 }

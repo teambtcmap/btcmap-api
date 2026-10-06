@@ -44,6 +44,11 @@ pub async fn run(params: Params, user: &User, pool: &Pool) -> Result<Res> {
         )
         .into());
     }
+    if let Some(alias) = params.tags.get("url_alias").and_then(|it| it.as_str()) {
+        if service::area::is_alias_taken(alias, pool).await? {
+            return Err(format!("url_alias '{alias}' is already taken").into());
+        }
+    }
     service::area::insert(params.tags, pool)
         .await
         .map(Into::into)
@@ -127,6 +132,24 @@ mod test {
                 Err(e) => e,
             };
             assert!(err.to_string().contains("geofence"));
+            Ok::<(), crate::Error>(())
+        })
+    }
+
+    #[test]
+    fn duplicate_alias_is_rejected() -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let pool = pool();
+            let user = am_user(vec![]);
+            run(params(), &user, &pool).await?;
+            let err = match run(params(), &user, &pool).await {
+                Ok(_) => panic!("expected duplicate alias rejection"),
+                Err(e) => e,
+            };
+            assert!(err.to_string().contains("already taken"));
             Ok::<(), crate::Error>(())
         })
     }

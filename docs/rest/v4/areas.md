@@ -4,6 +4,7 @@ This document describes the endpoints for interacting with areas in REST API v4.
 
 ## Available Endpoints
 
+- [Create Area](#create-area)
 - [Get Saved Areas](#get-saved-areas)
 - [Set Saved Areas](#set-saved-areas)
 - [Add Saved Area](#add-saved-area)
@@ -297,6 +298,107 @@ curl 'https://api.btcmap.org/v4/areas?updated_since=2025-06-11T00:00:00Z'
 ```json
 [{ "id": 123 }]
 ```
+
+### Create Area
+
+Creates a new area.
+
+```bash
+curl -X POST https://api.btcmap.org/v4/areas \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Grand Paris",
+    "type": "community",
+    "url_alias": "grand-paris",
+    "geo_json": {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[2.22, 48.81], [2.47, 48.81], [2.47, 48.91], [2.22, 48.91], [2.22, 48.81]]]
+      }
+    },
+    "description": "Greater Paris metropolitan region.",
+    "contact": { "telegram": "https://t.me/grandparis" }
+  }'
+```
+
+**Requires authentication.** Only area managers, admins and roots may create
+areas. A caller whose geofence is non-empty is rejected with `403 forbidden`,
+since a new top-level area would fall outside every area they are allowed to
+manage (mirrors the legacy RPC `add_area`).
+
+Generic area `tags` are never accepted. The body is a fixed set of well-known
+fields, and `contact` is filtered against an allowlist, so unknown or
+server-managed keys are silently ignored.
+
+#### btcmap-cli
+
+The [btcmap-cli](https://github.com/teambtcmap/mapctl) `area add` command calls
+this endpoint:
+
+```bash
+btcmap-cli area add \
+  --alias grand-paris \
+  --type community \
+  --name "Grand Paris" \
+  --geojson '{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[2.22,48.81],[2.47,48.81],[2.47,48.91],[2.22,48.91],[2.22,48.81]]]}}'
+```
+
+`--name` defaults to `--alias` when omitted. The CLI strips the trailing `/rpc`
+from the configured server URL to reach the v4 REST API and authenticates with
+the stored API key.
+
+#### Request Body
+
+| Field | Type | Example | Description |
+|-------|------|---------|-------------|
+| `name` | String | `Grand Paris` | **Required**. Area name. Must not be blank. |
+| `type` | String | `community` | **Required**. Area type (e.g. `country`, `community`). Must not be blank. |
+| `url_alias` | String | `grand-paris` | **Required**. URL-friendly identifier. Must not be blank, exceed 128 bytes, contain control characters, or already be taken. |
+| `geo_json` | Object | GeoJSON | **Required**. A valid GeoJSON feature, geometry or feature collection. Drives the bounding box and the place-to-area mapping. |
+| `description` | String | `Greater Paris...` | Optional. Blank values are ignored. |
+| `contact` | Object | `{ "telegram": "..." }` | Optional. Well-known contact channels keyed by bare channel name. Values must be strings. Only allowlisted channels are written, as `contact:<name>`; anything else is dropped. |
+
+#### Contact Channels
+
+Only the following `contact` keys are persisted (stored as `contact:<name>`).
+Values must be strings; a non-string value is rejected with `400 invalid_input`.
+`null` and blank values are ignored.
+
+`discord`, `email`, `eventbrite`, `facebook`, `geyser`, `github`, `instagram`,
+`line`, `linkedin`, `luma`, `matrix`, `meetup`, `nostr`, `phone`, `reddit`,
+`rss`, `satlantis`, `signal`, `simplex`, `telegram`, `twitter`, `website`,
+`whatsapp`, `youtube`
+
+#### Response
+
+Returns the created [Area](#get-area) object.
+
+```json
+{
+  "id": 123,
+  "name": "Grand Paris",
+  "type": "community",
+  "url_alias": "grand-paris",
+  "icon": null,
+  "icon_wide": null,
+  "website_url": "https://btcmap.org/community/grand-paris",
+  "description": "Greater Paris metropolitan region."
+}
+```
+
+The endpoint returns `400 invalid_input` for a blank `name`/`type`/`url_alias`,
+malformed `geo_json`, a non-string `contact` value, an over-long or
+control-character `url_alias`, or an already-taken `url_alias`.
+
+`url_alias` values are stored verbatim apart from surrounding whitespace, so
+case, spaces and accented characters are preserved (matching the aliases that
+already exist). Uniqueness is checked against all areas, including soft-deleted
+ones: a retired area keeps its alias reserved so historical links cannot
+silently point at a different place. The same rule applies to the RPC `add_area`
+method.
 
 ### Get Area
 
