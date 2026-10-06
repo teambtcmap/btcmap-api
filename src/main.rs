@@ -241,6 +241,7 @@ async fn main() -> Result<()> {
                     .service(
                         scope("areas")
                             .service(rest::v4::areas::post)
+                            .service(rest::v4::areas::patch)
                             .service(rest::v4::areas::get_saved)
                             .service(rest::v4::areas::put_saved)
                             .service(rest::v4::areas::post_saved)

@@ -5,6 +5,7 @@ This document describes the endpoints for interacting with areas in REST API v4.
 ## Available Endpoints
 
 - [Create Area](#create-area)
+- [Update Area](#update-area)
 - [Get Saved Areas](#get-saved-areas)
 - [Set Saved Areas](#set-saved-areas)
 - [Add Saved Area](#add-saved-area)
@@ -399,6 +400,73 @@ already exist). Uniqueness is checked against all areas, including soft-deleted
 ones: a retired area keeps its alias reserved so historical links cannot
 silently point at a different place. The same rule applies to the RPC `add_area`
 method.
+
+### Update Area
+
+Partially updates an area. Only the fields you send are changed; `url_alias` is
+immutable.
+
+```bash
+curl -X PATCH https://api.btcmap.org/v4/areas/grand-paris \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Grand Paris",
+    "description": "Greater Paris metropolitan region.",
+    "contact": { "telegram": "https://t.me/grandparis" }
+  }'
+```
+
+**Requires authentication.** Only area managers, admins and roots may update
+areas. Unlike [Create Area](#create-area), a caller may have a non-empty
+geofence as long as the target area is inside it; otherwise the request is
+rejected with `403 forbidden`.
+
+A caller with a non-empty geofence may edit their own area's attributes but not
+its geometry: changing `geo_json` would redraw the boundary and let them escape
+the geofence that scopes them, so it is rejected with `403 forbidden` even for
+an area inside their geofence. Geometry changes are reserved for callers with no
+geofence.
+
+#### btcmap-cli
+
+The [btcmap-cli](https://github.com/teambtcmap/mapctl) `area update` command calls
+this endpoint:
+
+```bash
+btcmap-cli area update grand-paris \
+  --name "Grand Paris" \
+  --description "Greater Paris metropolitan region." \
+  --contact telegram=https://t.me/grandparis
+```
+
+Only the flags you pass are sent. Use `--clear-description` to remove the
+description and `--clear-contact <channel>` to remove a contact channel;
+`--contact` may be repeated to set several channels, and `--geojson` replaces the
+geometry. Like the other area commands, the CLI strips the trailing `/rpc` from
+the configured server URL to reach the v4 REST API and authenticates with the
+stored API key.
+
+`{id}` accepts a numeric id or a `url_alias`. The body accepts the same fields as
+create except `url_alias`, and every field is optional:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | String | New area name. Must not be blank. |
+| `type` | String | New area type. Must not be blank. |
+| `geo_json` | Object | New geometry. Must be valid GeoJSON. Drives the bounding box and the place-to-area mapping. `null` is rejected, and callers with a non-empty geofence may not change it at all. |
+| `description` | String\|null | New description. `null` clears it; blank values are ignored. |
+| `contact` | Object | Contact channels to change, filtered against the same allowlist as create and stored as `contact:<name>`. A `null` value clears that channel; a blank value is ignored. |
+
+Fields that are omitted are left unchanged, and unknown or server-managed keys
+(`url_alias`, generic `tags`, icons, bbox columns) are silently ignored.
+`url_alias` cannot be changed.
+
+Returns the updated [Area](#get-area) object.
+
+The endpoint returns `400 invalid_input` for a blank `name`/`type`, malformed or
+`null` `geo_json`, or a non-string `contact` value, and `404 not_found` when no
+area matches `{id}`.
 
 ### Get Area
 

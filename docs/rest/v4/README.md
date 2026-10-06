@@ -17,7 +17,7 @@ The latest and recommended version of the BTCMap API, offering improved performa
 - **[Activity](activity.md)** - Fetch a merged feed of place activity, optionally scoped to areas and/or places.
 - **[Invoices](invoices.md)** - Check invoice status for boosts, comments and other paywalled features.
 - **[Users](users.md)** - Get authenticated user information.  
-- **[Areas](areas.md)** - Fetch areas, create areas as an area manager, admin or root, manage saved areas, and fetch per-area image and daily report data.
+- **[Areas](areas.md)** - Fetch areas, create and update areas as an area manager, admin or root, manage saved areas, and fetch per-area image and daily report data.
 - **[Search](search.md)** - Search areas and places by name, address and any other OSM tag.
 ### Proposed
 - Need something extra? Let us know!

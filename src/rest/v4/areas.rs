@@ -15,7 +15,7 @@ use crate::rest::v4::top_editors::{
 use crate::service;
 use crate::Error;
 use actix_web::{
-    delete, get, post, put, web::Data, web::Json, web::Path, web::Query, HttpResponse,
+    delete, get, patch, post, put, web::Data, web::Json, web::Path, web::Query, HttpResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -597,6 +597,187 @@ pub async fn post(auth: Auth, args: Json<PostAreaArgs>, pool: Data<MainPool>) ->
     // `build_area_tags` has already validated geo_json and the alias, so any
     // remaining failure here is internal (bbox/sync/mapping), not caller input.
     let area = service::area::insert(tags, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(get_by_id_res(&area, None)))
+}
+
+/// Tri-state JSON field for `PATCH` bodies: absent (`None`), explicit `null`
+/// (`Some(None)`) or a value (`Some(Some(_))`). A plain `Option<Option<T>>`
+/// would need a `serde(deserialize_with)` helper, which `ts-rs` cannot parse;
+/// implementing `Deserialize` here keeps the exported binding warning-free.
+#[derive(Default)]
+pub struct Nullable<T>(Option<Option<T>>);
+
+impl<'de, T> Deserialize<'de> for Nullable<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Nullable(Some(Option::<T>::deserialize(deserializer)?)))
+    }
+}
+
+/// Request body for `PATCH /v4/areas/{id}`. Every field is optional: omitted
+/// fields are left unchanged, and `null` clears an optional field. Mirrors the
+/// create body minus `url_alias`, which is immutable.
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct PatchAreaArgs {
+    #[serde(default)]
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub r#type: Option<String>,
+    /// A string sets the description; `null` clears it; an omitted or blank
+    /// value leaves it unchanged.
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub description: Nullable<String>,
+    /// A new geometry. `null` is rejected: an area cannot lose its geometry
+    /// (and with it its bounding box).
+    #[serde(default)]
+    #[ts(optional, type = "Record<string, unknown>")]
+    pub geo_json: Nullable<Value>,
+    /// Well-known contact channels keyed by bare channel name (e.g. `telegram`),
+    /// stored as `contact:<name>`. `null` removes a channel; omitted channels
+    /// are left unchanged. Channels outside `SUBMITTABLE_CONTACT_CHANNELS` are
+    /// silently ignored.
+    #[serde(default)]
+    #[ts(optional, type = "Record<string, unknown | null>")]
+    pub contact: Option<Map<String, Value>>,
+}
+
+/// Translate a `PATCH` body into the tag patch understood by
+/// [`service::area::patch_tags`]. A `null` value deletes the tag (JSON merge
+/// patch semantics), which is how optional fields are cleared.
+fn build_area_patch(args: &PatchAreaArgs) -> Result<Map<String, Value>, RestApiError> {
+    // Named `tags` rather than `patch` so it does not shadow the `patch` handler
+    // that the `#[patch]` attribute macro defines at module scope.
+    let mut tags = Map::new();
+
+    if let Some(name) = &args.name {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(RestApiError::invalid_input("name cannot be empty"));
+        }
+        tags.insert("name".into(), Value::String(name.into()));
+    }
+
+    if let Some(r#type) = &args.r#type {
+        let r#type = r#type.trim();
+        if r#type.is_empty() {
+            return Err(RestApiError::invalid_input("type cannot be empty"));
+        }
+        tags.insert("type".into(), Value::String(r#type.into()));
+    }
+
+    match &args.description.0 {
+        // Omitted: leave the description alone.
+        None => {}
+        // Explicit null: clear it.
+        Some(None) => {
+            tags.insert("description".into(), Value::Null);
+        }
+        // A blank description reads as "no description" on create, so on update
+        // it is a no-op rather than a clear.
+        Some(Some(description)) => {
+            let description = description.trim();
+            if !description.is_empty() {
+                tags.insert("description".into(), Value::String(description.into()));
+            }
+        }
+    }
+
+    match &args.geo_json.0 {
+        // Omitted: leave the geometry alone.
+        None => {}
+        // Explicit null: an area can't lose its geometry.
+        Some(None) => {
+            return Err(RestApiError::invalid_input("geo_json cannot be removed"));
+        }
+        Some(Some(geo_json)) => {
+            serde_json::to_string(geo_json)
+                .ok()
+                .and_then(|it| it.parse::<geojson::GeoJson>().ok())
+                .ok_or_else(|| RestApiError::invalid_input("geo_json must be valid GeoJSON"))?;
+            tags.insert("geo_json".into(), geo_json.clone());
+        }
+    }
+
+    if let Some(contact) = &args.contact {
+        for (channel, value) in contact {
+            if !SUBMITTABLE_CONTACT_CHANNELS.contains(&channel.as_str()) {
+                continue;
+            }
+            let key = format!("contact:{channel}");
+            if value.is_null() {
+                tags.insert(key, Value::Null);
+                continue;
+            }
+            let value = value.as_str().ok_or_else(|| {
+                RestApiError::invalid_input(format!("contact.{channel} must be a string or null"))
+            })?;
+            // A blank value is a no-op, matching create's handling.
+            let value = value.trim();
+            if !value.is_empty() {
+                tags.insert(key, Value::String(value.into()));
+            }
+        }
+    }
+
+    Ok(tags)
+}
+
+/// `PATCH /v4/areas/{id}`
+///
+/// Partially updates an area. Restricted to area managers, admins and roots,
+/// like `POST /v4/areas`, but a non-empty geofence is allowed as long as the
+/// target area is inside it. `url_alias` is immutable; send the other fields you
+/// want to change and omit the rest. A geofenced caller may edit their own
+/// area's attributes but never its geometry, since redrawing the boundary would
+/// let them escape the geofence that scopes them.
+#[patch("{id}")]
+pub async fn patch(
+    id: Path<String>,
+    auth: Auth,
+    args: Json<PatchAreaArgs>,
+    pool: Data<MainPool>,
+) -> Res<GetByIdRes> {
+    let user = auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
+    if !is_area_privileged(&auth) {
+        return Err(RestApiError::forbidden());
+    }
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
+    let area = db::main::area::queries::select_by_id_or_alias(id.into_inner(), &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+
+    service::area::check_geofence(user, &area.id.to_string(), &pool)
+        .await
+        .map_err(|_| RestApiError::forbidden())?;
+
+    // A geofence is what scopes a caller to a set of areas. Letting a geofenced
+    // caller redraw the boundary would let them escape it, so geometry changes
+    // are reserved for callers without a geofence, even on their own areas.
+    if !user.geofence.is_empty() && args.geo_json.0.is_some() {
+        return Err(RestApiError::new(
+            RestApiErrorCode::Forbidden,
+            "Cannot change area geometry while your geofence is set; ask an admin",
+        ));
+    }
+
+    let tags = build_area_patch(&args)?;
+    let area = service::area::patch_tags(&area.id.to_string(), tags, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(Json(get_by_id_res(&area, None)))
@@ -2291,6 +2472,359 @@ mod test {
             StatusCode::OK,
             "a token with an elevated role grants privileges regardless of user roles"
         );
+        Ok(())
+    }
+
+    async fn seed_area(pool: &crate::db::main::MainPool, alias: &str) -> Result<Area> {
+        let mut tags = phuket_area_tags("Phuket");
+        tags.insert("url_alias".into(), json!(alias));
+        tags.insert("description".into(), json!("original description"));
+        tags.insert("contact:telegram".into(), json!("https://t.me/original"));
+        db::main::area::queries::insert(tags, pool).await
+    }
+
+    async fn call_patch(
+        pool: &crate::db::main::MainPool,
+        secret: Option<&str>,
+        id: &str,
+        payload: &serde_json::Value,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/areas").service(super::patch)),
+        )
+        .await;
+        let mut request = TestRequest::patch()
+            .uri(&format!("/areas/{id}"))
+            .insert_header(header::ContentType::json())
+            .set_payload(payload.to_string());
+        if let Some(secret) = secret {
+            request = request.insert_header((header::AUTHORIZATION, format!("Bearer {secret}")));
+        }
+        test::call_service(&app, request.to_request()).await
+    }
+
+    #[test]
+    async fn patch_requires_auth() -> Result<()> {
+        let res = call_patch(&pool(), None, "1", &json!({"name": "x"})).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_forbidden_for_regular_user() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::User], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({"name": "x"}),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_allows_area_manager_with_geofence_covering_area() -> Result<()> {
+        // Unlike create, updating is allowed with a non-empty geofence as long
+        // as the target area is inside it.
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![area.id]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({"name": "Grand Paris"}),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_forbidden_outside_geofence() -> Result<()> {
+        let pool = pool();
+        let target = seed_area(&pool, "grand-paris").await?;
+        let other = seed_area(&pool, "other").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![other.id]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &target.id.to_string(),
+            &json!({"name": "x"}),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_updates_fields_and_leaves_the_rest() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({
+                "name": "Grand Paris",
+                "type": "community",
+                "description": "Updated",
+                "contact": { "website": "https://grandparis.example" }
+            }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(stored.tags["name"], json!("Grand Paris"));
+        assert_eq!(stored.tags["type"], json!("community"));
+        assert_eq!(stored.tags["description"], json!("Updated"));
+        assert_eq!(
+            stored.tags["contact:website"],
+            json!("https://grandparis.example")
+        );
+        // Untouched fields and the immutable alias survive.
+        assert_eq!(
+            stored.tags["contact:telegram"],
+            json!("https://t.me/original")
+        );
+        assert_eq!(stored.alias(), "grand-paris");
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_null_clears_optional_fields() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "description": null, "contact": { "telegram": null } }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert!(!stored.tags.contains_key("description"));
+        assert!(!stored.tags.contains_key("contact:telegram"));
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_blank_values_are_noop() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "description": "   ", "contact": { "telegram": "  " } }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(stored.tags["description"], json!("original description"));
+        assert_eq!(
+            stored.tags["contact:telegram"],
+            json!("https://t.me/original")
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_ignores_url_alias_and_unknown_fields() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let original_bbox_west = area.bbox_west;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({
+                "url_alias": "hacked",
+                "tags": { "name": "hacked" },
+                "bbox_west": -1.0,
+                "icon:square": "https://evil.example/icon.svg"
+            }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(stored.alias(), "grand-paris");
+        assert_eq!(stored.tags["name"], json!("Phuket"));
+        assert_eq!(stored.bbox_west, original_bbox_west);
+        assert!(!stored.tags.contains_key("icon:square"));
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_empty_name() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "name": "   " }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_invalid_geo_json() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "geo_json": "not geojson" }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_null_geo_json() -> Result<()> {
+        // `geo_json: null` must be distinguishable from an omitted field so the
+        // request is rejected instead of silently ignored.
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "geo_json": null }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_non_string_contact() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "contact": { "telegram": 123 } }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_non_string_description() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "description": 123 }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_updates_geo_json_and_bbox() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({
+                "geo_json": {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]
+                        ]]
+                    }
+                }
+            }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(stored.bbox_west, 0.0);
+        assert_eq!(stored.bbox_south, 0.0);
+        assert_eq!(stored.bbox_east, 1.0);
+        assert_eq!(stored.bbox_north, 1.0);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_forbidden_to_change_geo_json_with_geofence() -> Result<()> {
+        // A geofence scopes a caller to a set of areas, so letting them redraw
+        // the boundary would let them escape it. That applies even to an area
+        // inside their own geofence.
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let original_bbox_west = area.bbox_west;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![area.id]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({
+                "geo_json": {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]
+                        ]]
+                    }
+                }
+            }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(stored.bbox_west, original_bbox_west);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_unknown_area_returns_404() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(&pool, Some(&secret), "9999", &json!({"name": "x"})).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
         Ok(())
     }
 }
