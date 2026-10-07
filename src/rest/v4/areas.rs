@@ -20,7 +20,8 @@ use actix_web::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use time::OffsetDateTime;
+use time::macros::format_description;
+use time::{Date, OffsetDateTime};
 
 #[derive(Deserialize)]
 pub struct SearchArgs {
@@ -70,9 +71,10 @@ pub struct AreaSearchResult {
 
 /// Delta sync payload. Every field except `id` is optional and omitted unless
 /// the caller asked for it in `fields`, so a client only pays for the columns
-/// it stores. Raw tags are never exposed; geometry is available through `bbox`
-/// (compact, for map placement) and `geo_json` (the full polygon, only sent
-/// when explicitly requested because it can be large).
+/// it stores. The raw `tags` blob is never exposed as a whole; each value is
+/// instead surfaced through a named field, and geometry is available through
+/// `bbox` (compact, for map placement) and `geo_json` (the full polygon, only
+/// sent when explicitly requested because it can be large).
 #[derive(Default, Serialize, Deserialize, ts_rs::TS)]
 #[ts(export)]
 pub struct AreaDelta {
@@ -133,11 +135,17 @@ pub struct AreaDelta {
     #[serde(with = "time::serde::rfc3339::option", default)]
     #[ts(optional, type = "string")]
     pub deleted_at: Option<OffsetDateTime>,
+    /// Raw `verified:date` tag, a date-only string (`YYYY-MM-DD`) recording the
+    /// last time the area was verified. Omitted when the area has never been
+    /// verified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub verified_at: Option<String>,
 }
 
 /// Fields accepted by `AreaDelta`. Anything else in `fields` is ignored, and
-/// `id` is always present. Deliberately excludes raw tags: geometry is exposed
-/// through `bbox` and `geo_json` only.
+/// `id` is always present. Deliberately excludes arbitrary raw tags: geometry
+/// is exposed through `bbox` and `geo_json` only.
 const DELTA_FIELDS: &[&str] = &[
     "name",
     "type",
@@ -153,6 +161,7 @@ const DELTA_FIELDS: &[&str] = &[
     "created_at",
     "updated_at",
     "deleted_at",
+    "verified_at",
 ];
 
 /// The `bbox_*` columns default to the whole world, which is indistinguishable
@@ -168,7 +177,7 @@ fn area_type(area: &Area) -> String {
         .to_string()
 }
 
-fn area_icon(area: &Area, tag: &str) -> Option<String> {
+fn area_tag(area: &Area, tag: &str) -> Option<String> {
     area.tags
         .get(tag)
         .and_then(|it| it.as_str())
@@ -207,8 +216,8 @@ fn area_delta(area: &Area, fields: &[&str], lang: Option<&str>) -> AreaDelta {
             "name" => delta.name = Some(area.localized_tag("name", lang)),
             "type" => delta.r#type = Some(area_type(area)),
             "url_alias" => delta.url_alias = Some(area.alias()),
-            "icon" => delta.icon = area_icon(area, "icon:square"),
-            "icon_wide" => delta.icon_wide = area_icon(area, "icon:wide"),
+            "icon" => delta.icon = area_tag(area, "icon:square"),
+            "icon_wide" => delta.icon_wide = area_tag(area, "icon:wide"),
             "website_url" => delta.website_url = Some(area_website_url(area)),
             "description" => delta.description = Some(area.localized_tag("description", lang)),
             "localized_name" => delta.localized_name = area.localized_tags("name"),
@@ -220,6 +229,7 @@ fn area_delta(area: &Area, fields: &[&str], lang: Option<&str>) -> AreaDelta {
             "created_at" => delta.created_at = Some(area.created_at),
             "updated_at" => delta.updated_at = Some(area.updated_at),
             "deleted_at" => delta.deleted_at = area.deleted_at,
+            "verified_at" => delta.verified_at = area_tag(area, "verified:date"),
             _ => {}
         }
     }
@@ -297,7 +307,7 @@ pub async fn get(
             name: area.name(),
             r#type: area_type(&area),
             url_alias: area.alias(),
-            icon: area_icon(&area, "icon:square"),
+            icon: area_tag(&area, "icon:square"),
             website_url: area_website_url(&area),
             upcoming_events: events_by_area.get(&area.id).cloned().unwrap_or_default(),
         })
@@ -387,6 +397,8 @@ pub struct GetByIdRes {
     pub icon_wide: Option<String>,
     pub website_url: String,
     pub description: String,
+    /// Last verification date (`YYYY-MM-DD`), or `null` when never verified.
+    pub verified_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -400,10 +412,11 @@ fn get_by_id_res(area: &Area, lang: Option<&str>) -> GetByIdRes {
         name: area.localized_tag("name", lang),
         r#type: area_type(area),
         url_alias: area.alias(),
-        icon: area_icon(area, "icon:square"),
-        icon_wide: area_icon(area, "icon:wide"),
+        icon: area_tag(area, "icon:square"),
+        icon_wide: area_tag(area, "icon:wide"),
         website_url: area_website_url(area),
         description: area.localized_tag("description", lang),
+        verified_at: area_tag(area, "verified:date"),
     }
 }
 
@@ -474,6 +487,11 @@ pub struct PostAreaArgs {
     #[serde(default)]
     #[ts(optional)]
     pub description: Option<String>,
+    /// Last verification date as `YYYY-MM-DD`, stored as the `verified:date`
+    /// tag. A blank value is ignored.
+    #[serde(default)]
+    #[ts(optional)]
+    pub verified_at: Option<String>,
     /// Well-known contact channels keyed by bare channel name (e.g. `telegram`),
     /// stored as `contact:<name>`. Channels outside
     /// `SUBMITTABLE_CONTACT_CHANNELS` are silently ignored.
@@ -502,6 +520,15 @@ fn validate_url_alias(alias: &str) -> Result<(), RestApiError> {
         return Err(RestApiError::invalid_input("url_alias is too long"));
     }
     Ok(())
+}
+
+/// Area verification dates are day-granular (`YYYY-MM-DD`), matching how the
+/// tag is stored, so reject anything that does not parse as a plain date.
+fn validate_date(value: &str) -> Result<(), RestApiError> {
+    let format = format_description!("[year]-[month]-[day]");
+    Date::parse(value, &format)
+        .map(|_| ())
+        .map_err(|_| RestApiError::invalid_input("verified_at must be a YYYY-MM-DD date"))
 }
 
 fn build_area_tags(args: &PostAreaArgs) -> Result<Map<String, Value>, RestApiError> {
@@ -535,6 +562,15 @@ fn build_area_tags(args: &PostAreaArgs) -> Result<Map<String, Value>, RestApiErr
         .filter(|it| !it.is_empty())
     {
         tags.insert("description".into(), Value::String(description.into()));
+    }
+    if let Some(verified_at) = args
+        .verified_at
+        .as_deref()
+        .map(str::trim)
+        .filter(|it| !it.is_empty())
+    {
+        validate_date(verified_at)?;
+        tags.insert("verified:date".into(), Value::String(verified_at.into()));
     }
     if let Some(contact) = &args.contact {
         for (channel, value) in contact {
@@ -643,6 +679,12 @@ pub struct PatchAreaArgs {
     #[serde(default)]
     #[ts(optional, type = "Record<string, unknown>")]
     pub geo_json: Nullable<Value>,
+    /// A `YYYY-MM-DD` string sets the verification date (stored as
+    /// `verified:date`); `null` clears it; an omitted or blank value leaves it
+    /// unchanged.
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub verified_at: Nullable<String>,
     /// Well-known contact channels keyed by bare channel name (e.g. `telegram`),
     /// stored as `contact:<name>`. `null` removes a channel; omitted channels
     /// are left unchanged. Channels outside `SUBMITTABLE_CONTACT_CHANNELS` are
@@ -706,6 +748,23 @@ fn build_area_patch(args: &PatchAreaArgs) -> Result<Map<String, Value>, RestApiE
                 .and_then(|it| it.parse::<geojson::GeoJson>().ok())
                 .ok_or_else(|| RestApiError::invalid_input("geo_json must be valid GeoJSON"))?;
             tags.insert("geo_json".into(), geo_json.clone());
+        }
+    }
+
+    match &args.verified_at.0 {
+        // Omitted: leave the verification date alone.
+        None => {}
+        // Explicit null: clear it.
+        Some(None) => {
+            tags.insert("verified:date".into(), Value::Null);
+        }
+        // A blank value is a no-op, matching create's handling.
+        Some(Some(verified_at)) => {
+            let verified_at = verified_at.trim();
+            if !verified_at.is_empty() {
+                validate_date(verified_at)?;
+                tags.insert("verified:date".into(), Value::String(verified_at.into()));
+            }
         }
     }
 
@@ -1229,6 +1288,28 @@ mod test {
         let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.name, "Phuket");
         assert_eq!(res.description, "A beautiful island in Thailand");
+        Ok(())
+    }
+
+    #[test]
+    async fn get_by_id_returns_verified_at() -> Result<()> {
+        let pool = pool();
+        let mut tags = Area::mock_tags();
+        tags.insert("name".into(), json!("Phuket"));
+        tags.insert("type".into(), json!("country"));
+        tags.insert("verified:date".into(), json!("2026-01-06"));
+        let area = db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/areas").service(super::get_by_id)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/areas/{}", area.id))
+            .to_request();
+        let res: GetByIdRes = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.verified_at.as_deref(), Some("2026-01-06"));
         Ok(())
     }
 
@@ -2085,6 +2166,45 @@ mod test {
     }
 
     #[test]
+    async fn sync_verified_at_present_when_set() -> Result<()> {
+        let pool = pool();
+        let mut tags = phuket_area_tags("Phuket");
+        tags.insert("verified:date".into(), json!("2026-01-06"));
+        db::main::area::queries::insert(tags, &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,verified_at&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(delta_keys(&res[0]), vec!["id", "verified_at"]);
+        assert_eq!(res[0]["verified_at"], "2026-01-06");
+        Ok(())
+    }
+
+    #[test]
+    async fn sync_verified_at_omitted_when_absent() -> Result<()> {
+        let pool = pool();
+        db::main::area::queries::insert(phuket_area_tags("Phuket"), &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/").service(super::get)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri("/?fields=id,verified_at&updated_since=1970-01-01T00:00:00Z")
+            .to_request();
+        let res: Vec<serde_json::Value> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(delta_keys(&res[0]), vec!["id"]);
+        Ok(())
+    }
+
+    #[test]
     async fn sync_localizes_name() -> Result<()> {
         let pool = pool();
         let mut tags = Area::mock_tags();
@@ -2416,6 +2536,48 @@ mod test {
     }
 
     #[test]
+    async fn post_stores_verified_at() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["verified_at"] = json!("2026-01-06");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body: GetByIdRes = test::read_body_json(res).await;
+        assert_eq!(body.verified_at.as_deref(), Some("2026-01-06"));
+
+        let stored = db::main::area::queries::select_by_alias("grand-paris", &pool).await?;
+        assert_eq!(stored.tags["verified:date"], json!("2026-01-06"));
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_invalid_verified_at() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["verified_at"] = json!("06/01/2026");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_ignores_blank_verified_at() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let mut payload = post_area_payload("grand-paris");
+        payload["verified_at"] = json!("   ");
+        let res = call_post(&pool, Some(&secret), &payload).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_alias("grand-paris", &pool).await?;
+        assert!(!stored.tags.contains_key("verified:date"));
+        Ok(())
+    }
+
+    #[test]
     async fn post_rejects_duplicate_url_alias() -> Result<()> {
         let pool = pool();
         let mut tags = phuket_area_tags("Taken");
@@ -2616,6 +2778,72 @@ mod test {
         let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
         assert!(!stored.tags.contains_key("description"));
         assert!(!stored.tags.contains_key("contact:telegram"));
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_sets_verified_at() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "verified_at": "2026-01-06" }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body: GetByIdRes = test::read_body_json(res).await;
+        assert_eq!(body.verified_at.as_deref(), Some("2026-01-06"));
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert_eq!(stored.tags["verified:date"], json!("2026-01-06"));
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_null_clears_verified_at() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "verified_at": "2026-01-06" }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "verified_at": null }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let stored = db::main::area::queries::select_by_id(area.id, &pool).await?;
+        assert!(!stored.tags.contains_key("verified:date"));
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_invalid_verified_at() -> Result<()> {
+        let pool = pool();
+        let area = seed_area(&pool, "grand-paris").await?;
+        let secret = seed_user_token(&pool, vec![Role::AreaManager], vec![]).await?;
+        let res = call_patch(
+            &pool,
+            Some(&secret),
+            &area.id.to_string(),
+            &json!({ "verified_at": "2026/01/06" }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         Ok(())
     }
 

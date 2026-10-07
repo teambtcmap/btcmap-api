@@ -10,6 +10,11 @@
  */
 export type PostAreaArgs = { name: string, type: string, url_alias: string, geo_json: Record<string, unknown>, description?: string, 
 /**
+ * Last verification date as `YYYY-MM-DD`, stored as the `verified:date`
+ * tag. A blank value is ignored.
+ */
+verified_at?: string, 
+/**
  * Well-known contact channels keyed by bare channel name (e.g. `telegram`),
  * stored as `contact:<name>`. Channels outside
  * `SUBMITTABLE_CONTACT_CHANNELS` are silently ignored.

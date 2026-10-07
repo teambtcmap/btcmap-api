@@ -228,8 +228,9 @@ curl 'https://api.btcmap.org/v4/areas?lat=48.8566&lon=2.3522&fields=id'
 ### Sync Areas
 
 Incrementally fetch area changes for an offline cache. Raw `tags` are never
-returned; geometry is available through `bbox` (compact) or the full `geo_json`
-polygon, which is only sent when explicitly requested in `fields`.
+returned wholesale; each value is surfaced through a named field instead.
+Geometry is available through `bbox` (compact) or the full `geo_json` polygon,
+which is only sent when explicitly requested in `fields`.
 
 ```bash
 curl 'https://api.btcmap.org/v4/areas?fields=id,name,type,url_alias,icon,bbox,updated_at
@@ -268,6 +269,7 @@ Unknown field names are ignored. `id` is always returned.
 | `created_at` | String (RFC 3339) | Creation timestamp. |
 | `updated_at` | String (RFC 3339) | Last update timestamp; use as the next `updated_since` cursor. |
 | `deleted_at` | String (RFC 3339) | Tombstone timestamp. Present only for deleted areas when tombstones are included. |
+| `verified_at` | String (`YYYY-MM-DD`) | Last verification date, from the `verified:date` tag. Omitted when the area has never been verified. |
 
 #### Examples
 
@@ -360,6 +362,7 @@ the stored API key.
 | `url_alias` | String | `grand-paris` | **Required**. URL-friendly identifier. Must not be blank, exceed 128 bytes, contain control characters, or already be taken. |
 | `geo_json` | Object | GeoJSON | **Required**. A valid GeoJSON feature, geometry or feature collection. Drives the bounding box and the place-to-area mapping. |
 | `description` | String | `Greater Paris...` | Optional. Blank values are ignored. |
+| `verified_at` | String | `2026-01-06` | Optional. Last verification date as `YYYY-MM-DD`, stored as the `verified:date` tag. Blank values are ignored; any other format is rejected. |
 | `contact` | Object | `{ "telegram": "..." }` | Optional. Well-known contact channels keyed by bare channel name. Values must be strings. Only allowlisted channels are written, as `contact:<name>`; anything else is dropped. |
 
 #### Contact Channels
@@ -386,13 +389,15 @@ Returns the created [Area](#get-area) object.
   "icon": null,
   "icon_wide": null,
   "website_url": "https://btcmap.org/community/grand-paris",
-  "description": "Greater Paris metropolitan region."
+  "description": "Greater Paris metropolitan region.",
+  "verified_at": null
 }
 ```
 
 The endpoint returns `400 invalid_input` for a blank `name`/`type`/`url_alias`,
-malformed `geo_json`, a non-string `contact` value, an over-long or
-control-character `url_alias`, or an already-taken `url_alias`.
+malformed `geo_json`, a non-string `contact` value, a `verified_at` that is not
+`YYYY-MM-DD`, an over-long or control-character `url_alias`, or an
+already-taken `url_alias`.
 
 `url_alias` values are stored verbatim apart from surrounding whitespace, so
 case, spaces and accented characters are preserved (matching the aliases that
@@ -456,6 +461,7 @@ create except `url_alias`, and every field is optional:
 | `type` | String | New area type. Must not be blank. |
 | `geo_json` | Object | New geometry. Must be valid GeoJSON. Drives the bounding box and the place-to-area mapping. `null` is rejected, and callers with a non-empty geofence may not change it at all. |
 | `description` | String\|null | New description. `null` clears it; blank values are ignored. |
+| `verified_at` | String\|null | New verification date (`YYYY-MM-DD`). `null` clears it; blank values are ignored; any other format is rejected. |
 | `contact` | Object | Contact channels to change, filtered against the same allowlist as create and stored as `contact:<name>`. A `null` value clears that channel; a blank value is ignored. |
 
 Fields that are omitted are left unchanged, and unknown or server-managed keys
@@ -465,8 +471,8 @@ Fields that are omitted are left unchanged, and unknown or server-managed keys
 Returns the updated [Area](#get-area) object.
 
 The endpoint returns `400 invalid_input` for a blank `name`/`type`, malformed or
-`null` `geo_json`, or a non-string `contact` value, and `404 not_found` when no
-area matches `{id}`.
+`null` `geo_json`, a non-string `contact` value, or a `verified_at` that is not
+`YYYY-MM-DD`, and `404 not_found` when no area matches `{id}`.
 
 ### Get Area
 
@@ -537,6 +543,7 @@ curl 'https://api.btcmap.org/v4/areas/grand-paris'
 | `icon` | String or null | `https://static.btcmap.org/images/communities/grand-paris.jpg` | Square icon URL for the area, if set. |
 | `website_url` | String | `https://btcmap.org/community/grand-paris` | URL to the BTC Map page for this area. |
 | `description` | String | `Grand Paris area...` | Area description, if available. |
+| `verified_at` | String or null | `2026-01-06` | Last verification date (`YYYY-MM-DD`), if the area has been verified. |
 
 ### Get Area Image
 

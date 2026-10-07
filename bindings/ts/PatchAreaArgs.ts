@@ -17,6 +17,12 @@ description?: string | null,
  */
 geo_json?: Record<string, unknown>, 
 /**
+ * A `YYYY-MM-DD` string sets the verification date (stored as
+ * `verified:date`); `null` clears it; an omitted or blank value leaves it
+ * unchanged.
+ */
+verified_at?: string | null, 
+/**
  * Well-known contact channels keyed by bare channel name (e.g. `telegram`),
  * stored as `contact:<name>`. `null` removes a channel; omitted channels
  * are left unchanged. Channels outside `SUBMITTABLE_CONTACT_CHANNELS` are
