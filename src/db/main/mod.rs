@@ -10,6 +10,7 @@ pub mod element_event;
 pub mod element_issue;
 pub mod event;
 pub mod invoice;
+pub mod note;
 pub mod osm_user;
 pub mod place_import_origin;
 pub mod place_report;

@@ -239,6 +239,14 @@ async fn main() -> Result<()> {
                     )
                     .service(scope("search").service(rest::v4::search::get))
                     .service(
+                        scope("notes")
+                            .service(rest::v4::notes::search)
+                            .service(rest::v4::notes::post)
+                            .service(rest::v4::notes::get_by_id)
+                            .service(rest::v4::notes::patch)
+                            .service(rest::v4::notes::delete),
+                    )
+                    .service(
                         scope("areas")
                             .service(rest::v4::areas::post)
                             .service(rest::v4::areas::patch)
@@ -274,6 +282,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::users::delete_nostr)
                             .service(rest::v4::place_images::get_me)
                             .service(rest::v4::events::get_me)
+                            .service(rest::v4::notes::get_me)
                             .service(rest::v4::users::create_token),
                     ),
             )

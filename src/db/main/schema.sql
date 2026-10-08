@@ -185,6 +185,17 @@ CREATE TABLE place_report(
     closed_at TEXT,
     deleted_at TEXT
 ) STRICT;
+CREATE TABLE note(
+    id INTEGER PRIMARY KEY NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES "user"(id),
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    text TEXT NOT NULL,
+    public INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
+    deleted_at TEXT
+) STRICT;
 CREATE TRIGGER report_updated_at UPDATE OF area_id, date, tags, created_at, deleted_at ON report
 BEGIN
     UPDATE report SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
@@ -249,6 +260,10 @@ CREATE TRIGGER event_updated_at UPDATE OF lat, lon, name, website, starts_at, en
 BEGIN
     UPDATE event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
+CREATE TRIGGER note_updated_at UPDATE OF user_id, lat, lon, text, public, created_at, deleted_at ON note
+BEGIN
+    UPDATE note SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
+END;
 CREATE INDEX idx_user_updated_at ON "osm_user"(updated_at);
 CREATE INDEX area_updated_at ON area(updated_at);
 CREATE INDEX report_updated_at ON report(updated_at);
@@ -284,4 +299,7 @@ CREATE INDEX element_event_type_created_at ON element_event(type, created_at);
 CREATE INDEX area_type ON area(json_extract(tags, '$.type'));
 CREATE INDEX event_lat_lon ON event(lat, lon);
 CREATE INDEX event_updated_at ON event(updated_at, id);
+CREATE INDEX note_lat_lon ON note(lat, lon);
+CREATE INDEX note_user_updated ON note(user_id, updated_at, id);
+CREATE INDEX note_public ON note(public) WHERE deleted_at IS NULL;
 COMMIT;
