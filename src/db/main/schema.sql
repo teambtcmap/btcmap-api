@@ -191,6 +191,7 @@ CREATE TABLE note(
     lat REAL NOT NULL,
     lon REAL NOT NULL,
     text TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'notes',
     public INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
@@ -260,7 +261,7 @@ CREATE TRIGGER event_updated_at UPDATE OF lat, lon, name, website, starts_at, en
 BEGIN
     UPDATE event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER note_updated_at UPDATE OF user_id, lat, lon, text, public, created_at, deleted_at ON note
+CREATE TRIGGER note_updated_at UPDATE OF user_id, lat, lon, text, public, icon, created_at, deleted_at ON note
 BEGIN
     UPDATE note SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;

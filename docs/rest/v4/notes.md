@@ -41,6 +41,7 @@ curl --request POST \
        "lat": 53.5503,
        "lon": 9.9921,
        "text": "ATM is inside, ask at the bar",
+       "icon": "notes",
        "public": true
      }'
 ```
@@ -52,6 +53,7 @@ curl --request POST \
 | `lat`    | Number  | Yes      | Latitude, within `[-90, 90]`.                                                   |
 | `lon`    | Number  | Yes      | Longitude, within `[-180, 180]`.                                                |
 | `text`   | String  | Yes      | Note body. Trimmed, non-empty, at most 2000 characters.                          |
+| `icon`   | String  | No       | Icon discriminator, e.g. `notes`. Trimmed, non-empty, at most 50 characters. Defaults to `notes`. |
 | `public` | Boolean | No       | Whether the note is visible to everyone. Defaults to `false` (private).          |
 
 ### Response
@@ -62,6 +64,7 @@ curl --request POST \
   "lat": 53.5503,
   "lon": 9.9921,
   "text": "ATM is inside, ask at the bar",
+  "icon": "notes",
   "public": true,
   "author": { "id": 17, "name": "satoshi" },
   "created_at": "2026-10-07T12:00:00Z",
@@ -75,16 +78,17 @@ curl --request POST \
 | `lat`        | Number  | Latitude.                                                                |
 | `lon`        | Number  | Longitude.                                                               |
 | `text`       | String  | Note body.                                                               |
+| `icon`       | String  | Icon discriminator, e.g. `notes`.                                        |
 | `public`     | Boolean | Whether the note is public.                                              |
 | `author`     | Object  | Note owner as `{ "id": Number, "name": String }`.                        |
 | `created_at` | String  | RFC 3339 creation timestamp.                                             |
-| `updated_at` | String  | RFC 3339 timestamp of the last change (text, visibility or deletion).    |
+| `updated_at` | String  | RFC 3339 timestamp of the last change (text, icon, visibility or deletion). |
 
 ### Errors
 
 | Status | Meaning                                                   |
 |--------|-----------------------------------------------------------|
-| 400    | Invalid coordinates, or empty / oversized text.            |
+| 400    | Invalid coordinates, or empty / oversized text or icon.    |
 | 401    | Missing or invalid Bearer token.                           |
 | 500    | Database error. Contact the BTC Map team.                  |
 
@@ -153,7 +157,7 @@ curl --request PATCH \
      --url 'https://api.btcmap.org/v4/notes/7' \
      --header "Authorization: Bearer $ACCESS_TOKEN" \
      --header 'Content-Type: application/json' \
-     --data '{ "text": "ATM moved to the back", "public": false }'
+     --data '{ "text": "ATM moved to the back", "icon": "notes", "public": false }'
 ```
 
 **Requires authentication.** Only the note's author can update it; anyone else
@@ -161,12 +165,13 @@ receives `404`.
 
 ### Request Body
 
-At least one of `text` or `public` must be provided. Omitted fields keep their
-current value.
+At least one of `text`, `icon` or `public` must be provided. Omitted fields keep
+their current value.
 
 | Field    | Type    | Description                                             |
 |----------|---------|---------------------------------------------------------|
 | `text`   | String  | New note body. Trimmed, non-empty, at most 2000 characters. |
+| `icon`   | String  | New icon. Trimmed, non-empty, at most 50 characters.    |
 | `public` | Boolean | New visibility.                                         |
 
 The response is the updated [note object](#response).
@@ -175,7 +180,7 @@ The response is the updated [note object](#response).
 
 | Status | Meaning                                                        |
 |--------|----------------------------------------------------------------|
-| 400    | Neither `text` nor `public` was provided, or `text` is empty / oversized. |
+| 400    | None of `text`, `icon` or `public` was provided, or `text` / `icon` is empty / oversized. |
 | 401    | Missing or invalid Bearer token.                                |
 | 404    | The note does not exist, is deleted, or belongs to another user. |
 | 500    | Database error. Contact the BTC Map team.                       |
@@ -233,6 +238,7 @@ additionally carry `distance_km`, the distance from the search center:
     "lat": 53.5503,
     "lon": 9.9921,
     "text": "ATM is inside, ask at the bar",
+    "icon": "notes",
     "public": true,
     "author": { "id": 17, "name": "satoshi" },
     "created_at": "2026-10-07T12:00:00Z",

@@ -5,7 +5,7 @@ import type { NoteAuthor } from "./NoteAuthor";
  * A note as returned to its owner (includes private ones) and, for public
  * notes, to everyone else.
  */
-export type Note = { id: number, lat: number, lon: number, text: string, public: boolean, author: NoteAuthor, created_at: string, updated_at: string, 
+export type Note = { id: number, lat: number, lon: number, text: string, icon: string, public: boolean, author: NoteAuthor, created_at: string, updated_at: string, 
 /**
  * Only present on owner responses that asked for `include_deleted=true`.
  */

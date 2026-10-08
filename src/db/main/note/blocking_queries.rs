@@ -9,12 +9,13 @@ pub fn insert(
     lon: f64,
     text: impl Into<String>,
     public: bool,
+    icon: impl Into<String>,
     conn: &Connection,
 ) -> Result<Note> {
     let sql = format!(
         r#"
-            INSERT INTO {table} ({user_id}, {lat}, {lon}, {text}, {public})
-            VALUES (?1, ?2, ?3, ?4, ?5)
+            INSERT INTO {table} ({user_id}, {lat}, {lon}, {text}, {public}, {icon})
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
             RETURNING {projection}
         "#,
         table = schema::TABLE_NAME,
@@ -23,11 +24,12 @@ pub fn insert(
         lon = Columns::Lon.as_ref(),
         text = Columns::Text.as_ref(),
         public = Columns::Public.as_ref(),
+        icon = Columns::Icon.as_ref(),
         projection = Note::projection(),
     );
     conn.query_row(
         &sql,
-        params![user_id, lat, lon, text.into(), public],
+        params![user_id, lat, lon, text.into(), public, icon.into()],
         Note::mapper(),
     )
     .map_err(Into::into)
@@ -136,19 +138,26 @@ pub fn select_public_in_bbox(
         .map_err(Into::into)
 }
 
-pub fn update(id: i64, text: impl Into<String>, public: bool, conn: &Connection) -> Result<Note> {
+pub fn update(
+    id: i64,
+    text: impl Into<String>,
+    public: bool,
+    icon: impl Into<String>,
+    conn: &Connection,
+) -> Result<Note> {
     let sql = format!(
         r#"
             UPDATE {table}
-            SET {text} = ?2, {public} = ?3
+            SET {text} = ?2, {public} = ?3, {icon} = ?4
             WHERE {id} = ?1
         "#,
         table = schema::TABLE_NAME,
         text = Columns::Text.as_ref(),
         public = Columns::Public.as_ref(),
+        icon = Columns::Icon.as_ref(),
         id = Columns::Id.as_ref(),
     );
-    conn.execute(&sql, params![id, text.into(), public])?;
+    conn.execute(&sql, params![id, text.into(), public, icon.into()])?;
     select_by_id(id, conn)
 }
 
@@ -197,7 +206,7 @@ mod test {
     fn insert_and_select_by_id() -> Result<()> {
         let conn = conn();
         let user = crate::db::main::user::blocking_queries::insert("tester", "", &conn)?;
-        let inserted = super::insert(user.id, 1.23, 4.56, "hello", true, &conn)?;
+        let inserted = super::insert(user.id, 1.23, 4.56, "hello", true, "notes", &conn)?;
 
         let selected = super::select_by_id(inserted.id, &conn)?;
         assert_eq!(inserted, selected);
@@ -205,6 +214,7 @@ mod test {
         assert_eq!(selected.lat, 1.23);
         assert_eq!(selected.lon, 4.56);
         assert_eq!(selected.text, "hello");
+        assert_eq!(selected.icon, "notes");
         assert!(selected.public);
         assert_eq!(selected.deleted_at, None);
         Ok(())
@@ -215,8 +225,8 @@ mod test {
         let conn = conn();
         let user = crate::db::main::user::blocking_queries::insert("tester", "", &conn)?;
         let other = crate::db::main::user::blocking_queries::insert("other", "", &conn)?;
-        super::insert(user.id, 1.0, 1.0, "mine", false, &conn)?;
-        super::insert(other.id, 1.0, 1.0, "theirs", true, &conn)?;
+        super::insert(user.id, 1.0, 1.0, "mine", false, "notes", &conn)?;
+        super::insert(other.id, 1.0, 1.0, "theirs", true, "notes", &conn)?;
 
         let mine =
             super::select_by_user_id(user.id, &datetime!(1970-01-01 0:00 UTC), false, 10, &conn)?;
@@ -229,7 +239,7 @@ mod test {
     fn select_by_user_id_excludes_deleted_unless_requested() -> Result<()> {
         let conn = conn();
         let user = crate::db::main::user::blocking_queries::insert("tester", "", &conn)?;
-        let note = super::insert(user.id, 1.0, 1.0, "bye", false, &conn)?;
+        let note = super::insert(user.id, 1.0, 1.0, "bye", false, "notes", &conn)?;
         super::set_deleted_at(note.id, Some(time::OffsetDateTime::now_utc()), &conn)?;
 
         let live =
@@ -247,11 +257,11 @@ mod test {
     fn select_public_in_bbox_filters_private_deleted_and_out_of_range() -> Result<()> {
         let conn = conn();
         let user = crate::db::main::user::blocking_queries::insert("tester", "", &conn)?;
-        super::insert(user.id, 1.0, 1.0, "public", true, &conn)?;
-        super::insert(user.id, 1.0, 1.0, "private", false, &conn)?;
-        let deleted = super::insert(user.id, 1.0, 1.0, "deleted", true, &conn)?;
+        super::insert(user.id, 1.0, 1.0, "public", true, "notes", &conn)?;
+        super::insert(user.id, 1.0, 1.0, "private", false, "notes", &conn)?;
+        let deleted = super::insert(user.id, 1.0, 1.0, "deleted", true, "notes", &conn)?;
         super::set_deleted_at(deleted.id, Some(time::OffsetDateTime::now_utc()), &conn)?;
-        super::insert(user.id, 50.0, 50.0, "far", true, &conn)?;
+        super::insert(user.id, 50.0, 50.0, "far", true, "notes", &conn)?;
 
         let hits = super::select_public_in_bbox(0.0, 2.0, 0.0, 2.0, 100, &conn)?;
         assert_eq!(hits.len(), 1);
@@ -263,11 +273,12 @@ mod test {
     fn update_changes_text_and_visibility() -> Result<()> {
         let conn = conn();
         let user = crate::db::main::user::blocking_queries::insert("tester", "", &conn)?;
-        let note = super::insert(user.id, 1.0, 1.0, "old", false, &conn)?;
+        let note = super::insert(user.id, 1.0, 1.0, "old", false, "notes", &conn)?;
 
-        let updated = super::update(note.id, "new", true, &conn)?;
+        let updated = super::update(note.id, "new", true, "star", &conn)?;
         assert_eq!(updated.text, "new");
         assert!(updated.public);
+        assert_eq!(updated.icon, "star");
         Ok(())
     }
 }

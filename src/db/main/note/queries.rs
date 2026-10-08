@@ -9,12 +9,14 @@ pub async fn insert(
     lon: f64,
     text: impl Into<String>,
     public: bool,
+    icon: impl Into<String>,
     pool: &Pool,
 ) -> Result<Note> {
     let text = text.into();
+    let icon = icon.into();
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::insert(user_id, lat, lon, text, public, conn))
+        .interact(move |conn| blocking_queries::insert(user_id, lat, lon, text, public, icon, conn))
         .await?
 }
 
@@ -62,11 +64,18 @@ pub async fn select_public_in_bbox(
         .await?
 }
 
-pub async fn update(id: i64, text: impl Into<String>, public: bool, pool: &Pool) -> Result<Note> {
+pub async fn update(
+    id: i64,
+    text: impl Into<String>,
+    public: bool,
+    icon: impl Into<String>,
+    pool: &Pool,
+) -> Result<Note> {
     let text = text.into();
+    let icon = icon.into();
     pool.get()
         .await?
-        .interact(move |conn| blocking_queries::update(id, text, public, conn))
+        .interact(move |conn| blocking_queries::update(id, text, public, icon, conn))
         .await?
 }
 

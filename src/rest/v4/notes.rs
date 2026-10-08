@@ -19,6 +19,8 @@ use std::collections::HashSet;
 use time::OffsetDateTime;
 
 const MAX_TEXT_LEN: usize = 2000;
+const MAX_ICON_LEN: usize = 50;
+const DEFAULT_ICON: &str = "notes";
 const DEFAULT_RADIUS_KM: f64 = 10.0;
 const MAX_RADIUS_KM: f64 = 100.0;
 const DEFAULT_LIMIT: i64 = 100;
@@ -42,6 +44,7 @@ pub struct Item {
     pub lat: f64,
     pub lon: f64,
     pub text: String,
+    pub icon: String,
     pub public: bool,
     pub author: Author,
     #[serde(with = "time::serde::rfc3339")]
@@ -68,6 +71,7 @@ impl Item {
             lat: note.lat,
             lon: note.lon,
             text: note.text,
+            icon: note.icon,
             public: note.public,
             author,
             created_at: note.created_at,
@@ -102,6 +106,19 @@ fn validate_text(text: &str) -> Result<String, RestApiError> {
         )));
     }
     Ok(text.to_string())
+}
+
+fn validate_icon(icon: &str) -> Result<String, RestApiError> {
+    let icon = icon.trim();
+    if icon.is_empty() {
+        return Err(RestApiError::invalid_input("Note icon cannot be empty"));
+    }
+    if icon.chars().count() > MAX_ICON_LEN {
+        return Err(RestApiError::invalid_input(format!(
+            "Note icon cannot exceed {MAX_ICON_LEN} characters"
+        )));
+    }
+    Ok(icon.to_string())
 }
 
 fn not_found_from(err: Error) -> RestApiError {
@@ -221,6 +238,10 @@ pub struct PostArgs {
     pub lat: f64,
     pub lon: f64,
     pub text: String,
+    /// Icon discriminator, e.g. `notes`. Defaults to `notes` when omitted.
+    #[serde(default)]
+    #[ts(optional)]
+    pub icon: Option<String>,
     #[serde(default)]
     pub public: bool,
 }
@@ -233,11 +254,19 @@ pub async fn post(auth: Auth, args: Json<PostArgs>, pool: Data<MainPool>) -> Res
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
     validate_coords(args.lat, args.lon)?;
     let text = validate_text(&args.text)?;
+    let icon = validate_icon(args.icon.as_deref().unwrap_or(DEFAULT_ICON))?;
 
-    let note =
-        db::main::note::queries::insert(user.id, args.lat, args.lon, text, args.public, &pool)
-            .await
-            .map_err(|_| RestApiError::database())?;
+    let note = db::main::note::queries::insert(
+        user.id,
+        args.lat,
+        args.lon,
+        text,
+        args.public,
+        icon,
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
     Ok(Json(Item::new(
         note,
         Author {
@@ -276,12 +305,15 @@ pub struct PatchArgs {
     pub text: Option<String>,
     #[serde(default)]
     #[ts(optional)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
     pub public: Option<bool>,
 }
 
 /// `PATCH /v4/notes/{id}`
 ///
-/// Edits the caller's own note. Either `text`, `public` or both may be sent;
+/// Edits the caller's own note. Any of `text`, `icon` or `public` may be sent;
 /// visibility can be flipped at any time.
 #[patch("/{id}")]
 pub async fn patch(
@@ -291,9 +323,9 @@ pub async fn patch(
     pool: Data<MainPool>,
 ) -> RestResult<Item> {
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
-    if args.text.is_none() && args.public.is_none() {
+    if args.text.is_none() && args.icon.is_none() && args.public.is_none() {
         return Err(RestApiError::invalid_input(
-            "Provide text and/or public to update",
+            "Provide text, icon and/or public to update",
         ));
     }
 
@@ -307,9 +339,13 @@ pub async fn patch(
         Some(text) => validate_text(text)?,
         None => existing.text.clone(),
     };
+    let icon = match &args.icon {
+        Some(icon) => validate_icon(icon)?,
+        None => existing.icon.clone(),
+    };
     let public = args.public.unwrap_or(existing.public);
 
-    let note = db::main::note::queries::update(id, text, public, &pool)
+    let note = db::main::note::queries::update(id, text, public, icon, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(Json(Item::new(
@@ -484,13 +520,48 @@ mod test {
         let res: super::Item = test::call_and_read_body_json(&app, req).await;
 
         assert_eq!(res.text, "hello");
+        assert_eq!(res.icon, "notes");
         assert!(!res.public);
         assert_eq!(res.author.id, user_id);
         assert_eq!(res.author.name, "tester");
 
         let stored = db::main::note::queries::select_by_id(res.id, &pool).await?;
         assert_eq!(stored.user_id, user_id);
+        assert_eq!(stored.icon, "notes");
         assert!(!stored.public);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_accepts_custom_icon() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+        let app = app!(pool.clone());
+
+        let req = TestRequest::post()
+            .uri("/notes")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":1.0,"lon":2.0,"text":"hi","icon":"  star  "}"#.as_bytes())
+            .to_request();
+        let res: super::Item = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.icon, "star");
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_empty_icon() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+        let app = app!(pool);
+        let req = TestRequest::post()
+            .uri("/notes")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"lat":1.0,"lon":2.0,"text":"hi","icon":"   "}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         Ok(())
     }
 
@@ -530,9 +601,9 @@ mod test {
     async fn get_me_returns_all_own_notes() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        db::main::note::queries::insert(1, 1.0, 1.0, "private", false, &pool).await?;
-        db::main::note::queries::insert(1, 2.0, 2.0, "public", true, &pool).await?;
-        db::main::note::queries::insert(2, 3.0, 3.0, "other", true, &pool).await?;
+        db::main::note::queries::insert(1, 1.0, 1.0, "private", false, "notes", &pool).await?;
+        db::main::note::queries::insert(1, 2.0, 2.0, "public", true, "notes", &pool).await?;
+        db::main::note::queries::insert(2, 3.0, 3.0, "other", true, "notes", &pool).await?;
         let app = app!(pool);
 
         let req = TestRequest::get()
@@ -557,9 +628,9 @@ mod test {
     async fn search_returns_public_notes_with_author_and_hides_private() -> Result<()> {
         let pool = pool();
         db::main::user::queries::insert("alice", "", &pool).await?;
-        db::main::note::queries::insert(1, 53.5, 9.9, "public", true, &pool).await?;
-        db::main::note::queries::insert(1, 53.5, 9.9, "private", false, &pool).await?;
-        db::main::note::queries::insert(1, 40.0, 40.0, "far", true, &pool).await?;
+        db::main::note::queries::insert(1, 53.5, 9.9, "public", true, "notes", &pool).await?;
+        db::main::note::queries::insert(1, 53.5, 9.9, "private", false, "notes", &pool).await?;
+        db::main::note::queries::insert(1, 40.0, 40.0, "far", true, "notes", &pool).await?;
         let app = app!(pool);
 
         let req = TestRequest::get()
@@ -591,7 +662,8 @@ mod test {
     async fn get_by_id_hides_private_note_from_others() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(1, 1.0, 1.0, "private", false, &pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "private", false, "notes", &pool).await?;
         let app = app!(pool);
 
         let anon = test::call_service(
@@ -619,7 +691,8 @@ mod test {
     async fn patch_toggles_visibility_and_text() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(1, 1.0, 1.0, "old", false, &pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "old", false, "notes", &pool).await?;
         let app = app!(pool.clone());
 
         let req = TestRequest::patch()
@@ -639,10 +712,52 @@ mod test {
     }
 
     #[test]
+    async fn patch_updates_icon() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "note", false, "notes", &pool).await?;
+        let app = app!(pool.clone());
+
+        let req = TestRequest::patch()
+            .uri(&format!("/notes/{}", note.id))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"icon":"star"}"#.as_bytes())
+            .to_request();
+        let res: super::Item = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(res.icon, "star");
+
+        let stored = db::main::note::queries::select_by_id(note.id, &pool).await?;
+        assert_eq!(stored.icon, "star");
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_empty_icon() -> Result<()> {
+        let pool = pool();
+        let (_, secret) = seed_user_with_token(&pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "note", false, "notes", &pool).await?;
+        let app = app!(pool);
+
+        let req = TestRequest::patch()
+            .uri(&format!("/notes/{}", note.id))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .insert_header(ContentType::json())
+            .set_payload(r#"{"icon":""}"#.as_bytes())
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
     async fn patch_rejects_note_owned_by_someone_else() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(2, 1.0, 1.0, "theirs", false, &pool).await?;
+        let note =
+            db::main::note::queries::insert(2, 1.0, 1.0, "theirs", false, "notes", &pool).await?;
         let app = app!(pool);
 
         let req = TestRequest::patch()
@@ -660,7 +775,8 @@ mod test {
     async fn delete_soft_deletes_own_note() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(1, 1.0, 1.0, "bye", true, &pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "bye", true, "notes", &pool).await?;
         let app = app!(pool.clone());
 
         let req = TestRequest::delete()
@@ -679,7 +795,8 @@ mod test {
     async fn patch_makes_note_private_again() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(1, 1.0, 1.0, "public", true, &pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "public", true, "notes", &pool).await?;
         let app = app!(pool.clone());
 
         let req = TestRequest::patch()
@@ -700,7 +817,8 @@ mod test {
     async fn patch_rejects_request_without_changes() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(1, 1.0, 1.0, "note", false, &pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "note", false, "notes", &pool).await?;
         let app = app!(pool);
 
         let req = TestRequest::patch()
@@ -718,7 +836,8 @@ mod test {
     async fn get_by_id_returns_404_for_deleted_note() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(1, 1.0, 1.0, "gone", true, &pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "gone", true, "notes", &pool).await?;
         db::main::note::queries::set_deleted_at(
             note.id,
             Some(time::OffsetDateTime::now_utc()),
@@ -740,7 +859,8 @@ mod test {
     async fn delete_rejects_note_owned_by_someone_else() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(2, 1.0, 1.0, "theirs", true, &pool).await?;
+        let note =
+            db::main::note::queries::insert(2, 1.0, 1.0, "theirs", true, "notes", &pool).await?;
         let app = app!(pool.clone());
 
         let req = TestRequest::delete()
@@ -759,9 +879,9 @@ mod test {
     async fn search_respects_limit() -> Result<()> {
         let pool = pool();
         db::main::user::queries::insert("alice", "", &pool).await?;
-        db::main::note::queries::insert(1, 53.5, 9.9, "one", true, &pool).await?;
-        db::main::note::queries::insert(1, 53.5, 9.9, "two", true, &pool).await?;
-        db::main::note::queries::insert(1, 53.5, 9.9, "three", true, &pool).await?;
+        db::main::note::queries::insert(1, 53.5, 9.9, "one", true, "notes", &pool).await?;
+        db::main::note::queries::insert(1, 53.5, 9.9, "two", true, "notes", &pool).await?;
+        db::main::note::queries::insert(1, 53.5, 9.9, "three", true, "notes", &pool).await?;
         let app = app!(pool);
 
         let req = TestRequest::get()
@@ -810,8 +930,8 @@ mod test {
     async fn get_me_updated_since_filters_by_cursor() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        db::main::note::queries::insert(1, 1.0, 1.0, "one", false, &pool).await?;
-        db::main::note::queries::insert(1, 2.0, 2.0, "two", true, &pool).await?;
+        db::main::note::queries::insert(1, 1.0, 1.0, "one", false, "notes", &pool).await?;
+        db::main::note::queries::insert(1, 2.0, 2.0, "two", true, "notes", &pool).await?;
         let app = app!(pool);
 
         let all: Vec<super::Item> = test::call_and_read_body_json(
@@ -840,7 +960,8 @@ mod test {
     async fn get_me_excludes_deleted_unless_requested() -> Result<()> {
         let pool = pool();
         let (_, secret) = seed_user_with_token(&pool).await?;
-        let note = db::main::note::queries::insert(1, 1.0, 1.0, "gone", true, &pool).await?;
+        let note =
+            db::main::note::queries::insert(1, 1.0, 1.0, "gone", true, "notes", &pool).await?;
         db::main::note::queries::set_deleted_at(
             note.id,
             Some(time::OffsetDateTime::now_utc()),
