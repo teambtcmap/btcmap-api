@@ -225,6 +225,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::place_submissions::get),
                     )
                     .service(scope("place-reports").service(rest::v4::place_reports::post))
+                    .service(scope("place-images").service(rest::v4::place_images::get_recent))
                     .service(
                         scope("place-comments")
                             .service(rest::v4::place_comments::get)

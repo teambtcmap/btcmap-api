@@ -53,6 +53,13 @@ pub async fn select_by_created_by(created_by: i64, pool: &Pool) -> Result<Vec<Pl
         .await?
 }
 
+pub async fn select_recent(limit: i64, pool: &Pool) -> Result<Vec<PlaceImageMeta>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_recent(limit, conn))
+        .await?
+}
+
 pub async fn delete(id: i64, pool: &Pool) -> Result<usize> {
     pool.get()
         .await?

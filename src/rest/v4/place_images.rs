@@ -8,6 +8,7 @@ use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult as Res;
+use crate::rest::v4::top_editors::validate_limit;
 use crate::service;
 use crate::Error;
 use actix_web::delete;
@@ -31,6 +32,11 @@ const IMAGE_TYPE: &str = "user";
 #[derive(Deserialize)]
 pub struct GetListArgs {
     r#type: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GetRecentArgs {
+    limit: Option<i64>,
 }
 
 /// Uploader of a place image, exposed as a nested `author` object so clients
@@ -306,6 +312,31 @@ pub async fn get_me(
 ) -> Res<Vec<ListItem>> {
     let user = auth.user.ok_or(RestApiError::unauthorized())?;
     let images = db::image::place::queries::select_by_created_by(user.id, &image_pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(attach_authors(images, &pool).await?))
+}
+
+/// List the most recently added place images across every place, newest first,
+/// capped at `limit`. Restricted to admin and root users.
+#[get("")]
+pub async fn get_recent(
+    auth: Auth,
+    args: Query<GetRecentArgs>,
+    pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
+) -> Res<Vec<ListItem>> {
+    auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
+    let is_privileged = auth
+        .effective_roles()
+        .iter()
+        .any(|role| matches!(role, Role::Admin | Role::Root));
+    if !is_privileged {
+        return Err(RestApiError::forbidden());
+    }
+
+    let limit = validate_limit(args.limit)?;
+    let images = db::image::place::queries::select_recent(limit, &image_pool)
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(Json(attach_authors(images, &pool).await?))
@@ -1060,6 +1091,135 @@ mod test {
             .to_request();
         let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
         assert!(res.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_recent_requires_auth() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .app_data(Data::new(crate::db::image::test::pool()))
+                .service(scope("/place-images").service(super::get_recent)),
+        )
+        .await;
+
+        let req = TestRequest::get().uri("/place-images").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_recent_forbidden_for_regular_user() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let (_, secret) = seed_user("user", &[Role::User], &main_pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/place-images").service(super::get_recent)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/place-images")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_recent_lists_newest_across_places_and_respects_limit() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_a = insert_place(&main_pool, 1).await?;
+        let place_b = insert_place(&main_pool, 2).await?;
+        let (_, secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+
+        let first = insert_owned_image(&image_pool, place_a, None).await?;
+        let second = insert_owned_image(&image_pool, place_b, None).await?;
+        let third = insert_owned_image(&image_pool, place_a, None).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/place-images").service(super::get_recent)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/place-images")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        assert_eq!(vec![third, second, first], ids);
+
+        let req = TestRequest::get()
+            .uri("/place-images?limit=2")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        assert_eq!(vec![third, second], ids);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_recent_allowed_for_root() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let (_, secret) = seed_user("root", &[Role::Root], &main_pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/place-images").service(super::get_recent)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .uri("/place-images")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn get_recent_rejects_invalid_limit() -> Result<()> {
+        let main_pool = pool();
+        let (_, secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(crate::db::image::test::pool()))
+                .service(scope("/place-images").service(super::get_recent)),
+        )
+        .await;
+
+        for limit in ["0", "1001"] {
+            let req = TestRequest::get()
+                .uri(&format!("/place-images?limit={limit}"))
+                .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        }
 
         Ok(())
     }

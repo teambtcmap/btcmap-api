@@ -19,6 +19,7 @@ Images live in the `image.db` `place` table and are served publicly.
 
 - [List Place Images](#list-place-images)
 - [List My Place Images](#list-my-place-images)
+- [List Recent Place Images](#list-recent-place-images)
 - [Add Place Image](#add-place-image)
 - [Get Place Image](#get-place-image)
 - [Delete Place Image](#delete-place-image)
@@ -121,6 +122,62 @@ The response is an empty array when the user has not uploaded any images.
 |--------|------------------------------------------------|
 | 401    | Missing or invalid Bearer token.               |
 | 500    | Database error. Contact the BTC Map team.      |
+
+### List Recent Place Images
+
+Returns metadata for the most recently added place images across every place,
+newest first. Intended for moderation, so reviewers can watch new uploads as they
+come in. Restricted to `admin` and `root` users; regular users list their own
+uploads with [List My Place Images](#list-my-place-images).
+
+#### Authentication
+
+Requires a Bearer token belonging to a user with the `admin` or `root` role.
+
+#### Query Parameters
+
+| Parameter | Type    | Example | Default | Description                                                          |
+|-----------|---------|---------|---------|----------------------------------------------------------------------|
+| `limit`   | Integer | `20`    | `100`   | Maximum number of images to return. Must be between `1` and `1000`.  |
+
+#### Request
+
+```bash
+curl 'https://api.btcmap.org/v4/place-images?limit=20' \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+#### Response
+
+An array of place image items in the same shape as
+[List Place Images](#list-place-images), newest first, capped at `limit`:
+
+```json
+[
+  {
+    "id": 4,
+    "place_id": 42,
+    "type": "user",
+    "width": 1024,
+    "height": 768,
+    "size_bytes": 184320,
+    "created_at": "2026-10-01T04:22:53.706Z",
+    "created_by": 17,
+    "author": { "id": 17, "name": "satoshi" }
+  }
+]
+```
+
+The response is an empty array when there are no images.
+
+#### Errors
+
+| Status | Meaning                                                        |
+|--------|----------------------------------------------------------------|
+| 400    | `limit` is outside the `1`–`1000` range.                       |
+| 401    | Missing or invalid Bearer token.                               |
+| 403    | Authenticated, but the caller is not an `admin` or `root`.      |
+| 500    | Database error. Contact the BTC Map team.                      |
 
 ### Add Place Image
 

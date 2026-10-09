@@ -120,6 +120,25 @@ pub fn select_by_created_by(created_by: i64, conn: &Connection) -> Result<Vec<Pl
     .map_err(Into::into)
 }
 
+/// Newest images across all places, capped at `limit`. Ordered by upload time
+/// rather than row id so it reflects the actual "recently added" order even if
+/// rows were inserted out of order; `Id` breaks ties created within the same
+/// millisecond.
+pub fn select_recent(limit: i64, conn: &Connection) -> Result<Vec<PlaceImageMeta>> {
+    conn.prepare(&format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            ORDER BY {CreatedAt} DESC, {Id} DESC
+            LIMIT ?1
+        "#,
+        projection = PlaceImageMeta::projection(),
+    ))?
+    .query_map(params![limit], PlaceImageMeta::mapper())?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(Into::into)
+}
+
 pub fn delete(id: i64, conn: &Connection) -> Result<usize> {
     conn.execute(
         &format!(
@@ -298,6 +317,31 @@ mod test {
         let conn = conn();
         let res = super::select_by_created_by(9999, &conn)?;
         assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn select_recent_orders_newest_first_and_limits() -> Result<()> {
+        let conn = conn();
+        let first = insert(1, "report", &conn)?;
+        let second = insert(2, "user", &conn)?;
+        let third = insert(1, "cover", &conn)?;
+
+        let res = super::select_recent(10, &conn)?;
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        assert_eq!(vec![third, second, first], ids);
+
+        let limited = super::select_recent(2, &conn)?;
+        let ids: Vec<i64> = limited.iter().map(|it| it.id).collect();
+        assert_eq!(vec![third, second], ids);
+
+        Ok(())
+    }
+
+    #[test]
+    fn select_recent_empty() -> Result<()> {
+        let conn = conn();
+        assert!(super::select_recent(10, &conn)?.is_empty());
         Ok(())
     }
 
