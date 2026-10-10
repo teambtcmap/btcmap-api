@@ -83,7 +83,8 @@ Returns the API keys associated with the authorized user. Secrets are never retu
       "label": "my laptop",
       "roles": ["user"],
       "created_at": "2024-06-13T10:33:00Z",
-      "updated_at": "2024-06-13T10:33:00Z"
+      "updated_at": "2024-06-13T10:33:00Z",
+      "last_used_at": "2024-06-14T09:01:00Z"
     }
   ],
   "id": 1

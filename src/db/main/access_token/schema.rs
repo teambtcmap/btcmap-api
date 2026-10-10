@@ -18,6 +18,7 @@ pub enum Columns {
     CreatedAt,
     UpdatedAt,
     DeletedAt,
+    LastUsedAt,
 }
 
 #[allow(dead_code)]
@@ -32,6 +33,7 @@ pub struct AccessToken {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub deleted_at: Option<OffsetDateTime>,
+    pub last_used_at: OffsetDateTime,
 }
 
 #[allow(dead_code)]
@@ -43,6 +45,7 @@ pub struct AccessTokenInfo {
     pub roles: Vec<Role>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
+    pub last_used_at: OffsetDateTime,
 }
 
 impl AccessTokenInfo {
@@ -56,6 +59,7 @@ impl AccessTokenInfo {
                 Columns::Roles,
                 Columns::CreatedAt,
                 Columns::UpdatedAt,
+                Columns::LastUsedAt,
             ]
             .iter()
             .map(AsRef::as_ref)
@@ -73,6 +77,7 @@ impl AccessTokenInfo {
                 roles: parse_roles(row.get(Columns::Roles.as_ref())?)?,
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
                 updated_at: row.get(Columns::UpdatedAt.as_ref())?,
+                last_used_at: row.get(Columns::LastUsedAt.as_ref())?,
             })
         }
     }
@@ -92,6 +97,7 @@ impl AccessToken {
                 Columns::CreatedAt,
                 Columns::UpdatedAt,
                 Columns::DeletedAt,
+                Columns::LastUsedAt,
             ]
             .iter()
             .map(AsRef::as_ref)
@@ -112,6 +118,7 @@ impl AccessToken {
                 created_at: row.get(Columns::CreatedAt.as_ref())?,
                 updated_at: row.get(Columns::UpdatedAt.as_ref())?,
                 deleted_at: row.get(Columns::DeletedAt.as_ref())?,
+                last_used_at: row.get(Columns::LastUsedAt.as_ref())?,
             })
         }
     }

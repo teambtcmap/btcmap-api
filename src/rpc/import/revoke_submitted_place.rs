@@ -105,6 +105,7 @@ mod test {
             created_at: time::OffsetDateTime::UNIX_EPOCH,
             updated_at: time::OffsetDateTime::UNIX_EPOCH,
             deleted_at: None,
+            last_used_at: time::OffsetDateTime::UNIX_EPOCH,
         };
 
         let res = super::run(

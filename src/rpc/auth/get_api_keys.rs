@@ -15,6 +15,8 @@ pub struct Res {
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub last_used_at: OffsetDateTime,
 }
 
 impl From<AccessTokenInfo> for Res {
@@ -26,6 +28,7 @@ impl From<AccessTokenInfo> for Res {
             roles,
             created_at: val.created_at,
             updated_at: val.updated_at,
+            last_used_at: val.last_used_at,
         }
     }
 }
@@ -51,6 +54,7 @@ mod test {
             roles,
             created_at: OffsetDateTime::UNIX_EPOCH,
             updated_at: OffsetDateTime::UNIX_EPOCH,
+            last_used_at: OffsetDateTime::UNIX_EPOCH,
         }
     }
 

@@ -71,3 +71,14 @@ pub async fn set_deleted_at(
         .interact(move |conn| blocking_queries::set_deleted_at(id, deleted_at, conn))
         .await?
 }
+
+pub async fn set_last_used_at(
+    id: i64,
+    last_used_at: OffsetDateTime,
+    pool: &Pool,
+) -> Result<AccessToken> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_last_used_at(id, last_used_at, conn))
+        .await?
+}

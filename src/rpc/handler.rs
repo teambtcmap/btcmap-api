@@ -442,6 +442,19 @@ pub async fn handle(
                 }
                 Err(e) => return Err(e),
             };
+            if let Err(e) = db::main::access_token::queries::set_last_used_at(
+                bearer_token.id,
+                time::OffsetDateTime::now_utc(),
+                &main_pool,
+            )
+            .await
+            {
+                tracing::warn!(
+                    error = %e,
+                    token_id = bearer_token.id,
+                    "failed to record access token last_used_at"
+                );
+            }
             if bearer_token.roles.is_empty() {
                 if !allowed_methods(&user.roles).contains(&req.method) {
                     return Ok(Json(RpcResponse::error(RpcError {

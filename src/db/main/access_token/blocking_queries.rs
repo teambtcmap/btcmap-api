@@ -145,6 +145,28 @@ pub fn set_deleted_at(
     }
 }
 
+pub fn set_last_used_at(
+    id: i64,
+    last_used_at: OffsetDateTime,
+    conn: &Connection,
+) -> Result<AccessToken> {
+    let sql = format!(
+        r#"
+            UPDATE {TABLE}
+            SET {LastUsedAt} = ?2
+            WHERE {Id} = ?1
+            RETURNING {projection}
+        "#,
+        projection = AccessToken::projection(),
+    );
+    conn.query_row(
+        &sql,
+        params![id, last_used_at.format(&Rfc3339)?],
+        AccessToken::mapper(),
+    )
+    .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use crate::db::main::test::conn;
@@ -262,6 +284,31 @@ mod test {
         super::set_deleted_at(token.id, Some(OffsetDateTime::now_utc()), &conn)?;
         let restored = super::set_deleted_at(token.id, None, &conn)?;
         assert!(restored.deleted_at.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn set_last_used_at_records_timestamp_without_bumping_updated_at() -> Result<()> {
+        let conn = conn();
+        let token = super::insert(1, "name", "secret", &[], &conn)?;
+        assert_eq!(OffsetDateTime::UNIX_EPOCH, token.last_used_at);
+
+        let used_at = OffsetDateTime::now_utc();
+        let updated = super::set_last_used_at(token.id, used_at, &conn)?;
+
+        assert_eq!(used_at, updated.last_used_at);
+        assert_eq!(token.updated_at, updated.updated_at);
+        Ok(())
+    }
+
+    #[test]
+    fn set_last_used_at_persists() -> Result<()> {
+        let conn = conn();
+        let token = super::insert(1, "name", "secret", &[], &conn)?;
+        let used_at = OffsetDateTime::now_utc();
+        super::set_last_used_at(token.id, used_at, &conn)?;
+        let selected = super::select_by_id(token.id, &conn)?;
+        assert_eq!(used_at, selected.last_used_at);
         Ok(())
     }
 }

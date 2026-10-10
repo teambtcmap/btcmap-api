@@ -86,6 +86,7 @@ mod test {
             created_at: OffsetDateTime::UNIX_EPOCH,
             updated_at: OffsetDateTime::UNIX_EPOCH,
             deleted_at: Some(OffsetDateTime::UNIX_EPOCH),
+            last_used_at: OffsetDateTime::UNIX_EPOCH,
         };
         let res: super::Res = token.into();
         assert_eq!(res.id, 5);
@@ -106,6 +107,7 @@ mod test {
             created_at: OffsetDateTime::UNIX_EPOCH,
             updated_at: OffsetDateTime::UNIX_EPOCH,
             deleted_at: None,
+            last_used_at: OffsetDateTime::UNIX_EPOCH,
         };
         let res: super::Res = token.into();
         assert_eq!(res.label.as_deref(), Some("laptop"));

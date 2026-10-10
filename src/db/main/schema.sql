@@ -130,7 +130,8 @@ CREATE TABLE access_token(
     import_origins TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
-    deleted_at TEXT
+    deleted_at TEXT,
+    last_used_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
 ) STRICT;
 CREATE TABLE place_import_origin(
     id INTEGER PRIMARY KEY NOT NULL,

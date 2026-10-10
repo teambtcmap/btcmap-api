@@ -6,6 +6,7 @@ use crate::service::log::AuthenticatedUser;
 use actix_web::{dev::Payload, http::header, web::Data, FromRequest, HttpMessage, HttpRequest};
 use std::future::Future;
 use std::pin::Pin;
+use time::OffsetDateTime;
 
 pub struct Auth {
     pub user: Option<User>,
@@ -87,6 +88,24 @@ impl FromRequest for Auth {
                     user: None,
                     token: None,
                 });
+            };
+
+            let access_token = match db::main::access_token::queries::set_last_used_at(
+                access_token.id,
+                OffsetDateTime::now_utc(),
+                &pool,
+            )
+            .await
+            {
+                Ok(token) => token,
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        token_id = access_token.id,
+                        "failed to record access token last_used_at"
+                    );
+                    access_token
+                }
             };
 
             req.extensions_mut().insert(AuthenticatedUser(user.id));

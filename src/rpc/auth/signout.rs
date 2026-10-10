@@ -58,6 +58,7 @@ mod test {
             created_at: OffsetDateTime::UNIX_EPOCH,
             updated_at: OffsetDateTime::UNIX_EPOCH,
             deleted_at: None,
+            last_used_at: OffsetDateTime::UNIX_EPOCH,
         }
     }
 
