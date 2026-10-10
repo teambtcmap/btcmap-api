@@ -241,6 +241,36 @@ pub fn select_top_rest_api_calls(
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
+pub struct TopUser {
+    pub user_id: i64,
+    pub count: i64,
+}
+
+pub fn select_top_users(since: OffsetDateTime, conn: &Connection) -> Result<Vec<TopUser>> {
+    let since = since
+        .format(&time::format_description::well_known::Rfc3339)
+        .map_err(crate::Error::from)?;
+    let sql = format!(
+        r#"
+            SELECT {UserId}, COUNT(*) AS count
+            FROM {TABLE}
+            WHERE {Date} > ?1
+              AND {UserId} IS NOT NULL
+            GROUP BY {UserId}
+            ORDER BY count DESC
+            LIMIT 10
+        "#,
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([&since], |row| {
+        Ok(TopUser {
+            user_id: row.get(0)?,
+            count: row.get(1)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 pub struct PlatformUniqueIps24h {
     pub web: i64,
     pub android: i64,
@@ -712,6 +742,32 @@ mod test {
         let count = super::select_count_since(now + time::Duration::hours(1), &conn)?;
         assert_eq!(0, count);
 
+        Ok(())
+    }
+
+    #[test]
+    fn select_top_users() -> crate::Result<()> {
+        let conn = conn();
+
+        let insert = |user_id: Option<i64>, offset: &str| {
+            conn.execute(
+                "INSERT INTO request (ip, user_id, path, response_code, processing_time_ns, date) VALUES ('10.0.0.1', ?1, '/rpc', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?2))",
+                rusqlite::params![user_id, offset],
+            )
+        };
+        insert(Some(1), "0 minutes")?;
+        insert(Some(1), "0 minutes")?;
+        insert(Some(2), "0 minutes")?;
+        insert(None, "0 minutes")?;
+        insert(Some(1), "-2 days")?;
+
+        let since = time::OffsetDateTime::now_utc() - time::Duration::hours(24);
+        let res = super::select_top_users(since, &conn)?;
+        assert_eq!(2, res.len());
+        assert_eq!(1, res[0].user_id);
+        assert_eq!(2, res[0].count);
+        assert_eq!(2, res[1].user_id);
+        assert_eq!(1, res[1].count);
         Ok(())
     }
 

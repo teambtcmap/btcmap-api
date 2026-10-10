@@ -65,11 +65,19 @@ pub struct LogStats {
     pub requests: PeriodCounts,
     pub top_rpcs: Vec<TopRpc>,
     pub top_rest_api_calls: Vec<TopRestApiCall>,
+    pub top_users: Vec<TopUser>,
 }
 
 #[derive(Serialize)]
 pub struct TopRpc {
     pub method: String,
+    pub count: i64,
+}
+
+#[derive(Serialize)]
+pub struct TopUser {
+    pub user_id: i64,
+    pub name: Option<String>,
     pub count: i64,
 }
 
@@ -179,6 +187,22 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
         },
     };
     let imports = collect_imports(pool, d1, d7, d30).await?;
+    let top_user_counts = log_request_queries::select_top_users(d1, log_pool).await?;
+    let user_ids: Vec<i64> = top_user_counts.iter().map(|it| it.user_id).collect();
+    let user_names: HashMap<i64, String> =
+        crate::db::main::user::queries::select_by_ids(&user_ids, pool)
+            .await?
+            .into_iter()
+            .map(|user| (user.id, user.name))
+            .collect();
+    let top_users: Vec<TopUser> = top_user_counts
+        .into_iter()
+        .map(|it| TopUser {
+            user_id: it.user_id,
+            name: user_names.get(&it.user_id).cloned(),
+            count: it.count,
+        })
+        .collect();
     let logs = LogStats {
         file_size_bytes: log_db_file_size(),
         requests: PeriodCounts {
@@ -203,6 +227,7 @@ pub async fn run(pool: &MainPool, log_pool: &LogPool) -> Result<Res> {
                 count: it.count,
             })
             .collect(),
+        top_users,
     };
     let raw_sync_runs = log_sync_queries::select_latest(SYNC_RUNS_LIMIT, log_pool).await?;
     let parse_opt = |value: Option<String>| -> Result<Option<OffsetDateTime>> {
@@ -429,6 +454,7 @@ mod test {
         assert_eq!(0, res.logs.requests.d30);
         assert!(res.logs.top_rpcs.is_empty());
         assert!(res.logs.top_rest_api_calls.is_empty());
+        assert!(res.logs.top_users.is_empty());
         assert!(res.sync_runs.is_empty());
         assert!(res.lnd.is_none());
         assert!(res.wallets.wallets.is_empty());
@@ -870,6 +896,51 @@ mod test {
                 .top_rest_api_calls
                 .into_iter()
                 .map(|it| (it.method, it.path, it.count))
+                .collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn returns_top_users_in_last_24h() -> Result<()> {
+        let pool = pool();
+        let log_pool = log_pool();
+        let scheduler =
+            crate::db::main::user::queries::insert("Scheduler", "secret", &pool).await?;
+        let square = crate::db::main::user::queries::insert("square", "secret", &pool).await?;
+
+        let scheduler_id = scheduler.id;
+        let square_id = square.id;
+        log_pool
+            .get()
+            .await?
+            .interact(move |conn| {
+                let insert = |user_id: Option<i64>, offset: &str| {
+                    conn.execute(
+                        "INSERT INTO request (ip, user_id, path, response_code, processing_time_ns, date) VALUES ('10.0.0.1', ?1, '/rpc', 200, 1000000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?2))",
+                        rusqlite::params![user_id, offset],
+                    )
+                };
+                insert(Some(scheduler_id), "0 minutes")?;
+                insert(Some(scheduler_id), "0 minutes")?;
+                insert(Some(scheduler_id), "0 minutes")?;
+                insert(Some(square_id), "0 minutes")?;
+                // anonymous request: should be ignored
+                insert(None, "0 minutes")?;
+                // out-of-window: should be ignored
+                insert(Some(scheduler_id), "-2 days")
+            })
+            .await??;
+        let res = super::run(&pool, &log_pool).await?;
+        assert_eq!(
+            vec![
+                (scheduler_id, Some("Scheduler".to_string()), 3),
+                (square_id, Some("square".to_string()), 1),
+            ],
+            res.logs
+                .top_users
+                .into_iter()
+                .map(|it| (it.user_id, it.name, it.count))
                 .collect::<Vec<_>>()
         );
         Ok(())

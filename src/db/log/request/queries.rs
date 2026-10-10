@@ -2,7 +2,7 @@ use super::super::LogPool;
 use super::blocking_queries;
 use super::blocking_queries::{
     DailyInfraReport, InsertArgs, PlatformUniqueIps24h, TopClientsReport, TopRestApiCall,
-    TopRpcMethod, TopUserAgent,
+    TopRpcMethod, TopUser, TopUserAgent,
 };
 use crate::db::log::request::schema::Request;
 use crate::Result;
@@ -69,6 +69,13 @@ pub async fn select_top_clients(pool: &LogPool) -> Result<TopClientsReport> {
     pool.get()
         .await?
         .interact(move |conn| blocking_queries::select_top_clients(conn))
+        .await?
+}
+
+pub async fn select_top_users(since: OffsetDateTime, pool: &LogPool) -> Result<Vec<TopUser>> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_top_users(since, conn))
         .await?
 }
 

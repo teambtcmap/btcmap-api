@@ -267,7 +267,11 @@ async fn main() -> Result<()> {
                             .service(rest::v4::nostr::auth_nostr)
                             .service(rest::v4::auth::signout),
                     )
-                    .service(scope("dashboard").service(rest::v4::dashboard::get))
+                    .service(
+                        scope("dashboard")
+                            .service(rest::v4::dashboard::get)
+                            .service(rest::v4::dashboard::get_infra),
+                    )
                     .service(scope("top-editors").service(rest::v4::top_editors::get))
                     .service(scope("communities").service(rest::v4::communities::get_top))
                     .service(scope("countries").service(rest::v4::countries::get_top))
