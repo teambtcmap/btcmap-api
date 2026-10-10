@@ -274,6 +274,8 @@ async fn main() -> Result<()> {
                     .service(scope("activity").service(rest::v4::activity::get))
                     .service(
                         scope("users")
+                            .service(rest::v4::users::get)
+                            .service(rest::v4::users::patch)
                             .service(rest::v4::users::me)
                             .service(rest::v4::users::post)
                             .service(rest::v4::users::change_password)

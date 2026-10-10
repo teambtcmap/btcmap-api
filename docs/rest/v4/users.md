@@ -6,6 +6,8 @@ This document describes the endpoints for interacting with users in REST API v4.
 
 - [Get Authenticated User](#get-authenticated-user)
 - [Create User](#create-user)
+- [Search Users](#search-users)
+- [Update User](#update-user)
 - [Create Token](#create-token)
 - [Change Password](#change-password)
 - [Update Username](#update-username)
@@ -105,6 +107,116 @@ curl -X POST https://api.btcmap.org/v4/users \
 | id    | Number | User ID |
 | name  | String | Username (either provided or generated) |
 | roles | Array  | List of user roles (default: ["user"]) |
+
+### Search Users
+
+Admin and root only user lookup. Returns users whose `name` contains `query` (case-insensitive substring), ordered by name. Soft-deleted users are excluded and `%`/`_` in `query` are matched literally. An empty `query` lists users up to `limit`.
+
+#### Example Request
+
+```bash
+curl 'https://api.btcmap.org/v4/users?query=na&limit=50' \
+  -H "Authorization: Bearer <your-token>"
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| query | String | Yes | Case-insensitive substring to match against usernames. An empty value lists users up to `limit`. |
+| limit | Number | No | Maximum number of users to return. Defaults to 100 and must be between 1 and 1000. |
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Returns matching users (possibly empty) |
+| 400  | Bad Request - `limit` is out of range |
+| 401  | Unauthorized - Missing or invalid token |
+| 403  | Forbidden - Caller is not an admin or root |
+| 500  | Internal Server Error - Database error |
+
+##### Example Response (200 OK)
+
+```json
+[
+  {
+    "id": 124,
+    "name": "natinfosec",
+    "roles": ["user"],
+    "created_at": "2024-01-01T00:00:00Z",
+    "geofence": [],
+    "npub": "npub1..."
+  }
+]
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id    | Number | User ID |
+| name  | String | Username |
+| roles | Array  | List of user roles |
+| created_at | String | RFC 3339 creation timestamp |
+| geofence | Array of Numbers | Area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
+| npub  | String | Bech32 npub of the linked Nostr identity; omitted when none is linked |
+
+### Update User
+
+Root and admin only partial update of a user's `roles` and/or `geofence`. Both fields are optional; omitted fields are left unchanged. Returns the updated user in the same shape as [Search Users](#search-users).
+
+The applied policy:
+
+- **Root** may update the roles (up to, but never `root`) and geofence of any non-root user, and may update its own geofence, but may never change its own roles or touch another root.
+- **Admin** may add or remove `event_manager` / `area_manager` for non-admin, non-root users, and may set the geofence of any target that is not an admin or a root (including their own). Admins can never change their own roles.
+
+#### Example Request
+
+```bash
+curl -X PATCH https://api.btcmap.org/v4/users/124 \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"roles": ["user", "event_manager"], "geofence": [3, 7]}'
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| roles | Array of Strings | No | Replacement role set. Omit to leave roles untouched. |
+| geofence | Array of Numbers | No | Replacement geofence (area IDs). Omit to leave the geofence untouched. |
+
+#### Response
+
+| Code | Description |
+|------|-------------|
+| 200  | Success - Returns the updated user |
+| 400  | Bad Request - Neither field provided, or an unknown role |
+| 401  | Unauthorized - Missing or invalid token |
+| 403  | Forbidden - Caller is not allowed to make this change |
+| 404  | Not Found - No user with the given id |
+| 500  | Internal Server Error - Database error |
+
+##### Example Response (200 OK)
+
+```json
+{
+  "id": 124,
+  "name": "natinfosec",
+  "roles": ["user", "event_manager"],
+  "created_at": "2024-01-01T00:00:00Z",
+  "geofence": [3, 7],
+  "npub": "npub1..."
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id    | Number | User ID |
+| name  | String | Username |
+| roles | Array  | Updated list of user roles |
+| created_at | String | RFC 3339 creation timestamp |
+| geofence | Array of Numbers | Updated area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
+| npub  | String | Bech32 npub of the linked Nostr identity; omitted when none is linked |
 
 ### Create Token
 

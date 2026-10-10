@@ -115,6 +115,26 @@ pub fn select_by_name(name: &str, conn: &Connection) -> Result<User> {
     .map_err(Into::into)
 }
 
+/// Case-insensitive substring match on `name`, for the admin user search.
+/// Deleted users are excluded. `query` is escaped so `%`/`_` are literal;
+/// an empty `query` matches every (non-deleted) user up to `limit`.
+pub fn select_by_name_like(query: &str, limit: i64, conn: &Connection) -> Result<Vec<User>> {
+    let pattern = format!("%{}%", crate::service::search::escape_like(query));
+    conn.prepare(&format!(
+        r#"
+            SELECT {projection}
+            FROM {TABLE}
+            WHERE {Name} LIKE ?1 ESCAPE '\' AND {DeletedAt} IS NULL
+            ORDER BY {Name} COLLATE NOCASE
+            LIMIT ?2
+        "#,
+        projection = User::projection(),
+    ))?
+    .query_map(params![pattern, limit], User::mapper())?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(Into::into)
+}
+
 #[allow(dead_code)]
 pub fn select_by_npub(npub: &str, conn: &Connection) -> Result<Option<User>> {
     conn.query_row(
@@ -373,6 +393,60 @@ mod test {
         let res_admin = super::select_by_name(admin_name, &conn)?;
         assert_eq!(admin_id, res_admin.id);
         assert_eq!(admin_name, res_admin.name);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_name_like_matches_substring_case_insensitively() -> Result<()> {
+        let conn = conn();
+        let nathan = super::insert("Nathan", "", &conn)?.id;
+        let natasha = super::insert("natasha", "", &conn)?.id;
+        super::insert("bob", "", &conn)?;
+
+        let res = super::select_by_name_like("na", 10, &conn)?;
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        assert_eq!(2, ids.len());
+        assert!(ids.contains(&nathan));
+        assert!(ids.contains(&natasha));
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_name_like_escapes_wildcards() -> Result<()> {
+        let conn = conn();
+        super::insert("alice", "", &conn)?;
+        // `%` must be treated as a literal, not a wildcard matching every user.
+        assert!(super::select_by_name_like("%", 10, &conn)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_name_like_respects_limit_and_orders_by_name() -> Result<()> {
+        let conn = conn();
+        super::insert("carol", "", &conn)?;
+        super::insert("alice", "", &conn)?;
+        super::insert("bob", "", &conn)?;
+
+        let res = super::select_by_name_like("", 2, &conn)?;
+        let names: Vec<&str> = res.iter().map(|it| it.name.as_str()).collect();
+        assert_eq!(vec!["alice", "bob"], names);
+        Ok(())
+    }
+
+    #[test]
+    fn select_by_name_like_excludes_deleted() -> Result<()> {
+        use super::schema::{Columns, TABLE_NAME};
+        let conn = conn();
+        let deleted = super::insert("nat", "", &conn)?.id;
+        conn.execute(
+            &format!(
+                r#"UPDATE {TABLE_NAME} SET {DeletedAt} = '2020-01-01T00:00:00Z' WHERE {Id} = ?1"#,
+                DeletedAt = Columns::DeletedAt.as_ref(),
+                Id = Columns::Id.as_ref(),
+            ),
+            rusqlite::params![deleted],
+        )?;
+        assert!(super::select_by_name_like("nat", 10, &conn)?.is_empty());
         Ok(())
     }
 

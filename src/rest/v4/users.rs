@@ -4,14 +4,19 @@ use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::nostr_auth::NostrProof;
+use crate::rest::v4::top_editors::validate_limit;
+use crate::Error;
 use actix_web::delete;
 use actix_web::get;
 use actix_web::http::header;
+use actix_web::patch;
 use actix_web::post;
 use actix_web::put;
 use actix_web::web;
 use actix_web::web::Data;
 use actix_web::web::Json;
+use actix_web::web::Path;
+use actix_web::web::Query;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use argon2::Argon2;
@@ -22,6 +27,7 @@ use names::Generator;
 use names::Name;
 use serde::Deserialize;
 use serde::Serialize;
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
@@ -147,6 +153,242 @@ pub async fn post(
         name: user.name,
         roles: user.roles.into_iter().map(|it| it.to_string()).collect(),
     }))
+}
+
+#[derive(Deserialize)]
+pub struct GetUsersArgs {
+    /// Case-insensitive substring to match against usernames. An empty value
+    /// lists non-deleted users up to `limit`.
+    pub query: String,
+    pub limit: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, ts_rs::TS)]
+#[ts(export, rename = "UserSearchResult")]
+pub struct UserSearchResult {
+    #[ts(type = "number")]
+    pub id: i64,
+    pub name: String,
+    pub roles: Vec<String>,
+    #[ts(type = "string")]
+    pub created_at: String,
+    /// Area ids the user is restricted to when acting as an event manager.
+    /// Empty means unrestricted (same meaning as on `GET /users/me`).
+    #[ts(type = "Array<number>")]
+    pub geofence: Vec<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub npub: Option<String>,
+}
+
+impl From<User> for UserSearchResult {
+    fn from(user: User) -> Self {
+        UserSearchResult {
+            id: user.id,
+            name: user.name,
+            roles: user.roles.iter().map(|role| role.to_string()).collect(),
+            created_at: user.created_at,
+            geofence: user.geofence,
+            npub: user.npub,
+        }
+    }
+}
+
+/// `GET /v4/users?query=<substring>&limit=<n>`
+///
+/// Admin/root-only user lookup. Returns users whose `name` contains `query`
+/// (case-insensitive substring), ordered by name. Deleted users are excluded
+/// and `%`/`_` in `query` are treated literally. `limit` defaults to 100 and
+/// is capped at 1000.
+#[get("")]
+pub async fn get(
+    auth: Auth,
+    args: Query<GetUsersArgs>,
+    pool: Data<MainPool>,
+) -> Result<Json<Vec<UserSearchResult>>, RestApiError> {
+    auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
+    let is_privileged = auth
+        .effective_roles()
+        .iter()
+        .any(|role| matches!(role, Role::Admin | Role::Root));
+    if !is_privileged {
+        return Err(RestApiError::forbidden());
+    }
+
+    let limit = validate_limit(args.limit)?;
+    let users = db::main::user::queries::select_by_name_like(&args.query, limit, &pool)
+        .await
+        .map_err(|_| RestApiError::database())?;
+    Ok(Json(
+        users.into_iter().map(UserSearchResult::from).collect(),
+    ))
+}
+
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PatchUserArgs")]
+pub struct PatchUserArgs {
+    /// Replacement role set. Omit to leave roles untouched.
+    #[serde(default)]
+    #[ts(optional)]
+    pub roles: Option<Vec<String>>,
+    /// Replacement geofence (area ids). Omit to leave the geofence untouched.
+    #[serde(default)]
+    #[ts(optional, type = "Array<number>")]
+    pub geofence: Option<Vec<i64>>,
+}
+
+/// Roles an admin is allowed to grant/revoke. Everything else must stay as-is.
+const ADMIN_MANAGED_ROLES: [Role; 2] = [Role::EventManager, Role::AreaManager];
+
+/// Validated result of [`authorize_update`]: the (possibly unchanged) roles and
+/// geofence to persist.
+struct AuthorizedUpdate {
+    roles: Option<Vec<Role>>,
+    geofence: Option<Vec<i64>>,
+}
+
+fn same_role_set(a: &[Role], b: &[Role]) -> bool {
+    a.len() == b.len() && a.iter().all(|role| b.contains(role))
+}
+
+/// True when the only difference between `existing` and `requested` is the
+/// membership of admin-managed roles (event_manager / area_manager).
+fn only_admin_managed_roles_differ(existing: &[Role], requested: &[Role]) -> bool {
+    existing
+        .iter()
+        .chain(requested.iter())
+        .filter(|role| !ADMIN_MANAGED_ROLES.contains(role))
+        .all(|role| existing.contains(role) == requested.contains(role))
+}
+
+/// Applies the role/geofence update policy for a root or admin caller.
+///
+/// - Root: may update any non-root user's roles (up to, but never `root`) and
+///   geofence; may update its own geofence but never its own roles; may not
+///   touch another root at all.
+/// - Admin: may add/remove `event_manager` / `area_manager` for non-admin,
+///   non-root users, and may set the geofence of any target except another
+///   admin or a root (their own included). Admins can never change their own
+///   roles.
+fn authorize_update(
+    caller_id: i64,
+    caller_roles: &[Role],
+    target: &User,
+    roles: Option<Vec<Role>>,
+    geofence: Option<Vec<i64>>,
+) -> Result<AuthorizedUpdate, RestApiError> {
+    if roles.is_none() && geofence.is_none() {
+        return Err(RestApiError::invalid_input("Nothing to update"));
+    }
+
+    let is_root = caller_roles.contains(&Role::Root);
+    let is_admin = caller_roles.contains(&Role::Admin);
+    let is_self = caller_id == target.id;
+    let target_is_root = target.roles.contains(&Role::Root);
+    let target_is_admin = target.roles.contains(&Role::Admin);
+
+    if is_root {
+        // A root may never modify another root's record.
+        if target_is_root && !is_self {
+            return Err(RestApiError::forbidden());
+        }
+        if let Some(ref new_roles) = roles {
+            if is_self {
+                // A root may update its own geofence but never its own roles.
+                if !same_role_set(new_roles, &target.roles) {
+                    return Err(RestApiError::forbidden());
+                }
+            } else if new_roles.contains(&Role::Root) {
+                // `admin` is the ceiling — roots cannot create other roots.
+                return Err(RestApiError::forbidden());
+            }
+        }
+        return Ok(AuthorizedUpdate { roles, geofence });
+    }
+
+    if is_admin {
+        // Admins can never touch a root.
+        if target_is_root {
+            return Err(RestApiError::forbidden());
+        }
+        // Admins may set their own geofence but never their own roles.
+        if is_self {
+            if let Some(ref new_roles) = roles {
+                if !same_role_set(new_roles, &target.roles) {
+                    return Err(RestApiError::forbidden());
+                }
+            }
+            return Ok(AuthorizedUpdate {
+                roles: None,
+                geofence,
+            });
+        }
+        // Other admins are off-limits entirely.
+        if target_is_admin {
+            return Err(RestApiError::forbidden());
+        }
+        if let Some(ref new_roles) = roles {
+            if !only_admin_managed_roles_differ(&target.roles, new_roles) {
+                return Err(RestApiError::forbidden());
+            }
+        }
+        return Ok(AuthorizedUpdate { roles, geofence });
+    }
+
+    Err(RestApiError::forbidden())
+}
+
+/// `PATCH /v4/users/{id}`
+///
+/// Root/admin-only update of another user's roles and/or geofence. See
+/// [`authorize_update`] for the exact policy. Returns the updated user in the
+/// same shape as `GET /v4/users`.
+#[patch("/{id}")]
+pub async fn patch(
+    auth: Auth,
+    path: Path<i64>,
+    args: Json<PatchUserArgs>,
+    pool: Data<MainPool>,
+) -> Result<Json<UserSearchResult>, RestApiError> {
+    let caller = auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
+
+    let target = db::main::user::queries::select_by_id(*path, &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+
+    let roles = match &args.roles {
+        Some(raw) => Some(
+            raw.iter()
+                .map(|role| Role::from_str(role).map_err(RestApiError::invalid_input))
+                .collect::<Result<Vec<Role>, _>>()?,
+        ),
+        None => None,
+    };
+
+    let authorized = authorize_update(
+        caller.id,
+        auth.effective_roles(),
+        &target,
+        roles,
+        args.geofence.clone(),
+    )?;
+
+    let mut updated = target;
+    if let Some(roles) = authorized.roles {
+        updated = db::main::user::queries::set_roles(updated.id, &roles, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+    }
+    if let Some(geofence) = authorized.geofence {
+        updated = db::main::user::queries::set_geofence(updated.id, &geofence, &pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+    }
+
+    Ok(Json(UserSearchResult::from(updated)))
 }
 
 #[derive(Deserialize, ts_rs::TS)]
@@ -409,6 +651,7 @@ mod test {
     use nostr::key::Keys;
     use nostr::nips::nip19::ToBech32;
     use nostr::{JsonUtil, Kind, Tag, Timestamp};
+    use serde_json::json;
 
     // Trusted base URL the NIP-98 `u` tag must bind to in PUT /me/nostr tests.
     const BASE: &str = "https://api.example.test";
@@ -979,6 +1222,547 @@ mod test {
         let res: MeResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, user.id);
         assert_eq!(res.name, "new_name");
+        Ok(())
+    }
+
+    // Inserts a user with `roles`, plus an access token with `secret` carrying
+    // the same roles, and returns the user id.
+    async fn user_with_role_token(
+        name: &str,
+        roles: &[Role],
+        secret: &str,
+        pool: &crate::db::main::MainPool,
+    ) -> Result<i64> {
+        let user = db::main::user::queries::insert(name, "", pool).await?;
+        let user = db::main::user::queries::set_roles(user.id, roles, pool).await?;
+        db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            secret.into(),
+            roles.to_vec(),
+            pool,
+        )
+        .await?;
+        Ok(user.id)
+    }
+
+    #[test]
+    async fn get_users_unauthenticated_returns_401() -> Result<()> {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool()))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get().uri("/users?query=na").to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_users_forbidden_for_regular_user() -> Result<()> {
+        let pool = pool();
+        user_with_token("regular", None, &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users?query=reg")
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_users_admin_matches_usernames_case_insensitively() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        user_with_role_token("Nathan", &[Role::User], "n1", &pool).await?;
+        user_with_role_token("natasha", &[Role::User], "n2", &pool).await?;
+        user_with_role_token("bob", &[Role::User], "b3", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .uri("/users?query=NA")
+            .to_request();
+        let res: Vec<UserSearchResult> = test::call_and_read_body_json(&app, req).await;
+        let names: Vec<&str> = res.iter().map(|u| u.name.as_str()).collect();
+        assert_eq!(vec!["natasha", "Nathan"], names);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_users_root_can_search() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("root", &[Role::Root], "root-secret", &pool).await?;
+        let carol = user_with_role_token("carol", &[Role::User], "c", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .uri("/users?query=car")
+            .to_request();
+        let res: Vec<UserSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(carol, res[0].id);
+        assert_eq!("carol", res[0].name);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_users_exposes_geofence() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let carol = user_with_role_token("carol", &[Role::User], "c", &pool).await?;
+        db::main::user::queries::set_geofence(carol, &[3, 7], &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .uri("/users?query=car")
+            .to_request();
+        let res: Vec<UserSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(1, res.len());
+        assert_eq!(vec![3, 7], res[0].geofence);
+        Ok(())
+    }
+
+    #[test]
+    async fn get_users_no_match_returns_empty() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        user_with_role_token("alice", &[Role::User], "a", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .uri("/users?query=zzz")
+            .to_request();
+        let res: Vec<UserSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_users_treats_wildcards_literally() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        user_with_role_token("alice", &[Role::User], "a", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .uri("/users?query=%25")
+            .to_request();
+        let res: Vec<UserSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert!(res.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    async fn get_users_empty_query_lists_users() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        user_with_role_token("alice", &[Role::User], "a", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(get)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .uri("/users?query=")
+            .to_request();
+        let res: Vec<UserSearchResult> = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(2, res.len());
+        Ok(())
+    }
+
+    // App with the user search + update endpoints mounted at /users.
+    fn users_app(
+        pool: crate::db::main::MainPool,
+    ) -> App<
+        impl actix_web::dev::ServiceFactory<
+            actix_web::dev::ServiceRequest,
+            Config = (),
+            Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+            Error = actix_web::Error,
+            InitError = (),
+        >,
+    > {
+        App::new()
+            .app_data(Data::new(pool))
+            .service(scope("/users").service(get).service(patch))
+    }
+
+    #[test]
+    async fn patch_user_unauthenticated_returns_401() -> Result<()> {
+        let app = test::init_service(users_app(pool())).await;
+        let req = TestRequest::patch()
+            .uri("/users/1")
+            .set_json(json!({ "geofence": [1] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_regular_user_is_forbidden() -> Result<()> {
+        let pool = pool();
+        let user = user_with_token("regular", None, &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{}", user.id))
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .set_json(json!({ "geofence": [1] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_root_promotes_to_admin_and_sets_geofence() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("root", &[Role::Root], "root-secret", &pool).await?;
+        let bob = user_with_role_token("bob", &[Role::User], "b", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({ "roles": ["user", "admin"], "geofence": [5, 6] }))
+            .to_request();
+        let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(bob, res.id);
+        assert!(res.roles.contains(&"admin".to_string()));
+        assert_eq!(vec![5, 6], res.geofence);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_root_cannot_grant_root() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("root", &[Role::Root], "root-secret", &pool).await?;
+        let bob = user_with_role_token("bob", &[Role::User], "b", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({ "roles": ["user", "root"] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_root_cannot_edit_another_root() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("root_a", &[Role::Root], "a-secret", &pool).await?;
+        let root_b = user_with_role_token("root_b", &[Role::Root], "b-secret", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        for body in [json!({ "geofence": [1] }), json!({ "roles": ["user"] })] {
+            let req = TestRequest::patch()
+                .uri(&format!("/users/{root_b}"))
+                .insert_header((header::AUTHORIZATION, "Bearer a-secret"))
+                .set_json(body)
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_root_can_update_own_geofence_but_not_roles() -> Result<()> {
+        let pool = pool();
+        let root_id = user_with_role_token("root", &[Role::Root], "root-secret", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{root_id}"))
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({ "geofence": [9] }))
+            .to_request();
+        let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(vec![9], res.geofence);
+
+        // Changing own roles is rejected...
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{root_id}"))
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({ "roles": ["user"] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // ...but echoing the current roles back is a no-op that succeeds.
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{root_id}"))
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({ "roles": ["root"] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_manages_event_manager() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let bob = user_with_role_token("bob", &[Role::User], "b", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "roles": ["user", "event_manager"] }))
+            .to_request();
+        let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+        assert!(res.roles.contains(&"event_manager".to_string()));
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "roles": ["user"] }))
+            .to_request();
+        let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+        assert!(!res.roles.contains(&"event_manager".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_cannot_grant_admin() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let bob = user_with_role_token("bob", &[Role::User], "b", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "roles": ["user", "admin"] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_cannot_touch_admins_or_roots() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let other_admin = user_with_role_token("admin2", &[Role::Admin], "a2", &pool).await?;
+        let root = user_with_role_token("root", &[Role::Root], "r", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        for target in [other_admin, root] {
+            let req = TestRequest::patch()
+                .uri(&format!("/users/{target}"))
+                .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+                .set_json(json!({ "geofence": [1] }))
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_can_set_geofence() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let bob = user_with_role_token("bob", &[Role::User], "b", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "geofence": [2, 4] }))
+            .to_request();
+        let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(vec![2, 4], res.geofence);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_can_set_own_geofence() -> Result<()> {
+        let pool = pool();
+        let admin = user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{admin}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "geofence": [3, 4] }))
+            .to_request();
+        let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(admin, res.id);
+        assert_eq!(vec![3, 4], res.geofence);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_cannot_change_own_roles() -> Result<()> {
+        let pool = pool();
+        let admin = user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        // A change is rejected...
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{admin}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "roles": ["admin", "event_manager"] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // ...but echoing the current roles back is a no-op that succeeds.
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{admin}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "roles": ["admin"] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_can_set_geofence_for_managers() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let em = user_with_role_token("em", &[Role::User, Role::EventManager], "em-secret", &pool)
+            .await?;
+        let am = user_with_role_token("am", &[Role::User, Role::AreaManager], "am-secret", &pool)
+            .await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        for target in [em, am] {
+            let req = TestRequest::patch()
+                .uri(&format!("/users/{target}"))
+                .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+                .set_json(json!({ "geofence": [1] }))
+                .to_request();
+            let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+            assert_eq!(vec![1], res.geofence);
+        }
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_admin_can_still_demote_a_manager() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("admin", &[Role::Admin], "admin-secret", &pool).await?;
+        let em = user_with_role_token("em", &[Role::User, Role::EventManager], "em-secret", &pool)
+            .await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{em}"))
+            .insert_header((header::AUTHORIZATION, "Bearer admin-secret"))
+            .set_json(json!({ "roles": ["user"] }))
+            .to_request();
+        let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
+        assert!(!res.roles.contains(&"event_manager".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_unknown_returns_404() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("root", &[Role::Root], "root-secret", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri("/users/999999")
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({ "geofence": [1] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_nothing_to_update_returns_400() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("root", &[Role::Root], "root-secret", &pool).await?;
+        let bob = user_with_role_token("bob", &[Role::User], "b", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({}))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_user_invalid_role_returns_400() -> Result<()> {
+        let pool = pool();
+        user_with_role_token("root", &[Role::Root], "root-secret", &pool).await?;
+        let bob = user_with_role_token("bob", &[Role::User], "b", &pool).await?;
+        let app = test::init_service(users_app(pool)).await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/users/{bob}"))
+            .insert_header((header::AUTHORIZATION, "Bearer root-secret"))
+            .set_json(json!({ "roles": ["wizard"] }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         Ok(())
     }
 }

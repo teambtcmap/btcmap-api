@@ -67,6 +67,18 @@ pub async fn select_by_name(name: impl Into<String>, pool: &Pool) -> Result<User
         .await?
 }
 
+pub async fn select_by_name_like(
+    query: impl Into<String>,
+    limit: i64,
+    pool: &Pool,
+) -> Result<Vec<User>> {
+    let query = query.into();
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::select_by_name_like(&query, limit, conn))
+        .await?
+}
+
 pub async fn select_by_npub(npub: impl Into<String>, pool: &Pool) -> Result<Option<User>> {
     let npub = npub.into();
     pool.get()
