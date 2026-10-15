@@ -33,13 +33,14 @@ futures-util = { version = "0.3.32", default-features = false }
 
 # We're using SQLite because it's portable and it requires no maintenance
 # SQLite is fast enough for our needs and we aren't aiming for infinite scalability
-# NOTE: 0.38.0 max becasuse deadpool-sqlite 0.13.0 won't work with newer versions
+# NOTE: keep in sync with deadpool-sqlite, which pins the rusqlite minor version
+# it supports; bump both together.
 # https://github.com/rusqlite/rusqlite/releases
-rusqlite = { version = "0.38.0", default-features = false, features = ["bundled", "time", "serde_json", "trace"] }
+rusqlite = { version = "0.40.0", default-features = false, features = ["bundled", "time", "serde_json", "trace"] }
 
 # We're wrapping blocking SQLite connections into an async pool
 # https://github.com/deadpool-rs/deadpool/blob/main/crates/deadpool-sqlite/CHANGELOG.md
-deadpool-sqlite = { version = "0.13.0", default-features = false, features = ["rt_tokio_1"] }
+deadpool-sqlite = { version = "0.14.0", default-features = false, features = ["rt_tokio_1"] }
 
 # That's an industry standard for making HTTP requests
 # https://github.com/seanmonstar/reqwest/releases
