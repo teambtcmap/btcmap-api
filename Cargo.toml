@@ -158,7 +158,7 @@ x509-parser = "0.18"
 
 # SHA-256 hashing for SPKI pin comparison.
 # https://github.com/RustCrypto/hashes
-sha2 = "0.10"
+sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
 
 # Derives TypeScript definitions from response structs so btcmap.org can
 # generate its API types from this crate (dev tool; no runtime use)
