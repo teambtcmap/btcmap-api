@@ -115,7 +115,7 @@ matrix-sdk = { version = "0.18.0", default-features = false }
 url = { version = "2.5.7", default-features = false, features = ["std"] }
 
 # https://github.com/RustCrypto/password-hashes/blob/master/argon2/CHANGELOG.md
-argon2 = { version = "0.5.3", default-features = false, features = ["password-hash", "alloc"] }
+argon2 = { version = "0.6", default-features = false, features = ["alloc", "getrandom", "password-hash"] }
 
 # https://github.com/uuid-rs/uuid/releases
 uuid = { version = "1.23.3", default-features = false, features = ["v4"] }

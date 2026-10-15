@@ -1,12 +1,10 @@
 use crate::db;
 use crate::service::auth::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH};
 use crate::Result;
+use argon2::Argon2;
+use argon2::PasswordHash;
 use argon2::PasswordHasher;
 use argon2::PasswordVerifier;
-use argon2::{
-    password_hash::{rand_core::OsRng, SaltString},
-    Argon2, PasswordHash,
-};
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
 
@@ -50,9 +48,8 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     Argon2::default()
         .verify_password(params.old_password.as_bytes(), &old_password_hash)
         .map_err(|_| err_invalid_username_password)?;
-    let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
-        .hash_password(params.new_password.as_bytes(), &salt)
+        .hash_password(params.new_password.as_bytes())
         .map_err(|_| err_generic)?
         .to_string();
     db::main::user::queries::set_password(user.id, password_hash, pool)
@@ -68,9 +65,8 @@ mod test {
     use crate::rpc::auth::signin;
 
     fn hash_password(password: &str) -> String {
-        let salt = SaltString::generate(&mut OsRng);
         Argon2::default()
-            .hash_password(password.as_bytes(), &salt)
+            .hash_password(password.as_bytes())
             .unwrap()
             .to_string()
     }

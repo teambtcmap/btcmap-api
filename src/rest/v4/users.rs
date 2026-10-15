@@ -17,8 +17,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
 use actix_web::web::Query;
-use argon2::password_hash::rand_core::OsRng;
-use argon2::password_hash::SaltString;
 use argon2::Argon2;
 use argon2::PasswordHash;
 use argon2::PasswordHasher;
@@ -137,9 +135,8 @@ pub async fn post(
             .next()
             .unwrap_or_default(),
     };
-    let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
-        .hash_password(args.password.as_bytes(), &salt)
+        .hash_password(args.password.as_bytes())
         .map_err(|e| RestApiError::invalid_input(e.to_string()))?
         .to_string();
     let user = db::main::user::queries::insert(&name, password_hash, &pool)
@@ -423,9 +420,8 @@ pub async fn change_password(
     Argon2::default()
         .verify_password(args.old_password.as_bytes(), &old_password_hash)
         .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
-    let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
-        .hash_password(args.new_password.as_bytes(), &salt)
+        .hash_password(args.new_password.as_bytes())
         .map_err(|e| RestApiError::invalid_input(e.to_string()))?
         .to_string();
     db::main::user::queries::set_password(user.id, password_hash, &pool)
@@ -1070,9 +1066,8 @@ mod test {
     }
 
     fn make_password_hash(password: &str) -> String {
-        let salt = SaltString::generate(&mut OsRng);
         Argon2::default()
-            .hash_password(password.as_bytes(), &salt)
+            .hash_password(password.as_bytes())
             .unwrap()
             .to_string()
     }

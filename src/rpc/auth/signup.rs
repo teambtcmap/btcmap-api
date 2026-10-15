@@ -3,11 +3,8 @@ use crate::{
     service::auth::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH},
     Error, Result,
 };
+use argon2::Argon2;
 use argon2::PasswordHasher;
-use argon2::{
-    password_hash::{rand_core::OsRng, SaltString},
-    Argon2,
-};
 use deadpool_sqlite::Pool;
 use names::Generator;
 use names::Name;
@@ -58,9 +55,8 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
                 Error::Other("Failed to generate a username, please provide one explicitly".into())
             })?,
     };
-    let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
-        .hash_password(params.password.as_bytes(), &salt)
+        .hash_password(params.password.as_bytes())
         .map_err(|e| e.to_string())?
         .to_string();
     let user = match crate::db::main::user::queries::insert(&name, password_hash, pool).await {
