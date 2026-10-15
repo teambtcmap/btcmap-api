@@ -29,7 +29,7 @@ actix-http = { version = "3.12.1", default-features = false }
 
 # Actix middleware needs that
 # https://github.com/rust-lang/futures-rs/releases
-futures-util = { version = "0.3.32", default-features = false }
+futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
 
 # We're using SQLite because it's portable and it requires no maintenance
 # SQLite is fast enough for our needs and we aren't aiming for infinite scalability
@@ -73,7 +73,7 @@ time-tz = "2.0.0"
 
 # Async logging infra
 # https://github.com/tokio-rs/tracing/releases
-tracing = { version = "0.1.44", default-features = false }
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 
 # Async logging infra
 # https://github.com/tokio-rs/tracing/releases
@@ -81,7 +81,7 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 
 # Used to embed database migrations
 # https://github.com/Michael-F-Bryan/include_dir/tags
-include_dir = { version = "0.7.4", default-features = false }
+include_dir = "0.7.4"
 
 # Used for dealing with area bounds
 # https://github.com/georust/geojson/blob/main/CHANGES.md
@@ -93,11 +93,11 @@ geo = { version = "0.33.1", default-features = false }
 
 # Used to handle area icons
 # https://github.com/marshallpierce/rust-base64/blob/master/RELEASE-NOTES.md
-base64 = { version = "0.22.1", default-features = false }
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 
 # Used to generate OpenGraph images
 # https://docs.rs/staticmap/latest/staticmap/
-staticmap = { version = "0.4.2", default-features = false }
+staticmap = "0.4.2"
 
 # Used to decode png, jpeg, and webp images and encode jpeg images
 # https://github.com/image-rs/image/blob/main/CHANGES.md
@@ -105,14 +105,14 @@ image = { version = "0.25.9", default-features = false, features = ["png", "jpeg
 
 # Used to extract tip addresses from OSM profiles
 # https://github.com/rust-lang/regex/blob/master/CHANGELOG.md
-regex = { version = "1.12.3", default-features = false }
+regex = { version = "1.12.3", default-features = false, features = ["std", "perf"] }
 
 # BTC Map Matrix Space bot
 # https://github.com/matrix-org/matrix-rust-sdk/releases
 matrix-sdk = { version = "0.18.0", default-features = false }
 
 # https://github.com/servo/rust-url/releases
-url = { version = "2.5.7", default-features = false }
+url = { version = "2.5.7", default-features = false, features = ["std"] }
 
 # https://github.com/RustCrypto/password-hashes/blob/master/argon2/CHANGELOG.md
 argon2 = { version = "0.5.3", default-features = false, features = ["password-hash", "alloc"] }
