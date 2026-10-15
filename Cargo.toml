@@ -14,29 +14,29 @@ edition = "2021"
 
 # This is the main dependency, providing a webserver and core infra
 # https://github.com/actix/actix-web/blob/master/actix-web/CHANGES.md
-actix-web = { version = "4.13.0", default-features = false, features = ["macros", "compress-brotli"] }
+actix-web = { version = "4.16.0", default-features = false, features = ["macros", "compress-brotli"] }
 
 # Cross-Origin Resource Sharing (CORS) middleware, so any browser-based
 # client can call the API from a different origin. The middleware handles
 # the OPTIONS preflight itself; without it browsers reject every cross-origin
 # POST that carries an Authorization header or a JSON content type.
 # https://github.com/actix/actix-extras/blob/master/actix-cors/CHANGES.md
-actix-cors = "0.7.1"
+actix-cors = "0.7.2"
 
 # HTTP types and services for the Actix ecosystem
 # https://github.com/actix/actix-web/blob/main/actix-http/CHANGES.md
-actix-http = { version = "3.12.1", default-features = false }
+actix-http = { version = "3.18.13", default-features = false }
 
 # Actix middleware needs that
 # https://github.com/rust-lang/futures-rs/releases
-futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 
 # We're using SQLite because it's portable and it requires no maintenance
 # SQLite is fast enough for our needs and we aren't aiming for infinite scalability
 # NOTE: keep in sync with deadpool-sqlite, which pins the rusqlite minor version
 # it supports; bump both together.
 # https://github.com/rusqlite/rusqlite/releases
-rusqlite = { version = "0.40.0", default-features = false, features = ["bundled", "time", "serde_json", "trace"] }
+rusqlite = { version = "0.40.2", default-features = false, features = ["bundled", "time", "serde_json", "trace"] }
 
 # We're wrapping blocking SQLite connections into an async pool
 # https://github.com/deadpool-rs/deadpool/blob/main/crates/deadpool-sqlite/CHANGELOG.md
@@ -44,26 +44,26 @@ deadpool-sqlite = { version = "0.14.0", default-features = false, features = ["r
 
 # That's an industry standard for making HTTP requests
 # https://github.com/seanmonstar/reqwest/releases
-reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json"] }
 
 # Used for mapping Rust structs to JSON via derive annotation
 # https://github.com/serde-rs/serde/releases
-serde = { version = "1.0.228", default-features = false, features = ["derive"] }
+serde = { version = "1.0.229", default-features = false, features = ["derive"] }
 
 # JSON is heavily used in this project
 # https://github.com/serde-rs/json/releases
-serde_json = { version = "1.0.149", default-features = false, features = ["preserve_order"] }
+serde_json = { version = "1.0.154", default-features = false, features = ["preserve_order"] }
 
 # That's an industry starnard for working with time
 # TODO consider switching to std alternatives, if/when present
 # https://github.com/time-rs/time/blob/main/CHANGELOG.md
-time = { version = "0.3.47", default-features = false, features = ["macros", "serde-well-known"] }
+time = { version = "0.3.55", default-features = false, features = ["macros", "serde-well-known"] }
 
 # Converts (lon, lat) coordinates to an IANA timezone name entirely offline.
 # It bundles ~4 MB of tz boundary data; `clap` (a default CLI-only dependency)
 # is disabled to keep the server binary lean.
 # https://github.com/ringsaturn/tzf-rs/releases
-tzf-rs = { version = "2.1.2", default-features = false, features = ["bundled"] }
+tzf-rs = { version = "2.1.3", default-features = false, features = ["bundled"] }
 
 # IANA timezone database integration for the `time` crate, so a local
 # wall-clock time plus a zone name can be turned into a concrete UTC offset
@@ -101,34 +101,34 @@ staticmap = "0.4.2"
 
 # Used to decode png, jpeg, and webp images and encode jpeg images
 # https://github.com/image-rs/image/blob/main/CHANGES.md
-image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "webp"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 
 # Used to extract tip addresses from OSM profiles
 # https://github.com/rust-lang/regex/blob/master/CHANGELOG.md
-regex = { version = "1.12.3", default-features = false, features = ["std", "perf"] }
+regex = { version = "1.13.1", default-features = false, features = ["std", "perf"] }
 
 # BTC Map Matrix Space bot
 # https://github.com/matrix-org/matrix-rust-sdk/releases
-matrix-sdk = { version = "0.19", default-features = false, features = ["rustls-aws-lc-rs"] }
+matrix-sdk = { version = "0.19.1", default-features = false, features = ["rustls-aws-lc-rs"] }
 
 # https://github.com/servo/rust-url/releases
-url = { version = "2.5.7", default-features = false, features = ["std"] }
+url = { version = "2.5.8", default-features = false, features = ["std"] }
 
 # https://github.com/RustCrypto/password-hashes/blob/master/argon2/CHANGELOG.md
-argon2 = { version = "0.6", default-features = false, features = ["alloc", "getrandom", "password-hash"] }
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "getrandom", "password-hash"] }
 
 # https://github.com/uuid-rs/uuid/releases
-uuid = { version = "1.23.3", default-features = false, features = ["v4"] }
+uuid = { version = "1.28.0", default-features = false, features = ["v4"] }
 
 # https://github.com/Peternator7/strum/blob/master/CHANGELOG.md
 strum = { version = "0.28.0", features = ["derive"] }
 
 # https://github.com/tokio-rs/tokio/releases
-tokio = "1.52.3"
+tokio = "1.53.3"
 
 # Cancellation tokens used to break background-task loops on graceful shutdown
 # https://github.com/tokio-rs/tokio/releases
-tokio-util = "0.7.18"
+tokio-util = "0.7.20"
 
 # https://github.com/fnichol/names/blob/main/CHANGELOG.md
 names = "0.14.0"
@@ -136,7 +136,7 @@ names = "0.14.0"
 # Nostr protocol types + Schnorr signature verification, used by the NIP-98
 # HTTP auth extractor
 # https://crates.io/crates/nostr
-nostr = { version = "0.45", default-features = false, features = ["std"] }
+nostr = { version = "0.45.5", default-features = false, features = ["std"] }
 
 # Used to query Bitcoin wallet balances from xpubs via a public Electrum server
 # https://github.com/bitcoindevkit/rust-electrum-client/releases
@@ -145,20 +145,20 @@ electrum-client = { version = "0.25.0", default-features = false, features = ["u
 # TLS stack used to implement SPKI-pinned electrum connections (the electrum-client
 # crate has no public API for certificate pinning).
 # https://github.com/rustls/rustls/releases
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 
 # Rustls-owned equivalents of `webpki` types so we don't pull in a different version.
 # https://github.com/rustls/pki-types
-rustls-pki-types = "1"
+rustls-pki-types = "1.15.1"
 
 # X.509 certificate parser used to extract the SPKI from a server certificate so
 # we can compare it against the pin.
 # https://github.com/rusticata/x509-parser
-x509-parser = "0.18"
+x509-parser = "0.18.1"
 
 # SHA-256 hashing for SPKI pin comparison.
 # https://github.com/RustCrypto/hashes
-sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
+sha2 = { version = "0.11.1", default-features = false, features = ["alloc"] }
 
 # Derives TypeScript definitions from response structs so btcmap.org can
 # generate its API types from this crate (dev tool; no runtime use)
@@ -169,4 +169,4 @@ ts-rs = "12.0.1"
 # `os-rng` (and therefore `rand`) is only needed by the NIP-98 tests, which
 # call `Keys::generate()`. Declaring it here keeps it out of the production
 # dependency set; feature unification enables it for test builds only.
-nostr = { version = "0.45", default-features = false, features = ["std", "os-rng"] }
+nostr = { version = "0.45.5", default-features = false, features = ["std", "os-rng"] }
