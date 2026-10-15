@@ -399,6 +399,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wall-clock microbenchmark, flaky under test-suite contention; run with `cargo test -- --ignored`"]
     fn test_parse_performance() {
         let start = std::time::Instant::now();
 
