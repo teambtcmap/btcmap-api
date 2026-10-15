@@ -109,7 +109,7 @@ regex = { version = "1.12.3", default-features = false, features = ["std", "perf
 
 # BTC Map Matrix Space bot
 # https://github.com/matrix-org/matrix-rust-sdk/releases
-matrix-sdk = { version = "0.18.0", default-features = false }
+matrix-sdk = { version = "0.19", default-features = false, features = ["rustls-aws-lc-rs"] }
 
 # https://github.com/servo/rust-url/releases
 url = { version = "2.5.7", default-features = false, features = ["std"] }
