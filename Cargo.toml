@@ -95,10 +95,6 @@ geo = { version = "0.33.1", default-features = false }
 # https://github.com/marshallpierce/rust-base64/blob/master/RELEASE-NOTES.md
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 
-# Used to generate OpenGraph images
-# https://docs.rs/staticmap/latest/staticmap/
-staticmap = "0.4.2"
-
 # Used to decode png, jpeg, and webp images and encode jpeg images
 # https://github.com/image-rs/image/blob/main/CHANGES.md
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }

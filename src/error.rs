@@ -15,7 +15,6 @@ pub enum Error {
     Parse(time::error::Parse),
     Decode(base64::DecodeError),
     GeoJson(Box<geojson::Error>),
-    Staticmap(staticmap::Error),
     Blocking(actix_web::error::BlockingError),
     Matrix(String),
     Image(image::error::ImageError),
@@ -38,7 +37,6 @@ impl Display for Error {
             Error::DeadpoolInteract(err) => err.fmt(f),
             Error::DeadpoolConfig(err) => err.fmt(f),
             Error::DeadpoolBuild(err) => err.fmt(f),
-            Error::Staticmap(err) => err.fmt(f),
             Error::Blocking(err) => err.fmt(f),
             Error::Matrix(err) => write!(f, "{}", err),
             Error::Image(err) => err.fmt(f),
@@ -128,12 +126,6 @@ impl From<base64::DecodeError> for Error {
 impl From<geojson::Error> for Error {
     fn from(error: geojson::Error) -> Self {
         Error::GeoJson(Box::new(error))
-    }
-}
-
-impl From<staticmap::Error> for Error {
-    fn from(error: staticmap::Error) -> Self {
-        Error::Staticmap(error)
     }
 }
 
