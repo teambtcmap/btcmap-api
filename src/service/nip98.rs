@@ -24,9 +24,8 @@ use crate::error::Error;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use nostr::event::Event;
+use nostr::event::Kind;
 use nostr::nips::nip19::ToBech32;
-use nostr::JsonUtil;
-use nostr::Kind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const NIP98_KIND: u16 = 27235;
@@ -163,10 +162,9 @@ fn require_unique_tag(event: &Event, tag_name: &str) -> Result<String, Error> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use nostr::event::EventBuilder;
+    use nostr::event::{EventBuilder, FinalizeEvent, Tag};
     use nostr::key::Keys;
-    use nostr::Tag;
-    use nostr::Timestamp;
+    use nostr::types::Timestamp;
 
     fn make_nip98_event(keys: &Keys, url: &str, method: &str) -> String {
         let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
@@ -175,7 +173,7 @@ mod test {
                 Tag::parse(["method", method]).unwrap(),
             ])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(keys)
+            .finalize(keys)
             .unwrap();
         let json = event.as_json();
         BASE64.encode(json.as_bytes())
@@ -233,7 +231,7 @@ mod test {
                 Tag::parse(["method", "POST"]).unwrap(),
             ])
             .custom_created_at(Timestamp::from(0))
-            .sign_with_keys(&keys)
+            .finalize(&keys)
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, url, "POST").unwrap_err();
@@ -250,7 +248,7 @@ mod test {
                 Tag::parse(["method", "POST"]).unwrap(),
             ])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(&keys)
+            .finalize(&keys)
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, url, "POST").unwrap_err();
@@ -275,7 +273,7 @@ mod test {
                 Tag::parse(["method", "POST"]).unwrap(),
             ])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(&keys)
+            .finalize(&keys)
             .unwrap();
 
         // Flip one character of the sig hex. The event's `id` still matches
@@ -308,7 +306,7 @@ mod test {
         let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
             .tags(vec![Tag::parse(["method", "POST"]).unwrap()])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(&keys)
+            .finalize(&keys)
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, "https://api.btcmap.org/v4/auth/nostr", "POST").unwrap_err();
@@ -322,7 +320,7 @@ mod test {
         let event = EventBuilder::new(Kind::from_u16(NIP98_KIND), "")
             .tags(vec![Tag::parse(["u", url]).unwrap()])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(&keys)
+            .finalize(&keys)
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, url, "POST").unwrap_err();
@@ -346,7 +344,7 @@ mod test {
                 Tag::parse(["method", "POST"]).unwrap(),
             ])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(&keys)
+            .finalize(&keys)
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, url, "POST").unwrap_err();
@@ -364,7 +362,7 @@ mod test {
                 Tag::parse(["method", "GET"]).unwrap(),
             ])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(&keys)
+            .finalize(&keys)
             .unwrap();
         let b64 = BASE64.encode(event.as_json().as_bytes());
         let err = verify(&b64, url, "POST").unwrap_err();

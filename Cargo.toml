@@ -136,7 +136,7 @@ names = "0.14.0"
 # Nostr protocol types + Schnorr signature verification, used by the NIP-98
 # HTTP auth extractor
 # https://crates.io/crates/nostr
-nostr = { version = "0.44.3", default-features = false, features = ["std"] }
+nostr = { version = "0.45", default-features = false, features = ["std"] }
 
 # Used to query Bitcoin wallet balances from xpubs via a public Electrum server
 # https://github.com/bitcoindevkit/rust-electrum-client/releases
@@ -164,3 +164,9 @@ sha2 = { version = "0.11", default-features = false, features = ["alloc"] }
 # generate its API types from this crate (dev tool; no runtime use)
 # https://github.com/Aleph-Alpha/ts-rs/blob/main/CHANGELOG.md
 ts-rs = "12.0.1"
+
+[dev-dependencies]
+# `os-rng` (and therefore `rand`) is only needed by the NIP-98 tests, which
+# call `Keys::generate()`. Declaring it here keeps it out of the production
+# dependency set; feature unification enables it for test builds only.
+nostr = { version = "0.45", default-features = false, features = ["std", "os-rng"] }

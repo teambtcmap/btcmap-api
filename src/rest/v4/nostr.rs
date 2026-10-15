@@ -143,10 +143,10 @@ mod test {
     use actix_web::{test, App};
     use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine;
-    use nostr::event::EventBuilder;
+    use nostr::event::{EventBuilder, FinalizeEvent, Kind, Tag};
     use nostr::key::Keys;
     use nostr::nips::nip19::ToBech32;
-    use nostr::{JsonUtil, Kind, Tag, Timestamp};
+    use nostr::types::Timestamp;
 
     const BASE_URL: &str = "https://api.example.test";
     const ENDPOINT_PATH: &str = "/v4/auth/nostr";
@@ -159,7 +159,7 @@ mod test {
                 Tag::parse(["method", method]).unwrap(),
             ])
             .custom_created_at(Timestamp::now())
-            .sign_with_keys(keys)
+            .finalize(keys)
             .unwrap();
         BASE64.encode(event.as_json().as_bytes())
     }
