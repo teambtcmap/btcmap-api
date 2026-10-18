@@ -6,6 +6,7 @@ use crate::rest::error::RestApiError;
 use crate::rest::nostr_auth::NostrProof;
 use crate::rest::v4::nostr::NAME_RETRIES;
 use crate::rest::v4::top_editors::validate_limit;
+use crate::service;
 use crate::Error;
 use actix_web::delete;
 use actix_web::get;
@@ -20,7 +21,6 @@ use actix_web::web::Path;
 use actix_web::web::Query;
 use argon2::Argon2;
 use argon2::PasswordHash;
-use argon2::PasswordHasher;
 use argon2::PasswordVerifier;
 use names::Generator;
 use names::Name;
@@ -130,10 +130,8 @@ pub async fn post(
     args: Json<PostArgs>,
     pool: Data<MainPool>,
 ) -> Result<Json<PostResponse>, RestApiError> {
-    let password_hash = Argon2::default()
-        .hash_password(args.password.as_bytes())
-        .map_err(|_| RestApiError::internal())?
-        .to_string();
+    let password_hash =
+        service::auth::hash_password(&args.password).map_err(|_| RestApiError::internal())?;
     let user = match &args.name {
         Some(name) => db::main::user::queries::insert(name, password_hash, &pool)
             .await
@@ -439,10 +437,8 @@ pub async fn change_password(
     Argon2::default()
         .verify_password(args.old_password.as_bytes(), &old_password_hash)
         .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
-    let password_hash = Argon2::default()
-        .hash_password(args.new_password.as_bytes())
-        .map_err(|_| RestApiError::internal())?
-        .to_string();
+    let password_hash =
+        service::auth::hash_password(&args.new_password).map_err(|_| RestApiError::internal())?;
     db::main::user::queries::set_password(user.id, password_hash, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -1105,10 +1101,7 @@ mod test {
     }
 
     fn make_password_hash(password: &str) -> String {
-        Argon2::default()
-            .hash_password(password.as_bytes())
-            .unwrap()
-            .to_string()
+        service::auth::hash_password(password).unwrap()
     }
 
     #[test]

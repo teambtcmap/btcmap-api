@@ -3,11 +3,10 @@ use crate::db::main::user::schema::{Role, User};
 use crate::db::main::MainPool;
 use crate::rest::error::{RestApiError, RestResult};
 use crate::rest::nostr_auth::NostrAuth;
+use crate::service;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
-use argon2::Argon2;
-use argon2::PasswordHasher;
 use names::Generator;
 use names::Name;
 use nostr::event::{Event, Kind};
@@ -139,10 +138,7 @@ fn profile_name(profile: &serde_json::Value, npub: &str) -> Option<String> {
 /// A password nobody knows, stored hashed: every account has one, so an
 /// empty password can never stand in for a credential.
 fn random_password_hash() -> Result<String, RestApiError> {
-    Argon2::default()
-        .hash_password(Uuid::new_v4().to_string().as_bytes())
-        .map(|hash| hash.to_string())
-        .map_err(|_| RestApiError::internal())
+    service::auth::hash_password(&Uuid::new_v4().to_string()).map_err(|_| RestApiError::internal())
 }
 
 /// The usernames to try, in order: the profile name, then it with 2, 3, …
