@@ -4,7 +4,7 @@ use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::nostr_auth::NostrProof;
-use crate::rest::v4::nostr::NAME_RETRIES;
+use crate::rest::v4::nostr::GENERATED_NAME_ATTEMPTS;
 use crate::rest::v4::top_editors::validate_limit;
 use crate::service;
 use crate::Error;
@@ -159,7 +159,7 @@ async fn insert_with_generated_name(
     password_hash: String,
     pool: &MainPool,
 ) -> Result<User, RestApiError> {
-    for name in names.take(NAME_RETRIES.into()) {
+    for name in names.take(GENERATED_NAME_ATTEMPTS.into()) {
         match db::main::user::queries::insert(name, password_hash.clone(), pool).await {
             Ok(user) => return Ok(user),
             Err(e) if e.is_unique_violation_on("user.name") => continue,

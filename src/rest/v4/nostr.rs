@@ -106,16 +106,23 @@ pub async fn auth_nostr(
     }))
 }
 
+/// How many generated names a sign-up tries before giving up.
+pub(crate) const GENERATED_NAME_ATTEMPTS: u8 = 5;
+
+/// How many names a profile name yields: itself, then with 2, 3, …
+/// appended up to this number.
+const PROFILE_NAME_ATTEMPTS: u8 = 5;
+
 /// The usernames to try, in order: the profile name, then it with 2, 3, …
 /// appended, then generated names.
 fn name_candidates(profile_name: Option<&str>) -> impl Iterator<Item = String> + '_ {
     let from_profile = profile_name.into_iter().flat_map(|base| {
-        (1..=NAME_RETRIES).map(move |n| match n {
+        (1..=PROFILE_NAME_ATTEMPTS).map(move |n| match n {
             1 => base.to_string(),
             n => format!("{base}{n}"),
         })
     });
-    let generated = (0..NAME_RETRIES).map(|_| {
+    let generated = (0..GENERATED_NAME_ATTEMPTS).map(|_| {
         Generator::with_naming(Name::Numbered)
             .next()
             .unwrap_or_default()
@@ -137,8 +144,6 @@ fn name_candidates(profile_name: Option<&str>) -> impl Iterator<Item = String> +
 /// Any other database error (pool, panic, NOT NULL, other UNIQUE indexes,
 /// foreign keys, ...) is propagated as a database error rather than
 /// silently masked as a lost race.
-pub(crate) const NAME_RETRIES: u8 = 5;
-
 async fn create_or_recover(
     npub: &str,
     profile_name: Option<&str>,
