@@ -56,11 +56,12 @@ that same account.
 
 The username comes from the optional `profile` in the request body: the user's
 signed kind-0 profile event (NIP-01). Its `name` is used, else its
-`display_name`, trimmed to 100 characters. It is only used if the event is a
-valid kind 0 signed by the same key. While the name is taken, `2`, `3`, `4`
-and then `5` is appended, shortening the name to stay within 100 characters.
-If those are all taken, or there is no usable profile, a random username is
-generated. The profile is ignored for keys that already have an account.
+`display_name`, with line breaks and runs of spaces collapsed to one space,
+control and invisible formatting characters removed, and cut to 100
+characters. It is only used if the event is a valid kind 0 signed by the same
+key. While the name is taken, `2`, `3`, `4` and then `5` is appended,
+shortening the name to stay within 100 characters. If those are all taken, or
+there is no usable profile, a random username is generated. The profile is ignored for keys that already have an account.
 
 Accounts that were created without a password get a random one on their next
 Nostr sign-in.
