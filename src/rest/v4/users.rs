@@ -137,7 +137,7 @@ pub async fn post(
     let user = match &args.name {
         Some(name) => db::main::user::queries::insert(name, password_hash, &pool)
             .await
-            .map_err(name_write_error)?,
+            .map_err(map_name_conflict)?,
         None => {
             insert_with_generated_name(Generator::with_naming(Name::Numbered), password_hash, &pool)
                 .await?
@@ -464,13 +464,13 @@ pub async fn update_username(
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
     let updated_user = db::main::user::queries::set_name(user.id, &args.username, &pool)
         .await
-        .map_err(name_write_error)?;
+        .map_err(map_name_conflict)?;
     Ok(Json(MeResponse::from(&updated_user)))
 }
 
 /// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
 /// belongs to another account is a 409 the client can act on, not a 500.
-fn name_write_error(e: crate::Error) -> RestApiError {
+fn map_name_conflict(e: crate::Error) -> RestApiError {
     if e.is_unique_violation_on("user.name") {
         RestApiError::conflict("username already taken")
     } else {
