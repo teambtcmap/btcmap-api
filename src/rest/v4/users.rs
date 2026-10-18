@@ -470,7 +470,7 @@ pub async fn update_username(
 
 /// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
 /// belongs to another account is a 409 the client can act on, not a 500.
-fn map_name_conflict(e: crate::Error) -> RestApiError {
+fn map_name_conflict(e: Error) -> RestApiError {
     if e.is_unique_violation_on("user.name") {
         RestApiError::conflict("username already taken")
     } else {
