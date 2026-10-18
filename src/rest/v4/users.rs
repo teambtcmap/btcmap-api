@@ -468,11 +468,15 @@ pub async fn update_username(
     Ok(Json(MeResponse::from(&updated_user)))
 }
 
+/// Message for a `user.name` UNIQUE violation, documented in
+/// `docs/rest/v4/users.md`.
+const NAME_TAKEN: &str = "username already taken";
+
 /// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
 /// belongs to another account is a 409 the client can act on, not a 500.
 fn map_name_conflict(e: Error) -> RestApiError {
     if e.is_unique_violation_on("user.name") {
-        RestApiError::conflict("username already taken")
+        RestApiError::conflict(NAME_TAKEN)
     } else {
         RestApiError::database()
     }
@@ -1281,7 +1285,7 @@ mod test {
         assert_eq!(res.status(), StatusCode::CONFLICT);
         let body: serde_json::Value = test::read_body_json(res).await;
         assert_eq!(body["code"], "conflict");
-        assert_eq!(body["message"], "username already taken");
+        assert_eq!(body["message"], NAME_TAKEN);
 
         let unchanged = db::main::user::queries::select_by_id(user.id, &pool).await?;
         assert_eq!(unchanged.name, "old_name");
@@ -1308,7 +1312,7 @@ mod test {
         assert_eq!(res.status(), StatusCode::CONFLICT);
         let body: serde_json::Value = test::read_body_json(res).await;
         assert_eq!(body["code"], "conflict");
-        assert_eq!(body["message"], "username already taken");
+        assert_eq!(body["message"], NAME_TAKEN);
         Ok(())
     }
 
