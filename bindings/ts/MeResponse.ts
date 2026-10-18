@@ -14,7 +14,7 @@ geofence: Array<number>,
  */
 npub: string | null, 
 /**
- * Whether the account has a password. Accounts created via Nostr start
- * without one; `PUT /me/password` sets the first one.
+ * Whether the account has a password. Accounts created via Nostr have
+ * none: their key is their only login.
  */
 has_password: boolean, };

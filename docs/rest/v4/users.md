@@ -59,7 +59,7 @@ curl https://api.btcmap.org/v4/users/me \
 | saved_areas | Array | List of saved areas with `id` and `name` fields |
 | geofence | Array of Numbers | Area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
 | npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
-| has_password | Boolean | Whether the account has a password. Accounts created via Nostr start without one |
+| has_password | Boolean | Whether the account has a password. Accounts created via Nostr have none: their key is their only login |
 
 ### Create User
 
@@ -272,7 +272,7 @@ curl -X POST https://api.btcmap.org/v4/users/satoshi/tokens \
 
 ### Change Password
 
-Changes the authenticated user's password. Requires a valid Bearer token. An account created via Nostr has no password yet (`has_password: false` on [Get Authenticated User](#get-authenticated-user)); for it, `old_password` is ignored and the first password is set.
+Changes the authenticated user's password. Requires a valid Bearer token.
 
 #### Example Request
 
@@ -358,7 +358,7 @@ Returns the authenticated user (same shape as [Get Authenticated User](#get-auth
 | saved_areas | Array | Always empty on this endpoint |
 | geofence | Array of Numbers | Area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
 | npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
-| has_password | Boolean | Whether the account has a password. Accounts created via Nostr start without one |
+| has_password | Boolean | Whether the account has a password. Accounts created via Nostr have none: their key is their only login |
 
 ### Get Linked Nostr Identity
 
@@ -446,7 +446,7 @@ curl -X DELETE https://api.btcmap.org/v4/users/me/nostr \
 | Code | Description |
 |------|-------------|
 | 200  | Success - Link cleared (or already absent) |
-| 400  | Bad Request - The account has no password, so the key is its only way to log in (`"set a password before unlinking your Nostr key"`). Set one with [Change Password](#change-password) first |
+| 400  | Bad Request - The account has no password (`has_password: false`, e.g. created via Nostr), so the key is its only login (`"this Nostr key is the account's only login"`) |
 | 401  | Unauthorized - Missing or invalid token |
 | 500  | Internal Server Error - Database error |
 

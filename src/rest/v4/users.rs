@@ -60,8 +60,8 @@ pub struct MeResponse {
     /// Bech32 npub (`npub1...`) of the Nostr identity linked to this user,
     /// or `null` when no pubkey is linked.
     pub npub: Option<String>,
-    /// Whether the account has a password. Accounts created via Nostr start
-    /// without one; `PUT /me/password` sets the first one.
+    /// Whether the account has a password. Accounts created via Nostr have
+    /// none: their key is their only login.
     pub has_password: bool,
 }
 
@@ -420,15 +420,11 @@ pub async fn change_password(
     pool: Data<MainPool>,
 ) -> Result<Json<()>, RestApiError> {
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
-    // An account created via Nostr has no password yet, so there is no old
-    // one to check: the Bearer token alone authorizes setting the first one.
-    if !user.password.is_empty() {
-        let old_password_hash = PasswordHash::new(&user.password)
-            .map_err(|_| RestApiError::invalid_input("Invalid password hash"))?;
-        Argon2::default()
-            .verify_password(args.old_password.as_bytes(), &old_password_hash)
-            .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
-    }
+    let old_password_hash = PasswordHash::new(&user.password)
+        .map_err(|_| RestApiError::invalid_input("Invalid password hash"))?;
+    Argon2::default()
+        .verify_password(args.old_password.as_bytes(), &old_password_hash)
+        .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
     let password_hash = Argon2::default()
         .hash_password(args.new_password.as_bytes())
         .map_err(|e| RestApiError::invalid_input(e.to_string()))?
@@ -558,7 +554,7 @@ pub async fn delete_nostr(
     // unlinking it would lock the account out once its tokens are gone.
     if user.npub.is_some() && user.password.is_empty() {
         return Err(RestApiError::invalid_input(
-            "set a password before unlinking your Nostr key",
+            "this Nostr key is the account's only login",
         ));
     }
     db::main::user::queries::set_npub(user.id, None, &pool)
@@ -916,7 +912,7 @@ mod test {
         let body: serde_json::Value = test::read_body_json(res).await;
         assert_eq!(
             body["message"],
-            "set a password before unlinking your Nostr key"
+            "this Nostr key is the account's only login"
         );
 
         let reloaded = db::main::user::queries::select_by_id(user.id, &pool).await?;
@@ -1180,38 +1176,6 @@ mod test {
         let updated_hash = PasswordHash::new(&updated_user.password).unwrap();
         assert!(Argon2::default()
             .verify_password("new_password".as_bytes(), &updated_hash)
-            .is_ok());
-        Ok(())
-    }
-
-    #[test]
-    async fn change_password_sets_a_first_password_without_the_old_one() -> Result<()> {
-        let pool = pool();
-        // Created via Nostr: no password yet.
-        let user = user_with_token("nostr_user", Some("npub1example"), &pool).await?;
-
-        let app = test::init_service(
-            App::new()
-                .app_data(Data::new(pool.clone()))
-                .service(scope("/users").service(change_password)),
-        )
-        .await;
-
-        let req = TestRequest::put()
-            .insert_header((header::AUTHORIZATION, "Bearer secret"))
-            .uri("/users/me/password")
-            .set_json(ChangePasswordArgs {
-                old_password: "".into(),
-                new_password: "first_password".into(),
-            })
-            .to_request();
-        let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::OK);
-
-        let updated_user = db::main::user::queries::select_by_id(user.id, &pool).await?;
-        let updated_hash = PasswordHash::new(&updated_user.password).unwrap();
-        assert!(Argon2::default()
-            .verify_password("first_password".as_bytes(), &updated_hash)
             .is_ok());
         Ok(())
     }
