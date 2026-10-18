@@ -75,7 +75,7 @@ impl From<&User> for MeResponse {
             saved_areas: vec![],
             geofence: user.geofence.clone(),
             npub: user.npub.clone(),
-            has_password: !user.password.is_empty(),
+            has_password: user.has_password(),
         }
     }
 }
@@ -102,12 +102,12 @@ pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, Re
         })
         .collect();
     Ok(Json(MeResponse {
+        has_password: user.has_password(),
         id: user.id,
         name: user.name,
         roles: user.roles.iter().map(|r| r.to_string()).collect(),
         saved_places,
         saved_areas,
-        has_password: !user.password.is_empty(),
         geofence: user.geofence,
         npub: user.npub,
     }))
@@ -552,7 +552,7 @@ pub async fn delete_nostr(
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
     // Without a password the key is the account's only way to log in:
     // unlinking it would lock the account out once its tokens are gone.
-    if user.npub.is_some() && user.password.is_empty() {
+    if user.npub.is_some() && !user.has_password() {
         return Err(RestApiError::invalid_input(
             "this Nostr key is the account's only login",
         ));
@@ -582,11 +582,11 @@ pub async fn create_token(
         .await
         .map_err(|_| RestApiError::unauthorized())?;
 
-    // Users provisioned via Nostr (NIP-98) have no password set. Block
-    // password auth for them explicitly so an empty bearer cannot be
-    // mistaken for a credential. PHC parsing of an empty hash already
-    // fails today, but make the intent explicit.
-    if user.password.is_empty() {
+    // Users provisioned via Nostr (NIP-98) have no password set, and legacy
+    // admin secrets were never hashed. Block password auth for them
+    // explicitly so an empty or unhashed value cannot be mistaken for a
+    // credential.
+    if !user.has_password() {
         return Err(RestApiError::unauthorized());
     }
 
@@ -630,7 +630,7 @@ pub async fn create_token(
     Ok(Json(CreateTokenResponse {
         token,
         user: MeResponse {
-            has_password: !user.password.is_empty(),
+            has_password: user.has_password(),
             id: user.id,
             name: user.name,
             roles: user.roles.iter().map(|r| r.to_string()).collect(),

@@ -64,6 +64,14 @@ impl fmt::Display for Role {
 }
 
 impl User {
+    /// Whether the account can log in with a password: the stored value is
+    /// an Argon2 hash. Accounts created via Nostr store an empty string, and
+    /// admin secrets carried over by migration 62 were never hashed; neither
+    /// can be used to log in, so neither counts.
+    pub fn has_password(&self) -> bool {
+        argon2::PasswordHash::new(&self.password).is_ok()
+    }
+
     pub fn projection() -> &'static str {
         static PROJECTION: OnceLock<String> = OnceLock::new();
         PROJECTION.get_or_init(|| {
@@ -142,5 +150,47 @@ impl FromStr for Role {
             "dashboard" => Ok(Role::Dashboard),
             _ => Err(format!("'{}' is not a valid Role", s)),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::User;
+    use argon2::Argon2;
+    use argon2::PasswordHasher;
+
+    fn user_with_password(password: &str) -> User {
+        User {
+            id: 1,
+            name: "user".into(),
+            password: password.into(),
+            roles: vec![],
+            saved_places: vec![],
+            saved_areas: vec![],
+            npub: None,
+            geofence: vec![],
+            created_at: String::new(),
+            updated_at: String::new(),
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn has_password_for_an_argon2_hash() {
+        let hash = Argon2::default().hash_password(b"pw").unwrap().to_string();
+        assert!(user_with_password(&hash).has_password());
+    }
+
+    // Accounts created via Nostr
+    #[test]
+    fn no_password_when_empty() {
+        assert!(!user_with_password("").has_password());
+    }
+
+    // Admin secrets carried over as-is by migration 62 never became hashes:
+    // nothing can log in with them
+    #[test]
+    fn no_password_for_a_value_that_is_not_a_hash() {
+        assert!(!user_with_password("legacy-plaintext-secret").has_password());
     }
 }
