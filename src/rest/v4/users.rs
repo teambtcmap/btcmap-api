@@ -60,6 +60,9 @@ pub struct MeResponse {
     /// Bech32 npub (`npub1...`) of the Nostr identity linked to this user,
     /// or `null` when no pubkey is linked.
     pub npub: Option<String>,
+    /// Whether the account has a password. Accounts created via Nostr start
+    /// without one; `PUT /me/password` sets the first one.
+    pub has_password: bool,
 }
 
 impl From<&User> for MeResponse {
@@ -72,6 +75,7 @@ impl From<&User> for MeResponse {
             saved_areas: vec![],
             geofence: user.geofence.clone(),
             npub: user.npub.clone(),
+            has_password: !user.password.is_empty(),
         }
     }
 }
@@ -103,6 +107,7 @@ pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, Re
         roles: user.roles.iter().map(|r| r.to_string()).collect(),
         saved_places,
         saved_areas,
+        has_password: !user.password.is_empty(),
         geofence: user.geofence,
         npub: user.npub,
     }))
@@ -415,11 +420,15 @@ pub async fn change_password(
     pool: Data<MainPool>,
 ) -> Result<Json<()>, RestApiError> {
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
-    let old_password_hash = PasswordHash::new(&user.password)
-        .map_err(|_| RestApiError::invalid_input("Invalid password hash"))?;
-    Argon2::default()
-        .verify_password(args.old_password.as_bytes(), &old_password_hash)
-        .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
+    // An account created via Nostr has no password yet, so there is no old
+    // one to check: the Bearer token alone authorizes setting the first one.
+    if !user.password.is_empty() {
+        let old_password_hash = PasswordHash::new(&user.password)
+            .map_err(|_| RestApiError::invalid_input("Invalid password hash"))?;
+        Argon2::default()
+            .verify_password(args.old_password.as_bytes(), &old_password_hash)
+            .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
+    }
     let password_hash = Argon2::default()
         .hash_password(args.new_password.as_bytes())
         .map_err(|e| RestApiError::invalid_input(e.to_string()))?
@@ -545,6 +554,13 @@ pub async fn delete_nostr(
     pool: Data<MainPool>,
 ) -> Result<Json<NostrIdentityResponse>, RestApiError> {
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
+    // Without a password the key is the account's only way to log in:
+    // unlinking it would lock the account out once its tokens are gone.
+    if user.npub.is_some() && user.password.is_empty() {
+        return Err(RestApiError::invalid_input(
+            "set a password before unlinking your Nostr key",
+        ));
+    }
     db::main::user::queries::set_npub(user.id, None, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -618,6 +634,7 @@ pub async fn create_token(
     Ok(Json(CreateTokenResponse {
         token,
         user: MeResponse {
+            has_password: !user.password.is_empty(),
             id: user.id,
             name: user.name,
             roles: user.roles.iter().map(|r| r.to_string()).collect(),
@@ -710,6 +727,8 @@ mod test {
         assert_eq!(res.name, "test_user");
         // A password-only user has no linked Nostr identity.
         assert_eq!(res.npub, None);
+        // Inserted with an empty password, as Nostr sign-up does.
+        assert!(!res.has_password);
         Ok(())
     }
 
@@ -852,6 +871,8 @@ mod test {
     async fn delete_nostr_clears_link() -> Result<()> {
         let pool = pool();
         let user = user_with_token("nostr_user", Some("npub1example"), &pool).await?;
+        // A password is a second way in, so the key may go.
+        db::main::user::queries::set_password(user.id, make_password_hash("pw"), &pool).await?;
 
         let app = test::init_service(
             App::new()
@@ -870,6 +891,36 @@ mod test {
         // The link is actually gone from the database.
         let reloaded = db::main::user::queries::select_by_id(user.id, &pool).await?;
         assert_eq!(reloaded.npub, None);
+        Ok(())
+    }
+
+    #[test]
+    async fn delete_nostr_refuses_the_only_login() -> Result<()> {
+        let pool = pool();
+        // Created via Nostr: no password, so the key is the only way in.
+        let user = user_with_token("nostr_user", Some("npub1example"), &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/users").service(delete_nostr)),
+        )
+        .await;
+
+        let req = TestRequest::delete()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/nostr")
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = test::read_body_json(res).await;
+        assert_eq!(
+            body["message"],
+            "set a password before unlinking your Nostr key"
+        );
+
+        let reloaded = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        assert_eq!(reloaded.npub.as_deref(), Some("npub1example"));
         Ok(())
     }
 
@@ -1130,6 +1181,68 @@ mod test {
         assert!(Argon2::default()
             .verify_password("new_password".as_bytes(), &updated_hash)
             .is_ok());
+        Ok(())
+    }
+
+    #[test]
+    async fn change_password_sets_a_first_password_without_the_old_one() -> Result<()> {
+        let pool = pool();
+        // Created via Nostr: no password yet.
+        let user = user_with_token("nostr_user", Some("npub1example"), &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/users").service(change_password)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/password")
+            .set_json(ChangePasswordArgs {
+                old_password: "".into(),
+                new_password: "first_password".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let updated_user = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        let updated_hash = PasswordHash::new(&updated_user.password).unwrap();
+        assert!(Argon2::default()
+            .verify_password("first_password".as_bytes(), &updated_hash)
+            .is_ok());
+        Ok(())
+    }
+
+    #[test]
+    async fn me_reports_a_set_password() -> Result<()> {
+        let pool = pool();
+        let user =
+            db::main::user::queries::insert("test_user", &make_password_hash("pw"), &pool).await?;
+        db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::User],
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(me)),
+        )
+        .await;
+
+        let req = TestRequest::get()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me")
+            .to_request();
+        let res: MeResponse = test::call_and_read_body_json(&app, req).await;
+        assert!(res.has_password);
         Ok(())
     }
 

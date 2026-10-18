@@ -45,7 +45,8 @@ curl https://api.btcmap.org/v4/users/me \
   "saved_places": [{"id": 1, "name": "Bitcoin Cafe"}],
   "saved_areas": [{"id": 2, "name": "Downtown District"}],
   "geofence": [],
-  "npub": "npub1..."
+  "npub": "npub1...",
+  "has_password": true
 }
 ```
 
@@ -58,6 +59,7 @@ curl https://api.btcmap.org/v4/users/me \
 | saved_areas | Array | List of saved areas with `id` and `name` fields |
 | geofence | Array of Numbers | Area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
 | npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
+| has_password | Boolean | Whether the account has a password. Accounts created via Nostr start without one |
 
 ### Create User
 
@@ -257,7 +259,8 @@ curl -X POST https://api.btcmap.org/v4/users/satoshi/tokens \
     "saved_places": [{"id": 1, "name": "Bitcoin Cafe"}],
     "saved_areas": [{"id": 2, "name": "Downtown District"}],
     "geofence": [],
-    "npub": null
+    "npub": null,
+    "has_password": true
   }
 }
 ```
@@ -269,7 +272,7 @@ curl -X POST https://api.btcmap.org/v4/users/satoshi/tokens \
 
 ### Change Password
 
-Changes the authenticated user's password. Requires a valid Bearer token.
+Changes the authenticated user's password. Requires a valid Bearer token. An account created via Nostr has no password yet (`has_password: false` on [Get Authenticated User](#get-authenticated-user)); for it, `old_password` is ignored and the first password is set.
 
 #### Example Request
 
@@ -341,7 +344,8 @@ Returns the authenticated user (same shape as [Get Authenticated User](#get-auth
   "saved_places": [],
   "saved_areas": [],
   "geofence": [],
-  "npub": null
+  "npub": null,
+  "has_password": true
 }
 ```
 
@@ -354,6 +358,7 @@ Returns the authenticated user (same shape as [Get Authenticated User](#get-auth
 | saved_areas | Array | Always empty on this endpoint |
 | geofence | Array of Numbers | Area IDs the user is restricted to when acting as an event manager. Empty means unrestricted. |
 | npub  | String \| null | Bech32 npub of the linked Nostr identity, or `null` if none is linked |
+| has_password | Boolean | Whether the account has a password. Accounts created via Nostr start without one |
 
 ### Get Linked Nostr Identity
 
@@ -441,6 +446,7 @@ curl -X DELETE https://api.btcmap.org/v4/users/me/nostr \
 | Code | Description |
 |------|-------------|
 | 200  | Success - Link cleared (or already absent) |
+| 400  | Bad Request - The account has no password, so the key is its only way to log in (`"set a password before unlinking your Nostr key"`). Set one with [Change Password](#change-password) first |
 | 401  | Unauthorized - Missing or invalid token |
 | 500  | Internal Server Error - Database error |
 

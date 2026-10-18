@@ -12,4 +12,9 @@ geofence: Array<number>,
  * Bech32 npub (`npub1...`) of the Nostr identity linked to this user,
  * or `null` when no pubkey is linked.
  */
-npub: string | null, };
+npub: string | null, 
+/**
+ * Whether the account has a password. Accounts created via Nostr start
+ * without one; `PUT /me/password` sets the first one.
+ */
+has_password: boolean, };
