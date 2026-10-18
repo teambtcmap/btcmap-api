@@ -102,14 +102,9 @@ pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, Re
         })
         .collect();
     Ok(Json(MeResponse {
-        has_password: user.has_password(),
-        id: user.id,
-        name: user.name,
-        roles: user.roles.iter().map(|r| r.to_string()).collect(),
         saved_places,
         saved_areas,
-        geofence: user.geofence,
-        npub: user.npub,
+        ..MeResponse::from(&user)
     }))
 }
 
@@ -630,14 +625,9 @@ pub async fn create_token(
     Ok(Json(CreateTokenResponse {
         token,
         user: MeResponse {
-            has_password: user.has_password(),
-            id: user.id,
-            name: user.name,
-            roles: user.roles.iter().map(|r| r.to_string()).collect(),
             saved_places,
             saved_areas,
-            geofence: user.geofence,
-            npub: user.npub,
+            ..MeResponse::from(&user)
         },
     }))
 }
