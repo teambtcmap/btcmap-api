@@ -713,7 +713,7 @@ mod test {
         assert_eq!(res.name, "test_user");
         // A password-only user has no linked Nostr identity.
         assert_eq!(res.npub, None);
-        // Inserted with an empty password, as Nostr sign-up does.
+        // The test inserted it with an empty password, so none is set.
         assert!(!res.has_password);
         Ok(())
     }
@@ -1173,16 +1173,8 @@ mod test {
     #[test]
     async fn me_reports_a_set_password() -> Result<()> {
         let pool = pool();
-        let user =
-            db::main::user::queries::insert("test_user", &make_password_hash("pw"), &pool).await?;
-        db::main::access_token::queries::insert(
-            user.id,
-            "".into(),
-            "secret".into(),
-            vec![Role::User],
-            &pool,
-        )
-        .await?;
+        let user = user_with_token("test_user", None, &pool).await?;
+        db::main::user::queries::set_password(user.id, make_password_hash("pw"), &pool).await?;
 
         let app = test::init_service(
             App::new()
