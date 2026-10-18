@@ -4,7 +4,7 @@ use nostr::nips::nip01::Metadata;
 
 /// Longest username taken from a profile, in characters (matches the web's
 /// username field).
-const PROFILE_NAME_MAX_CHARS: usize = 100;
+pub const PROFILE_NAME_MAX_CHARS: usize = 100;
 
 /// The username a signed kind-0 profile event asks for: its `name`, else
 /// its `display_name`, trimmed and capped. None unless the event is a valid

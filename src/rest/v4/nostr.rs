@@ -4,6 +4,7 @@ use crate::db::main::MainPool;
 use crate::rest::error::{RestApiError, RestResult};
 use crate::rest::nostr_auth::NostrAuth;
 use crate::service;
+use crate::service::nostr::PROFILE_NAME_MAX_CHARS;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
@@ -115,12 +116,20 @@ pub(crate) const GENERATED_NAME_ATTEMPTS: u8 = 5;
 const PROFILE_NAME_ATTEMPTS: u8 = 5;
 
 /// The usernames to try, in order: the profile name, then it with 2, 3, …
-/// appended, then generated names.
+/// appended (shortening the name so it stays within
+/// [`PROFILE_NAME_MAX_CHARS`]), then generated names.
 fn name_candidates(profile_name: Option<&str>) -> impl Iterator<Item = String> + '_ {
     let from_profile = profile_name.into_iter().flat_map(|base| {
         (1..=PROFILE_NAME_ATTEMPTS).map(move |n| match n {
             1 => base.to_string(),
-            n => format!("{base}{n}"),
+            n => {
+                let suffix = n.to_string();
+                let base: String = base
+                    .chars()
+                    .take(PROFILE_NAME_MAX_CHARS - suffix.len())
+                    .collect();
+                format!("{base}{suffix}")
+            }
         })
     });
     let generated = (0..GENERATED_NAME_ATTEMPTS).map(|_| {
@@ -353,6 +362,20 @@ mod test {
         let res = sign_in(&keys, Some(profile), &pool).await;
 
         assert_eq!(res.username, "satoshi3");
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn sign_up_keeps_a_numbered_profile_name_within_the_cap() -> Result<()> {
+        let pool = pool();
+        let long_name = "a".repeat(100);
+        db::main::user::queries::insert(&long_name, "", &pool).await?;
+        let keys = Keys::generate();
+        let profile = signed_profile(&keys, &Metadata::new().name(&long_name));
+
+        let res = sign_in(&keys, Some(profile), &pool).await;
+
+        assert_eq!(res.username, format!("{}2", "a".repeat(99)));
         Ok(())
     }
 
