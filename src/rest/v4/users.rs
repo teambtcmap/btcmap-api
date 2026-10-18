@@ -469,10 +469,10 @@ pub async fn update_username(
 }
 
 /// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
-/// belongs to another account is a 400 the client can act on, not a 500.
+/// belongs to another account is a 409 the client can act on, not a 500.
 fn name_write_error(e: crate::Error) -> RestApiError {
     if e.is_unique_violation_on("user.name") {
-        RestApiError::invalid_input("username already taken")
+        RestApiError::conflict("username already taken")
     } else {
         RestApiError::database()
     }
@@ -1250,7 +1250,7 @@ mod test {
     }
 
     #[test]
-    async fn update_username_taken_returns_400() -> Result<()> {
+    async fn update_username_taken_returns_409() -> Result<()> {
         let pool = pool();
         db::main::user::queries::insert("taken", "", &pool).await?;
         let user = db::main::user::queries::insert("old_name", "", &pool).await?;
@@ -1278,8 +1278,9 @@ mod test {
             })
             .to_request();
         let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(res.status(), StatusCode::CONFLICT);
         let body: serde_json::Value = test::read_body_json(res).await;
+        assert_eq!(body["code"], "conflict");
         assert_eq!(body["message"], "username already taken");
 
         let unchanged = db::main::user::queries::select_by_id(user.id, &pool).await?;
@@ -1288,7 +1289,7 @@ mod test {
     }
 
     #[test]
-    async fn post_taken_name_returns_400() -> Result<()> {
+    async fn post_taken_name_returns_409() -> Result<()> {
         let pool = pool();
         db::main::user::queries::insert("taken", "", &pool).await?;
 
@@ -1304,8 +1305,9 @@ mod test {
             .set_json(json!({ "name": "taken", "password": "correct horse" }))
             .to_request();
         let res = test::call_service(&app, req).await;
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(res.status(), StatusCode::CONFLICT);
         let body: serde_json::Value = test::read_body_json(res).await;
+        assert_eq!(body["code"], "conflict");
         assert_eq!(body["message"], "username already taken");
         Ok(())
     }

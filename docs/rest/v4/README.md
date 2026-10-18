@@ -43,6 +43,7 @@ All API errors return:
 | 401  | Unauthorized - Missing or invalid credentials |
 | 403  | Forbidden - Authenticated but not allowed to perform the action |
 | 404  | Not Found - Resource doesn't exist |
+| 409  | Conflict - The request clashes with existing data (e.g., a taken username) |
 | 500  | Server Error - Unexpected failure in database or elsewhere |
 
 ### Error Response Body
