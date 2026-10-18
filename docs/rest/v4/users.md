@@ -432,7 +432,7 @@ curl -X PUT https://api.btcmap.org/v4/users/me/nostr \
 
 ### Unlink Nostr Identity
 
-Clears the Nostr pubkey linked to the authenticated account. Requires a valid Bearer token only — removing your own link needs no NIP-98 proof. Idempotent: succeeds with `npub: null` even if nothing was linked.
+Clears the Nostr pubkey linked to the authenticated account. Requires a valid Bearer token only — removing your own link needs no NIP-98 proof. Idempotent: succeeds with `npub: null` even if nothing was linked. Refused with 400 when the key is the account's only login (`has_password: false`, e.g. an account created via Nostr), since unlinking it would lock the account out.
 
 #### Example Request
 
