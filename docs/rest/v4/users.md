@@ -89,7 +89,7 @@ curl -X POST https://api.btcmap.org/v4/users \
 | Code | Description |
 |------|-------------|
 | 200  | Success - User created |
-| 400  | Bad Request - Invalid input (e.g., empty password) |
+| 400  | Bad Request - Invalid input (e.g., empty password), or the name is already taken (`"username already taken"`) |
 | 500  | Internal Server Error - Database error |
 
 ##### Example Response (200 OK)
@@ -326,6 +326,7 @@ curl -X PUT https://api.btcmap.org/v4/users/me/username \
 | Code | Description |
 |------|-------------|
 | 200  | Success - Username updated |
+| 400  | Bad Request - The name is already taken (`"username already taken"`) |
 | 401  | Unauthorized - Missing or invalid token |
 | 500  | Internal Server Error - Database error |
 

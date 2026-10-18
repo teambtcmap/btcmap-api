@@ -141,7 +141,7 @@ pub async fn post(
         .to_string();
     let user = db::main::user::queries::insert(&name, password_hash, &pool)
         .await
-        .map_err(|_| RestApiError::database())?;
+        .map_err(name_write_error)?;
     let user = db::main::user::queries::set_roles(user.id, &[Role::User], &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -445,8 +445,18 @@ pub async fn update_username(
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
     let updated_user = db::main::user::queries::set_name(user.id, &args.username, &pool)
         .await
-        .map_err(|_| RestApiError::database())?;
+        .map_err(name_write_error)?;
     Ok(Json(MeResponse::from(&updated_user)))
+}
+
+/// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
+/// belongs to another account is a 400 the client can act on, not a 500.
+fn name_write_error(e: crate::Error) -> RestApiError {
+    if crate::rest::v4::nostr::is_unique_violation_on(&e, "user.name") {
+        RestApiError::invalid_input("username already taken")
+    } else {
+        RestApiError::database()
+    }
 }
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
@@ -1217,6 +1227,67 @@ mod test {
         let res: MeResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, user.id);
         assert_eq!(res.name, "new_name");
+        Ok(())
+    }
+
+    #[test]
+    async fn update_username_taken_returns_400() -> Result<()> {
+        let pool = pool();
+        db::main::user::queries::insert("taken", "", &pool).await?;
+        let user = db::main::user::queries::insert("old_name", "", &pool).await?;
+        db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::User],
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/users").service(update_username)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/username")
+            .set_json(UpdateUsernameArgs {
+                username: "taken".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = test::read_body_json(res).await;
+        assert_eq!(body["message"], "username already taken");
+
+        let unchanged = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        assert_eq!(unchanged.name, "old_name");
+        Ok(())
+    }
+
+    #[test]
+    async fn post_taken_name_returns_400() -> Result<()> {
+        let pool = pool();
+        db::main::user::queries::insert("taken", "", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/users")
+            .set_json(json!({ "name": "taken", "password": "correct horse" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = test::read_body_json(res).await;
+        assert_eq!(body["message"], "username already taken");
         Ok(())
     }
 
