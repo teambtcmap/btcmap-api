@@ -47,6 +47,7 @@ The `devtools` script provides helper commands for development:
 | `fetch-image-db` | Fetch only the image database |
 | `fetch-log-db` | Fetch only the log database |
 | `deploy` | Run tests, build release, deploy to production |
+| `self-deploy` | Run tests, build release, replace the binary and restart the service on the current machine |
 | `gen-main-schema` | Generate `schema.sql` from migrations |
 | `export-ts-types [dir]` | Export the TypeScript bindings to a directory |
 

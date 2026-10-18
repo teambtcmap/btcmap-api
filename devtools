@@ -56,6 +56,21 @@ case "$1" in
             && ssh btcmap-api 'systemctl restart btcmap-api.service'
         ;;
 
+    self-deploy)
+        # Same as `deploy`, but run on the target machine: no rsync/ssh, just
+        # rebuild, replace the installed binary and restart the service.
+        as_root=()
+        if [ "$(id -u)" -ne 0 ]; then
+            as_root=(sudo)
+        fi
+
+        cargo test \
+            && cargo build --release \
+            && "${as_root[@]}" systemctl stop btcmap-api.service \
+            && "${as_root[@]}" install -m 755 target/release/btcmap-api /usr/local/bin/btcmap-api \
+            && "${as_root[@]}" systemctl start btcmap-api.service
+        ;;
+
     gen-main-schema)
         # Generate schema.sql from migrations using temporary SQLite database
         rm -f /tmp/schema_gen.db
