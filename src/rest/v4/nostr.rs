@@ -9,10 +9,6 @@ use actix_web::web::Data;
 use actix_web::web::Json;
 use names::Generator;
 use names::Name;
-use nostr::event::{Event, Kind};
-use nostr::key::PublicKey;
-use nostr::nips::nip01::Metadata;
-use nostr::nips::nip19::FromBech32;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -77,7 +73,9 @@ pub async fn auth_nostr(
     {
         Some(u) => {
             if u.password.is_empty() {
-                db::main::user::queries::set_password(u.id, random_password_hash()?, &pool)
+                let password =
+                    service::auth::random_password_hash().map_err(|_| RestApiError::internal())?;
+                db::main::user::queries::set_password(u.id, password, &pool)
                     .await
                     .map_err(|_| RestApiError::database())?;
             }
@@ -87,7 +85,7 @@ pub async fn auth_nostr(
             let name = args
                 .as_ref()
                 .and_then(|args| args.profile.as_ref())
-                .and_then(|profile| profile_name(profile, &npub));
+                .and_then(|profile| service::nostr::profile_name(profile, &npub));
             create_or_recover(&npub, name.as_deref(), &pool).await?
         }
     };
@@ -106,39 +104,6 @@ pub async fn auth_nostr(
         username: user.name,
         npub,
     }))
-}
-
-/// Longest username taken from a profile, in characters (matches the web's
-/// username field).
-const PROFILE_NAME_MAX_CHARS: usize = 100;
-
-/// The username a signed kind-0 profile event asks for: its `name`, else
-/// its `display_name`, trimmed and capped. None unless the event is a valid
-/// kind 0 signed by `npub`'s key, so a client can't pick a name for
-/// someone else's profile.
-fn profile_name(profile: &serde_json::Value, npub: &str) -> Option<String> {
-    let event = Event::from_json(profile.to_string()).ok()?;
-    event.verify().ok()?;
-    if event.kind != Kind::Metadata || event.pubkey != PublicKey::from_bech32(npub).ok()? {
-        return None;
-    }
-    let metadata = Metadata::from_json(&event.content).ok()?;
-    [metadata.name, metadata.display_name]
-        .into_iter()
-        .flatten()
-        .map(|name| {
-            name.trim()
-                .chars()
-                .take(PROFILE_NAME_MAX_CHARS)
-                .collect::<String>()
-        })
-        .find(|name| !name.is_empty())
-}
-
-/// A password nobody knows, stored hashed: every account has one, so an
-/// empty password can never stand in for a credential.
-fn random_password_hash() -> Result<String, RestApiError> {
-    service::auth::hash_password(&Uuid::new_v4().to_string()).map_err(|_| RestApiError::internal())
 }
 
 /// The usernames to try, in order: the profile name, then it with 2, 3, …
@@ -179,7 +144,7 @@ async fn create_or_recover(
     profile_name: Option<&str>,
     pool: &MainPool,
 ) -> Result<User, RestApiError> {
-    let password = random_password_hash()?;
+    let password = service::auth::random_password_hash().map_err(|_| RestApiError::internal())?;
     for name in name_candidates(profile_name) {
         match db::main::user::queries::insert_with_npub(
             name,
@@ -219,6 +184,7 @@ mod test {
     use base64::Engine;
     use nostr::event::{EventBuilder, FinalizeEvent, Kind, Tag};
     use nostr::key::Keys;
+    use nostr::nips::nip01::Metadata;
     use nostr::nips::nip19::ToBech32;
     use nostr::types::Timestamp;
 
