@@ -82,7 +82,7 @@ pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<Aut
 /// Any other database error (pool, panic, NOT NULL, other UNIQUE indexes,
 /// foreign keys, ...) is propagated as a database error rather than
 /// silently masked as a lost race.
-const NAME_RETRIES: u8 = 5;
+pub(crate) const NAME_RETRIES: u8 = 5;
 
 async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiError> {
     for _ in 0..NAME_RETRIES {
@@ -100,34 +100,17 @@ async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiE
         .await
         {
             Ok(user) => return Ok(user),
-            Err(e) if is_unique_violation_on(&e, "user.npub") => {
+            Err(e) if e.is_unique_violation_on("user.npub") => {
                 return db::main::user::queries::select_by_npub(npub.to_string(), pool)
                     .await
                     .map_err(|_| RestApiError::database())?
                     .ok_or_else(RestApiError::database);
             }
-            Err(e) if is_unique_violation_on(&e, "user.name") => continue,
+            Err(e) if e.is_unique_violation_on("user.name") => continue,
             Err(_) => return Err(RestApiError::database()),
         }
     }
     Err(RestApiError::database())
-}
-
-/// True iff `err` is a SQLite `ConstraintViolation` whose message names
-/// `target` (e.g. `"user.npub"`). SQLite's UNIQUE failure message has the
-/// form `UNIQUE constraint failed: <table>.<col>`, so column-level
-/// matching is robust enough without parsing extended error codes.
-///
-/// Shared with `users::put_nostr`, which maps a `user.npub` violation to a
-/// 400 so the identity-link endpoint stays correct if/when a unique index
-/// on `user.npub` is added.
-pub(crate) fn is_unique_violation_on(err: &crate::Error, target: &str) -> bool {
-    matches!(
-        err,
-        crate::Error::Rusqlite(rusqlite::Error::SqliteFailure(e, msg))
-            if e.code == rusqlite::ErrorCode::ConstraintViolation
-                && msg.as_deref().is_some_and(|m| m.contains(target))
-    )
 }
 
 #[cfg(test)]

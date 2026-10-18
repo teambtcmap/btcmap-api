@@ -4,6 +4,7 @@ use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::nostr_auth::NostrProof;
+use crate::rest::v4::nostr::NAME_RETRIES;
 use crate::rest::v4::top_editors::validate_limit;
 use crate::Error;
 use actix_web::delete;
@@ -129,19 +130,19 @@ pub async fn post(
     args: Json<PostArgs>,
     pool: Data<MainPool>,
 ) -> Result<Json<PostResponse>, RestApiError> {
-    let name = match &args.name {
-        Some(n) => n.clone(),
-        None => Generator::with_naming(Name::Numbered)
-            .next()
-            .unwrap_or_default(),
-    };
     let password_hash = Argon2::default()
         .hash_password(args.password.as_bytes())
         .map_err(|e| RestApiError::invalid_input(e.to_string()))?
         .to_string();
-    let user = db::main::user::queries::insert(&name, password_hash, &pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
+    let user = match &args.name {
+        Some(name) => db::main::user::queries::insert(name, password_hash, &pool)
+            .await
+            .map_err(map_name_conflict)?,
+        None => {
+            insert_with_generated_name(Generator::with_naming(Name::Numbered), password_hash, &pool)
+                .await?
+        }
+    };
     let user = db::main::user::queries::set_roles(user.id, &[Role::User], &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -150,6 +151,24 @@ pub async fn post(
         name: user.name,
         roles: user.roles.into_iter().map(|it| it.to_string()).collect(),
     }))
+}
+
+/// Inserts a user under the first name from `names` that isn't taken. The
+/// client didn't pick the name, so a collision is retried rather than
+/// reported as "username already taken".
+async fn insert_with_generated_name(
+    names: impl Iterator<Item = String>,
+    password_hash: String,
+    pool: &MainPool,
+) -> Result<User, RestApiError> {
+    for name in names.take(NAME_RETRIES.into()) {
+        match db::main::user::queries::insert(name, password_hash.clone(), pool).await {
+            Ok(user) => return Ok(user),
+            Err(e) if e.is_unique_violation_on("user.name") => continue,
+            Err(_) => return Err(RestApiError::database()),
+        }
+    }
+    Err(RestApiError::database())
 }
 
 #[derive(Deserialize)]
@@ -445,8 +464,32 @@ pub async fn update_username(
     let user = auth.user.ok_or_else(RestApiError::unauthorized)?;
     let updated_user = db::main::user::queries::set_name(user.id, &args.username, &pool)
         .await
-        .map_err(|_| RestApiError::database())?;
+        .map_err(map_name_conflict)?;
     Ok(Json(MeResponse::from(&updated_user)))
+}
+
+/// Message for a `user.name` UNIQUE violation, documented in
+/// `docs/rest/v4/users.md`.
+const NAME_TAKEN: &str = "username already taken";
+
+/// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
+/// belongs to another account is a 409 the client can act on, not a 500.
+fn map_name_conflict(e: Error) -> RestApiError {
+    conflict_or_database(&e, "user.name", || RestApiError::conflict(NAME_TAKEN))
+}
+
+/// `conflict()` if `e` is a UNIQUE violation on `target`, otherwise a
+/// generic database error.
+fn conflict_or_database(
+    e: &Error,
+    target: &str,
+    conflict: impl FnOnce() -> RestApiError,
+) -> RestApiError {
+    if e.is_unique_violation_on(target) {
+        conflict()
+    } else {
+        RestApiError::database()
+    }
 }
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
@@ -517,11 +560,7 @@ pub async fn put_nostr(
             // Backstop for the TOCTOU window: if a unique index on
             // `user.npub` exists and the concurrent loser hits it, surface
             // the documented 400 instead of a generic 500.
-            if crate::rest::v4::nostr::is_unique_violation_on(&e, "user.npub") {
-                npub_conflict()
-            } else {
-                RestApiError::database()
-            }
+            conflict_or_database(&e, "user.npub", npub_conflict)
         })?;
 
     Ok(Json(NostrIdentityResponse { npub: Some(npub) }))
@@ -1217,6 +1256,81 @@ mod test {
         let res: MeResponse = test::call_and_read_body_json(&app, req).await;
         assert_eq!(res.id, user.id);
         assert_eq!(res.name, "new_name");
+        Ok(())
+    }
+
+    #[test]
+    async fn update_username_taken_returns_409() -> Result<()> {
+        let pool = pool();
+        db::main::user::queries::insert("taken", "", &pool).await?;
+        let user = db::main::user::queries::insert("old_name", "", &pool).await?;
+        db::main::access_token::queries::insert(
+            user.id,
+            "".into(),
+            "secret".into(),
+            vec![Role::User],
+            &pool,
+        )
+        .await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/users").service(update_username)),
+        )
+        .await;
+
+        let req = TestRequest::put()
+            .insert_header((header::AUTHORIZATION, "Bearer secret"))
+            .uri("/users/me/username")
+            .set_json(UpdateUsernameArgs {
+                username: "taken".into(),
+            })
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::CONFLICT);
+        let body: serde_json::Value = test::read_body_json(res).await;
+        assert_eq!(body["code"], "conflict");
+        assert_eq!(body["message"], NAME_TAKEN);
+
+        let unchanged = db::main::user::queries::select_by_id(user.id, &pool).await?;
+        assert_eq!(unchanged.name, "old_name");
+        Ok(())
+    }
+
+    #[test]
+    async fn post_taken_name_returns_409() -> Result<()> {
+        let pool = pool();
+        db::main::user::queries::insert("taken", "", &pool).await?;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/users").service(post)),
+        )
+        .await;
+
+        let req = TestRequest::post()
+            .uri("/users")
+            .set_json(json!({ "name": "taken", "password": "correct horse" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::CONFLICT);
+        let body: serde_json::Value = test::read_body_json(res).await;
+        assert_eq!(body["code"], "conflict");
+        assert_eq!(body["message"], NAME_TAKEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn post_generated_name_retries_on_collision() -> Result<()> {
+        let pool = pool();
+        db::main::user::queries::insert("taken", "", &pool).await?;
+        let names = ["taken", "free"].into_iter().map(String::from);
+        let user = super::insert_with_generated_name(names, "".into(), &pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        assert_eq!(user.name, "free");
         Ok(())
     }
 

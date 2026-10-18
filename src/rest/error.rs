@@ -39,6 +39,10 @@ impl RestApiError {
         Self::new(RestApiErrorCode::InvalidInput, message.into())
     }
 
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(RestApiErrorCode::Conflict, message.into())
+    }
+
     pub fn unauthorized() -> Self {
         Self::new(
             RestApiErrorCode::Unauthorized,
@@ -61,6 +65,7 @@ pub enum RestApiErrorCode {
     Database,
     Unauthorized,
     Forbidden,
+    Conflict,
 }
 
 impl fmt::Display for RestApiError {
@@ -77,6 +82,7 @@ impl std::fmt::Display for RestApiErrorCode {
             RestApiErrorCode::Database => write!(f, "database"),
             RestApiErrorCode::Unauthorized => write!(f, "unauthorized"),
             RestApiErrorCode::Forbidden => write!(f, "forbidden"),
+            RestApiErrorCode::Conflict => write!(f, "conflict"),
         }
     }
 }
@@ -89,6 +95,7 @@ impl RestApiErrorCode {
             Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Conflict => StatusCode::CONFLICT,
         }
     }
 }

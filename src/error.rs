@@ -21,6 +21,21 @@ pub enum Error {
     Electrum(electrum_client::Error),
 }
 
+impl Error {
+    /// True iff this is a SQLite `ConstraintViolation` whose message names
+    /// `target` (e.g. `"user.npub"`). SQLite's UNIQUE failure message has the
+    /// form `UNIQUE constraint failed: <table>.<col>`, so column-level
+    /// matching is robust enough without parsing extended error codes.
+    pub fn is_unique_violation_on(&self, target: &str) -> bool {
+        matches!(
+            self,
+            Error::Rusqlite(rusqlite::Error::SqliteFailure(e, msg))
+                if e.code == rusqlite::ErrorCode::ConstraintViolation
+                    && msg.as_deref().is_some_and(|m| m.contains(target))
+        )
+    }
+}
+
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
