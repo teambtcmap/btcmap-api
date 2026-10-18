@@ -347,7 +347,6 @@ Use `db::test::pool()` for in-memory SQLite test databases.
 - Server binds to `127.0.0.1:8000` (hardcoded in main.rs)
 - Database stored in ~/.local/share/btcmap
 - Logging controlled via `RUST_LOG` env var (defaults to "info")
-- Builds on x86-64 Linux (how production is built) target the x86-64-v3 CPU baseline (via .cargo/config.toml); other hosts build with defaults
 
 ### Temporary Files
 For scratch files, logs, PIDs, or any other transient artifacts outside the workspace, always use `/tmp/opencode` — this path is pre-approved and won't trigger permission prompts. Do NOT use bare `/tmp/...` paths. Examples: `/tmp/opencode/btcmap-server.log`, `/tmp/opencode/btcmap-server.pid`.

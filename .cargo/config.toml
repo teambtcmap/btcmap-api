@@ -1,9 +1,2 @@
-# Production is built on an x86-64 Linux host (`devtools deploy`) and copied
-# to the server, so the build machine's CPU can be newer than the server's:
-# pin the x86-64-v3 baseline the server supports instead of `native`. Scoped
-# to that target so other hosts (e.g. Apple Silicon) build with defaults.
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "target-cpu=x86-64-v3"]
-
 [env]
 TS_RS_EXPORT_DIR = { value = "bindings/ts", relative = true }
