@@ -475,8 +475,18 @@ const NAME_TAKEN: &str = "username already taken";
 /// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
 /// belongs to another account is a 409 the client can act on, not a 500.
 fn map_name_conflict(e: Error) -> RestApiError {
-    if e.is_unique_violation_on("user.name") {
-        RestApiError::conflict(NAME_TAKEN)
+    conflict_or_database(&e, "user.name", || RestApiError::conflict(NAME_TAKEN))
+}
+
+/// `conflict()` if `e` is a UNIQUE violation on `target`, otherwise a
+/// generic database error.
+fn conflict_or_database(
+    e: &Error,
+    target: &str,
+    conflict: impl FnOnce() -> RestApiError,
+) -> RestApiError {
+    if e.is_unique_violation_on(target) {
+        conflict()
     } else {
         RestApiError::database()
     }
@@ -550,11 +560,7 @@ pub async fn put_nostr(
             // Backstop for the TOCTOU window: if a unique index on
             // `user.npub` exists and the concurrent loser hits it, surface
             // the documented 400 instead of a generic 500.
-            if e.is_unique_violation_on("user.npub") {
-                npub_conflict()
-            } else {
-                RestApiError::database()
-            }
+            conflict_or_database(&e, "user.npub", npub_conflict)
         })?;
 
     Ok(Json(NostrIdentityResponse { npub: Some(npub) }))
