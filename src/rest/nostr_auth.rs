@@ -4,6 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use crate::service::nip98;
+use crate::service::nip98::VerifiedNip98Event;
 
 /// Trusted external base URL of the API (e.g. `https://api.btcmap.org`, or
 /// `http://localhost:8000` in dev). Must be injected via `app_data` by
@@ -24,11 +25,14 @@ pub struct ApiBaseUrl(pub String);
 pub const X_NOSTR_AUTHORIZATION: &str = "x-nostr-authorization";
 
 /// Verify a NIP-98 event carried in `header_name` against the trusted
-/// `ApiBaseUrl` + this request's path/method, returning the bech32 npub on
+/// `ApiBaseUrl` + this request's path/method, returning the signer's key on
 /// success. Returns `None` when state is missing, the header is absent or
 /// not a `Nostr ...` value, or verification fails. Shared by [`NostrAuth`]
 /// (reads `Authorization`) and [`NostrProof`] (reads `X-Nostr-Authorization`).
-fn verified_npub(req: &HttpRequest, header_name: impl header::AsHeaderName) -> Option<String> {
+fn verified_event(
+    req: &HttpRequest,
+    header_name: impl header::AsHeaderName,
+) -> Option<VerifiedNip98Event> {
     // Without a trusted base URL we can't safely verify the `u` tag, so
     // refuse to attempt verification (matches the `Auth` extractor's
     // fail-closed pattern when state is missing).
@@ -53,7 +57,7 @@ fn verified_npub(req: &HttpRequest, header_name: impl header::AsHeaderName) -> O
     let method = req.method().as_str();
 
     match nip98::verify(payload, &full_url, method) {
-        Ok(event) => Some(event.npub),
+        Ok(event) => Some(event),
         Err(e) => {
             tracing::debug!(
                 error = %e,
@@ -67,21 +71,22 @@ fn verified_npub(req: &HttpRequest, header_name: impl header::AsHeaderName) -> O
 }
 
 /// NIP-98 extractor. Mirrors the `Auth` bearer extractor: never fails the
-/// request, always yields a struct. When `npub` is `None` the handler
+/// request, always yields a struct. When `event` is `None` the handler
 /// decides whether to reject (401) or treat auth as optional.
 ///
-/// A `Some(npub)` value guarantees the event was:
+/// A `Some(event)` value guarantees the event was:
 /// - base64-decoded + JSON-parsed successfully
 /// - kind 27235 with an in-window `created_at`
 /// - signed such that the `u` tag matches the actual request URL
 /// - signed such that the `method` tag matches the actual request method
 /// - verified under a valid Schnorr signature
 ///
-/// The `npub` is bech32-encoded (`npub1...`), matching the encoding used by
-/// the `user.npub` DB column. The signed event is read from the standard
-/// `Authorization: Nostr ...` header.
+/// `event.npub` is bech32-encoded (`npub1...`), matching the encoding used
+/// by the `user.npub` DB column; `event.pubkey` is the same key, parsed.
+/// The signed event is read from the standard `Authorization: Nostr ...`
+/// header.
 pub struct NostrAuth {
-    pub npub: Option<String>,
+    pub event: Option<VerifiedNip98Event>,
 }
 
 impl FromRequest for NostrAuth {
@@ -89,8 +94,8 @@ impl FromRequest for NostrAuth {
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let npub = verified_npub(req, header::AUTHORIZATION);
-        Box::pin(async move { Ok(NostrAuth { npub }) })
+        let event = verified_event(req, header::AUTHORIZATION);
+        Box::pin(async move { Ok(NostrAuth { event }) })
     }
 }
 
@@ -108,7 +113,7 @@ impl FromRequest for NostrProof {
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let npub = verified_npub(req, X_NOSTR_AUTHORIZATION);
+        let npub = verified_event(req, X_NOSTR_AUTHORIZATION).map(|event| event.npub);
         Box::pin(async move { Ok(NostrProof { npub }) })
     }
 }
@@ -128,8 +133,8 @@ mod test {
     const TEST_BASE: &str = "https://api.example/test";
 
     async fn handler(auth: NostrAuth) -> HttpResponse {
-        match auth.npub {
-            Some(npub) => HttpResponse::Ok().body(npub),
+        match auth.event {
+            Some(event) => HttpResponse::Ok().body(event.npub),
             None => HttpResponse::Unauthorized().finish(),
         }
     }

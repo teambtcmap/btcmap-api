@@ -65,7 +65,8 @@ pub async fn auth_nostr(
     args: Option<Json<AuthNostrArgs>>,
     pool: Data<MainPool>,
 ) -> RestResult<AuthNostrResponse> {
-    let npub = auth.npub.ok_or_else(RestApiError::unauthorized)?;
+    let signer = auth.event.ok_or_else(RestApiError::unauthorized)?;
+    let npub = signer.npub;
 
     let user = match db::main::user::queries::select_by_npub(npub.clone(), &pool)
         .await
@@ -85,7 +86,7 @@ pub async fn auth_nostr(
             let name = args
                 .as_ref()
                 .and_then(|args| args.profile.as_ref())
-                .and_then(|profile| service::nostr::profile_name(profile, &npub));
+                .and_then(|profile| service::nostr::profile_name(profile, &signer.pubkey));
             create_or_recover(&npub, name.as_deref(), &pool).await?
         }
     };

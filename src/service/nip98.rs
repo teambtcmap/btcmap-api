@@ -25,6 +25,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use nostr::event::Event;
 use nostr::event::Kind;
+use nostr::key::PublicKey;
 use nostr::nips::nip19::ToBech32;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -37,6 +38,8 @@ pub struct VerifiedNip98Event {
     /// Bech32-encoded (`npub1...`) Nostr public key, per NIP-19. Matches the
     /// encoding used by the `user.npub` column (see `select_by_npub` tests).
     pub npub: String,
+    /// The same key, as signed the event.
+    pub pubkey: PublicKey,
 }
 
 /// Verify a NIP-98 HTTP auth event.
@@ -112,7 +115,10 @@ pub fn verify(
         .to_bech32()
         .map_err(|e| Error::Other(format!("Pubkey bech32 encoding failed: {e}")))?;
 
-    Ok(VerifiedNip98Event { npub })
+    Ok(VerifiedNip98Event {
+        npub,
+        pubkey: event.pubkey,
+    })
 }
 
 /// Extract the base64 payload from an `Authorization` header value. Matches
