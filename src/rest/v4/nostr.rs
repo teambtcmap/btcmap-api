@@ -142,7 +142,7 @@ fn random_password_hash() -> Result<String, RestApiError> {
     Argon2::default()
         .hash_password(Uuid::new_v4().to_string().as_bytes())
         .map(|hash| hash.to_string())
-        .map_err(|_| RestApiError::database())
+        .map_err(|_| RestApiError::internal())
 }
 
 /// The usernames to try, in order: the profile name, then it with 2, 3, …

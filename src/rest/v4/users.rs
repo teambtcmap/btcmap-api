@@ -132,7 +132,7 @@ pub async fn post(
 ) -> Result<Json<PostResponse>, RestApiError> {
     let password_hash = Argon2::default()
         .hash_password(args.password.as_bytes())
-        .map_err(|e| RestApiError::invalid_input(e.to_string()))?
+        .map_err(|_| RestApiError::internal())?
         .to_string();
     let user = match &args.name {
         Some(name) => db::main::user::queries::insert(name, password_hash, &pool)
@@ -441,7 +441,7 @@ pub async fn change_password(
         .map_err(|_| RestApiError::invalid_input("Invalid old password"))?;
     let password_hash = Argon2::default()
         .hash_password(args.new_password.as_bytes())
-        .map_err(|e| RestApiError::invalid_input(e.to_string()))?
+        .map_err(|_| RestApiError::internal())?
         .to_string();
     db::main::user::queries::set_password(user.id, password_hash, &pool)
         .await
