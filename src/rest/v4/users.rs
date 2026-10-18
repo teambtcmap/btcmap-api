@@ -164,7 +164,7 @@ async fn insert_with_generated_name(
     for name in names.take(NAME_RETRIES.into()) {
         match db::main::user::queries::insert(name, password_hash.clone(), pool).await {
             Ok(user) => return Ok(user),
-            Err(e) if crate::rest::v4::nostr::is_unique_violation_on(&e, "user.name") => continue,
+            Err(e) if e.is_unique_violation_on("user.name") => continue,
             Err(_) => return Err(RestApiError::database()),
         }
     }
@@ -471,7 +471,7 @@ pub async fn update_username(
 /// Maps a failed `user.name` write: `user.name` is UNIQUE, so a name that
 /// belongs to another account is a 400 the client can act on, not a 500.
 fn name_write_error(e: crate::Error) -> RestApiError {
-    if crate::rest::v4::nostr::is_unique_violation_on(&e, "user.name") {
+    if e.is_unique_violation_on("user.name") {
         RestApiError::invalid_input("username already taken")
     } else {
         RestApiError::database()
@@ -546,7 +546,7 @@ pub async fn put_nostr(
             // Backstop for the TOCTOU window: if a unique index on
             // `user.npub` exists and the concurrent loser hits it, surface
             // the documented 400 instead of a generic 500.
-            if crate::rest::v4::nostr::is_unique_violation_on(&e, "user.npub") {
+            if e.is_unique_violation_on("user.npub") {
                 npub_conflict()
             } else {
                 RestApiError::database()
