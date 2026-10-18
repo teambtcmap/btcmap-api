@@ -82,7 +82,7 @@ pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<Aut
 /// Any other database error (pool, panic, NOT NULL, other UNIQUE indexes,
 /// foreign keys, ...) is propagated as a database error rather than
 /// silently masked as a lost race.
-const NAME_RETRIES: u8 = 5;
+pub(crate) const NAME_RETRIES: u8 = 5;
 
 async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiError> {
     for _ in 0..NAME_RETRIES {

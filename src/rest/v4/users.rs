@@ -4,6 +4,7 @@ use crate::db::{self, main::user::schema::Role};
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::nostr_auth::NostrProof;
+use crate::rest::v4::nostr::NAME_RETRIES;
 use crate::rest::v4::top_editors::validate_limit;
 use crate::Error;
 use actix_web::delete;
@@ -129,19 +130,19 @@ pub async fn post(
     args: Json<PostArgs>,
     pool: Data<MainPool>,
 ) -> Result<Json<PostResponse>, RestApiError> {
-    let name = match &args.name {
-        Some(n) => n.clone(),
-        None => Generator::with_naming(Name::Numbered)
-            .next()
-            .unwrap_or_default(),
-    };
     let password_hash = Argon2::default()
         .hash_password(args.password.as_bytes())
         .map_err(|e| RestApiError::invalid_input(e.to_string()))?
         .to_string();
-    let user = db::main::user::queries::insert(&name, password_hash, &pool)
-        .await
-        .map_err(name_write_error)?;
+    let user = match &args.name {
+        Some(name) => db::main::user::queries::insert(name, password_hash, &pool)
+            .await
+            .map_err(name_write_error)?,
+        None => {
+            insert_with_generated_name(Generator::with_naming(Name::Numbered), password_hash, &pool)
+                .await?
+        }
+    };
     let user = db::main::user::queries::set_roles(user.id, &[Role::User], &pool)
         .await
         .map_err(|_| RestApiError::database())?;
@@ -150,6 +151,24 @@ pub async fn post(
         name: user.name,
         roles: user.roles.into_iter().map(|it| it.to_string()).collect(),
     }))
+}
+
+/// Inserts a user under the first name from `names` that isn't taken. The
+/// client didn't pick the name, so a collision is retried rather than
+/// reported as "username already taken".
+async fn insert_with_generated_name(
+    names: impl Iterator<Item = String>,
+    password_hash: String,
+    pool: &MainPool,
+) -> Result<User, RestApiError> {
+    for name in names.take(NAME_RETRIES.into()) {
+        match db::main::user::queries::insert(name, password_hash.clone(), pool).await {
+            Ok(user) => return Ok(user),
+            Err(e) if crate::rest::v4::nostr::is_unique_violation_on(&e, "user.name") => continue,
+            Err(_) => return Err(RestApiError::database()),
+        }
+    }
+    Err(RestApiError::database())
 }
 
 #[derive(Deserialize)]
@@ -1288,6 +1307,18 @@ mod test {
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         let body: serde_json::Value = test::read_body_json(res).await;
         assert_eq!(body["message"], "username already taken");
+        Ok(())
+    }
+
+    #[test]
+    async fn post_generated_name_retries_on_collision() -> Result<()> {
+        let pool = pool();
+        db::main::user::queries::insert("taken", "", &pool).await?;
+        let names = ["taken", "free"].into_iter().map(String::from);
+        let user = super::insert_with_generated_name(names, "".into(), &pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        assert_eq!(user.name, "free");
         Ok(())
     }
 
