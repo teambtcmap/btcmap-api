@@ -3,6 +3,8 @@ use crate::db::main::user::schema::{Role, User};
 use crate::db::main::MainPool;
 use crate::rest::error::{RestApiError, RestResult};
 use crate::rest::nostr_auth::NostrAuth;
+use crate::service;
+use crate::service::nostr::PROFILE_NAME_MAX_CHARS;
 use actix_web::post;
 use actix_web::web::Data;
 use actix_web::web::Json;
@@ -10,6 +12,17 @@ use names::Generator;
 use names::Name;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct AuthNostrArgs {
+    /// The user's signed kind-0 profile event (NIP-01) as JSON. Only used
+    /// when the key has no account yet: its `name` (or `display_name`)
+    /// becomes the new account's username. The event carries its own
+    /// signature, so the server needs no relay to trust it.
+    #[ts(type = "unknown", optional)]
+    pub profile: Option<serde_json::Value>,
+}
 
 #[derive(Serialize, Deserialize, ts_rs::TS)]
 #[ts(export)]
@@ -28,10 +41,16 @@ pub struct AuthNostrResponse {
 /// extractor against the URL pinned by `ApiBaseUrl` — request headers
 /// (`Host`, `X-Forwarded-*`) are not trusted.
 ///
-/// On success, looks up the user by bech32 npub. If no user is linked to
-/// the pubkey, a fresh account is auto-created in a single INSERT
-/// (generated name, empty password, role `User`, npub set). A token is
-/// minted bound to that user and returned alongside `username` and `npub`.
+/// There are only BTC Map accounts: Nostr is a link on one. On success,
+/// looks up the account linked to the npub. If there is none, signs the
+/// user up: creates a BTC Map account with a username from the optional
+/// signed profile event (see [`AuthNostrArgs`]; a number is appended while
+/// it is taken, and a generated name is the fallback) and a random password
+/// that is stored hashed and never returned, then links the key. A token is
+/// minted bound to that account and returned alongside `username` and `npub`.
+///
+/// Accounts created before every account had a password get a random one
+/// on their next Nostr login.
 ///
 /// Concurrency: two simultaneous first-time sign-ins for the same pubkey
 /// race on `INSERT INTO user(... npub)`. There is no unique index on
@@ -42,15 +61,35 @@ pub struct AuthNostrResponse {
 /// re-selects the winning row, so exactly one fully-initialized user exists.
 /// Any other database error is propagated rather than masked as a lost race.
 #[post("/nostr")]
-pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<AuthNostrResponse> {
-    let npub = auth.npub.ok_or_else(RestApiError::unauthorized)?;
+pub async fn auth_nostr(
+    auth: NostrAuth,
+    args: Option<Json<AuthNostrArgs>>,
+    pool: Data<MainPool>,
+) -> RestResult<AuthNostrResponse> {
+    let signer = auth.event.ok_or_else(RestApiError::unauthorized)?;
+    let npub = signer.npub;
 
     let user = match db::main::user::queries::select_by_npub(npub.clone(), &pool)
         .await
         .map_err(|_| RestApiError::database())?
     {
-        Some(u) => u,
-        None => create_or_recover(&npub, &pool).await?,
+        Some(u) => {
+            if u.password.is_empty() {
+                let password =
+                    service::auth::random_password_hash().map_err(|_| RestApiError::internal())?;
+                db::main::user::queries::set_password(u.id, password, &pool)
+                    .await
+                    .map_err(|_| RestApiError::database())?;
+            }
+            u
+        }
+        None => {
+            let name = args
+                .as_ref()
+                .and_then(|args| args.profile.as_ref())
+                .and_then(|profile| service::nostr::profile_name(profile, &signer.pubkey));
+            create_or_recover(&npub, name.as_deref(), &pool).await?
+        }
     };
 
     // Mint with empty token roles so authorization always derives from
@@ -69,30 +108,62 @@ pub async fn auth_nostr(auth: NostrAuth, pool: Data<MainPool>) -> RestResult<Aut
     }))
 }
 
-/// Auto-create a user for an unknown npub. The insert sets `roles`
-/// atomically alongside `npub`. Two distinct UNIQUE failures are possible
-/// here, and they're handled differently:
+/// How many generated names a sign-up tries before giving up.
+pub(crate) const GENERATED_NAME_ATTEMPTS: u8 = 5;
+
+/// How many names a profile name yields: itself, then with 2, 3, …
+/// appended up to this number.
+const PROFILE_NAME_ATTEMPTS: u8 = 5;
+
+/// The usernames to try, in order: the profile name, then it with 2, 3, …
+/// appended (shortening the name so it stays within
+/// [`PROFILE_NAME_MAX_CHARS`]), then generated names.
+fn name_candidates(profile_name: Option<&str>) -> impl Iterator<Item = String> + '_ {
+    let from_profile = profile_name.into_iter().flat_map(|base| {
+        (1..=PROFILE_NAME_ATTEMPTS).map(move |n| match n {
+            1 => base.to_string(),
+            n => {
+                let suffix = n.to_string();
+                let base: String = base
+                    .chars()
+                    .take(PROFILE_NAME_MAX_CHARS - suffix.len())
+                    .collect();
+                format!("{base}{suffix}")
+            }
+        })
+    });
+    let generated = (0..GENERATED_NAME_ATTEMPTS).map(|_| {
+        Generator::with_naming(Name::Numbered)
+            .next()
+            .unwrap_or_default()
+    });
+    from_profile.chain(generated)
+}
+
+/// Sign up an unknown npub: a BTC Map account with a username and a random
+/// password, linked to the key. The insert sets `roles` atomically
+/// alongside `npub`. Two distinct UNIQUE failures are possible here, and
+/// they're handled differently:
 ///
 /// * `user.npub` — lost a race against a concurrent first-time login for
 ///   the same pubkey. Recover by selecting the winning row so both
 ///   callers agree on a single, fully-initialized user.
-/// * `user.name` — the random `Name::Numbered` generator collided with an
-///   existing user. Retry with a fresh name a few times.
+/// * `user.name` — the name is taken. Move on to the next candidate (see
+///   [`name_candidates`]).
 ///
 /// Any other database error (pool, panic, NOT NULL, other UNIQUE indexes,
 /// foreign keys, ...) is propagated as a database error rather than
 /// silently masked as a lost race.
-pub(crate) const NAME_RETRIES: u8 = 5;
-
-async fn create_or_recover(npub: &str, pool: &MainPool) -> Result<User, RestApiError> {
-    for _ in 0..NAME_RETRIES {
-        let name = Generator::with_naming(Name::Numbered)
-            .next()
-            .unwrap_or_default();
-
+async fn create_or_recover(
+    npub: &str,
+    profile_name: Option<&str>,
+    pool: &MainPool,
+) -> Result<User, RestApiError> {
+    let password = service::auth::random_password_hash().map_err(|_| RestApiError::internal())?;
+    for name in name_candidates(profile_name) {
         match db::main::user::queries::insert_with_npub(
             name,
-            String::new(),
+            password.clone(),
             npub,
             &[Role::User],
             pool,
@@ -128,6 +199,7 @@ mod test {
     use base64::Engine;
     use nostr::event::{EventBuilder, FinalizeEvent, Kind, Tag};
     use nostr::key::Keys;
+    use nostr::nips::nip01::Metadata;
     use nostr::nips::nip19::ToBech32;
     use nostr::types::Timestamp;
 
@@ -242,6 +314,151 @@ mod test {
         Ok(())
     }
 
+    // A kind-0 profile event signed by `keys`, as the JSON a client sends.
+    fn signed_profile(keys: &Keys, metadata: &Metadata) -> serde_json::Value {
+        let event = EventBuilder::new(Kind::Metadata, metadata.as_json())
+            .finalize(keys)
+            .unwrap();
+        serde_json::from_str(&event.as_json()).unwrap()
+    }
+
+    // Sign in with `keys`, optionally sending a profile, and return the reply.
+    async fn sign_in(
+        keys: &Keys,
+        profile: Option<serde_json::Value>,
+        pool: &MainPool,
+    ) -> AuthNostrResponse {
+        let app = test::init_service(build_app(Data::new(pool.clone()))).await;
+        let mut req = TestRequest::post().uri(ENDPOINT_PATH).insert_header((
+            header::AUTHORIZATION,
+            format!("Nostr {}", signed_nip98(keys, "POST")),
+        ));
+        if let Some(profile) = profile {
+            req = req.set_json(serde_json::json!({ "profile": profile }));
+        }
+        test::call_and_read_body_json(&app, req.to_request()).await
+    }
+
+    #[actix_web::test]
+    async fn sign_up_takes_the_username_from_the_signed_profile() -> Result<()> {
+        let pool = pool();
+        let keys = Keys::generate();
+        let profile = signed_profile(&keys, &Metadata::new().name("satoshi"));
+
+        let res = sign_in(&keys, Some(profile), &pool).await;
+
+        assert_eq!(res.username, "satoshi");
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn sign_up_appends_a_number_while_the_profile_name_is_taken() -> Result<()> {
+        let pool = pool();
+        db::main::user::queries::insert("satoshi", "", &pool).await?;
+        db::main::user::queries::insert("satoshi2", "", &pool).await?;
+        let keys = Keys::generate();
+        let profile = signed_profile(&keys, &Metadata::new().name("satoshi"));
+
+        let res = sign_in(&keys, Some(profile), &pool).await;
+
+        assert_eq!(res.username, "satoshi3");
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn sign_up_keeps_a_numbered_profile_name_within_the_cap() -> Result<()> {
+        let pool = pool();
+        let long_name = "a".repeat(100);
+        db::main::user::queries::insert(&long_name, "", &pool).await?;
+        let keys = Keys::generate();
+        let profile = signed_profile(&keys, &Metadata::new().name(&long_name));
+
+        let res = sign_in(&keys, Some(profile), &pool).await;
+
+        assert_eq!(res.username, format!("{}2", "a".repeat(99)));
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn sign_up_falls_back_to_the_display_name() -> Result<()> {
+        let pool = pool();
+        let keys = Keys::generate();
+        let profile = signed_profile(&keys, &Metadata::new().name("  ").display_name("Satoshi N"));
+
+        let res = sign_in(&keys, Some(profile), &pool).await;
+
+        assert_eq!(res.username, "Satoshi N");
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn sign_up_ignores_a_profile_signed_by_another_key() -> Result<()> {
+        let pool = pool();
+        let keys = Keys::generate();
+        let someone_else = Keys::generate();
+        let profile = signed_profile(&someone_else, &Metadata::new().name("satoshi"));
+
+        let res = sign_in(&keys, Some(profile), &pool).await;
+
+        assert_ne!(res.username, "satoshi");
+        assert!(!res.username.is_empty());
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn sign_up_ignores_a_tampered_profile() -> Result<()> {
+        let pool = pool();
+        let keys = Keys::generate();
+        let mut profile = signed_profile(&keys, &Metadata::new().name("satoshi"));
+        // Changed after signing: the signature no longer matches
+        profile["content"] = serde_json::json!(r#"{"name":"hal"}"#);
+
+        let res = sign_in(&keys, Some(profile), &pool).await;
+
+        assert_ne!(res.username, "hal");
+        assert_ne!(res.username, "satoshi");
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn sign_up_gives_the_account_a_password() -> Result<()> {
+        let pool = pool();
+        let keys = Keys::generate();
+
+        sign_in(&keys, None, &pool).await;
+
+        let npub = keys.public_key().to_bech32().unwrap();
+        let user = db::main::user::queries::select_by_npub(npub, &pool)
+            .await?
+            .unwrap();
+        assert!(argon2::PasswordHash::new(&user.password).is_ok());
+        Ok(())
+    }
+
+    #[actix_web::test]
+    async fn login_gives_a_passwordless_account_a_password() -> Result<()> {
+        let pool = pool();
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        db::main::user::queries::insert_with_npub(
+            "old_nostr_user",
+            "",
+            &npub,
+            &[Role::User],
+            &pool,
+        )
+        .await?;
+
+        let res = sign_in(&keys, None, &pool).await;
+
+        assert_eq!(res.username, "old_nostr_user");
+        let user = db::main::user::queries::select_by_npub(npub, &pool)
+            .await?
+            .unwrap();
+        assert!(argon2::PasswordHash::new(&user.password).is_ok());
+        Ok(())
+    }
+
     #[actix_web::test]
     async fn unknown_npub_concurrent_inserts_create_exactly_one_user() -> Result<()> {
         // Two parallel select_by_npub calls both return None, then both
@@ -259,8 +476,8 @@ mod test {
         let npub_b = npub.clone();
 
         let (a, b) = tokio::join!(
-            create_or_recover(&npub_a, &pool_a),
-            create_or_recover(&npub_b, &pool_b),
+            create_or_recover(&npub_a, None, &pool_a),
+            create_or_recover(&npub_b, None, &pool_b),
         );
         let user_a = a.expect("first call should succeed");
         let user_b = b.expect("second call should succeed (via recover path)");

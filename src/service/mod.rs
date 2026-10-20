@@ -15,6 +15,7 @@ pub mod lnd;
 pub mod log;
 pub mod matrix;
 pub mod nip98;
+pub mod nostr;
 pub mod og;
 pub mod osm;
 pub mod overpass;

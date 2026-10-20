@@ -1,10 +1,11 @@
 use crate::{
     db::{self, main::user::schema::Role},
-    service::auth::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH},
+    service::{
+        self,
+        auth::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH},
+    },
     Error, Result,
 };
-use argon2::Argon2;
-use argon2::PasswordHasher;
 use deadpool_sqlite::Pool;
 use names::Generator;
 use names::Name;
@@ -55,10 +56,7 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
                 Error::Other("Failed to generate a username, please provide one explicitly".into())
             })?,
     };
-    let password_hash = Argon2::default()
-        .hash_password(params.password.as_bytes())
-        .map_err(|e| e.to_string())?
-        .to_string();
+    let password_hash = service::auth::hash_password(&params.password)?;
     let user = match crate::db::main::user::queries::insert(&name, password_hash, pool).await {
         Ok(user) => user,
         Err(Error::Rusqlite(rusqlite::Error::SqliteFailure(

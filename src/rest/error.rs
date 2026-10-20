@@ -35,6 +35,13 @@ impl RestApiError {
         )
     }
 
+    pub fn internal() -> Self {
+        Self::new(
+            RestApiErrorCode::Internal,
+            "Unexpected error. Contact BTC Map team to resolve.",
+        )
+    }
+
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::new(RestApiErrorCode::InvalidInput, message.into())
     }
@@ -66,6 +73,7 @@ pub enum RestApiErrorCode {
     Unauthorized,
     Forbidden,
     Conflict,
+    Internal,
 }
 
 impl fmt::Display for RestApiError {
@@ -83,6 +91,7 @@ impl std::fmt::Display for RestApiErrorCode {
             RestApiErrorCode::Unauthorized => write!(f, "unauthorized"),
             RestApiErrorCode::Forbidden => write!(f, "forbidden"),
             RestApiErrorCode::Conflict => write!(f, "conflict"),
+            RestApiErrorCode::Internal => write!(f, "internal"),
         }
     }
 }
@@ -96,6 +105,7 @@ impl RestApiErrorCode {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::Conflict => StatusCode::CONFLICT,
+            Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

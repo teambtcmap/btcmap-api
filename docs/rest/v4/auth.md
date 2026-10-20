@@ -47,10 +47,24 @@ healthy until someone tries to sign in with Nostr.
 
 ### Sign In with Nostr
 
-Exchanges a NIP-98 signed event for a Bearer token. If no account is linked to
-the signing pubkey yet, one is **auto-created** (random username, no password,
-`user` role, npub set) and a token is returned for it. Subsequent sign-ins with
-the same key return a token for that same account.
+Exchanges a NIP-98 signed event for a Bearer token. There are only BTC Map
+accounts; Nostr is a link on one. If no account is linked to the signing pubkey
+yet, the user is **signed up**: a BTC Map account is created with the `user`
+role, a username and a random password (stored hashed, never returned), and the
+key is linked to it. Subsequent sign-ins with the same key return a token for
+that same account.
+
+The username comes from the optional `profile` in the request body: the user's
+signed kind-0 profile event (NIP-01). Its `name` is used, else its
+`display_name`, with line breaks and runs of spaces collapsed to one space,
+control and invisible formatting characters removed, and cut to 100
+characters. It is only used if the event is a valid kind 0 signed by the same
+key. While the name is taken, `2`, `3`, `4` and then `5` is appended,
+shortening the name to stay within 100 characters. If those are all taken, or
+there is no usable profile, a random username is generated. The profile is ignored for keys that already have an account.
+
+Accounts that were created without a password get a random one on their next
+Nostr sign-in.
 
 The signed event is carried on the `Authorization` header with the `Nostr`
 scheme. The event must be a NIP-98 event (kind `27235`) that signs:
@@ -66,8 +80,16 @@ for what `<BTCMAP_API_BASE_URL>` resolves to.
 
 ```bash
 curl -X POST https://api.btcmap.org/v4/auth/nostr \
-  -H "Authorization: Nostr <base64-encoded-nip98-event>"
+  -H "Authorization: Nostr <base64-encoded-nip98-event>" \
+  -H "Content-Type: application/json" \
+  -d '{"profile": {"kind": 0, "pubkey": "…", "content": "{\"name\":\"satoshi\"}", "sig": "…", "…": "…"}}'
 ```
+
+#### Request Body (optional)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| profile | Object | No | The user's signed kind-0 profile event, used for the username at sign-up |
 
 #### Response
 

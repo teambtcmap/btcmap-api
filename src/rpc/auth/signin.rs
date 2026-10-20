@@ -81,13 +81,9 @@ fn parse_and_validate_token_roles(requested: &[String], user_roles: &[Role]) -> 
 mod test {
     use super::*;
     use crate::db::main::test::pool;
-    use argon2::PasswordHasher;
 
     fn hash_password(password: &str) -> String {
-        Argon2::default()
-            .hash_password(password.as_bytes())
-            .unwrap()
-            .to_string()
+        crate::service::auth::hash_password(password).unwrap()
     }
 
     async fn insert_user(

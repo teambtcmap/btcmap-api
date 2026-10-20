@@ -1,9 +1,9 @@
 use crate::db;
+use crate::service;
 use crate::service::auth::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH};
 use crate::Result;
 use argon2::Argon2;
 use argon2::PasswordHash;
-use argon2::PasswordHasher;
 use argon2::PasswordVerifier;
 use deadpool_sqlite::Pool;
 use serde::{Deserialize, Serialize};
@@ -48,10 +48,8 @@ pub async fn run(params: Params, pool: &Pool) -> Result<Res> {
     Argon2::default()
         .verify_password(params.old_password.as_bytes(), &old_password_hash)
         .map_err(|_| err_invalid_username_password)?;
-    let password_hash = Argon2::default()
-        .hash_password(params.new_password.as_bytes())
-        .map_err(|_| err_generic)?
-        .to_string();
+    let password_hash =
+        service::auth::hash_password(&params.new_password).map_err(|_| err_generic)?;
     db::main::user::queries::set_password(user.id, password_hash, pool)
         .await
         .map_err(|_| err_generic)?;
@@ -65,10 +63,7 @@ mod test {
     use crate::rpc::auth::signin;
 
     fn hash_password(password: &str) -> String {
-        Argon2::default()
-            .hash_password(password.as_bytes())
-            .unwrap()
-            .to_string()
+        service::auth::hash_password(password).unwrap()
     }
 
     async fn insert_user(
