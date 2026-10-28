@@ -23,10 +23,13 @@ Images live in the `image.db` `place` table and are served publicly.
 - [Add Place Image](#add-place-image)
 - [Get Place Image](#get-place-image)
 - [Delete Place Image](#delete-place-image)
+- [Reorder Place Images](#reorder-place-images)
 
 ### List Place Images
 
-Returns metadata for the images attached to a place — no bytes. Newest first.
+Returns metadata for the images attached to a place — no bytes. Images an
+admin has ordered come first, in `position` order (see
+[Reorder Place Images](#reorder-place-images)); the rest follow newest first.
 
 ```bash
 curl 'https://api.btcmap.org/v4/places/42/images'
@@ -57,7 +60,8 @@ curl 'https://api.btcmap.org/v4/places/42/images'
     "size_bytes": 184320,
     "created_at": "2026-10-01T04:22:53.706Z",
     "created_by": 17,
-    "author": { "id": 17, "name": "satoshi" }
+    "author": { "id": 17, "name": "satoshi" },
+    "position": 0
   }
 ]
 ```
@@ -73,6 +77,7 @@ curl 'https://api.btcmap.org/v4/places/42/images'
 | `created_at` | String | RFC 3339 timestamp of when the image was stored.                                              |
 | `created_by` | Number | Optional. ID of the signed-in user who uploaded the image, omitted when unknown.               |
 | `author`     | Object | Optional. Uploader as `{ "id": Number, "name": String }`, omitted when unknown. `created_by` is kept for backwards compatibility; prefer `author` in new clients. |
+| `position`   | Number | Optional. Display slot from `0`, set by [Reorder Place Images](#reorder-place-images). Omitted for images never ordered. |
 
 The response is an empty array when the place has no images.
 
@@ -341,3 +346,68 @@ The stored bytes are removed; subsequent requests for the image return `404`.
 | 403    | The image belongs to another user and the caller is not `admin` or `root`.                     |
 | 404    | The place does not exist, the image does not exist, or the image belongs to a different place. |
 | 500    | Database error. Contact the BTC Map team.                                                     |
+
+### Reorder Place Images
+
+Sets the display order of a place's `user` images, so the storefront can come
+first, then the interior, then the rest. Restricted to `admin` and `root` users.
+`report` images are never ordered.
+
+The body lists **every** `user` image of the place exactly once, in the new
+order. The images get `position` `0`, `1`, `2`, … in one transaction. A list
+that leaves an image out or names one that isn't a `user` image of this place
+(e.g. a photo was uploaded or deleted after the caller loaded the list) is
+rejected with `409` and nothing changes; reload the list and try again.
+
+Images uploaded later have no `position`, so they are listed after the ordered
+ones until the next reorder.
+
+#### Authentication
+
+Requires a Bearer token belonging to a user with the `admin` or `root` role.
+
+#### Request
+
+```bash
+curl --request PUT \
+  --url 'https://api.btcmap.org/v4/places/42/images/order' \
+  --header "Authorization: Bearer $ACCESS_TOKEN" \
+  --header 'Content-Type: application/json' \
+  --data '{ "image_ids": [5, 3, 4] }'
+```
+
+#### Path Parameters
+
+| Parameter | Type   | Example                   | Description                                                              |
+|-----------|--------|---------------------------|--------------------------------------------------------------------------|
+| `id`      | String | `42` or `node:1234567890` | **Required**. Place ID (numeric) or an OSM reference (`node:…`, `way:…`, `relation:…`). |
+
+#### Request Body
+
+| Field       | Type     | Required | Description                                                                 |
+|-------------|----------|----------|-----------------------------------------------------------------------------|
+| `image_ids` | Number[] | Yes      | Every `user` image ID of the place, in display order. 1 to 500 IDs, no duplicates. |
+
+#### Response
+
+The place's `user` images in their new order, in the same shape as
+[List Place Images](#list-place-images):
+
+```json
+[
+  { "id": 5, "place_id": 42, "type": "user", "width": 1024, "height": 768, "size_bytes": 184320, "created_at": "2026-10-03T09:10:00.000Z", "created_by": 17, "author": { "id": 17, "name": "satoshi" }, "position": 0 },
+  { "id": 3, "place_id": 42, "type": "user", "width": 1024, "height": 768, "size_bytes": 184320, "created_at": "2026-10-01T04:22:53.706Z", "created_by": 17, "author": { "id": 17, "name": "satoshi" }, "position": 1 },
+  { "id": 4, "place_id": 42, "type": "user", "width": 768, "height": 1024, "size_bytes": 163840, "created_at": "2026-10-02T12:00:00.000Z", "position": 2 }
+]
+```
+
+#### Errors
+
+| Status | Meaning                                                                                          |
+|--------|--------------------------------------------------------------------------------------------------|
+| 400    | `id` too long, `image_ids` empty or longer than 500, or `image_ids` has duplicates.               |
+| 401    | Missing or invalid Bearer token.                                                                 |
+| 403    | Authenticated, but the caller is not an `admin` or `root`.                                        |
+| 404    | The place does not exist.                                                                        |
+| 409    | `image_ids` doesn't match the place's current `user` images. Reload the list and try again.       |
+| 500    | Database error. Contact the BTC Map team.                                                        |

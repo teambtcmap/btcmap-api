@@ -199,6 +199,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::places::get_by_id)
                             .service(rest::v4::places::get_by_id_comments)
                             .service(rest::v4::places::get_by_id_areas)
+                            .service(rest::v4::place_images::put_order)
                             .service(rest::v4::place_images::get_by_place_id)
                             .service(rest::v4::place_images::get_by_place_id_and_image_id)
                             .service(rest::v4::place_images::post)
