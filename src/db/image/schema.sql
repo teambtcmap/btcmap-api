@@ -25,7 +25,8 @@ CREATE TABLE place (
     height INTEGER NOT NULL,
     size_bytes INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
-    created_by INTEGER
+    created_by INTEGER,
+    position INTEGER
 ) STRICT;
 CREATE INDEX og_created_at ON og(created_at);
 CREATE INDEX area_area_id ON area(area_id);

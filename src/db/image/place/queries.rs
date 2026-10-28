@@ -60,6 +60,13 @@ pub async fn select_recent(limit: i64, pool: &Pool) -> Result<Vec<PlaceImageMeta
         .await?
 }
 
+pub async fn set_positions(place_id: i64, ordered_ids: Vec<i64>, pool: &Pool) -> Result<()> {
+    pool.get()
+        .await?
+        .interact(move |conn| blocking_queries::set_positions(place_id, &ordered_ids, conn))
+        .await?
+}
+
 pub async fn delete(id: i64, pool: &Pool) -> Result<usize> {
     pool.get()
         .await?

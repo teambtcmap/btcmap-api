@@ -73,6 +73,11 @@ pub struct ListItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub author: Option<Author>,
+    // Admin-chosen display slot, from 0. Omitted for images never ordered;
+    // lists put those after the ordered ones, newest first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub position: Option<i64>,
 }
 
 fn to_list_item(val: PlaceImageMeta, author: Option<Author>) -> ListItem {
@@ -86,6 +91,7 @@ fn to_list_item(val: PlaceImageMeta, author: Option<Author>) -> ListItem {
         created_at: val.created_at,
         created_by: val.created_by,
         author,
+        position: val.position,
     }
 }
 
@@ -99,6 +105,7 @@ fn meta_from_image(val: PlaceImage) -> PlaceImageMeta {
         size_bytes: val.size_bytes,
         created_at: val.created_at,
         created_by: val.created_by,
+        position: val.position,
     }
 }
 

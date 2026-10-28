@@ -77,7 +77,7 @@ pub fn select_by_place_id(place_id: i64, conn: &Connection) -> Result<Vec<PlaceI
             SELECT {projection}
             FROM {TABLE}
             WHERE {PlaceId} = ?1
-            ORDER BY {Id} DESC
+            ORDER BY {Position} IS NULL, {Position}, {Id} DESC
         "#,
         projection = PlaceImageMeta::projection(),
     ))?
@@ -96,7 +96,7 @@ pub fn select_by_place_id_and_type(
             SELECT {projection}
             FROM {TABLE}
             WHERE {PlaceId} = ?1 AND {Type} = ?2
-            ORDER BY {Id} DESC
+            ORDER BY {Position} IS NULL, {Position}, {Id} DESC
         "#,
         projection = PlaceImageMeta::projection(),
     ))?
@@ -137,6 +137,26 @@ pub fn select_recent(limit: i64, conn: &Connection) -> Result<Vec<PlaceImageMeta
     .query_map(params![limit], PlaceImageMeta::mapper())?
     .collect::<Result<Vec<_>, _>>()
     .map_err(Into::into)
+}
+
+/// Number `ordered_ids` from 0 in one transaction. Only `user` images of
+/// `place_id` are touched; the caller checks the list is complete.
+pub fn set_positions(place_id: i64, ordered_ids: &[i64], conn: &mut Connection) -> Result<()> {
+    let tx = conn.transaction()?;
+    {
+        let mut stmt = tx.prepare(&format!(
+            r#"
+                UPDATE {TABLE}
+                SET {Position} = ?1
+                WHERE {Id} = ?2 AND {PlaceId} = ?3 AND {Type} = 'user'
+            "#
+        ))?;
+        for (position, id) in ordered_ids.iter().enumerate() {
+            stmt.execute(params![position as i64, id, place_id])?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
 }
 
 pub fn delete(id: i64, conn: &Connection) -> Result<usize> {
@@ -354,6 +374,56 @@ mod test {
 
         assert!(super::select_by_id(id, &conn).is_err());
         assert!(super::select_by_place_id(1, &conn)?.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn positioned_images_sort_first_in_position_order() -> Result<()> {
+        let mut conn = conn();
+        let a = insert(1, "user", &conn)?;
+        let b = insert(1, "user", &conn)?;
+        let c = insert(1, "user", &conn)?;
+        super::set_positions(1, &[b, a], &mut conn)?;
+
+        let ids: Vec<i64> = super::select_by_place_id(1, &conn)?
+            .iter()
+            .map(|it| it.id)
+            .collect();
+        // positioned first, then the unpositioned newest first
+        assert_eq!(vec![b, a, c], ids);
+
+        let ids: Vec<i64> = super::select_by_place_id_and_type(1, "user", &conn)?
+            .iter()
+            .map(|it| it.id)
+            .collect();
+        assert_eq!(vec![b, a, c], ids);
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_positions_numbers_from_zero() -> Result<()> {
+        let mut conn = conn();
+        let a = insert(1, "user", &conn)?;
+        let b = insert(1, "user", &conn)?;
+        super::set_positions(1, &[b, a], &mut conn)?;
+
+        assert_eq!(super::select_meta_by_id(b, &conn)?.position, Some(0));
+        assert_eq!(super::select_meta_by_id(a, &conn)?.position, Some(1));
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_positions_skips_other_places_and_types() -> Result<()> {
+        let mut conn = conn();
+        let other_place = insert(2, "user", &conn)?;
+        let report = insert(1, "report", &conn)?;
+        super::set_positions(1, &[other_place, report], &mut conn)?;
+
+        assert_eq!(super::select_meta_by_id(other_place, &conn)?.position, None);
+        assert_eq!(super::select_meta_by_id(report, &conn)?.position, None);
 
         Ok(())
     }
