@@ -365,7 +365,7 @@ pub async fn put_order(
         return Err(RestApiError::conflict("image_ids is out of date"));
     }
 
-    db::image::place::queries::set_positions(place_id, image_ids, &image_pool)
+    db::image::place::queries::set_positions(place_id, IMAGE_TYPE, image_ids, &image_pool)
         .await
         .map_err(|_| RestApiError::database())?;
     info!(user_id = user.id, place_id, "reordered place images");

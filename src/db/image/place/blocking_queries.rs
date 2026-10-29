@@ -139,20 +139,25 @@ pub fn select_recent(limit: i64, conn: &Connection) -> Result<Vec<PlaceImageMeta
     .map_err(Into::into)
 }
 
-/// Number `ordered_ids` from 0 in one transaction. Only `user` images of
-/// `place_id` are touched; the caller checks the list is complete.
-pub fn set_positions(place_id: i64, ordered_ids: &[i64], conn: &mut Connection) -> Result<()> {
+/// Number `ordered_ids` from 0 in one transaction. Only images of `place_id`
+/// with type `r#type` are touched; the caller checks the list is complete.
+pub fn set_positions(
+    place_id: i64,
+    r#type: &str,
+    ordered_ids: &[i64],
+    conn: &mut Connection,
+) -> Result<()> {
     let tx = conn.transaction()?;
     {
         let mut stmt = tx.prepare(&format!(
             r#"
                 UPDATE {TABLE}
                 SET {Position} = ?1
-                WHERE {Id} = ?2 AND {PlaceId} = ?3 AND {Type} = 'user'
+                WHERE {Id} = ?2 AND {PlaceId} = ?3 AND {Type} = ?4
             "#
         ))?;
         for (position, id) in ordered_ids.iter().enumerate() {
-            stmt.execute(params![position as i64, id, place_id])?;
+            stmt.execute(params![position as i64, id, place_id, r#type])?;
         }
     }
     tx.commit()?;
@@ -384,7 +389,7 @@ mod test {
         let a = insert(1, "user", &conn)?;
         let b = insert(1, "user", &conn)?;
         let c = insert(1, "user", &conn)?;
-        super::set_positions(1, &[b, a], &mut conn)?;
+        super::set_positions(1, "user", &[b, a], &mut conn)?;
 
         let ids: Vec<i64> = super::select_by_place_id(1, &conn)?
             .iter()
@@ -407,7 +412,7 @@ mod test {
         let mut conn = conn();
         let a = insert(1, "user", &conn)?;
         let b = insert(1, "user", &conn)?;
-        super::set_positions(1, &[b, a], &mut conn)?;
+        super::set_positions(1, "user", &[b, a], &mut conn)?;
 
         assert_eq!(super::select_meta_by_id(b, &conn)?.position, Some(0));
         assert_eq!(super::select_meta_by_id(a, &conn)?.position, Some(1));
@@ -420,7 +425,7 @@ mod test {
         let mut conn = conn();
         let other_place = insert(2, "user", &conn)?;
         let report = insert(1, "report", &conn)?;
-        super::set_positions(1, &[other_place, report], &mut conn)?;
+        super::set_positions(1, "user", &[other_place, report], &mut conn)?;
 
         assert_eq!(super::select_meta_by_id(other_place, &conn)?.position, None);
         assert_eq!(super::select_meta_by_id(report, &conn)?.position, None);
