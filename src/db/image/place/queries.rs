@@ -65,7 +65,7 @@ pub async fn set_positions(
     r#type: &str,
     ordered_ids: Vec<i64>,
     pool: &Pool,
-) -> Result<()> {
+) -> Result<bool> {
     let r#type = r#type.to_owned();
     pool.get()
         .await?

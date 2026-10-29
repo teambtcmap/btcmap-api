@@ -354,20 +354,13 @@ pub async fn put_order(
         return Err(RestApiError::invalid_input("image_ids has duplicates"));
     }
 
-    let current: HashSet<i64> =
-        db::image::place::queries::select_by_place_id_and_type(place_id, IMAGE_TYPE, &image_pool)
+    let applied =
+        db::image::place::queries::set_positions(place_id, IMAGE_TYPE, image_ids, &image_pool)
             .await
-            .map_err(|_| RestApiError::database())?
-            .iter()
-            .map(|it| it.id)
-            .collect();
-    if requested != current {
+            .map_err(|_| RestApiError::database())?;
+    if !applied {
         return Err(RestApiError::conflict("image_ids is out of date"));
     }
-
-    db::image::place::queries::set_positions(place_id, IMAGE_TYPE, image_ids, &image_pool)
-        .await
-        .map_err(|_| RestApiError::database())?;
     info!(user_id = user.id, place_id, "reordered place images");
 
     let images =
