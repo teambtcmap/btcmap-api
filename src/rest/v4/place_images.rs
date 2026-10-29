@@ -180,9 +180,6 @@ pub async fn get_by_place_id(
     pool: Data<MainPool>,
     image_pool: Data<ImagePool>,
 ) -> Res<Vec<ListItem>> {
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     let place_id = resolve_place_id(id.into_inner(), &pool).await?;
     let images = match args.r#type.as_deref() {
         Some(r#type) => {
@@ -204,9 +201,6 @@ pub async fn get_by_place_id_and_image_id(
     image_pool: Data<ImagePool>,
 ) -> Result<HttpResponse, RestApiError> {
     let (id, image_id) = path.into_inner();
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     if let Some(0) = args.w {
         return Err(RestApiError::invalid_input("w must be greater than 0"));
     }
@@ -248,9 +242,6 @@ pub async fn post(
     let user = auth.user.ok_or(RestApiError::unauthorized())?;
 
     let id = path.into_inner();
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     let place_id = resolve_place_id(id, &pool).await?;
 
     let data_base64 = args.into_inner().data_base64;
@@ -290,9 +281,6 @@ pub async fn delete_by_place_id_and_image_id(
     let user = auth.user.ok_or(RestApiError::unauthorized())?;
 
     let (id, image_id) = path.into_inner();
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     let place_id = resolve_place_id(id, &pool).await?;
 
     let image = db::image::place::queries::select_meta_by_id(image_id, &image_pool)
@@ -338,9 +326,6 @@ pub async fn put_order(
     }
 
     let id = path.into_inner();
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     let place_id = resolve_place_id(id, &pool).await?;
 
     let image_ids = args.into_inner().image_ids;
@@ -406,6 +391,9 @@ pub async fn get_recent(
 }
 
 async fn resolve_place_id(id: String, pool: &MainPool) -> Result<i64, RestApiError> {
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
     db::main::element::queries::select_by_id_or_osm_id(id, pool)
         .await
         .map(|it| it.id)
