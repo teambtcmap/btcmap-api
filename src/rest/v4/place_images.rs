@@ -83,8 +83,8 @@ pub struct ListItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub author: Option<Author>,
-    // Admin-chosen display slot, from 0. Omitted for images never ordered;
-    // lists put those after the ordered ones, newest first.
+    /// Admin-chosen display slot, from 0. Omitted for images never ordered;
+    /// lists put those after the ordered ones, newest first.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub position: Option<i64>,
