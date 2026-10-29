@@ -221,11 +221,7 @@ pub async fn get(
     pool: Data<MainPool>,
 ) -> Result<Json<Vec<UserSearchResult>>, RestApiError> {
     auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
-    let is_privileged = auth
-        .effective_roles()
-        .iter()
-        .any(|role| matches!(role, Role::Admin | Role::Root));
-    if !is_privileged {
+    if !auth.is_admin() {
         return Err(RestApiError::forbidden());
     }
 

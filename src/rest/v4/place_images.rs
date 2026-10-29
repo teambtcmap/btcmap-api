@@ -333,11 +333,7 @@ pub async fn put_order(
     image_pool: Data<ImagePool>,
 ) -> Res<Vec<ListItem>> {
     let user = auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
-    let is_privileged = auth
-        .effective_roles()
-        .iter()
-        .any(|role| matches!(role, Role::Admin | Role::Root));
-    if !is_privileged {
+    if !auth.is_admin() {
         return Err(RestApiError::forbidden());
     }
 
@@ -405,11 +401,7 @@ pub async fn get_recent(
     image_pool: Data<ImagePool>,
 ) -> Res<Vec<ListItem>> {
     auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
-    let is_privileged = auth
-        .effective_roles()
-        .iter()
-        .any(|role| matches!(role, Role::Admin | Role::Root));
-    if !is_privileged {
+    if !auth.is_admin() {
         return Err(RestApiError::forbidden());
     }
 
