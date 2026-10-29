@@ -1,8 +1,9 @@
 use super::schema::{self, PlaceImage, PlaceImageMeta};
 use crate::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, TransactionBehavior};
 use schema::Columns::*;
 use schema::TABLE_NAME as TABLE;
+use std::collections::HashSet;
 
 pub struct InsertArgs {
     pub place_id: i64,
@@ -77,7 +78,7 @@ pub fn select_by_place_id(place_id: i64, conn: &Connection) -> Result<Vec<PlaceI
             SELECT {projection}
             FROM {TABLE}
             WHERE {PlaceId} = ?1
-            ORDER BY {Id} DESC
+            ORDER BY {Position} IS NULL, {Position}, {Id} DESC
         "#,
         projection = PlaceImageMeta::projection(),
     ))?
@@ -96,7 +97,7 @@ pub fn select_by_place_id_and_type(
             SELECT {projection}
             FROM {TABLE}
             WHERE {PlaceId} = ?1 AND {Type} = ?2
-            ORDER BY {Id} DESC
+            ORDER BY {Position} IS NULL, {Position}, {Id} DESC
         "#,
         projection = PlaceImageMeta::projection(),
     ))?
@@ -137,6 +138,47 @@ pub fn select_recent(limit: i64, conn: &Connection) -> Result<Vec<PlaceImageMeta
     .query_map(params![limit], PlaceImageMeta::mapper())?
     .collect::<Result<Vec<_>, _>>()
     .map_err(Into::into)
+}
+
+/// Number `ordered_ids` from 0, but only when they are exactly the ids of the
+/// images of `place_id` with type `r#type`. Returns `false` and changes nothing
+/// otherwise. The check and the writes share one transaction, so an upload or
+/// delete can't slip in between.
+pub fn set_positions(
+    place_id: i64,
+    r#type: &str,
+    ordered_ids: &[i64],
+    conn: &mut Connection,
+) -> Result<bool> {
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let current: HashSet<i64> = tx
+        .prepare(&format!(
+            r#"
+                SELECT {Id}
+                FROM {TABLE}
+                WHERE {PlaceId} = ?1 AND {Type} = ?2
+            "#
+        ))?
+        .query_map(params![place_id, r#type], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    let requested: HashSet<i64> = ordered_ids.iter().copied().collect();
+    if requested.len() != ordered_ids.len() || requested != current {
+        return Ok(false);
+    }
+    {
+        let mut stmt = tx.prepare(&format!(
+            r#"
+                UPDATE {TABLE}
+                SET {Position} = ?1
+                WHERE {Id} = ?2
+            "#
+        ))?;
+        for (position, id) in ordered_ids.iter().enumerate() {
+            stmt.execute(params![position as i64, id])?;
+        }
+    }
+    tx.commit()?;
+    Ok(true)
 }
 
 pub fn delete(id: i64, conn: &Connection) -> Result<usize> {
@@ -354,6 +396,76 @@ mod test {
 
         assert!(super::select_by_id(id, &conn).is_err());
         assert!(super::select_by_place_id(1, &conn)?.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn positioned_images_sort_first_in_position_order() -> Result<()> {
+        let mut conn = conn();
+        let a = insert(1, "user", &conn)?;
+        let b = insert(1, "user", &conn)?;
+        assert!(super::set_positions(1, "user", &[b, a], &mut conn)?);
+        let c = insert(1, "user", &conn)?;
+
+        let ids: Vec<i64> = super::select_by_place_id(1, &conn)?
+            .iter()
+            .map(|it| it.id)
+            .collect();
+        // positioned first, then the unpositioned newest first
+        assert_eq!(vec![b, a, c], ids);
+
+        let ids: Vec<i64> = super::select_by_place_id_and_type(1, "user", &conn)?
+            .iter()
+            .map(|it| it.id)
+            .collect();
+        assert_eq!(vec![b, a, c], ids);
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_positions_numbers_from_zero() -> Result<()> {
+        let mut conn = conn();
+        let a = insert(1, "user", &conn)?;
+        let b = insert(1, "user", &conn)?;
+        assert!(super::set_positions(1, "user", &[b, a], &mut conn)?);
+
+        assert_eq!(super::select_meta_by_id(b, &conn)?.position, Some(0));
+        assert_eq!(super::select_meta_by_id(a, &conn)?.position, Some(1));
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_positions_rejects_other_places_and_types() -> Result<()> {
+        let mut conn = conn();
+        let own = insert(1, "user", &conn)?;
+        let other_place = insert(2, "user", &conn)?;
+        let report = insert(1, "report", &conn)?;
+        assert!(!super::set_positions(
+            1,
+            "user",
+            &[own, other_place, report],
+            &mut conn
+        )?);
+
+        for id in [own, other_place, report] {
+            assert_eq!(super::select_meta_by_id(id, &conn)?.position, None);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_positions_rejects_incomplete_list() -> Result<()> {
+        let mut conn = conn();
+        let a = insert(1, "user", &conn)?;
+        let b = insert(1, "user", &conn)?;
+        assert!(!super::set_positions(1, "user", &[a], &mut conn)?);
+
+        assert_eq!(super::select_meta_by_id(a, &conn)?.position, None);
+        assert_eq!(super::select_meta_by_id(b, &conn)?.position, None);
 
         Ok(())
     }

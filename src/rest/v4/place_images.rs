@@ -14,6 +14,7 @@ use crate::Error;
 use actix_web::delete;
 use actix_web::get;
 use actix_web::post;
+use actix_web::put;
 use actix_web::web::Data;
 use actix_web::web::Json;
 use actix_web::web::Path;
@@ -24,6 +25,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use time::OffsetDateTime;
+use tracing::info;
 
 /// Image type used for photos uploaded directly by signed-in users (as opposed
 /// to `report` evidence, which is tied to a place report).
@@ -33,6 +35,14 @@ const IMAGE_TYPE: &str = "user";
 pub struct GetListArgs {
     r#type: Option<String>,
 }
+
+#[derive(Deserialize)]
+pub struct PutOrderArgs {
+    image_ids: Vec<i64>,
+}
+
+/// Upper bound on `image_ids` in [`put_order`], far above any real place.
+const MAX_ORDER_IDS: usize = 500;
 
 #[derive(Deserialize)]
 pub struct GetRecentArgs {
@@ -73,6 +83,11 @@ pub struct ListItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub author: Option<Author>,
+    /// Admin-chosen display slot, from 0. Omitted for images never ordered;
+    /// lists put those after the ordered ones, newest first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub position: Option<i64>,
 }
 
 fn to_list_item(val: PlaceImageMeta, author: Option<Author>) -> ListItem {
@@ -86,6 +101,7 @@ fn to_list_item(val: PlaceImageMeta, author: Option<Author>) -> ListItem {
         created_at: val.created_at,
         created_by: val.created_by,
         author,
+        position: val.position,
     }
 }
 
@@ -99,6 +115,7 @@ fn meta_from_image(val: PlaceImage) -> PlaceImageMeta {
         size_bytes: val.size_bytes,
         created_at: val.created_at,
         created_by: val.created_by,
+        position: val.position,
     }
 }
 
@@ -163,9 +180,6 @@ pub async fn get_by_place_id(
     pool: Data<MainPool>,
     image_pool: Data<ImagePool>,
 ) -> Res<Vec<ListItem>> {
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     let place_id = resolve_place_id(id.into_inner(), &pool).await?;
     let images = match args.r#type.as_deref() {
         Some(r#type) => {
@@ -187,9 +201,6 @@ pub async fn get_by_place_id_and_image_id(
     image_pool: Data<ImagePool>,
 ) -> Result<HttpResponse, RestApiError> {
     let (id, image_id) = path.into_inner();
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     if let Some(0) = args.w {
         return Err(RestApiError::invalid_input("w must be greater than 0"));
     }
@@ -231,9 +242,6 @@ pub async fn post(
     let user = auth.user.ok_or(RestApiError::unauthorized())?;
 
     let id = path.into_inner();
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     let place_id = resolve_place_id(id, &pool).await?;
 
     let data_base64 = args.into_inner().data_base64;
@@ -273,9 +281,6 @@ pub async fn delete_by_place_id_and_image_id(
     let user = auth.user.ok_or(RestApiError::unauthorized())?;
 
     let (id, image_id) = path.into_inner();
-    if id.len() > 128 {
-        return Err(RestApiError::invalid_input("id too long"));
-    }
     let place_id = resolve_place_id(id, &pool).await?;
 
     let image = db::image::place::queries::select_meta_by_id(image_id, &image_pool)
@@ -303,6 +308,53 @@ pub async fn delete_by_place_id_and_image_id(
     Ok(Json(to_enriched_list_item(image, &pool).await?))
 }
 
+/// Set the display order of a place's `user` images. `image_ids` must list
+/// every such image exactly once; a list that misses or adds one (an upload
+/// or delete since the caller loaded it) is a conflict. Restricted to admin
+/// and root users.
+#[put("{id}/images/order")]
+pub async fn put_order(
+    auth: Auth,
+    path: Path<String>,
+    args: Json<PutOrderArgs>,
+    pool: Data<MainPool>,
+    image_pool: Data<ImagePool>,
+) -> Res<Vec<ListItem>> {
+    let user = auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
+    if !auth.is_admin() {
+        return Err(RestApiError::forbidden());
+    }
+
+    let id = path.into_inner();
+    let place_id = resolve_place_id(id, &pool).await?;
+
+    let image_ids = args.into_inner().image_ids;
+    if image_ids.is_empty() || image_ids.len() > MAX_ORDER_IDS {
+        return Err(RestApiError::invalid_input(format!(
+            "image_ids must hold 1 to {MAX_ORDER_IDS} ids"
+        )));
+    }
+    let requested: HashSet<i64> = image_ids.iter().copied().collect();
+    if requested.len() != image_ids.len() {
+        return Err(RestApiError::invalid_input("image_ids has duplicates"));
+    }
+
+    let applied =
+        db::image::place::queries::set_positions(place_id, IMAGE_TYPE, image_ids, &image_pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+    if !applied {
+        return Err(RestApiError::conflict("image_ids is out of date"));
+    }
+    info!(user_id = user.id, place_id, "reordered place images");
+
+    let images =
+        db::image::place::queries::select_by_place_id_and_type(place_id, IMAGE_TYPE, &image_pool)
+            .await
+            .map_err(|_| RestApiError::database())?;
+    Ok(Json(attach_authors(images, &pool).await?))
+}
+
 /// List the images the authenticated user uploaded, newest first.
 #[get("/me/place-images")]
 pub async fn get_me(
@@ -327,11 +379,7 @@ pub async fn get_recent(
     image_pool: Data<ImagePool>,
 ) -> Res<Vec<ListItem>> {
     auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
-    let is_privileged = auth
-        .effective_roles()
-        .iter()
-        .any(|role| matches!(role, Role::Admin | Role::Root));
-    if !is_privileged {
+    if !auth.is_admin() {
         return Err(RestApiError::forbidden());
     }
 
@@ -343,6 +391,9 @@ pub async fn get_recent(
 }
 
 async fn resolve_place_id(id: String, pool: &MainPool) -> Result<i64, RestApiError> {
+    if id.len() > 128 {
+        return Err(RestApiError::invalid_input("id too long"));
+    }
     db::main::element::queries::select_by_id_or_osm_id(id, pool)
         .await
         .map(|it| it.id)
@@ -1220,6 +1271,259 @@ mod test {
             let res = test::call_service(&app, req).await;
             assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         }
+
+        Ok(())
+    }
+
+    async fn put_order(
+        main_pool: crate::db::main::MainPool,
+        image_pool: crate::db::image::ImagePool,
+        place: &str,
+        secret: Option<&str>,
+        body: serde_json::Value,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/places").service(super::put_order)),
+        )
+        .await;
+        let mut req = TestRequest::put()
+            .uri(&format!("/places/{place}/images/order"))
+            .insert_header(ContentType::json())
+            .set_payload(body.to_string());
+        if let Some(secret) = secret {
+            req = req.insert_header((header::AUTHORIZATION, format!("Bearer {secret}")));
+        }
+        test::call_service(&app, req.to_request()).await
+    }
+
+    async fn positions(
+        image_pool: &crate::db::image::ImagePool,
+        ids: &[i64],
+    ) -> Result<Vec<Option<i64>>> {
+        let mut res = vec![];
+        for id in ids {
+            res.push(
+                db::image::place::queries::select_meta_by_id(*id, image_pool)
+                    .await?
+                    .position,
+            );
+        }
+        Ok(res)
+    }
+
+    #[test]
+    async fn put_order_requires_auth() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let a = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let res = put_order(
+            main_pool,
+            image_pool,
+            &place_id.to_string(),
+            None,
+            serde_json::json!({ "image_ids": [a] }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn put_order_forbidden_for_regular_user() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (user_id, secret) = seed_user("owner", &[Role::User], &main_pool).await?;
+        // Even the uploader of every photo may not reorder them
+        let a = insert_owned_image(&image_pool, place_id, Some(user_id)).await?;
+        let b = insert_owned_image(&image_pool, place_id, Some(user_id)).await?;
+
+        let res = put_order(
+            main_pool,
+            image_pool.clone(),
+            &place_id.to_string(),
+            Some(&secret),
+            serde_json::json!({ "image_ids": [a, b] }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(vec![None, None], positions(&image_pool, &[a, b]).await?);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn put_order_admin_reorders_and_list_follows() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (_, secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+        let a = insert_owned_image(&image_pool, place_id, None).await?;
+        let b = insert_owned_image(&image_pool, place_id, None).await?;
+        let c = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let res = put_order(
+            main_pool.clone(),
+            image_pool.clone(),
+            &place_id.to_string(),
+            Some(&secret),
+            serde_json::json!({ "image_ids": [c, a, b] }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+        let res: Vec<super::ListItem> = test::read_body_json(res).await;
+        let order: Vec<(i64, Option<i64>)> = res.iter().map(|it| (it.id, it.position)).collect();
+        assert_eq!(vec![(c, Some(0)), (a, Some(1)), (b, Some(2))], order);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(main_pool))
+                .app_data(Data::new(image_pool))
+                .service(scope("/places").service(super::get_by_place_id)),
+        )
+        .await;
+        let req = TestRequest::get()
+            .uri(&format!("/places/{place_id}/images?type=user"))
+            .to_request();
+        let res: Vec<super::ListItem> = test::call_and_read_body_json(&app, req).await;
+        let ids: Vec<i64> = res.iter().map(|it| it.id).collect();
+        assert_eq!(vec![c, a, b], ids);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn put_order_allowed_for_root() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (_, secret) = seed_user("root", &[Role::Root], &main_pool).await?;
+        let a = insert_owned_image(&image_pool, place_id, None).await?;
+        let b = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let res = put_order(
+            main_pool,
+            image_pool.clone(),
+            &place_id.to_string(),
+            Some(&secret),
+            serde_json::json!({ "image_ids": [b, a] }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            vec![Some(0), Some(1)],
+            positions(&image_pool, &[b, a]).await?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn put_order_unknown_place_returns_not_found() -> Result<()> {
+        let main_pool = pool();
+        let (_, secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+
+        let res = put_order(
+            main_pool,
+            crate::db::image::test::pool(),
+            "9999",
+            Some(&secret),
+            serde_json::json!({ "image_ids": [1] }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+        Ok(())
+    }
+
+    #[test]
+    async fn put_order_rejects_stale_list() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (_, secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+        let a = insert_owned_image(&image_pool, place_id, None).await?;
+        let b = insert_owned_image(&image_pool, place_id, None).await?;
+        // Uploaded after the admin loaded the list
+        let c = insert_owned_image(&image_pool, place_id, None).await?;
+
+        let res = put_order(
+            main_pool,
+            image_pool.clone(),
+            &place_id.to_string(),
+            Some(&secret),
+            serde_json::json!({ "image_ids": [b, a] }),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            vec![None, None, None],
+            positions(&image_pool, &[a, b, c]).await?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn put_order_rejects_foreign_and_report_ids() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let other_place_id = insert_place(&main_pool, 2).await?;
+        let (_, secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+        let a = insert_owned_image(&image_pool, place_id, None).await?;
+        let report = insert_image(&image_pool, place_id, "report", encode_png(4, 2)).await?;
+        let foreign = insert_owned_image(&image_pool, other_place_id, None).await?;
+
+        for smuggled in [report, foreign] {
+            let res = put_order(
+                main_pool.clone(),
+                image_pool.clone(),
+                &place_id.to_string(),
+                Some(&secret),
+                serde_json::json!({ "image_ids": [a, smuggled] }),
+            )
+            .await;
+            assert_eq!(res.status(), StatusCode::CONFLICT);
+        }
+        assert_eq!(
+            vec![None, None, None],
+            positions(&image_pool, &[a, report, foreign]).await?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    async fn put_order_rejects_duplicates_and_empty_list() -> Result<()> {
+        let main_pool = pool();
+        let image_pool = crate::db::image::test::pool();
+        let place_id = insert_place(&main_pool, 1).await?;
+        let (_, secret) = seed_user("admin", &[Role::Admin], &main_pool).await?;
+        let a = insert_owned_image(&image_pool, place_id, None).await?;
+        let b = insert_owned_image(&image_pool, place_id, None).await?;
+
+        for body in [
+            serde_json::json!({ "image_ids": [a, a, b] }),
+            serde_json::json!({ "image_ids": [] }),
+        ] {
+            let res = put_order(
+                main_pool.clone(),
+                image_pool.clone(),
+                &place_id.to_string(),
+                Some(&secret),
+                body,
+            )
+            .await;
+            assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        }
+        assert_eq!(vec![None, None], positions(&image_pool, &[a, b]).await?);
 
         Ok(())
     }

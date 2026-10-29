@@ -374,6 +374,7 @@ severity: high"
             size_bytes: 0,
             created_at: OffsetDateTime::UNIX_EPOCH,
             created_by: None,
+            position: None,
         }
     }
 

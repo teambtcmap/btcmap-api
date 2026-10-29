@@ -35,6 +35,13 @@ impl Auth {
                 .unwrap_or(&[]),
         }
     }
+
+    /// Whether the effective roles include `admin` or `root`.
+    pub fn is_admin(&self) -> bool {
+        self.effective_roles()
+            .iter()
+            .any(|role| matches!(role, Role::Admin | Role::Root))
+    }
 }
 
 impl From<Auth> for Option<User> {
