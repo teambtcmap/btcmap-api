@@ -51,7 +51,7 @@ pub struct MeResponse {
     #[ts(type = "number")]
     pub id: i64,
     pub name: String,
-    pub roles: Vec<String>,
+    pub roles: Vec<Role>,
     pub saved_places: Vec<SavedPlace>,
     pub saved_areas: Vec<SavedArea>,
     /// Area ids the user is restricted to when acting as an event manager.
@@ -68,7 +68,7 @@ impl From<&User> for MeResponse {
         MeResponse {
             id: user.id,
             name: user.name.clone(),
-            roles: user.roles.iter().map(|r| r.to_string()).collect(),
+            roles: user.roles.clone(),
             saved_places: vec![],
             saved_areas: vec![],
             geofence: user.geofence.clone(),
@@ -101,7 +101,7 @@ pub async fn me(auth: Auth, pool: Data<MainPool>) -> Result<Json<MeResponse>, Re
     Ok(Json(MeResponse {
         id: user.id,
         name: user.name,
-        roles: user.roles.iter().map(|r| r.to_string()).collect(),
+        roles: user.roles,
         saved_places,
         saved_areas,
         geofence: user.geofence,
@@ -122,7 +122,7 @@ pub struct PostResponse {
     #[ts(type = "number")]
     pub id: i64,
     pub name: String,
-    pub roles: Vec<String>,
+    pub roles: Vec<Role>,
 }
 
 #[post("")]
@@ -147,7 +147,7 @@ pub async fn post(
     Ok(Json(PostResponse {
         id: user.id,
         name: user.name,
-        roles: user.roles.into_iter().map(|it| it.to_string()).collect(),
+        roles: user.roles,
     }))
 }
 
@@ -183,7 +183,7 @@ pub struct UserSearchResult {
     #[ts(type = "number")]
     pub id: i64,
     pub name: String,
-    pub roles: Vec<String>,
+    pub roles: Vec<Role>,
     #[ts(type = "string")]
     pub created_at: String,
     /// Area ids the user is restricted to when acting as an event manager.
@@ -200,7 +200,7 @@ impl From<User> for UserSearchResult {
         UserSearchResult {
             id: user.id,
             name: user.name,
-            roles: user.roles.iter().map(|role| role.to_string()).collect(),
+            roles: user.roles,
             created_at: user.created_at,
             geofence: user.geofence,
             npub: user.npub,
@@ -651,7 +651,7 @@ pub async fn create_token(
         user: MeResponse {
             id: user.id,
             name: user.name,
-            roles: user.roles.iter().map(|r| r.to_string()).collect(),
+            roles: user.roles,
             saved_places,
             saved_areas,
             geofence: user.geofence,
@@ -1577,7 +1577,7 @@ mod test {
             .to_request();
         let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
         assert_eq!(bob, res.id);
-        assert!(res.roles.contains(&"admin".to_string()));
+        assert!(res.roles.contains(&Role::Admin));
         assert_eq!(vec![5, 6], res.geofence);
         Ok(())
     }
@@ -1665,7 +1665,7 @@ mod test {
             .set_json(json!({ "roles": ["user", "event_manager"] }))
             .to_request();
         let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
-        assert!(res.roles.contains(&"event_manager".to_string()));
+        assert!(res.roles.contains(&Role::EventManager));
 
         let req = TestRequest::patch()
             .uri(&format!("/users/{bob}"))
@@ -1673,7 +1673,7 @@ mod test {
             .set_json(json!({ "roles": ["user"] }))
             .to_request();
         let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
-        assert!(!res.roles.contains(&"event_manager".to_string()));
+        assert!(!res.roles.contains(&Role::EventManager));
         Ok(())
     }
 
@@ -1810,7 +1810,7 @@ mod test {
             .set_json(json!({ "roles": ["user"] }))
             .to_request();
         let res: UserSearchResult = test::call_and_read_body_json(&app, req).await;
-        assert!(!res.roles.contains(&"event_manager".to_string()));
+        assert!(!res.roles.contains(&Role::EventManager));
         Ok(())
     }
 

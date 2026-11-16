@@ -1,4 +1,6 @@
 use rusqlite::Row;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -38,7 +40,10 @@ pub struct User {
 
 use std::fmt;
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+/// A user's role, sent as its snake_case name, e.g. `places_source`.
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
 pub enum Role {
     User,
     Admin,
@@ -141,6 +146,33 @@ impl FromStr for Role {
             "area_manager" => Ok(Role::AreaManager),
             "dashboard" => Ok(Role::Dashboard),
             _ => Err(format!("'{}' is not a valid Role", s)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Role;
+    use serde_json::Value;
+
+    #[test]
+    fn role_serializes_as_its_display_name() {
+        // Responses sent role.to_string() before Role was serialized
+        // directly; the wire format must not change
+        let roles = [
+            Role::User,
+            Role::Admin,
+            Role::Root,
+            Role::PlacesSource,
+            Role::EventManager,
+            Role::AreaManager,
+            Role::Dashboard,
+        ];
+        for role in roles {
+            assert_eq!(
+                serde_json::to_value(&role).unwrap(),
+                Value::String(role.to_string())
+            );
         }
     }
 }
