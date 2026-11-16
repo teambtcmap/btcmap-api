@@ -6,11 +6,13 @@ use crate::db::main::MainPool;
 use crate::rest::auth::Auth;
 use crate::rest::error::RestApiError;
 use crate::rest::error::RestResult;
+use crate::rest::v4::Nullable;
 use crate::service::timezone;
 use crate::service::timezone::EventTime;
 use crate::Error;
 use actix_web::delete;
 use actix_web::get;
+use actix_web::patch;
 use actix_web::post;
 use actix_web::put;
 use actix_web::web::Data;
@@ -554,6 +556,130 @@ pub async fn put_status(
     let event = db::main::event::queries::set_status(id, status, &pool)
         .await
         .map_err(|_| RestApiError::database())?;
+    Ok(Json(attach_author(event, &pool).await?))
+}
+
+/// Request body for `PATCH /v4/events/{id}`. Every field is optional: omitted
+/// fields are left unchanged, `null` clears `area_id` or `ends_at`, and
+/// `starts_at` cannot be cleared.
+#[derive(Deserialize, ts_rs::TS)]
+#[ts(export, rename = "PatchEventArgs")]
+pub struct PatchArgs {
+    #[serde(default)]
+    #[ts(optional, type = "number | null")]
+    pub area_id: Nullable<i64>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub lat: Option<f64>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub lon: Option<f64>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub website: Option<String>,
+    /// RFC 3339 with an offset, or a floating local datetime that needs
+    /// `timezone` to be placed on the timeline. Cannot be cleared.
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub starts_at: Nullable<EventTime>,
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub ends_at: Nullable<EventTime>,
+    /// Either `"auto"` (infer from newly supplied lat/lon) or an IANA zone
+    /// name. Only needed when a timestamp in this request has no offset.
+    #[serde(default)]
+    #[ts(optional)]
+    pub timezone: Option<String>,
+}
+
+/// `PATCH /v4/events/{id}`
+///
+/// Edits an existing event. Restricted to event managers, admins and roots.
+/// The event's resulting location (the supplied `lat`/`lon`, or the stored
+/// point when they are omitted) must lie inside the caller's geofence when one
+/// is set, so an edit cannot move an event out of the caller's scope.
+#[patch("{id}")]
+pub async fn patch(
+    id: Path<i64>,
+    auth: Auth,
+    args: Json<PatchArgs>,
+    pool: Data<MainPool>,
+) -> RestResult<Item> {
+    let user = auth.user.as_ref().ok_or_else(RestApiError::unauthorized)?;
+    if !is_privileged(&auth) {
+        return Err(RestApiError::forbidden());
+    }
+    let args = args.into_inner();
+
+    let id = id.into_inner();
+    let existing = db::main::event::queries::select_by_id(id, &pool)
+        .await
+        .map_err(|e| match e {
+            Error::Rusqlite(rusqlite::Error::QueryReturnedNoRows) => RestApiError::not_found(),
+            _ => RestApiError::database(),
+        })?;
+
+    // Soft-deleted events are tombstones and must stay gone; editing one would
+    // resurrect it under the radar of the review workflow.
+    if existing.deleted_at.is_some() {
+        return Err(RestApiError::not_found());
+    }
+
+    if let Some(lat) = args.lat {
+        if !(-90.0..=90.0).contains(&lat) {
+            return Err(RestApiError::invalid_input(
+                "Latitude must be between -90 and 90",
+            ));
+        }
+    }
+
+    if let Some(lon) = args.lon {
+        if !(-180.0..=180.0).contains(&lon) {
+            return Err(RestApiError::invalid_input(
+                "Longitude must be between -180 and 180",
+            ));
+        }
+    }
+
+    if let Some(name) = &args.name {
+        if name.trim().is_empty() {
+            return Err(RestApiError::invalid_input("name cannot be empty"));
+        }
+    }
+
+    // Standard geofence semantics: the point the event ends up at must be
+    // inside the caller's fence, even when only non-spatial fields change.
+    let lat = args.lat.unwrap_or(existing.lat);
+    let lon = args.lon.unwrap_or(existing.lon);
+    crate::service::geofence::check(user, lat, lon, &pool)
+        .await
+        .map_err(|_| RestApiError::forbidden())?;
+
+    let (starts_at, ends_at, _timezone) = timezone::resolve_update_times(
+        args.starts_at.0,
+        args.ends_at.0,
+        args.timezone.as_deref(),
+        lat,
+        lon,
+    )
+    .map_err(|e| RestApiError::invalid_input(e.to_string()))?;
+
+    let event = db::main::event::queries::update(
+        id,
+        args.area_id.0,
+        args.lat,
+        args.lon,
+        args.name.map(|name| name.trim().to_string()),
+        args.website,
+        starts_at,
+        ends_at,
+        &pool,
+    )
+    .await
+    .map_err(|_| RestApiError::database())?;
     Ok(Json(attach_author(event, &pool).await?))
 }
 
@@ -2225,6 +2351,347 @@ mod test {
             res[0]["deleted_at"].is_string(),
             "the revocation must be observable as a tombstone"
         );
+        Ok(())
+    }
+
+    async fn insert_future_event(pool: &crate::db::main::MainPool) -> Result<i64> {
+        let event = db::main::event::queries::insert(
+            None,
+            1.0,
+            2.0,
+            "name".to_string(),
+            "website".to_string(),
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            pool,
+        )
+        .await?;
+        Ok(event.id)
+    }
+
+    #[test]
+    async fn patch_requires_auth() -> Result<()> {
+        let pool = pool();
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .set_json(serde_json::json!({ "name": "renamed" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_is_forbidden_for_unprivileged() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::User], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "name": "renamed" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_root_can_edit_fields() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::Root], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({
+                "name": "  renamed  ",
+                "website": "https://btcmap.org",
+                "lat": 7.97,
+                "lon": 98.33,
+                "starts_at": "2999-02-01T00:00:00Z",
+            }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert_eq!("renamed", res["name"].as_str().unwrap());
+        assert_eq!("https://btcmap.org", res["website"].as_str().unwrap());
+        assert_eq!(7.97, res["lat"].as_f64().unwrap());
+        assert_eq!(98.33, res["lon"].as_f64().unwrap());
+        assert_eq!("2999-02-01T00:00:00Z", res["starts_at"].as_str().unwrap());
+        assert_eq!("live", res["status"].as_str().unwrap());
+
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert_eq!("renamed", stored.name);
+        assert_eq!(datetime!(2999-02-01 0:00 UTC), stored.starts_at);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_event_manager_can_edit() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::EventManager], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "website": "https://example.org" }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert_eq!("https://example.org", res["website"].as_str().unwrap());
+        // Omitted fields stay untouched.
+        assert_eq!("name", res["name"].as_str().unwrap());
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_clears_area_and_ends_at() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let secret = seed_user_with_token(&[Role::Admin], &[], &pool).await?;
+        let event = db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "name".to_string(),
+            "website".to_string(),
+            datetime!(2999-01-01 0:00 UTC),
+            Some(datetime!(2999-01-01 2:00 UTC)),
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{}", event.id))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({
+                "area_id": null,
+                "ends_at": null,
+            }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert!(res.get("ends_at").is_none());
+        let stored = db::main::event::queries::select_by_id(event.id, &pool).await?;
+        assert_eq!(None, stored.area_id);
+        assert_eq!(None, stored.ends_at);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_resolves_floating_timestamp_with_timezone() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::EventManager], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({
+                "starts_at": "2999-01-01T19:00:00",
+                "timezone": "Asia/Bangkok",
+            }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(
+            "2999-01-01T19:00:00+07:00",
+            res["starts_at"].as_str().unwrap()
+        );
+        // The floating wall-clock time is placed on the timeline using the
+        // supplied zone; the stored instant is 19:00 Bangkok time (12:00 UTC).
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert_eq!(datetime!(2999-01-01 12:00 UTC), stored.starts_at);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_clearing_starts_at() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::Admin], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "starts_at": null }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_empty_name() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::Admin], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "name": "   " }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_not_found() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::Root], &[], &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri("/events/999")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "name": "renamed" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_not_found_for_deleted_event() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::Root], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        db::main::event::queries::set_deleted_at(event_id, Some(OffsetDateTime::now_utc()), &pool)
+            .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "name": "renamed" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_outside_geofence_is_forbidden() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let secret = seed_user_with_token(&[Role::EventManager], &[area.id], &pool).await?;
+        // Event lives in London, editor is fenced to Phuket.
+        let event = db::main::event::queries::insert(
+            None,
+            51.5,
+            -0.1,
+            "name".to_string(),
+            "website".to_string(),
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{}", event.id))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "name": "renamed" }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        let stored = db::main::event::queries::select_by_id(event.id, &pool).await?;
+        assert_eq!("name", stored.name);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_cannot_move_event_outside_geofence() -> Result<()> {
+        let pool = pool();
+        let area = db::main::area::queries::insert(phuket_area_tags(), &pool).await?;
+        let secret = seed_user_with_token(&[Role::EventManager], &[area.id], &pool).await?;
+        let event = db::main::event::queries::insert(
+            Some(area.id),
+            7.97,
+            98.33,
+            "name".to_string(),
+            "website".to_string(),
+            datetime!(2999-01-01 0:00 UTC),
+            None,
+            &pool,
+        )
+        .await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{}", event.id))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({
+                "lat": 51.5,
+                "lon": -0.1,
+            }))
+            .to_request();
+        let res = test::call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        let stored = db::main::event::queries::select_by_id(event.id, &pool).await?;
+        assert_eq!(7.97, stored.lat);
+        assert_eq!(98.33, stored.lon);
         Ok(())
     }
 }

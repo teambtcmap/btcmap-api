@@ -11,6 +11,7 @@ which matches them by name alongside areas and places.
 - [Get by ID](#get-by-id)
 - [Get Events by Area](#get-events-by-area)
 - [Submit Event](#submit-event)
+- [Edit Event](#edit-event)
 - [Change Event Status](#change-event-status)
 - [Revoke Event](#revoke-event)
 - [Get My Submitted Events](#get-my-submitted-events)
@@ -357,6 +358,59 @@ call it, and the event location must be inside the caller's geofence (when set).
 | `401` | Missing or invalid bearer token. |
 | `403` | The caller is not an event manager/admin/root, or the event is outside their geofence. |
 | `404` | No event with the requested ID. |
+
+### Edit Event
+
+```bash
+curl --request PATCH https://api.btcmap.org/v4/events/123 \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Phuket Bitcoin Meetup",
+    "website": "https://example.com/phuket",
+    "starts_at": "2026-09-25T19:00:00+07:00",
+    "ends_at": "2026-09-25T22:00:00+07:00"
+  }'
+```
+
+Edits an existing event. Only `event_manager`, `admin` and `root` users may call
+it. The event's resulting location — the supplied `lat`/`lon`, or its stored
+point when they are omitted — must be inside the caller's geofence (when set),
+so an edit cannot move an event out of the caller's scope.
+
+Every field is optional: omitted fields are left unchanged, and `null` clears
+`area_id` or `ends_at`. `starts_at` cannot be cleared. `status` is not editable
+here; use [Change Event Status](#change-event-status). Soft-deleted events cannot
+be edited and read as `404`.
+
+#### Path Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `id` | Integer | `123` | **Required**. Event ID. |
+
+#### Request Body
+
+| Field | Type | Example | Description |
+|-------|------|---------|-------------|
+| `lat` | Float | `7.9812` | Latitude, between -90 and 90. Omit to keep the current value. |
+| `lon` | Float | `98.3345` | Longitude, between -180 and 180. Omit to keep the current value. |
+| `name` | String | `Phuket Bitcoin Meetup` | Non-empty. Omit to keep the current value. |
+| `website` | String | `https://example.com` | May be an empty string. Omit to keep the current value. |
+| `starts_at` | String | `2026-09-25T19:00:00+07:00` | RFC 3339 with an offset, or a floating local datetime that needs `timezone`. `null` is rejected. |
+| `ends_at` | String or `null` | `2026-09-25T22:00:00+07:00` | Sets or clears the end time. |
+| `timezone` | String | `auto` or `Europe/Berlin` | Required when a timestamp in this request is floating (no offset). `auto` infers the zone from the event's resulting `lat`/`lon`. |
+| `area_id` | Integer or `null` | `123` | Associates the event with an area; `null` clears the association. |
+
+#### Responses
+
+| Status | Description |
+|--------|-------------|
+| `200` | Event updated. The body is the full [event object](#response-fields) with the resolved timestamps. |
+| `400` | Invalid coordinates, empty name, an unparseable timestamp, or an attempt to clear `starts_at`. |
+| `401` | Missing or invalid bearer token. |
+| `403` | The caller is not an event manager/admin/root, or the event's location is outside their geofence. |
+| `404` | No event with the requested ID, or the event is soft-deleted. |
 
 ### Revoke Event
 

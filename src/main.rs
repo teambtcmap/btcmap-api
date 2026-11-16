@@ -213,6 +213,7 @@ async fn main() -> Result<()> {
                             .service(rest::v4::events::get_by_id)
                             .service(rest::v4::events::post)
                             .service(rest::v4::events::put_status)
+                            .service(rest::v4::events::patch)
                             .service(rest::v4::events::delete),
                     )
                     .service(

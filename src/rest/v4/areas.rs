@@ -12,6 +12,7 @@ use crate::rest::v4::events::{
 use crate::rest::v4::top_editors::{
     extract_tip_url, far_future, parse_date, validate_limit, TopEditor, EXCLUDED_USER_IDS,
 };
+use crate::rest::v4::Nullable;
 use crate::service;
 use crate::Error;
 use actix_web::{
@@ -636,25 +637,6 @@ pub async fn post(auth: Auth, args: Json<PostAreaArgs>, pool: Data<MainPool>) ->
         .await
         .map_err(|_| RestApiError::database())?;
     Ok(Json(get_by_id_res(&area, None)))
-}
-
-/// Tri-state JSON field for `PATCH` bodies: absent (`None`), explicit `null`
-/// (`Some(None)`) or a value (`Some(Some(_))`). A plain `Option<Option<T>>`
-/// would need a `serde(deserialize_with)` helper, which `ts-rs` cannot parse;
-/// implementing `Deserialize` here keeps the exported binding warning-free.
-#[derive(Default)]
-pub struct Nullable<T>(Option<Option<T>>);
-
-impl<'de, T> Deserialize<'de> for Nullable<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(Nullable(Some(Option::<T>::deserialize(deserializer)?)))
-    }
 }
 
 /// Request body for `PATCH /v4/areas/{id}`. Every field is optional: omitted
