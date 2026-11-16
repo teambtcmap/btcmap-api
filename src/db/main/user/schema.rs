@@ -38,10 +38,20 @@ pub struct User {
     pub deleted_at: Option<String>,
 }
 
-use std::fmt;
-
 /// A user's role, sent as its snake_case name, e.g. `places_source`.
-#[derive(PartialEq, Eq, Hash, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    ts_rs::TS,
+    strum::Display,
+    strum::EnumIter,
+)]
+#[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum Role {
@@ -52,20 +62,6 @@ pub enum Role {
     EventManager,
     AreaManager,
     Dashboard,
-}
-
-impl fmt::Display for Role {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Role::User => write!(f, "user"),
-            Role::Admin => write!(f, "admin"),
-            Role::Root => write!(f, "root"),
-            Role::PlacesSource => write!(f, "places_source"),
-            Role::EventManager => write!(f, "event_manager"),
-            Role::AreaManager => write!(f, "area_manager"),
-            Role::Dashboard => write!(f, "dashboard"),
-        }
-    }
 }
 
 impl User {
@@ -154,25 +150,27 @@ impl FromStr for Role {
 mod test {
     use super::Role;
     use serde_json::Value;
+    use std::str::FromStr;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn role_serializes_as_its_display_name() {
         // Responses sent role.to_string() before Role was serialized
         // directly; the wire format must not change
-        let roles = [
-            Role::User,
-            Role::Admin,
-            Role::Root,
-            Role::PlacesSource,
-            Role::EventManager,
-            Role::AreaManager,
-            Role::Dashboard,
-        ];
-        for role in roles {
+        for role in Role::iter() {
             assert_eq!(
                 serde_json::to_value(&role).unwrap(),
                 Value::String(role.to_string())
             );
+        }
+    }
+
+    #[test]
+    fn role_parses_its_display_name() {
+        // The stored roles column holds Display names and is read back with
+        // the hand-written FromStr, so the two must agree on every variant
+        for role in Role::iter() {
+            assert_eq!(Role::from_str(&role.to_string()), Ok(role));
         }
     }
 }
