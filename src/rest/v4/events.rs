@@ -581,9 +581,13 @@ pub struct PatchArgs {
     #[ts(optional)]
     pub website: Option<String>,
     /// RFC 3339 with an offset, or a floating local datetime that needs
-    /// `timezone` to be placed on the timeline. Cannot be cleared.
+    /// `timezone` to be placed on the timeline. `null` is rejected: an event
+    /// cannot lose its start time.
+    // Nullable, not Option, so an explicit `null` reaches
+    // resolve_update_times and fails with 400 instead of reading as omitted;
+    // the binding leaves `null` out because the API never accepts it.
     #[serde(default)]
-    #[ts(optional, type = "string | null")]
+    #[ts(optional, type = "string")]
     pub starts_at: Nullable<EventTime>,
     #[serde(default)]
     #[ts(optional, type = "string | null")]
