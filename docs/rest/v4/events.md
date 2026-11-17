@@ -54,6 +54,8 @@ switches to delta sync, described below.
 | `website` | String | Website URL for the event. |
 | `status` | String | Review state: `pending`, `live` or `rejected`. All v4 event endpoints expose it, including batch, by-ID, by-area, search and area `upcoming_events`. New user submissions start as `pending`; privileged submissions are `live` immediately. |
 | `submitted_by` | Object (omitted when unknown) | `{ "id": 123, "name": "satoshi" }` — `id` and `name` of the user who submitted the event. Present for events submitted through `POST /v4/events`; omitted for older events and RPC-created ones. |
+| `place_osm_id` | String (omitted when unlinked) | OpenStreetMap place the event takes place at, in `<type>/<id>` form. `node/14385962692` maps to <https://www.openstreetmap.org/node/14385962692>. |
+| `description` | String (omitted when absent) | Free-form description of the event. |
 | `starts_at` | ISO 8601 datetime | Start time of the event. |
 | `ends_at` | ISO 8601 datetime (omitted when absent) | End time of the event, if it has an end time. |
 | `updated_at` | ISO 8601 datetime (delta mode only) | When the event was last changed. Omitting `updated_since` leaves it out so existing clients see an unchanged payload. |
@@ -315,13 +317,15 @@ The event is attributed to the caller, so it can be tracked afterwards through
 | `ends_at` | String | `2026-09-25T22:00:00+07:00` | absent | Optional end time. |
 | `timezone` | String | `auto` or `Europe/Berlin` | absent | Required when a timestamp is floating (no offset). `auto` infers the zone from `lat`/`lon`. |
 | `area_id` | Integer | `123` | absent | Optional area to associate with the event. |
+| `place_osm_id` | String | `node/14385962692` | absent | Optional OpenStreetMap place the event takes place at, in `<type>/<id>` form (`node`, `way` or `relation` plus a positive integer id). |
+| `description` | String | `Weekly meetup, all welcome` | absent | Optional free-form description of the event. |
 
 #### Responses
 
 | Status | Description |
 |--------|-------------|
 | `200` | Event created. The body is the full [event object](#response-fields), including its `status`. |
-| `400` | Invalid coordinates, empty name, or an unparseable/missing timestamp. |
+| `400` | Invalid coordinates, empty name, an unparseable/missing timestamp, or a malformed `place_osm_id`. |
 | `401` | Missing or invalid bearer token. |
 | `403` | A privileged submitter tried to create an event outside their geofence. |
 
@@ -379,7 +383,7 @@ point when they are omitted — must be inside the caller's geofence (when set),
 so an edit cannot move an event out of the caller's scope.
 
 Every field is optional: omitted fields are left unchanged, and `null` clears
-`area_id` or `ends_at`. `starts_at` cannot be cleared. `status` is not editable
+`area_id`, `ends_at`, `place_osm_id` or `description`. `starts_at` cannot be cleared. `status` is not editable
 here; use [Change Event Status](#change-event-status). Soft-deleted events cannot
 be edited and read as `404`.
 
@@ -401,13 +405,15 @@ be edited and read as `404`.
 | `ends_at` | String or `null` | `2026-09-25T22:00:00+07:00` | Sets or clears the end time. |
 | `timezone` | String | `auto` or `Europe/Berlin` | Required when a timestamp in this request is floating (no offset). `auto` infers the zone from the event's resulting `lat`/`lon`. |
 | `area_id` | Integer or `null` | `123` | Associates the event with an area; `null` clears the association. |
+| `place_osm_id` | String or `null` | `node/14385962692` | Links the event to an OpenStreetMap place in `<type>/<id>` form (`node`, `way` or `relation` plus a positive integer id); `null` clears the link. |
+| `description` | String or `null` | `Weekly meetup, all welcome` | Sets the free-form description; `null` clears it. |
 
 #### Responses
 
 | Status | Description |
 |--------|-------------|
 | `200` | Event updated. The body is the full [event object](#response-fields) with the resolved timestamps. |
-| `400` | Invalid coordinates, empty name, an unparseable timestamp, or an attempt to clear `starts_at`. |
+| `400` | Invalid coordinates, empty name, an unparseable timestamp, a malformed `place_osm_id`, or an attempt to clear `starts_at`. |
 | `401` | Missing or invalid bearer token. |
 | `403` | The caller is not an event manager/admin/root, or the event's location is outside their geofence. |
 | `404` | No event with the requested ID, or the event is soft-deleted. |

@@ -40,6 +40,8 @@ pub async fn insert_with_status(
     ends_at: Option<OffsetDateTime>,
     status: Status,
     submitted_by: Option<i64>,
+    place_osm_id: Option<String>,
+    description: Option<String>,
     pool: &Pool,
 ) -> Result<Event> {
     pool.get()
@@ -55,6 +57,8 @@ pub async fn insert_with_status(
                 ends_at,
                 status,
                 submitted_by,
+                place_osm_id.as_deref(),
+                description.as_deref(),
                 conn,
             )
         })
@@ -160,6 +164,8 @@ pub async fn update(
     website: Option<String>,
     starts_at: Option<OffsetDateTime>,
     ends_at: Option<Option<OffsetDateTime>>,
+    place_osm_id: Option<Option<String>>,
+    description: Option<Option<String>>,
     pool: &Pool,
 ) -> Result<Event> {
     pool.get()
@@ -174,6 +180,8 @@ pub async fn update(
                 website.as_deref(),
                 starts_at,
                 ends_at,
+                place_osm_id.as_ref().map(|it| it.as_deref()),
+                description.as_ref().map(|it| it.as_deref()),
                 conn,
             )
         })

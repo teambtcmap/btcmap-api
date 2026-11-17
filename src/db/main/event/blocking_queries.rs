@@ -31,6 +31,8 @@ pub fn insert(
         ends_at,
         schema::Status::Live,
         None,
+        None,
+        None,
         conn,
     )
 }
@@ -50,12 +52,14 @@ pub fn insert_with_status(
     ends_at: Option<OffsetDateTime>,
     status: schema::Status,
     submitted_by: Option<i64>,
+    place_osm_id: Option<&str>,
+    description: Option<&str>,
     conn: &Connection,
 ) -> Result<Event> {
     let sql = format!(
         r#"
-            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt}, {Status}, {SubmittedBy})
-            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at, :status, :submitted_by)
+            INSERT INTO {TABLE} ({AreaId}, {Lat}, {Lon}, {Name}, {Website}, {StartsAt}, {EndsAt}, {Status}, {SubmittedBy}, {PlaceOsmId}, {Description})
+            VALUES (:area_id, :lat, :lon, :name, :website, :starts_at, :ends_at, :status, :submitted_by, :place_osm_id, :description)
             RETURNING {projection}
         "#,
         projection = Event::projection(),
@@ -70,6 +74,8 @@ pub fn insert_with_status(
         ":ends_at": ends_at,
         ":status": status,
         ":submitted_by": submitted_by,
+        ":place_osm_id": place_osm_id,
+        ":description": description,
     };
     conn.query_row(&sql, params, Event::mapper())
         .map_err(Into::into)
@@ -99,6 +105,8 @@ pub fn update(
     website: Option<&str>,
     starts_at: Option<OffsetDateTime>,
     ends_at: Option<Option<OffsetDateTime>>,
+    place_osm_id: Option<Option<&str>>,
+    description: Option<Option<&str>>,
     conn: &Connection,
 ) -> Result<Event> {
     let mut sets: Vec<String> = Vec::new();
@@ -131,6 +139,14 @@ pub fn update(
     if let Some(v) = &ends_at {
         sets.push(format!("{EndsAt} = :ends_at"));
         sql_params.push((":ends_at", v));
+    }
+    if let Some(v) = &place_osm_id {
+        sets.push(format!("{PlaceOsmId} = :place_osm_id"));
+        sql_params.push((":place_osm_id", v));
+    }
+    if let Some(v) = &description {
+        sets.push(format!("{Description} = :description"));
+        sql_params.push((":description", v));
     }
 
     if sets.is_empty() {
@@ -524,6 +540,8 @@ mod test {
             None,
             Status::Pending,
             Some(42),
+            None,
+            None,
             &conn,
         )?;
         assert_eq!(event.status, Status::Pending);
@@ -531,6 +549,59 @@ mod test {
         assert_eq!(
             Status::Pending,
             super::select_by_id(event.id, &conn)?.status
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn insert_with_status_persists_place_osm_id() -> Result<()> {
+        let conn = conn();
+        let event = super::insert_with_status(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Live,
+            None,
+            Some("node/14385962692"),
+            None,
+            &conn,
+        )?;
+        assert_eq!(event.place_osm_id.as_deref(), Some("node/14385962692"));
+        assert_eq!(
+            Some("node/14385962692".to_string()),
+            super::select_by_id(event.id, &conn)?.place_osm_id
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn insert_with_status_persists_description() -> Result<()> {
+        let conn = conn();
+        let event = super::insert_with_status(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Live,
+            None,
+            None,
+            Some("Weekly meetup, all welcome"),
+            &conn,
+        )?;
+        assert_eq!(
+            event.description.as_deref(),
+            Some("Weekly meetup, all welcome")
+        );
+        assert_eq!(
+            Some("Weekly meetup, all welcome".to_string()),
+            super::select_by_id(event.id, &conn)?.description
         );
         Ok(())
     }
@@ -548,6 +619,8 @@ mod test {
             None,
             Status::Pending,
             Some(7),
+            None,
+            None,
             &conn,
         )?;
         super::insert_with_status(
@@ -560,6 +633,8 @@ mod test {
             None,
             Status::Live,
             Some(8),
+            None,
+            None,
             &conn,
         )?;
         super::insert(
@@ -591,6 +666,8 @@ mod test {
             None,
             Status::Live,
             Some(7),
+            None,
+            None,
             &conn,
         )?;
         super::set_deleted_at(event.id, Some(OffsetDateTime::now_utc()), &conn)?;
@@ -643,6 +720,8 @@ mod test {
             Some("https://example.com"),
             None,
             Some(None),
+            None,
+            None,
             &conn,
         )?;
         assert_eq!(updated.id, event.id);
@@ -678,6 +757,8 @@ mod test {
             None,
             None,
             None,
+            None,
+            None,
             &conn,
         )?;
         assert_eq!(updated.id, event.id);
@@ -706,7 +787,9 @@ mod test {
         )?;
         let original_updated_at = event.updated_at;
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let returned = super::update(event.id, None, None, None, None, None, None, None, &conn)?;
+        let returned = super::update(
+            event.id, None, None, None, None, None, None, None, None, None, &conn,
+        )?;
         assert_eq!(returned.id, event.id);
         assert_eq!(returned.name, "name");
         assert_eq!(
@@ -741,6 +824,8 @@ mod test {
             None,
             None,
             None,
+            None,
+            None,
             &conn,
         )?;
         assert_eq!(updated.area_id, Some(area.id));
@@ -748,6 +833,8 @@ mod test {
         let updated = super::update(
             event.id,
             Some(None),
+            None,
+            None,
             None,
             None,
             None,
@@ -762,9 +849,129 @@ mod test {
     }
 
     #[test]
+    fn update_place_osm_id_and_bump_updated_at() -> Result<()> {
+        let conn = conn();
+        let event = super::insert_with_status(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Live,
+            None,
+            Some("node/14385962692"),
+            None,
+            &conn,
+        )?;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let updated = super::update(
+            event.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Some("way/42")),
+            None,
+            &conn,
+        )?;
+        assert_eq!(updated.place_osm_id.as_deref(), Some("way/42"));
+        assert!(
+            updated.updated_at > event.updated_at,
+            "relinking a place must bump updated_at for delta sync"
+        );
+
+        // Omitted field leaves the link untouched.
+        let updated = super::update(
+            event.id, None, None, None, None, None, None, None, None, None, &conn,
+        )?;
+        assert_eq!(updated.place_osm_id.as_deref(), Some("way/42"));
+
+        // Explicit null clears the link.
+        let updated = super::update(
+            event.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(None),
+            None,
+            &conn,
+        )?;
+        assert_eq!(None, updated.place_osm_id);
+        Ok(())
+    }
+
+    #[test]
+    fn update_description_and_bump_updated_at() -> Result<()> {
+        let conn = conn();
+        let event = super::insert_with_status(
+            None,
+            1.23,
+            4.56,
+            "name",
+            "website",
+            OffsetDateTime::now_utc(),
+            None,
+            Status::Live,
+            None,
+            None,
+            Some("old description"),
+            &conn,
+        )?;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let updated = super::update(
+            event.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Some("new description")),
+            &conn,
+        )?;
+        assert_eq!(updated.description.as_deref(), Some("new description"));
+        assert!(
+            updated.updated_at > event.updated_at,
+            "editing the description must bump updated_at for delta sync"
+        );
+
+        // Explicit null clears it.
+        let updated = super::update(
+            event.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(None),
+            &conn,
+        )?;
+        assert_eq!(None, updated.description);
+        Ok(())
+    }
+
+    #[test]
     fn update_missing_row() {
         let conn = conn();
-        let res = super::update(999, None, None, None, None, None, None, None, &conn);
+        let res = super::update(
+            999, None, None, None, None, None, None, None, None, None, &conn,
+        );
         assert!(res.is_err());
     }
 
@@ -1258,6 +1465,8 @@ mod test {
             None,
             Status::Pending,
             None,
+            None,
+            None,
             &conn,
         )?;
         set_updated_at(
@@ -1324,6 +1533,8 @@ mod test {
             None,
             Status::Pending,
             None,
+            None,
+            None,
             &conn,
         )?;
 
@@ -1346,6 +1557,8 @@ mod test {
             None,
             Status::Pending,
             None,
+            None,
+            None,
             &conn,
         )?;
         super::insert_with_status(
@@ -1357,6 +1570,8 @@ mod test {
             future_start(),
             None,
             Status::Rejected,
+            None,
+            None,
             None,
             &conn,
         )?;

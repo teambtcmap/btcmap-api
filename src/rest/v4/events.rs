@@ -59,6 +59,15 @@ pub struct Item {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submitted_by: Option<Author>,
+    /// OpenStreetMap place the event takes place at, when linked. Stored in
+    /// `<type>/<id>` form, e.g. `node/14385962692`.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub place_osm_id: Option<String>,
+    /// Free-form description of the event, when provided.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     #[ts(type = "string")]
     #[serde(with = "time::serde::rfc3339")]
     pub starts_at: OffsetDateTime,
@@ -100,6 +109,8 @@ impl From<Event> for Item {
             website: val.website,
             status: val.status.to_string(),
             submitted_by: None,
+            place_osm_id: val.place_osm_id,
+            description: val.description,
             starts_at: val.starts_at,
             ends_at: val.ends_at,
             updated_at: None,
@@ -389,6 +400,21 @@ fn is_privileged(auth: &Auth) -> bool {
         .any(|role| matches!(role, Role::EventManager | Role::Admin | Role::Root))
 }
 
+/// Whether `value` is a canonical OpenStreetMap element reference:
+/// `<type>/<id>` with a positive integer id, e.g. `node/14385962692`.
+fn is_valid_place_osm_id(value: &str) -> bool {
+    let Some((osm_type, id)) = value.split_once('/') else {
+        return false;
+    };
+    if !matches!(osm_type, "node" | "way" | "relation") {
+        return false;
+    }
+    id.parse::<u64>().is_ok_and(|id| id > 0)
+}
+
+const PLACE_OSM_ID_HINT: &str =
+    "place_osm_id must be an OSM element in the form node/<id>, way/<id> or relation/<id>";
+
 #[derive(Deserialize, ts_rs::TS)]
 #[ts(export, rename = "PostEventArgs")]
 pub struct PostArgs {
@@ -408,6 +434,15 @@ pub struct PostArgs {
     pub timezone: Option<String>,
     #[ts(type = "number | null")]
     pub area_id: Option<i64>,
+    /// OpenStreetMap place the event takes place at, in `<type>/<id>` form,
+    /// e.g. `node/14385962692`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub place_osm_id: Option<String>,
+    /// Free-form description of the event.
+    #[serde(default)]
+    #[ts(optional)]
+    pub description: Option<String>,
 }
 
 /// `POST /v4/events`
@@ -435,6 +470,12 @@ pub async fn post(auth: Auth, args: Json<PostArgs>, pool: Data<MainPool>) -> Res
 
     if args.name.trim().is_empty() {
         return Err(RestApiError::invalid_input("name cannot be empty"));
+    }
+
+    if let Some(place_osm_id) = &args.place_osm_id {
+        if !is_valid_place_osm_id(place_osm_id) {
+            return Err(RestApiError::invalid_input(PLACE_OSM_ID_HINT));
+        }
     }
 
     if privileged {
@@ -467,6 +508,8 @@ pub async fn post(auth: Auth, args: Json<PostArgs>, pool: Data<MainPool>) -> Res
         ends_at,
         status,
         Some(user.id),
+        args.place_osm_id.clone(),
+        args.description.clone(),
         &pool,
     )
     .await
@@ -560,8 +603,8 @@ pub async fn put_status(
 }
 
 /// Request body for `PATCH /v4/events/{id}`. Every field is optional: omitted
-/// fields are left unchanged, `null` clears `area_id` or `ends_at`, and
-/// `starts_at` cannot be cleared.
+/// fields are left unchanged, `null` clears `area_id`, `ends_at`,
+/// `place_osm_id` or `description`, and `starts_at` cannot be cleared.
 #[derive(Deserialize, ts_rs::TS)]
 #[ts(export, rename = "PatchEventArgs")]
 pub struct PatchArgs {
@@ -597,6 +640,15 @@ pub struct PatchArgs {
     #[serde(default)]
     #[ts(optional)]
     pub timezone: Option<String>,
+    /// OpenStreetMap place the event takes place at, in `<type>/<id>` form,
+    /// e.g. `node/14385962692`. `null` unlinks the event from its place.
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub place_osm_id: Nullable<String>,
+    /// Free-form description of the event. `null` clears it.
+    #[serde(default)]
+    #[ts(optional, type = "string | null")]
+    pub description: Nullable<String>,
 }
 
 /// `PATCH /v4/events/{id}`
@@ -654,6 +706,12 @@ pub async fn patch(
         }
     }
 
+    if let Some(Some(place_osm_id)) = &args.place_osm_id.0 {
+        if !is_valid_place_osm_id(place_osm_id) {
+            return Err(RestApiError::invalid_input(PLACE_OSM_ID_HINT));
+        }
+    }
+
     // Standard geofence semantics: the point the event ends up at must be
     // inside the caller's fence, even when only non-spatial fields change.
     let lat = args.lat.unwrap_or(existing.lat);
@@ -680,6 +738,8 @@ pub async fn patch(
         args.website,
         starts_at,
         ends_at,
+        args.place_osm_id.0,
+        args.description.0,
         &pool,
     )
     .await
@@ -1064,6 +1124,8 @@ mod test {
             datetime!(2999-01-01 0:00 UTC),
             None,
             crate::db::main::event::schema::Status::Pending,
+            None,
+            None,
             None,
             &pool,
         )
@@ -1526,6 +1588,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Pending,
             None,
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -1556,6 +1620,8 @@ mod test {
             datetime!(2999-01-01 0:00 UTC),
             None,
             crate::db::main::event::schema::Status::Pending,
+            None,
+            None,
             None,
             &pool,
         )
@@ -1632,6 +1698,77 @@ mod test {
         Ok(())
     }
 
+    #[test]
+    async fn post_persists_place_osm_id_and_description() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::User], &[], &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::post)),
+        )
+        .await;
+        let mut body = post_body(1.0, 2.0, "2999-01-01T00:00:00Z");
+        body["place_osm_id"] = serde_json::json!("node/14385962692");
+        body["description"] = serde_json::json!("Weekly meetup, all welcome");
+        let req = TestRequest::post()
+            .uri("/events")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(body)
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert_eq!("node/14385962692", res["place_osm_id"].as_str().unwrap());
+        assert_eq!(
+            "Weekly meetup, all welcome",
+            res["description"].as_str().unwrap()
+        );
+        let stored =
+            db::main::event::queries::select_by_id(res["id"].as_i64().unwrap(), &pool).await?;
+        assert_eq!(Some("node/14385962692".to_string()), stored.place_osm_id);
+        assert_eq!(
+            Some("Weekly meetup, all welcome".to_string()),
+            stored.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    async fn post_rejects_invalid_place_osm_id() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::User], &[], &pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool))
+                .service(scope("/events").service(super::post)),
+        )
+        .await;
+        for invalid in [
+            "14385962692",
+            "node/",
+            "node/abc",
+            "node/0",
+            "changeset/1",
+            "node/1/2",
+            "Node/1",
+            " node/1",
+        ] {
+            let mut body = post_body(1.0, 2.0, "2999-01-01T00:00:00Z");
+            body["place_osm_id"] = serde_json::json!(invalid);
+            let req = TestRequest::post()
+                .uri("/events")
+                .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+                .set_json(body)
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(
+                res.status(),
+                StatusCode::BAD_REQUEST,
+                "'{invalid}' must be rejected"
+            );
+        }
+        Ok(())
+    }
+
     async fn seed_user_id_and_token(
         roles: &[Role],
         pool: &crate::db::main::MainPool,
@@ -1678,6 +1815,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Pending,
             Some(owner_id),
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -1691,6 +1830,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Rejected,
             Some(owner_id),
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -1704,6 +1845,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Live,
             Some(owner_id + 1),
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -1987,6 +2130,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Pending,
             None,
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -2075,6 +2220,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Pending,
             None,
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -2105,6 +2252,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Pending,
             Some(owner_id),
+            None,
+            None,
             pool,
         )
         .await?;
@@ -2200,6 +2349,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Live,
             Some(owner_id),
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -2234,6 +2385,8 @@ mod test {
             None,
             crate::db::main::event::schema::Status::Rejected,
             Some(owner_id),
+            None,
+            None,
             &pool,
         )
         .await?;
@@ -2507,6 +2660,109 @@ mod test {
         let stored = db::main::event::queries::select_by_id(event.id, &pool).await?;
         assert_eq!(None, stored.area_id);
         assert_eq!(None, stored.ends_at);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_sets_and_clears_place_osm_id() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::EventManager], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "place_osm_id": "node/14385962692" }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert_eq!("node/14385962692", res["place_osm_id"].as_str().unwrap());
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert_eq!(Some("node/14385962692".to_string()), stored.place_osm_id);
+
+        // An explicit null unlinks the event from its place.
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "place_osm_id": null }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert!(res.get("place_osm_id").is_none());
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert_eq!(None, stored.place_osm_id);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_sets_and_clears_description() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::EventManager], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "description": "Weekly meetup, all welcome" }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert_eq!(
+            "Weekly meetup, all welcome",
+            res["description"].as_str().unwrap()
+        );
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert_eq!(
+            Some("Weekly meetup, all welcome".to_string()),
+            stored.description
+        );
+
+        // An explicit null clears the description.
+        let req = TestRequest::patch()
+            .uri(&format!("/events/{event_id}"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+            .set_json(serde_json::json!({ "description": null }))
+            .to_request();
+        let res: JsonObject = test::call_and_read_body_json(&app, req).await;
+        assert!(res.get("description").is_none());
+        let stored = db::main::event::queries::select_by_id(event_id, &pool).await?;
+        assert_eq!(None, stored.description);
+        Ok(())
+    }
+
+    #[test]
+    async fn patch_rejects_invalid_place_osm_id() -> Result<()> {
+        let pool = pool();
+        let secret = seed_user_with_token(&[Role::EventManager], &[], &pool).await?;
+        let event_id = insert_future_event(&pool).await?;
+        let app = test::init_service(
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .service(scope("/events").service(super::patch)),
+        )
+        .await;
+        for invalid in ["14385962692", "node/", "way/abc", "relation/0", "node/1/2"] {
+            let req = TestRequest::patch()
+                .uri(&format!("/events/{event_id}"))
+                .insert_header((header::AUTHORIZATION, format!("Bearer {secret}")))
+                .set_json(serde_json::json!({ "place_osm_id": invalid }))
+                .to_request();
+            let res = test::call_service(&app, req).await;
+            assert_eq!(
+                res.status(),
+                StatusCode::BAD_REQUEST,
+                "'{invalid}' must be rejected"
+            );
+        }
         Ok(())
     }
 

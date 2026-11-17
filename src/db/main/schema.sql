@@ -155,7 +155,7 @@ CREATE TABLE event(
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
     deleted_at TEXT
-, starts_at TEXT NOT NULL, area_id INTEGER REFERENCES area(id), status TEXT NOT NULL DEFAULT 'live', submitted_by INTEGER REFERENCES "user"(id)) STRICT;
+, starts_at TEXT NOT NULL, area_id INTEGER REFERENCES area(id), status TEXT NOT NULL DEFAULT 'live', submitted_by INTEGER REFERENCES "user"(id), place_osm_id TEXT, description TEXT) STRICT;
 CREATE TABLE place_submission(
     id INTEGER PRIMARY KEY NOT NULL,
     origin TEXT NOT NULL,
@@ -258,7 +258,7 @@ CREATE TRIGGER user_updated_at UPDATE OF name, password, roles, saved_places, sa
 BEGIN
     UPDATE user SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
-CREATE TRIGGER event_updated_at UPDATE OF lat, lon, name, website, starts_at, ends_at, area_id, created_at, deleted_at, status ON event
+CREATE TRIGGER event_updated_at UPDATE OF lat, lon, name, website, starts_at, ends_at, area_id, created_at, deleted_at, status, place_osm_id, description ON event
 BEGIN
     UPDATE event SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE id = old.id;
 END;
