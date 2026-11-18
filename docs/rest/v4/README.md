@@ -20,6 +20,7 @@ The latest and recommended version of the BTCMap API, offering improved performa
 - **[Users](users.md)** - Get authenticated user information, and, as an admin or root, search users and update their roles and geofence.
 - **[Areas](areas.md)** - Fetch areas, create and update areas as an area manager, admin or root, manage saved areas, and fetch per-area image and daily report data.
 - **[Search](search.md)** - Search areas and places by name, address and any other OSM tag.
+- **[OpenGraph](opengraph.md)** - Render a 600×315 map card image for any OSM element, cached for a week.
 - **[Dashboard](dashboard.md)** - Fetch the internal infrastructure/analytics dashboard (private).
 
 ### Proposed

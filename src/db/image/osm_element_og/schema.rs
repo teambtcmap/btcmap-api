@@ -1,0 +1,63 @@
+use rusqlite::Row;
+use std::sync::OnceLock;
+
+pub const TABLE_NAME: &str = "osm_element_og";
+
+#[derive(strum::AsRefStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum Columns {
+    OsmType,
+    OsmId,
+    ImageData,
+    Width,
+    Height,
+    SizeBytes,
+    CreatedAt,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub struct OsmElementOg {
+    pub osm_type: String,
+    pub osm_id: i64,
+    pub image_data: Vec<u8>,
+    pub width: i64,
+    pub height: i64,
+    pub size_bytes: i64,
+    pub created_at: time::OffsetDateTime,
+}
+
+impl OsmElementOg {
+    pub fn projection() -> &'static str {
+        static PROJECTION: OnceLock<String> = OnceLock::new();
+        PROJECTION.get_or_init(|| {
+            [
+                Columns::OsmType,
+                Columns::OsmId,
+                Columns::ImageData,
+                Columns::Width,
+                Columns::Height,
+                Columns::SizeBytes,
+                Columns::CreatedAt,
+            ]
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<_>>()
+            .join(", ")
+        })
+    }
+
+    pub const fn mapper() -> fn(&Row) -> rusqlite::Result<Self> {
+        |row| {
+            Ok(Self {
+                osm_type: row.get(Columns::OsmType.as_ref())?,
+                osm_id: row.get(Columns::OsmId.as_ref())?,
+                image_data: row.get(Columns::ImageData.as_ref())?,
+                width: row.get(Columns::Width.as_ref())?,
+                height: row.get(Columns::Height.as_ref())?,
+                size_bytes: row.get(Columns::SizeBytes.as_ref())?,
+                created_at: row.get(Columns::CreatedAt.as_ref())?,
+            })
+        }
+    }
+}

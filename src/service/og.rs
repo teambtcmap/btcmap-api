@@ -1,3 +1,4 @@
+use crate::service::overpass;
 use crate::{db, Result};
 use deadpool_sqlite::Pool;
 use futures_util::future::join_all;
@@ -46,6 +47,17 @@ pub async fn element_og(id: &str, pool: &Pool) -> Result<OgImagePayload> {
         return Err("Element not found".into());
     };
     render(element.lat(), element.lon()).await
+}
+
+/// Render a map card for any OSM element, resolved live from Overpass.
+///
+/// Returns `None` when the element doesn't exist.
+pub async fn osm_og(osm_type: &str, osm_id: i64) -> Result<Option<OgImagePayload>> {
+    let Some(element) = overpass::get_element(osm_type, osm_id).await? else {
+        return Ok(None);
+    };
+    let coord = element.coord();
+    render(coord.y, coord.x).await.map(Some)
 }
 
 async fn render(lat: f64, lon: f64) -> Result<OgImagePayload> {

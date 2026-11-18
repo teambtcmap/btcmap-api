@@ -3,6 +3,7 @@ use geo::{coord, Coord};
 use reqwest::header::USER_AGENT;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::time::Duration;
 use std::{hash::Hash, hash::Hasher};
 use time::{
     format_description::well_known::Iso8601, macros::format_description, Date, OffsetDateTime,
@@ -242,9 +243,37 @@ pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
     })
 }
 
+/// Fetch a single OSM element by type and id, including its centre coordinate.
+///
+/// Uses Overpass so that ways and relations resolve to a centre without extra
+/// requests. Returns `None` when the element doesn't exist.
+pub async fn get_element(osm_type: &str, osm_id: i64) -> Result<Option<OverpassElement>> {
+    // `bb` (not `center`): `coord()` derives the centre from `bounds`, and the
+    // response has no field to hold Overpass' `center` object.
+    let query = format!("[out:json][timeout:10];\n{osm_type}({osm_id});\nout ids bb;");
+    // The `[timeout:10]` above bounds query execution, not queueing at the
+    // public instance, which alone can take tens of seconds.
+    let response = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()?
+        .post(API_URL)
+        .header(USER_AGENT, USER_AGENT_VALUE)
+        .body(query)
+        .send()
+        .await?;
+    info!(http_status_code = ?response.status(), "got overpass element response");
+    if !response.status().is_success() {
+        Err(format!("unexpected overpass status: {}", response.status()))?;
+    }
+    let response = response.json::<Response>().await?;
+    Ok(response.elements.into_iter().next())
+}
+
 #[cfg(test)]
 mod test {
+    use super::Bounds;
     use super::OverpassElement;
+    use geo::coord;
     use serde_json::Map;
 
     #[test]
@@ -257,5 +286,70 @@ mod test {
         };
         assert_eq!("bar", element.tag("foo"));
         assert_eq!("", element.tag("missing"));
+    }
+
+    #[test]
+    fn center_coord_uses_node_lat_lon() {
+        let element = OverpassElement::mock(1);
+        assert_eq!(coord! { x: 0.0, y: 0.0 }, element.coord());
+    }
+
+    #[test]
+    fn center_coord_uses_bounds_for_ways() {
+        let element = OverpassElement {
+            r#type: "way".into(),
+            lat: None,
+            lon: None,
+            bounds: Some(Bounds {
+                minlon: 0.0,
+                maxlon: 2.0,
+                minlat: 4.0,
+                maxlat: 6.0,
+            }),
+            ..OverpassElement::mock(1)
+        };
+        assert_eq!(coord! { x: 1.0, y: 5.0 }, element.coord());
+    }
+
+    #[test]
+    fn center_coord_uses_bounds_for_relations() {
+        let element = OverpassElement {
+            r#type: "relation".into(),
+            lat: None,
+            lon: None,
+            bounds: Some(Bounds {
+                minlon: 0.0,
+                maxlon: 2.0,
+                minlat: 4.0,
+                maxlat: 6.0,
+            }),
+            ..OverpassElement::mock(1)
+        };
+        assert_eq!(coord! { x: 1.0, y: 5.0 }, element.coord());
+    }
+
+    #[test]
+    fn get_element_response_shape_has_bounds() {
+        // `get_element` asks Overpass for `out ids bb`, which returns `bounds`
+        // for ways and relations. Parsing the real shape keeps the query and
+        // `coord()` in sync.
+        let element: OverpassElement = serde_json::from_str(
+            r#"{
+                "type": "way",
+                "id": 346185092,
+                "bounds": {
+                    "minlat": 13.0076801,
+                    "minlon": 77.5981801,
+                    "maxlat": 13.0077909,
+                    "maxlon": 77.5982987
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let coord = element.coord();
+
+        assert!((coord.x - 77.5982394).abs() < 1e-9);
+        assert!((coord.y - 13.0077355).abs() < 1e-9);
     }
 }

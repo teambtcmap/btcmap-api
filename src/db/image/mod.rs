@@ -1,5 +1,6 @@
 pub mod area;
 pub mod og;
+pub mod osm_element_og;
 pub mod place;
 
 use super::Migration;

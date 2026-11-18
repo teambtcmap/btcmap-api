@@ -11,6 +11,7 @@ pub mod events;
 pub mod invoices;
 pub mod nostr;
 pub mod notes;
+pub mod opengraph;
 pub mod place_boosts;
 pub mod place_comments;
 pub mod place_images;

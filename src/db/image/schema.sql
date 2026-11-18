@@ -24,13 +24,22 @@ CREATE TABLE place (
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     size_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ'))
+, created_by INTEGER, position INTEGER) STRICT;
+CREATE TABLE osm_element_og (
+    osm_type TEXT NOT NULL,
+    osm_id INTEGER NOT NULL,
+    image_data BLOB NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    size_bytes INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ')),
-    created_by INTEGER,
-    position INTEGER
+    PRIMARY KEY (osm_type, osm_id)
 ) STRICT;
 CREATE INDEX og_created_at ON og(created_at);
 CREATE INDEX area_area_id ON area(area_id);
 CREATE INDEX place_place_id ON place(place_id);
 CREATE INDEX place_created_by ON place(created_by);
 CREATE INDEX place_created_at ON place(created_at);
+CREATE INDEX osm_element_og_created_at ON osm_element_og(created_at);
 COMMIT;

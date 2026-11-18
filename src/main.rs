@@ -278,6 +278,7 @@ async fn main() -> Result<()> {
                     .service(scope("communities").service(rest::v4::communities::get_top))
                     .service(scope("countries").service(rest::v4::countries::get_top))
                     .service(scope("activity").service(rest::v4::activity::get))
+                    .service(scope("opengraph").service(rest::v4::opengraph::osm_element_get))
                     .service(
                         scope("users")
                             .service(rest::v4::users::get)
