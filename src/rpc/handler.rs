@@ -834,7 +834,14 @@ where
 
 pub fn handle_rpc_error<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHandlerResponse<B>> {
     let (req, res) = res.into_parts();
-    let error_message = res.error().unwrap().to_string();
+    // `ErrorHandlers` invokes this for any 4xx/5xx response, including the
+    // plain status responses produced when a route doesn't match (e.g. a GET
+    // to `/rpc`). Those carry no `Error`, so unwrapping here used to panic and
+    // drop the connection. Fall back to the status text in that case.
+    let error_message = res
+        .error()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| res.status().to_string());
     let body = RpcResponse::error(RpcError::server_error(Some(Value::String(error_message))));
     let body = serde_json::to_string(&body).unwrap();
     let res = HttpResponseBuilder::new(StatusCode::OK).body(body);
@@ -860,6 +867,25 @@ mod test {
     };
     use matrix_sdk::Client;
     use serde_json::json;
+
+    #[test]
+    async fn error_handler_does_not_panic_on_status_without_error() {
+        // A request that doesn't match a route inside the `/rpc` scope (e.g.
+        // `GET /rpc`) produces a plain 404 response with no `Error` attached.
+        // The error handler must turn that into a JSON-RPC error instead of
+        // unwrapping `None` and dropping the connection.
+        let req = test::TestRequest::default().to_srv_request();
+        let res = req.into_response(actix_web::HttpResponse::NotFound().finish());
+        let handled = super::handle_rpc_error(res).expect("error handler must not panic");
+        match handled {
+            actix_web::middleware::ErrorHandlerResponse::Response(res) => {
+                assert_eq!(res.status(), StatusCode::OK);
+            }
+            actix_web::middleware::ErrorHandlerResponse::Future(_) => {
+                panic!("unexpected async response");
+            }
+        }
+    }
 
     #[test]
     async fn invalid_json() {

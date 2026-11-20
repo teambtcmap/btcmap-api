@@ -25,7 +25,7 @@ pub async fn chat(prompt: String, model: &str, pool: &Pool) -> Result<String> {
     if conf.ppq_key.is_empty() {
         Err("ppq ai key is not set")?
     }
-    let client = reqwest::Client::new();
+    let client = crate::service::http::client()?;
     let args = json!({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],

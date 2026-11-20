@@ -35,7 +35,7 @@ pub async fn get_element(element_type: &str, element_id: i64) -> Result<Option<O
         "https://api.openstreetmap.org/api/0.6/{element_type}s.json?{element_type}s={element_id}"
     );
     info!(url, "Querying OSM");
-    let res = reqwest::get(&url).await?;
+    let res = crate::service::http::client()?.get(&url).send().await?;
     info!(request_url = url, response_status = ?res.status(), "Got response from OSM");
     _get_element(res).await
 }
@@ -133,7 +133,7 @@ impl EditingApiUser {
 pub async fn get_user(id: i64) -> Result<Option<EditingApiUser>> {
     let url = format!("https://api.openstreetmap.org/api/0.6/user/{id}.json");
     info!(url, "Querying OSM");
-    let res = reqwest::get(&url).await?;
+    let res = crate::service::http::client()?.get(&url).send().await?;
     info!(request_url = url, response_status = ?res.status(), "Got response from OSM");
     _get_user(res).await
 }

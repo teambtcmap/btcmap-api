@@ -41,7 +41,7 @@ pub async fn get_node_stats(pool: &Pool) -> Result<NodeStats> {
     if conf.lnd_readonly_macaroon.is_empty() {
         Err("lnd readonly macaroon is not set")?
     }
-    let client = reqwest::Client::new();
+    let client = crate::service::http::client()?;
     let blockchain: BlockchainBalanceResponse = get(
         &client,
         "/v1/balance/blockchain",

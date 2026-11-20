@@ -101,21 +101,27 @@ where
             let Some(addr) = addr else {
                 return Ok(res);
             };
-            db::log::request::queries::insert(
-                InsertArgs {
-                    ip: addr,
-                    user_agent,
-                    user_id,
-                    method,
-                    path,
-                    query: query.map(ToString::to_string),
-                    body: body_str.map(ToString::to_string),
-                    response_code,
-                    processing_time_ns: time_ns as i64,
-                },
-                &pool,
-            )
-            .await?;
+            let args = InsertArgs {
+                ip: addr,
+                user_agent,
+                user_id,
+                method,
+                path,
+                query: query.map(ToString::to_string),
+                body: body_str.map(ToString::to_string),
+                response_code,
+                processing_time_ns: time_ns as i64,
+            };
+            // Request logging must never break the request it describes. Write
+            // it in the background instead of awaiting it here: the log db is
+            // shared with maintenance jobs (e.g. the daily trim), and a busy
+            // writer used to stall every response for `busy_timeout` and then
+            // turn successful requests into 500s.
+            actix_web::rt::spawn(async move {
+                if let Err(err) = db::log::request::queries::insert(args, &pool).await {
+                    tracing::warn!(error = %err, "failed to write request log");
+                }
+            });
             Ok(res)
         })
     }

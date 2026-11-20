@@ -21,7 +21,7 @@ pub async fn create_issue(
     if conf.gitea_api_key.is_empty() {
         Err("gitea api key is not set")?
     }
-    let client = reqwest::Client::new();
+    let client = crate::service::http::client()?;
     let args = json!({ "title": title, "body": body, "labels": labels });
     let gitea_response = client
         .post("https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues")
@@ -49,7 +49,7 @@ pub async fn get_issue(issue_url: String, pool: &Pool) -> Result<Option<GetIssue
     if conf.gitea_api_key.is_empty() {
         Err("gitea api key is not set")?
     }
-    let client = reqwest::Client::new();
+    let client = crate::service::http::client()?;
     let gitea_response = client
         .get(issue_url)
         .header("Authorization", format!("token {}", conf.gitea_api_key))

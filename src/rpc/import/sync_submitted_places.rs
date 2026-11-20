@@ -1,3 +1,4 @@
+use crate::service::sync_lock::SyncLock;
 use crate::{
     db::main::area::schema::Area,
     db::main::place_submission::schema::PlaceSubmission,
@@ -9,6 +10,7 @@ use crate::{
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
+use std::sync::atomic::AtomicBool;
 use time::OffsetDateTime;
 use tracing::{info, warn};
 
@@ -275,7 +277,11 @@ fn build_issue_body(submission: &PlaceSubmission) -> String {
         .join("\n")
 }
 
+static SYNC_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
 pub async fn run(pool: &Pool) -> Result<Res> {
+    let _guard = SyncLock::try_acquire(&SYNC_IN_PROGRESS)
+        .ok_or("Sync of submitted places is already in progress")?;
     let submissions =
         db::main::place_submission::queries::select_open_and_not_revoked(pool).await?;
     info!(

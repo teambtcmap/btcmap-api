@@ -34,7 +34,7 @@ pub async fn run(main_pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
     let mut images_failed = 0i64;
     let mut failures = Vec::new();
 
-    let client = reqwest::Client::new();
+    let client = crate::service::http::client()?;
 
     for area in areas {
         let Some(url) = area

@@ -35,7 +35,7 @@ pub async fn create(
     pool: &Pool,
 ) -> Result<Invoice> {
     let conf = db::main::conf::queries::select(pool).await?;
-    let client = reqwest::Client::new();
+    let client = crate::service::http::client()?;
 
     if source == "lnbits" {
         if conf.lnbits_invoice_key.is_empty() {
@@ -143,7 +143,7 @@ pub async fn sync_unpaid_invoice(
         return Ok(false);
     }
     let conf = db::main::conf::queries::select(pool).await?;
-    let client = reqwest::Client::new();
+    let client = crate::service::http::client()?;
     if invoice.source == "lnbits" {
         let url = format!(
             "https://core.btcmap.org/api/v1/payments/{}",

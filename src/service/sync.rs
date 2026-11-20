@@ -236,15 +236,22 @@ pub async fn sync_updated_elements(
         pool,
     )
     .await?;
+    // Index the cached elements once. Looking each fresh element up with a
+    // linear scan is O(fresh * cached) and, worse, `btcmap_id()` allocates a
+    // String on every comparison. With ~30k fresh and ~40k cached elements
+    // that ran for minutes and pinned an actix worker, stalling unrelated
+    // requests.
+    let mut cached_by_id: HashMap<String, usize> = HashMap::with_capacity(cached_elements.len());
+    for (index, element) in cached_elements.iter().enumerate() {
+        cached_by_id
+            .entry(element.overpass_data.btcmap_id())
+            .or_insert(index);
+    }
     for fresh_overpass_element in fresh_overpass_elements {
-        let cached_element = cached_elements.iter().find(|cached_element| {
-            cached_element.overpass_data.r#type == fresh_overpass_element.r#type
-                && cached_element.overpass_data.id == fresh_overpass_element.id
-        });
-        if cached_element.is_none() {
+        let Some(&cached_index) = cached_by_id.get(&fresh_overpass_element.btcmap_id()) else {
             continue;
-        }
-        let mut cached_element = cached_element.unwrap().clone();
+        };
+        let mut cached_element = cached_elements[cached_index].clone();
         if cached_element.deleted_at.is_some() {
             cached_element =
                 db::main::element::queries::set_deleted_at(cached_element.id, None, pool).await?;
@@ -327,63 +334,53 @@ pub async fn sync_new_elements(
         pool,
     )
     .await?;
+    // Same O(n²) trap as in `sync_updated_elements`: build the id set once
+    // rather than allocating a String for every (fresh, cached) pair.
+    let cached_ids: HashSet<String> = cached_elements
+        .iter()
+        .map(|it| it.overpass_data.btcmap_id())
+        .collect();
     for fresh_element in fresh_overpass_elements {
         let btcmap_id = fresh_element.btcmap_id();
-        let user_id = fresh_element.uid;
-
-        match cached_elements
-            .iter()
-            .find(|it| it.overpass_data.btcmap_id() == btcmap_id)
-        {
-            Some(_) => {}
-            None => {
-                service::user::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
-                let element =
-                    db::main::element::queries::insert(fresh_element.clone(), pool).await?;
-                let element = db::main::element::queries::set_lat_lon(
-                    element.id,
-                    element.lat(),
-                    element.lon(),
-                    pool,
-                )
-                .await?;
-                let mut event_tags: HashMap<String, Value> = HashMap::new();
-                event_tags.insert(
-                    "element_osm_type".into(),
-                    element.overpass_data.r#type.clone().into(),
-                );
-                event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
-                let event = db::main::element_event::queries::insert(
-                    user_id.unwrap(),
-                    element.id,
-                    "create",
-                    pool,
-                )
-                .await?;
-                let event =
-                    db::main::element_event::queries::patch_tags(event.id, event_tags, pool)
-                        .await?;
-                res.push(event);
-                let category = element.overpass_data.generate_category();
-                let android_icon = element.overpass_data.generate_android_icon();
-                let element = db::main::element::queries::set_tag(
-                    element.id,
-                    "category",
-                    &category.clone().into(),
-                    pool,
-                )
-                .await?;
-                let element = db::main::element::queries::set_tag(
-                    element.id,
-                    "icon:android",
-                    &android_icon.clone().into(),
-                    pool,
-                )
-                .await?;
-                service::element::generate_issues(vec![&element], pool).await?;
-                //area_element::service::generate_mapping(&vec![element], &sp)?;
-            }
+        if cached_ids.contains(&btcmap_id) {
+            continue;
         }
+        let user_id = fresh_element.uid;
+        service::user::insert_user_if_not_exists(user_id.unwrap(), pool).await?;
+        let element = db::main::element::queries::insert(fresh_element.clone(), pool).await?;
+        let element =
+            db::main::element::queries::set_lat_lon(element.id, element.lat(), element.lon(), pool)
+                .await?;
+        let mut event_tags: HashMap<String, Value> = HashMap::new();
+        event_tags.insert(
+            "element_osm_type".into(),
+            element.overpass_data.r#type.clone().into(),
+        );
+        event_tags.insert("element_osm_id".into(), element.overpass_data.id.into());
+        let event =
+            db::main::element_event::queries::insert(user_id.unwrap(), element.id, "create", pool)
+                .await?;
+        let event =
+            db::main::element_event::queries::patch_tags(event.id, event_tags, pool).await?;
+        res.push(event);
+        let category = element.overpass_data.generate_category();
+        let android_icon = element.overpass_data.generate_android_icon();
+        let element = db::main::element::queries::set_tag(
+            element.id,
+            "category",
+            &category.clone().into(),
+            pool,
+        )
+        .await?;
+        let element = db::main::element::queries::set_tag(
+            element.id,
+            "icon:android",
+            &android_icon.clone().into(),
+            pool,
+        )
+        .await?;
+        service::element::generate_issues(vec![&element], pool).await?;
+        //area_element::service::generate_mapping(&vec![element], &sp)?;
     }
     Ok(res)
 }

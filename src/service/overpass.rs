@@ -216,7 +216,10 @@ pub struct QueryBitcoinMerchantsRes {
 
 pub async fn query_bitcoin_merchants() -> Result<QueryBitcoinMerchantsRes> {
     let started_at = OffsetDateTime::now_utc();
-    let response = reqwest::Client::new()
+    // The Overpass query itself allows 600s (`[timeout:600]`), but the HTTP
+    // client must still have a ceiling so a wedged connection can't hang the
+    // sync indefinitely.
+    let response = crate::service::http::client_with_timeout(Duration::from_secs(300))?
         .post(API_URL)
         .header(USER_AGENT, USER_AGENT_VALUE)
         .body(QUERY)

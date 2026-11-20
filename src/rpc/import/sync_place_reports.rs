@@ -1,3 +1,4 @@
+use crate::service::sync_lock::SyncLock;
 use crate::{
     db::image::place::schema::PlaceImageMeta,
     db::image::ImagePool,
@@ -11,6 +12,7 @@ use crate::{
 };
 use deadpool_sqlite::Pool;
 use serde::Serialize;
+use std::sync::atomic::AtomicBool;
 use time::OffsetDateTime;
 use tracing::{info, warn};
 
@@ -105,7 +107,11 @@ fn build_details(report: &PlaceReport, images: &[PlaceImageMeta]) -> String {
     details
 }
 
+static SYNC_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
 pub async fn run(pool: &Pool, image_pool: &ImagePool) -> Result<Res> {
+    let _guard = SyncLock::try_acquire(&SYNC_IN_PROGRESS)
+        .ok_or("Sync of place reports is already in progress")?;
     let reports = db::main::place_report::queries::select_open_and_not_deleted(pool).await?;
     info!(
         len = reports.len(),

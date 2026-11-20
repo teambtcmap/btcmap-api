@@ -114,6 +114,10 @@ impl From<deadpool_sqlite::InteractError> for Error {
     }
 }
 
+// `deadpool_sqlite::ConfigError` is an alias for `Infallible`, so this
+// conversion can never run. It still has to exist for `?` on
+// `Config::builder(...)`'s result, but the body is unreachable by definition.
+#[allow(unreachable_code)]
 impl From<deadpool_sqlite::ConfigError> for Error {
     fn from(error: deadpool_sqlite::ConfigError) -> Self {
         Error::DeadpoolConfig(error)
